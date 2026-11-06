@@ -700,3 +700,15 @@ which is **6000** samples at 48 kHz (8 steps/second), not 12000. `timing::sample
 `sample_rate * 60 / (bpm * 4)` correctly; the Task 21 tests were corrected to 6000 / 5512.5 samples and the
 Task 22 clock expectations ("one second crosses 4 steps", "step boundary at sample 24000") must be halved
 the same way when that task is executed — one second at 120 BPM crosses **8** steps.
+
+### Task 22 revision: `set_bpm` / `set_swing` rescale the step in flight
+
+Task 22's Step 3 said "`set_bpm` only affects *future* step durations (do not rescale `remaining`)" — but two
+of that task's own four tests require the opposite: "at 240 bpm, 6000 samples is two further steps" is
+unreachable if the step in flight keeps its old length, and a clock built at `DEFAULT_BPM` (130) would start
+its first step at 5538.46 samples instead of 6000 whenever the tempo is set to 120 before playback. As built,
+`set_bpm` and `set_swing` rescale `remaining` by the ratio of the new full step duration to the old one, which
+keeps the elapsed phase fraction: a change is heard on the step it was made in, and the beat never moves
+backwards. Consequence for the tests: advances are kept a few hundred samples off exact step multiples
+(50 000 rather than 48 000 samples at 120 BPM), because a duration computed as `sr * 60 / (bpm * 4)` lands
+within a nanosecond of a boundary and an assertion made exactly on it is a coin flip.
