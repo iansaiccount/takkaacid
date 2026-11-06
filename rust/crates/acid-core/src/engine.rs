@@ -59,4 +59,18 @@ impl Engine {
     pub fn note_off(&mut self) {
         self.voice.note_off();
     }
+
+    /// WAVEFORM switch.
+    pub fn set_waveform(&mut self, waveform: crate::oscillator::Waveform) {
+        self.voice.set_waveform(waveform);
+    }
+
+    pub fn waveform(&self) -> crate::oscillator::Waveform {
+        self.voice.waveform()
+    }
+
+    /// TUNING knob, in knob domain: `0.5` is centre.
+    pub fn set_tuning(&mut self, knob: f32) {
+        self.voice.set_tuning_semitones(crate::param::tuning_semitones(knob));
+    }
 }
