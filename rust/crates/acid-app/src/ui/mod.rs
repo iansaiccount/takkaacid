@@ -2,3 +2,4 @@
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
 #[allow(dead_code)]
 pub mod theme;
+pub mod layout;
