@@ -1,6 +1,12 @@
 # Phase 11 — Polish, ergonomics and release
 
 > Part of [00-main-plan.md](00-main-plan.md). Tasks **52–56**. Depends on: Phase 10.
+
+> **Revisions from execution (2026-11-06).** `AudioStatus` lives in `acid_app::state`
+> (`Starting | Running { device, sample_rate } | Failed { reason }`) and is already populated by
+> `audio::Rig`, so Task 55 only formats it — no new plumbing. Device names come from
+> `cpal`'s `device.description()?.name()`. The app trait is `App::ui(&mut Ui, &mut Frame)` with
+> `App::logic(ctx, frame)` for per-frame work, not `update(ctx, frame)`.
 > **Delivers:** a laptop-keyboard instrument, shortcuts, an in-app help card, a device picker that explains
 > itself, and the release checklist that ends the plan.
 

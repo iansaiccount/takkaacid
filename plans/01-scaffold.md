@@ -296,9 +296,13 @@ Expected: FAIL — cannot find `ui` / `theme`.
 - `cargo add -p acid-app eframe egui anyhow` (record versions in the manifest).
 - `main.rs`: `eframe::run_native("takka-acid", NativeOptions { viewport: ViewportBuilder::default()
   .with_inner_size(WINDOW_SIZE).with_resizable(true), ..Default::default() },
-  Box::new(|_| Ok(Box::new(TakkaApp::default()))))?`.
-- `TakkaApp::update`: `CentralPanel::default().frame(Frame::NONE.fill(theme::PANEL)).show(ctx, |ui| …)`
-  painting only the `takka-acid` wordmark in `SILKSCREEN` for now, so the window is visibly not default.
+  Box::new(|_cc| Ok(Box::new(TakkaApp))))?`. Verified against the eframe in this workspace (0.37): the
+  creator returns `Result<Box<dyn App>, …>` and `run_native` returns `eframe::Result`.
+- `impl eframe::App for TakkaApp`: the required method is **`fn ui(&mut self, ui: &mut egui::Ui, frame:
+  &mut eframe::Frame)`** — there is no `update(ctx, frame)` in this version. Paint the panel background with
+  `ui.painter().rect_filled(ui.max_rect(), 0.0, theme::PANEL)` and the `takka-acid` wordmark in
+  `SILKSCREEN`, so the window is visibly not default. Add `fn logic(&mut self, ctx, frame)` later when
+  per-frame work appears.
 
 - [ ] **Step 4: Run tests, then open the window**
 

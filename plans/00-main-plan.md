@@ -140,6 +140,29 @@ The five inputs/conditions most likely to bite a player. Each has a test in the 
 | [11-polish.md](11-polish.md) | Polish & ergonomics | 52–56 | Keyboard play, shortcuts, help, device picker |
 | [12-deferred-accuracy.md](12-deferred-accuracy.md) | Deferred accuracy backlog | — | Anti-aliasing, nonlinear models, calibration |
 
+## Execution status
+
+Updated 2026-11-06. The ledger with per-task evidence and every ruling lives in
+`.superpowers/sdd/00-main-plan/progress.md` (git-ignored); `git log` is the authoritative record.
+
+| Phase | Tasks | Status |
+|---|---|---|
+| 01 scaffold | 1–4 | **done** |
+| 02 audio & engine | 5–9 | **done** |
+| 03 oscillator | 10–13 | **done** |
+| 04 filter, envelope, VCA | 14–19 | next |
+| 05 sequencer | 20–26 | not started |
+| 06 panel | 27–32 | not started |
+| 07 wiring | 33–37 | not started |
+| 08 patterns & persistence | 38–42 | not started |
+| 09 master section | 43–46 | not started |
+| 10 MIDI | 47–51 | not started |
+| 11 polish | 52–56 | not started |
+| 12 deferred accuracy | — | backlog |
+
+Current tree: 38 tests green in 14 suites, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+app opens a 48 kHz stream and plays a held note on the temporary RUN button. Resume at **Task 14**.
+
 ## Execution notes
 
 - Run phases in order. Within a phase, tasks are ordered and each ends green.

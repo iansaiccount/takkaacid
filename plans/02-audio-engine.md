@@ -1,6 +1,13 @@
 # Phase 02 — Audio output and engine skeleton
 
 > Part of [00-main-plan.md](00-main-plan.md). Tasks **5–9**. Depends on: Phase 01.
+>
+> **Revisions from execution (2026-11-06).** Audio is two-phase:
+> `audio::open_default() -> Opened` resolves device + config, then `Opened::spawn(render_mono, errors)`
+> builds the stream once the caller knows the sample rate; `audio::Rig` wraps both, drains stream errors,
+> reopens after `RETRY_DELAY` and exposes a status string. `start` takes a mono render closure plus a
+> `Sender<()>`, never an `Arc<Mutex<Engine>>`. cpal 0.18 here uses `DeviceTrait::description()`,
+> `SampleRate = u32`, `build_output_stream(config, cb, err, timeout)` and a unified `cpal::Error`.
 > **Delivers:** `Engine::render(&mut [f32])` that is silent when stopped, a real cpal output stream
 > picking a sane device/config, a `Voice` with its final public API (its DSP is a placeholder sine),
 > device-error recovery, and a transport flag the UI can flip.

@@ -1,6 +1,22 @@
 # Phase 07 — Wiring the panel to the engine
 
 > Part of [00-main-plan.md](00-main-plan.md). Tasks **33–37**. Depends on: Phase 06.
+
+> **Revisions from execution (2026-11-06).** These override the task text below where they differ:
+>
+> - **Audio interface.** There is no `AudioRenderer::render_into(interleaved, channels)`. The audio module
+>   exposes `audio::Rig::new(|sample_rate: f32| -> audio::RenderFn)` where
+>   `RenderFn = Box<dyn FnMut(&mut [f32]) + Send>` renders **mono**; `audio::Opened::spawn` owns the
+>   interleaving and duplicates each mono sample to every channel. So `AudioRenderer` should expose
+>   `render_mono(&mut [f32])` behind `RenderFn`, and the tests in Tasks 34–37 use mono buffers
+>   (`vec![0.0; n]`, not `n * channels`).
+> - **Engine lifetime.** The engine is created inside the `Rig` factory, once per successful open, at the
+>   device's sample rate — never behind a mutex.
+> - **eframe/egui 0.37.** `eframe::App` requires `fn ui(&mut self, ui: &mut egui::Ui, frame: &mut Frame)`
+>   (there is no `update(ctx, frame)`); optional `fn logic(&mut self, ctx: &egui::Context, frame: &mut Frame)`
+>   runs every frame even when hidden — that is where `Rig::poll` belongs. Panels take `&mut Ui`.
+> - **Transport.** `Engine::start/stop` already exist and the audio callback drives them from
+>   `SharedState::is_playing()` once per block; Task 36 only needs the UI side and the position publish.
 > **Delivers:** a live instrument. Knob moves are heard immediately, the step LEDs chase the audio
 > position, RUN/STOP/TEMPO work, and the audio callback is proven allocation-free.
 
