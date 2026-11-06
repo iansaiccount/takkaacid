@@ -175,3 +175,44 @@ fn double_click_clears_the_step_back_to_a_rest() {
     click_step(&shared, &mut panel, 1, false, false, 2); // double-click
     assert_eq!(shared.pattern().steps[1], Step::rest());
 }
+
+/// Drag step key `index` upwards by `dy` pixels through `draw_panel` and return the resulting step.
+fn drag_step(shared: &SharedState, panel: &mut PanelState, index: usize, dy: f32) -> Step {
+    let ctx = egui::Context::default();
+    let pos = layout::step_cells(layout::layout(window()).steps)[index].center();
+    let button = |pressed: bool, at: egui::Pos2| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::default(),
+    };
+    // Warm-up, press, two drag frames, release.
+    let frames = [
+        vec![],
+        vec![egui::Event::PointerMoved(pos), button(true, pos)],
+        vec![egui::Event::PointerMoved(pos - egui::vec2(0.0, dy))],
+        vec![egui::Event::PointerMoved(pos - egui::vec2(0.0, dy))],
+        vec![button(false, pos - egui::vec2(0.0, dy))],
+    ];
+    for events in frames {
+        let mut input = egui::RawInput {
+            screen_rect: Some(window()),
+            ..Default::default()
+        };
+        input.events = events;
+        let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
+        output.textures_delta.clear();
+    }
+    shared.pattern().steps[index]
+}
+
+#[test]
+fn dragging_a_step_up_a_fifth_moves_its_pitch_and_keeps_it_a_note() {
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    // A rest becomes a note when dragged, and 84 px up is seven semitones.
+    let step = drag_step(&shared, &mut panel, 4, 84.0);
+    assert!(step.on, "dragging a rest should bring it in");
+    assert_eq!(step.pitch, Pitch::G, "seven semitones above C is G");
+    assert_eq!(step.octave_offset, 0);
+}

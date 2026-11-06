@@ -67,18 +67,49 @@ pub fn gesture_from_input(left: bool, shift: bool, alt: bool, double: bool) -> O
     }
 }
 
+/// Pixels of vertical drag per semitone at 1× scale.
+pub const PITCH_DRAG_PIXELS_PER_SEMITONE: f32 = 12.0;
+
+/// Canonical `(note, octave)` for an absolute semitone, clamped to the panel's `-12..=24`.
+fn from_absolute(absolute: i32) -> (Pitch, i8) {
+    let moved = absolute.clamp(-12, 24);
+    // `24` is two octaves up, but the panel only carries `-1..=1`, so the top clamps to octave 1.
+    let octave = moved.div_euclid(12).clamp(-1, 1);
+    let index = moved.rem_euclid(12) as usize;
+    (Pitch::ALL[index], octave as i8)
+}
+
 /// Move a pitch by whole semitones, rolling into `octave_offset` and clamping at `-12..=24` absolute.
 ///
 /// The result is always canonical: an index in `0..=11` (plain `C`..`B`) plus an octave, so `CHigh` is
 /// spelled `(C, 1)` on the way out.
 pub fn nudge_pitch(pitch: Pitch, semitones: i8) -> (Pitch, i8) {
-    const LOWEST: i32 = -12;
-    const HIGHEST: i32 = 24;
-    let absolute = i32::from(pitch.semitones()).clamp(LOWEST, HIGHEST);
-    let moved = (absolute + i32::from(semitones)).clamp(LOWEST, HIGHEST);
-    let octave = moved.div_euclid(12).clamp(-1, 1);
-    let index = moved.rem_euclid(12) as usize;
-    (Pitch::ALL[index], octave as i8)
+    from_absolute(i32::from(pitch.semitones()) + i32::from(semitones))
+}
+
+/// Semitones covered by a vertical drag: up is higher, and shift quarters the sensitivity.
+pub fn semitones_from_drag(dy_pixels: f32, fine: bool) -> i8 {
+    let per_semitone = if fine {
+        PITCH_DRAG_PIXELS_PER_SEMITONE * 4.0
+    } else {
+        PITCH_DRAG_PIXELS_PER_SEMITONE
+    };
+    (-dy_pixels / per_semitone).round() as i8
+}
+
+/// The pitch a drag from `start` lands on.
+pub fn drag_pitch(start: (Pitch, i8), dy_pixels: f32, fine: bool) -> (Pitch, i8) {
+    let absolute = i32::from(start.0.semitones()) + 12 * i32::from(start.1);
+    from_absolute(absolute + i32::from(semitones_from_drag(dy_pixels, fine)))
+}
+
+/// The panel's spelling of a pitch: note name plus octave, always canonical.
+pub fn pitch_name(pitch: Pitch, octave: i8) -> String {
+    const NAMES: [&str; 12] = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
+    let (pitch, octave) = from_absolute(i32::from(pitch.semitones()) + 12 * i32::from(octave));
+    format!("{}{octave}", NAMES[pitch.semitones() as usize % 12])
 }
 
 #[cfg(test)]
@@ -156,5 +187,33 @@ mod tests {
         assert_eq!(nudge_pitch(Pitch::C, -12), (Pitch::C, -1));
         // Same pitch the plan spelled `(CHigh, 1)`; the canonical spelling is an octave and a plain note.
         assert_eq!(nudge_pitch(Pitch::CHigh, 12), (Pitch::C, 1));
+    }
+
+    #[test]
+    fn twelve_pixels_is_one_semitone() {
+        assert_eq!(semitones_from_drag(-12.0, false), 1);
+        assert_eq!(semitones_from_drag(-24.0, false), 2);
+        assert_eq!(semitones_from_drag(12.0, false), -1);
+        assert_eq!(semitones_from_drag(-4.0, false), 0);
+    }
+
+    #[test]
+    fn fine_drag_is_four_times_slower() {
+        assert_eq!(semitones_from_drag(-48.0, true), 1);
+        assert_eq!(semitones_from_drag(-12.0, true), 0);
+    }
+
+    #[test]
+    fn dragging_a_step_up_a_fifth_lands_on_the_right_note() {
+        assert_eq!(drag_pitch((Pitch::C, 0), -84.0, false), (Pitch::G, 0));
+        assert_eq!(drag_pitch((Pitch::C, 0), 12.0, false), (Pitch::B, -1));
+    }
+
+    #[test]
+    fn pitch_names_are_canonical() {
+        assert_eq!(pitch_name(Pitch::C, 0), "C0");
+        assert_eq!(pitch_name(Pitch::CSharp, 0), "C#0");
+        assert_eq!(pitch_name(Pitch::CHigh, 0), "C1");
+        assert_eq!(pitch_name(Pitch::B, -1), "B-1");
     }
 }

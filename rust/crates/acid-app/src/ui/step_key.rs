@@ -37,7 +37,7 @@ pub fn step_key(ui: &mut egui::Ui, index: usize, view: &StepView, rect: Rect) ->
     let response = ui.interact(
         rect,
         ui.scope_id().with(("step-key", index)),
-        egui::Sense::click(),
+        egui::Sense::click_and_drag(),
     );
     // The design cell is 104 tall; everything below is scaled from that.
     let s = (rect.height() / 104.0).max(0.5);

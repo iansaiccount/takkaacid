@@ -12,7 +12,7 @@ pub mod edit;
 
 use std::sync::Arc;
 
-use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN};
+use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
 use acid_core::timing::DEFAULT_BPM;
 
 use crate::state::SharedState;
@@ -40,6 +40,8 @@ pub struct PanelState {
     pub last_pitch: Pitch,
     /// Octave that goes with `last_pitch`.
     pub last_octave: i8,
+    /// A pitch drag in progress: the step, the pitch it started on, and pixels moved so far.
+    pub drag: Option<(usize, Pitch, i8, f32)>,
 }
 
 impl Default for PanelState {
@@ -53,6 +55,7 @@ impl Default for PanelState {
             position: 0,
             last_pitch: acid_core::pitch::Pitch::C,
             last_octave: 0,
+            drag: None,
         }
     }
 }
@@ -136,6 +139,39 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             }
             shared.set_step(i % STEPS_PER_PATTERN, edited);
             state.pattern = shared.pattern();
+        }
+
+        // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
+        // the drag returns to the original note instead of walking further away.
+        if response.dragged() {
+            let (index, start_pitch, start_octave, moved) = match state.drag {
+                Some((dragged, pitch, octave, moved)) if dragged == i => {
+                    (dragged, pitch, octave, moved)
+                }
+                _ => (i, step.pitch, step.octave_offset, 0.0),
+            };
+            let moved = moved + response.drag_delta().y;
+            state.drag = Some((index, start_pitch, start_octave, moved));
+            let (pitch, octave) = edit::drag_pitch((start_pitch, start_octave), moved, shift);
+            let dragged = Step {
+                on: true,
+                pitch,
+                octave_offset: octave,
+                ..step
+            };
+            state.last_pitch = pitch;
+            state.last_octave = octave;
+            shared.set_step(index, dragged);
+            state.pattern = shared.pattern();
+            ui.painter().text(
+                cell.center(),
+                egui::Align2::CENTER_CENTER,
+                edit::pitch_name(pitch, octave),
+                theme::legend(10.0 * s),
+                theme::SILKSCREEN,
+            );
+        } else {
+            state.drag = None;
         }
     }
 
