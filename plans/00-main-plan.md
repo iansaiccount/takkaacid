@@ -151,7 +151,7 @@ Updated 2026-11-06. The ledger with per-task evidence and every ruling lives in
 | 02 audio & engine | 5–9 | **done** |
 | 03 oscillator | 10–13 | **done** |
 | 04 filter, envelope, VCA | 14–19 | **done** |
-| 05 sequencer | 20–26 | next |
+| 05 sequencer | 20–26 | in progress: 20 pattern model done; 21 next |
 | 06 panel | 27–32 | not started |
 | 07 wiring | 33–37 | not started |
 | 08 patterns & persistence | 38–42 | not started |
@@ -160,8 +160,8 @@ Updated 2026-11-06. The ledger with per-task evidence and every ruling lives in
 | 11 polish | 52–56 | not started |
 | 12 deferred accuracy | — | backlog |
 
-Current tree: 62 tests green in 20 suites, `cargo clippy --workspace --all-targets -- -D warnings` clean,
-app opens a 48 kHz stream and plays a held note on the temporary RUN button. Resume at **Task 20**.
+Current tree: 66 tests green in 21 suites, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+app opens a 48 kHz stream and plays a held note on the temporary RUN button. Resume at **Task 21**.
 
 ## Execution notes
 
