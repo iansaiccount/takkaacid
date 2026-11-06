@@ -1,4 +1,5 @@
 pub mod analysis;
+pub mod bank;
 pub mod clock;
 pub mod engine;
 pub mod envelope;
