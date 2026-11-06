@@ -6,3 +6,4 @@ pub mod layout;
 pub mod panel;
 pub mod knob;
 pub mod step_key;
+pub mod display;
