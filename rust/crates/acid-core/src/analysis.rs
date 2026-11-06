@@ -54,15 +54,25 @@ pub fn dominant_hz(buf: &[f32], sample_rate: f32) -> f32 {
 
     // Correlation for every candidate lag, built once — the sub-octave guard re-reads it.
     let mut corr_at = vec![0.0f32; max_lag + 2];
-    for lag in min_lag..=max_lag {
-        corr_at[lag] = corr(lag);
+    for (lag, slot) in corr_at
+        .iter_mut()
+        .enumerate()
+        .take(max_lag + 1)
+        .skip(min_lag)
+    {
+        *slot = corr(lag);
     }
 
     let mut best_lag = 0usize;
     let mut best = 0.0f32;
-    for lag in min_lag..=max_lag {
-        if corr_at[lag] > best {
-            best = corr_at[lag];
+    for (lag, &c) in corr_at
+        .iter()
+        .enumerate()
+        .take(max_lag + 1)
+        .skip(min_lag)
+    {
+        if c > best {
+            best = c;
             best_lag = lag;
         }
     }
@@ -119,7 +129,7 @@ mod tests {
         assert_eq!(peak(&[0.1, -0.5, 0.25]), 0.5);
         assert!((rms(&[1.0, -1.0, 1.0, -1.0]) - 1.0).abs() < 1e-6);
         let s = sine(440.0, 48_000.0, 48_000);
-        assert!((rms(&s) - 0.7071).abs() < 0.01);
+        assert!((rms(&s) - core::f32::consts::FRAC_1_SQRT_2).abs() < 0.01);
     }
 
     #[test]
