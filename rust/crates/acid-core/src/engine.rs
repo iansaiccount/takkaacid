@@ -65,6 +65,11 @@ impl Engine {
         self.voice.note_off();
     }
 
+    /// SLIDE: glide to `hz` without retriggering the envelope (auditioning, and the ear-check demo).
+    pub fn glide_to(&mut self, hz: f32) {
+        self.voice.glide_to(hz);
+    }
+
     /// WAVEFORM switch.
     pub fn set_waveform(&mut self, waveform: crate::oscillator::Waveform) {
         self.voice.set_waveform(waveform);

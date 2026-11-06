@@ -41,10 +41,7 @@ fn a_released_note_renders_exact_zeros() {
     e.render(&mut vec![0.0; 4_800]);
     let mut tail = vec![1.0; 4_800];
     e.render(&mut tail);
-    assert!(
-        tail.iter().all(|s| *s == 0.0),
-        "tail was not exact silence"
-    );
+    assert!(tail.iter().all(|s| *s == 0.0), "tail was not exact silence");
 }
 
 #[test]
