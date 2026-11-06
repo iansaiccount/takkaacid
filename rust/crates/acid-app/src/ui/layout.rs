@@ -4,7 +4,7 @@
 //! bank/pattern switches, transport. Every band is a fraction of the panel, so the whole face scales as one
 //! piece and nothing is ever positioned in absolute pixels.
 
-use egui::{Pos2, Rect, Vec2};
+use egui::{Pos2, Rect};
 
 use super::theme;
 
@@ -95,11 +95,20 @@ pub fn knob_cells(area: Rect, count: usize) -> Vec<Rect> {
     }
     let gap = theme::GAP;
     let cell_width = (area.width() - gap * (count as f32 - 1.0)) / count as f32;
+    let stride = cell_width + gap;
     (0..count)
         .map(|i| {
-            Rect::from_min_size(
-                Pos2::new(area.left() + i as f32 * (cell_width + gap), area.top()),
-                Vec2::new(cell_width, area.height()),
+            let left = area.left() + i as f32 * stride;
+            // The last cell snaps to the row's right edge: float rounding must never leave a cell a
+            // fraction of a pixel outside the band it belongs to.
+            let right = if i + 1 == count {
+                area.right()
+            } else {
+                left + cell_width
+            };
+            Rect::from_min_max(
+                Pos2::new(left, area.top()),
+                Pos2::new(right, area.bottom()),
             )
         })
         .collect()
@@ -115,6 +124,7 @@ pub fn step_cells(area: Rect) -> [Rect; STEP_COUNT] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui::Vec2;
 
     /// The window grown by half a pixel: the tolerance for float error in a region that must merely *fit*.
     fn expand_rect(size: Vec2) -> Rect {

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use acid_app::audio::Rig;
 use acid_app::state::{self, AudioStatus};
-use acid_app::ui::theme;
+use acid_app::ui as panel_ui;
 use acid_core::engine::Engine;
 use acid_core::pattern::{Pattern, Step};
 use eframe::egui;
@@ -36,20 +36,27 @@ fn main() -> eframe::Result {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size(theme::WINDOW_SIZE)
+            .with_inner_size(panel_ui::theme::WINDOW_SIZE)
             .with_resizable(true),
         ..Default::default()
     };
     eframe::run_native(
         "takka-acid",
         options,
-        Box::new(move |_cc| Ok(Box::new(TakkaApp { rig, state }))),
+        Box::new(move |_cc| {
+            let panel = panel_ui::PanelState {
+                pattern: Arc::new(demo_pattern()),
+                ..Default::default()
+            };
+            Ok(Box::new(TakkaApp { rig, state, panel }))
+        }),
     )
 }
 
 struct TakkaApp {
     rig: Rig,
     state: Arc<state::SharedState>,
+    panel: panel_ui::PanelState,
 }
 
 impl eframe::App for TakkaApp {
@@ -79,32 +86,25 @@ impl eframe::App for TakkaApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0.0, theme::PANEL);
-        ui.painter().text(
-            rect.center_top() + egui::vec2(0.0, 80.0),
-            egui::Align2::CENTER_CENTER,
-            "takka-acid",
-            theme::legend(24.0),
-            theme::SILKSCREEN,
-        );
+        self.panel.playing = self.state.is_playing();
+        panel_ui::draw_panel(&mut self.panel, ui);
 
-        // Temporary transport until the panel lands in Phase 06.
-        let button = egui::Rect::from_center_size(
-            rect.center() + egui::vec2(0.0, 40.0),
-            egui::vec2(120.0, 40.0),
-        );
+        // The one working control until Phase 07 wires the panel: RUN/STOP in the first transport cell.
+        let transport = panel_ui::layout::knob_cells(panel_ui::layout::layout(rect).transport, 4);
         let playing = self.state.is_playing();
         let label = if playing { "STOP" } else { "RUN" };
-        if ui.put(button, egui::Button::new(label)).clicked() {
+        if let Some(cell) = transport.first()
+            && ui.put(*cell, egui::Button::new(label)).clicked()
+        {
             self.state.toggle_playing();
         }
 
         ui.painter().text(
-            rect.center_bottom() - egui::vec2(0.0, 24.0),
+            rect.center_bottom() - egui::vec2(0.0, 6.0),
             egui::Align2::CENTER_CENTER,
             self.rig.status(),
-            theme::legend(12.0),
-            theme::SILKSCREEN_DIM,
+            panel_ui::theme::legend(11.0),
+            panel_ui::theme::SILKSCREEN_DIM,
         );
     }
 }
