@@ -10,3 +10,6 @@ path = "src/main.rs"
 
 [dependencies]
 acid-core = { path = "../acid-core" }
+anyhow = "1.0.104"
+eframe = "0.37.0"
+egui = "0.37.0"
