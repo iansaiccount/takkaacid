@@ -60,6 +60,8 @@ pub struct Engine {
     sequencer: Sequencer,
     drive: Drive,
     limiter: Limiter,
+    /// The VOLUME knob's taper, smoothed so a sweep does not step.
+    volume: param::Smooth,
     playing: bool,
     knobs: Knobs,
 }
@@ -82,6 +84,7 @@ impl Engine {
             sequencer: Sequencer::new(sample_rate),
             drive: Drive::new(sample_rate),
             limiter: Limiter::new(sample_rate),
+            volume: param::Smooth::new(param::master_volume(knobs.volume), 10.0, sample_rate),
             playing: false,
             knobs,
         }
@@ -96,10 +99,18 @@ impl Engine {
         // The sequencer owns the transport: it splits at step boundaries, triggers the steps, and keeps
         // rendering the release tail after a stop so it never cuts mid-cycle.
         self.sequencer.render(&mut self.voice, out);
-        // Master chain, in this order: voice/sequencer → drive → limiter → (VOLUME, Task 46). The limiter
-        // sits before the volume so the ceiling holds whatever the volume knob is doing.
+        // Master chain, in this order: voice/sequencer → drive → limiter → VOLUME. The limiter sits before
+        // the volume so the ceiling holds whatever the volume knob is doing.
+        let target = param::master_volume(self.knobs.volume);
         for sample in out.iter_mut() {
-            *sample = self.limiter.process(self.drive.process(*sample));
+            // Volume 0 is a mute, so it must be exact silence rather than an asymptote.
+            let volume = if target == 0.0 {
+                self.volume.snap(0.0);
+                self.volume.value()
+            } else {
+                self.volume.process(target)
+            };
+            *sample = self.limiter.process(self.drive.process(*sample)) * volume;
         }
     }
 
@@ -236,9 +247,15 @@ impl Engine {
         self.knobs.accent
     }
 
-    /// VOLUME knob — stored now, applied by the master section in Phase 09.
+    /// VOLUME knob, applied after the limiter so it can only attenuate.
+    ///
+    /// A change made while nothing is playing takes effect at once; a change during playback ramps, so a
+    /// sweep never steps.
     pub fn set_volume(&mut self, knob: f32) {
         self.knobs.volume = knob.clamp(0.0, 1.0);
+        if !self.playing && !self.voice.is_active() {
+            self.volume.snap(param::master_volume(self.knobs.volume));
+        }
     }
 
     pub fn volume(&self) -> f32 {

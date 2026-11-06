@@ -1,6 +1,8 @@
 //! The save file: round-trip, atomicity, and the two conversions between disk and running state.
 
-use acid_app::persist::{ENV_DATA_DIR, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved};
+use acid_app::persist::{
+    ENV_DATA_DIR, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved,
+};
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
 
@@ -68,13 +70,19 @@ fn only_non_empty_patterns_get_their_own_file() {
         ..Default::default()
     };
     saved.bank.select(3);
-    saved.bank.replace(3, Pattern::from_steps([Step::note(Pitch::A, 0); 16]));
+    saved
+        .bank
+        .replace(3, Pattern::from_steps([Step::note(Pitch::A, 0); 16]));
     save(dir.path(), &saved).unwrap();
     let files: Vec<String> = std::fs::read_dir(dir.path().join("patterns"))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
-    assert_eq!(files, vec!["A4.json".to_string()], "one file for one pattern");
+    assert_eq!(
+        files,
+        vec!["A4.json".to_string()],
+        "one file for one pattern"
+    );
 }
 
 #[test]
@@ -85,7 +93,9 @@ fn the_shared_state_survives_a_save_and_restore() {
     };
     saved.knobs.cutoff = 0.7;
     saved.knobs.waveform = 1;
-    saved.bank.replace(0, Pattern::from_steps([Step::note(Pitch::C, 0); 16]));
+    saved
+        .bank
+        .replace(0, Pattern::from_steps([Step::note(Pitch::C, 0); 16]));
 
     let shared = saved_to_shared(&saved);
     assert!((shared.tempo_bpm.get() - 155.0).abs() < 1e-6);
@@ -97,7 +107,10 @@ fn the_shared_state_survives_a_save_and_restore() {
     assert!((back.bpm - 155.0).abs() < 1e-6);
     assert!((back.knobs.cutoff - 0.7).abs() < 1e-6);
     assert_eq!(back.knobs.waveform, 1);
-    assert!(back.bank.get(0).steps[0].on, "the current pattern is captured");
+    assert!(
+        back.bank.get(0).steps[0].on,
+        "the current pattern is captured"
+    );
 }
 
 /// Runs in a child process (see the test below) with `TAKKA_ACID_DATA_DIR` set.

@@ -44,6 +44,8 @@ pub struct PanelState {
     pub drag: Option<(usize, Pitch, i8, f32)>,
     /// True when something has changed since the last save.
     pub dirty: bool,
+    /// The VOLUME knob, kept separate from the seven tone knobs.
+    pub volume: f32,
 }
 
 impl Default for PanelState {
@@ -59,6 +61,7 @@ impl Default for PanelState {
             last_octave: 0,
             drag: None,
             dirty: false,
+            volume: acid_core::engine::DEFAULT_VOLUME_KNOB,
         }
     }
 }
@@ -88,6 +91,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     state.knobs[6] = shared.accent.get();
     state.tempo = shared.tempo_bpm.get();
     state.position = shared.position.load(std::sync::atomic::Ordering::Relaxed);
+    state.volume = shared.volume.get();
     panel::paint_panel(ui.painter(), &l);
 
     display::paint_display(
@@ -192,8 +196,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         paint_switch(ui.painter(), cell, s, label);
     }
     // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
-    let cells = layout::knob_cells(l.transport, 4);
-    if let [run, stop, tempo_down, tempo_up] = cells[..] {
+    let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
+    if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {
         let playing = shared.is_playing();
         if transport::transport_button(ui, "run", run, "RUN", playing).clicked() {
             shared.set_playing(true);
@@ -210,6 +214,35 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
         if transport::transport_button(ui, "tempo-up", tempo_up, "TEMPO +", false).clicked() {
             shared.tempo_bpm.set(transport::nudge_tempo(bpm, 1));
+            state.dirty = true;
+        }
+
+        // VOLUME lives in the last cell, sized to the row rather than to the tone knobs: a two-thirds-scale
+        // knob would punch through the switches row and hide the MODE legend. The caption sits beside it.
+        let diameter = (volume_cell.height() * 0.70).min(volume_cell.width() * 0.3);
+        let knob_rect = egui::Rect::from_min_size(
+            egui::Pos2::new(volume_cell.left() + 4.0 * s, volume_cell.top()),
+            egui::vec2(diameter, volume_cell.height()),
+        );
+        let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(knob_rect));
+        cell_ui.set_clip_rect(knob_rect);
+        let before = state.volume;
+        knob::knob(
+            &mut cell_ui,
+            egui::Id::unique(("knob", 7)),
+            "",
+            &mut state.volume,
+            diameter,
+        );
+        ui.painter().text(
+            egui::Pos2::new(knob_rect.right() + 6.0 * s, volume_cell.center().y),
+            egui::Align2::LEFT_CENTER,
+            "VOLUME",
+            theme::legend(11.0 * s),
+            theme::SILKSCREEN,
+        );
+        if state.volume != before {
+            shared.volume.set(state.volume);
             state.dirty = true;
         }
     }

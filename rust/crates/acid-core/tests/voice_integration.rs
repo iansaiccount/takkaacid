@@ -19,6 +19,8 @@ fn a_default_patch_produces_a_decaying_resonant_bass_note() {
     e.set_env_mod(0.5);
     e.set_decay(0.35);
     e.set_accent(0.8);
+    // Volume at unity: this test measures the patch's envelope, not the master stage behind it.
+    e.set_volume(1.0);
     e.note_on(55.0, false);
 
     let mut buf = vec![0.0; 48_000];

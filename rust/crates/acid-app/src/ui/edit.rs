@@ -153,7 +153,10 @@ mod tests {
             slide: true,
             ..Step::note(Pitch::B, 1)
         };
-        assert_eq!(apply_gesture(s, StepGesture::Clear, Pitch::C, 0), Step::rest());
+        assert_eq!(
+            apply_gesture(s, StepGesture::Clear, Pitch::C, 0),
+            Step::rest()
+        );
     }
 
     #[test]

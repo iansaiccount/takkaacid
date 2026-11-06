@@ -7,7 +7,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
 use acid_core::bank::PatternBank;
 use acid_core::engine::{DEFAULT_TUNING_KNOB, DEFAULT_VOLUME_KNOB};
 use acid_core::oscillator::Waveform;
@@ -16,6 +15,7 @@ use acid_core::voice::{
     DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
     DEFAULT_RESONANCE_KNOB,
 };
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::state::SharedState;
@@ -85,7 +85,9 @@ pub fn data_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("XDG_DATA_HOME") {
         return PathBuf::from(dir).join(APP_DIR);
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default();
     home.join(".local").join("share").join(APP_DIR)
 }
 
@@ -118,8 +120,8 @@ pub fn load(dir: &Path) -> Result<Option<SavedState>> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
     };
-    let state = serde_json::from_slice(&bytes)
-        .with_context(|| format!("parsing {}", path.display()))?;
+    let state =
+        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
     Ok(Some(state))
 }
 

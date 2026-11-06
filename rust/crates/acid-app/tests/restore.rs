@@ -1,8 +1,6 @@
 //! Restore on launch and the save debounce: a broken or hand-edited file must never stop the app opening.
 
-use acid_app::persist::{
-    AUTOSAVE_INTERVAL, Autosave, SavedState, load_or_default, sanitize, save,
-};
+use acid_app::persist::{AUTOSAVE_INTERVAL, Autosave, SavedState, load_or_default, sanitize, save};
 use std::time::Instant;
 
 #[test]

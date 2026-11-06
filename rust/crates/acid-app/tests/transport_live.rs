@@ -3,7 +3,7 @@
 
 use acid_app::audio::renderer::AudioRenderer;
 use acid_app::state::SharedState;
-use acid_app::ui::{PanelState, draw_panel, layout, transport::nudge_tempo};
+use acid_app::ui::{PanelState, draw_panel, layout, transport, transport::nudge_tempo};
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
 
@@ -14,7 +14,11 @@ fn window() -> egui::Rect {
 /// Click one cell of the transport row through three egui frames (warm-up, press, release).
 fn click_transport(shared: &SharedState, panel: &mut PanelState, index: usize) {
     let ctx = egui::Context::default();
-    let pos = layout::knob_cells(layout::layout(window()).transport, 4)[index].center();
+    let pos = layout::knob_cells(
+        layout::layout(window()).transport,
+        transport::TRANSPORT_CELLS,
+    )[index]
+        .center();
     let button = |pressed: bool| egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
@@ -39,13 +43,11 @@ fn click_transport(shared: &SharedState, panel: &mut PanelState, index: usize) {
 #[test]
 fn position_is_published_and_never_exceeds_fifteen() {
     let s = SharedState::new();
-    s.playing
-        .store(true, std::sync::atomic::Ordering::Relaxed);
+    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
     s.tempo_bpm.set(300.0);
-    s.set_pattern(std::sync::Arc::new(Pattern::from_steps([
-        Step::note(Pitch::A, -1);
-        16
-    ])));
+    s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
+        [Step::note(Pitch::A, -1); 16],
+    )));
     let mut r = AudioRenderer::new(48_000.0, 2, s.clone(), 2_048);
     let mut out = vec![0.0f32; 4_096];
     for _ in 0..200 {
@@ -61,16 +63,13 @@ fn position_is_published_and_never_exceeds_fifteen() {
 #[test]
 fn stopping_clears_the_chase() {
     let s = SharedState::new();
-    s.playing
-        .store(true, std::sync::atomic::Ordering::Relaxed);
-    s.set_pattern(std::sync::Arc::new(Pattern::from_steps([
-        Step::note(Pitch::A, -1);
-        16
-    ])));
+    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
+    s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
+        [Step::note(Pitch::A, -1); 16],
+    )));
     let mut r = AudioRenderer::new(48_000.0, 2, s.clone(), 2_048);
     r.render_into(&mut vec![0.0f32; 4_096]);
-    s.playing
-        .store(false, std::sync::atomic::Ordering::Relaxed);
+    s.playing.store(false, std::sync::atomic::Ordering::Relaxed);
     r.render_into(&mut vec![0.0f32; 4_096]);
     let position = s.position.load(std::sync::atomic::Ordering::Relaxed);
     let playing = s.playing.load(std::sync::atomic::Ordering::Relaxed);
@@ -90,7 +89,10 @@ fn the_run_button_starts_the_transport() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     click_transport(&shared, &mut panel, 0);
-    assert!(shared.is_playing(), "RUN must set the shared transport flag");
+    assert!(
+        shared.is_playing(),
+        "RUN must set the shared transport flag"
+    );
 }
 
 #[test]
@@ -108,4 +110,3 @@ fn the_tempo_buttons_nudge_the_shared_tempo() {
     click_transport(&shared, &mut panel, 2); // TEMPO −
     assert!((shared.tempo_bpm.get() - before).abs() < 1e-6);
 }
-

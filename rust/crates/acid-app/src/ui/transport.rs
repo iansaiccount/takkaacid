@@ -12,8 +12,16 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))
 }
 
+/// Cells in the transport row: RUN, STOP, TEMPO −, TEMPO +, VOLUME.
+pub const TRANSPORT_CELLS: usize = 5;
 /// A rectangular transport key. `lit` paints the legend in `LED_ACCENT`, the way RUN glows while playing.
-pub fn transport_button(ui: &mut egui::Ui, id: &str, rect: Rect, label: &str, lit: bool) -> Response {
+pub fn transport_button(
+    ui: &mut egui::Ui,
+    id: &str,
+    rect: Rect,
+    label: &str,
+    lit: bool,
+) -> Response {
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     let scale = (rect.height() / 44.0).clamp(0.65, 1.6);
     let face = if lit {

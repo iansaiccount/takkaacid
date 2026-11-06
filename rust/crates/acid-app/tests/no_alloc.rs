@@ -35,10 +35,9 @@ static A: Counting = Counting;
 fn the_audio_path_never_allocates() {
     let s = SharedState::new();
     s.playing.store(true, Ordering::Relaxed);
-    s.set_pattern(std::sync::Arc::new(Pattern::from_steps([
-        Step::note(Pitch::A, -1);
-        16
-    ])));
+    s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
+        [Step::note(Pitch::A, -1); 16],
+    )));
     let mut r = AudioRenderer::new(48_000.0, 2, s.clone(), 1_024);
     let mut out = vec![0.0f32; 2_048];
     r.render_into(&mut out); // warm-up: the first block may swap in the pattern Arc
@@ -60,15 +59,20 @@ fn the_audio_path_never_allocates() {
         r.render_into(&mut out);
     }
     let swept = COUNT.load(Ordering::Relaxed);
-    assert_eq!(swept, 0, "a knob sweep allocated {swept} times in the audio path");
+    assert_eq!(
+        swept, 0,
+        "a knob sweep allocated {swept} times in the audio path"
+    );
 
     // A pattern switch is the one allowed exception: it publishes a new `Arc` once, not per block.
     COUNT.store(0, Ordering::Relaxed);
-    s.set_pattern(std::sync::Arc::new(Pattern::from_steps([
-        Step::note(Pitch::C, 0);
-        16
-    ])));
+    s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
+        [Step::note(Pitch::C, 0); 16],
+    )));
     r.render_into(&mut out);
     let swap = COUNT.load(Ordering::Relaxed);
-    assert!(swap <= 2, "a pattern swap should not be a steady-state cost: {swap}");
+    assert!(
+        swap <= 2,
+        "a pattern swap should not be a steady-state cost: {swap}"
+    );
 }
