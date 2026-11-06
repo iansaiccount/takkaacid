@@ -26,15 +26,29 @@ impl Engine {
 
     /// Fill `out` with the next block of mono samples.
     pub fn render(&mut self, out: &mut [f32]) {
-        if !self.playing {
+        // Keep rendering through the release tail after a stop, so it never cuts mid-cycle.
+        if self.playing || self.voice.is_active() {
+            self.voice.render(out);
+        } else {
             out.fill(0.0);
-            return;
         }
-        self.voice.render(out);
     }
 
     pub fn is_playing(&self) -> bool {
         self.playing
+    }
+
+    /// Start the transport. Until the sequencer exists (Phase 05) this holds the root note.
+    pub fn start(&mut self) {
+        self.playing = true;
+        self.voice
+            .note_on(crate::pitch::step_hz(crate::pitch::Pitch::C, 0), false);
+    }
+
+    /// Stop the transport and close the gate.
+    pub fn stop(&mut self) {
+        self.playing = false;
+        self.voice.note_off();
     }
 
     /// Play a note directly, outside the sequencer (used by the first audible milestone and MIDI keys).
