@@ -1,3 +1,10 @@
+//! Integration test for the whole voice as the Engine exposes it: does the launch patch sound like a
+//! decaying resonant bass, and does every knob read back what was written to it.
+//!
+//! These assertions are deliberately about *audible* properties (attack level, decay, brightness falling)
+//! plus the knob contract — not about internals. If a change makes the voice stop decaying or the filter
+//! stop closing, this file fails before the ear test would.
+
 use acid_core::analysis::{brightness, peak, rms};
 use acid_core::engine::Engine;
 use acid_core::oscillator::Waveform;
@@ -38,6 +45,7 @@ fn every_knob_reads_back_what_was_set() {
     e.set_env_mod(0.1);
     e.set_decay(0.6);
     e.set_accent(0.4);
+    e.set_volume(0.55);
 
     assert_eq!(e.waveform(), Waveform::Square);
     assert!((e.tuning() - 0.75).abs() < 1e-6);
@@ -46,6 +54,21 @@ fn every_knob_reads_back_what_was_set() {
     assert!((e.env_mod() - 0.1).abs() < 1e-6);
     assert!((e.decay() - 0.6).abs() < 1e-6);
     assert!((e.accent() - 0.4).abs() < 1e-6);
+    assert!((e.volume() - 0.55).abs() < 1e-6);
+}
+
+#[test]
+fn knobs_clamp_instead_of_storing_nonsense() {
+    let mut e = Engine::new(48_000.0);
+    e.set_cutoff(9.0);
+    e.set_resonance(-3.0);
+    e.set_tuning(2.5);
+    e.set_volume(1.4);
+
+    assert!((e.cutoff() - 1.0).abs() < 1e-6, "cutoff {}", e.cutoff());
+    assert!((e.resonance() - 0.0).abs() < 1e-6);
+    assert!((e.tuning() - 1.0).abs() < 1e-6);
+    assert!((e.volume() - 1.0).abs() < 1e-6);
 }
 
 #[test]
@@ -58,4 +81,5 @@ fn a_fresh_engine_starts_on_the_launch_patch() {
     assert!((e.env_mod() - acid_core::voice::DEFAULT_ENV_MOD_KNOB).abs() < 1e-6);
     assert!((e.decay() - acid_core::voice::DEFAULT_DECAY_KNOB).abs() < 1e-6);
     assert!((e.accent() - acid_core::voice::DEFAULT_ACCENT_KNOB).abs() < 1e-6);
+    assert!((e.volume() - acid_core::engine::DEFAULT_VOLUME_KNOB).abs() < 1e-6);
 }
