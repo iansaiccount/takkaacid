@@ -24,6 +24,10 @@ pub const DEFAULT_VOLUME_KNOB: f32 = 0.8;
 /// DRIVE knob at launch: clean, so the first thing you hear is the voice, not the clipping.
 pub const DEFAULT_DRIVE_KNOB: f32 = 0.0;
 
+/// What the factory pattern should measure at launch settings, in dBFS. The voice's amplitude is staged for
+/// this; `tests/gain_staging.rs` holds it to a ±4 dB window.
+pub const TARGET_RMS_DB: f32 = -14.0;
+
 /// Every knob position, so readback and persistence have one source of truth.
 #[derive(Copy, Clone, Debug)]
 struct Knobs {

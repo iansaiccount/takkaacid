@@ -28,7 +28,10 @@ pub const DEFAULT_ACCENT_KNOB: f32 = 0.8;
 const ATTACK_MS: f32 = 2.0;
 const SUSTAIN: f32 = 0.35;
 const RELEASE_MS: f32 = 20.0;
-const AMPLITUDE: f32 = 0.3;
+/// Output staged so the factory pattern measures about -17 dBFS RMS at `volume = 1.0, drive = 0.0`, with
+/// peaks near 0.81. -14 dBFS was the target, but this patch's crest factor is 5.8x, which would put peaks at
+/// 1.15 and make the limiter do the level control — `tests/gain_staging.rs` requires peaks under 0.9.
+const AMPLITUDE: f32 = 0.92;
 /// How far the filter envelope sweeps at `env_mod = 1.0`, in octaves.
 pub const ENV_MOD_OCTAVES: f32 = 4.0;
 /// Filter envelope attack — snappier than the VCA's.
