@@ -75,12 +75,8 @@ impl Clock {
             left -= self.remaining;
             self.step_index += 1;
             crossed += 1;
-            self.remaining = step_duration_samples(
-                self.step_index,
-                self.bpm,
-                self.sample_rate,
-                self.swing,
-            );
+            self.remaining =
+                step_duration_samples(self.step_index, self.bpm, self.sample_rate, self.swing);
         }
         self.remaining -= left;
         crossed

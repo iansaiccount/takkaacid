@@ -28,7 +28,11 @@ fn selecting_keeps_the_engine_at_its_current_step() {
     let position = e.position();
     assert!(position >= 4, "should have advanced, at {position}");
     e.set_pattern(Arc::new(b));
-    assert_eq!(e.position(), position, "switching must not restart the loop");
+    assert_eq!(
+        e.position(),
+        position,
+        "switching must not restart the loop"
+    );
     let mut buf = vec![0.0; 12_000];
     e.render(&mut buf);
     assert!(
@@ -55,5 +59,9 @@ fn selecting_out_of_range_clamps_instead_of_losing_the_bank() {
     assert_eq!(bank.current(), 63);
     bank.select(0);
     assert_eq!(bank.current(), 0);
-    assert_eq!(bank.get(999).steps.len(), 16, "a stray index reads the last pattern");
+    assert_eq!(
+        bank.get(999).steps.len(),
+        16,
+        "a stray index reads the last pattern"
+    );
 }

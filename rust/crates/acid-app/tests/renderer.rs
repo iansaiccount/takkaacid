@@ -34,14 +34,12 @@ fn stopped_transport_renders_silence_into_every_channel() {
 #[test]
 fn playing_duplicates_the_mono_signal_to_both_channels() {
     let s = SharedState::new();
-    s.playing
-        .store(true, std::sync::atomic::Ordering::Relaxed);
+    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
     s.tempo_bpm.set(120.0);
     s.set_pattern(std::sync::Arc::new(
-        acid_core::pattern::Pattern::from_steps([acid_core::pattern::Step::note(
-            acid_core::pitch::Pitch::A,
-            -1,
-        ); 16]),
+        acid_core::pattern::Pattern::from_steps(
+            [acid_core::pattern::Step::note(acid_core::pitch::Pitch::A, -1); 16],
+        ),
     ));
     let mut r = AudioRenderer::new(48_000.0, 2, s, 2_048);
     let mut out = vec![0.0f32; 8_192];
@@ -57,14 +55,12 @@ fn playing_duplicates_the_mono_signal_to_both_channels() {
 fn block_size_never_changes_what_the_renderer_produces() {
     let make = || {
         let s = SharedState::new();
-        s.playing
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
         s.tempo_bpm.set(137.0);
         s.set_pattern(std::sync::Arc::new(
-            acid_core::pattern::Pattern::from_steps([acid_core::pattern::Step::note(
-                acid_core::pitch::Pitch::E,
-                0,
-            ); 16]),
+            acid_core::pattern::Pattern::from_steps(
+                [acid_core::pattern::Step::note(acid_core::pitch::Pitch::E, 0); 16],
+            ),
         ));
         AudioRenderer::new(44_100.0, 1, s, 4_096)
     };

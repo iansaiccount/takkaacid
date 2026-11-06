@@ -63,7 +63,8 @@ fn the_panel_never_overlaps_itself_at_any_reasonable_size() {
 fn knob_hit_targets_stay_usable_at_the_smallest_size() {
     let l = layout(Rect::from_min_size(Pos2::ZERO, egui::vec2(700.0, 400.0)));
     assert!(
-        l.knobs.cells
+        l.knobs
+            .cells
             .iter()
             .all(|r| r.width() >= 40.0 && r.height() >= 40.0)
     );

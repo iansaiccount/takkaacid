@@ -34,7 +34,11 @@ pub fn step_view(step: &Step, index: usize, position: usize, playing: bool) -> S
 /// Layout inside the cell, top to bottom: LED well, 2 px gap, keycap, slide bar. The LED is lit while the
 /// step is playing or the step carries a note, and gets an amber ring when accented.
 pub fn step_key(ui: &mut egui::Ui, index: usize, view: &StepView, rect: Rect) -> Response {
-    let response = ui.interact(rect, ui.scope_id().with(("step-key", index)), egui::Sense::click());
+    let response = ui.interact(
+        rect,
+        ui.scope_id().with(("step-key", index)),
+        egui::Sense::click(),
+    );
     // The design cell is 104 tall; everything below is scaled from that.
     let s = (rect.height() / 104.0).max(0.5);
     let led_band = 12.0 * s;
@@ -46,10 +50,7 @@ pub fn step_key(ui: &mut egui::Ui, index: usize, view: &StepView, rect: Rect) ->
         egui::Pos2::new(rect.left(), rect.top() + led_band + gap),
         egui::Pos2::new(rect.right(), rect.bottom() - bar - gap),
     );
-    let slide_bar = Rect::from_min_max(
-        egui::Pos2::new(rect.left(), rect.bottom() - bar),
-        rect.max,
-    );
+    let slide_bar = Rect::from_min_max(egui::Pos2::new(rect.left(), rect.bottom() - bar), rect.max);
 
     let painter = ui.painter();
     let led_radius = (led_band * 0.30).max(2.0);

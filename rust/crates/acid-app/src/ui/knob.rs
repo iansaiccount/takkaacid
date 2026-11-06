@@ -83,11 +83,7 @@ pub fn knob(
     let line = (radius * 0.12).max(2.0);
     painter.circle_filled(center, radius, theme::WELL);
     painter.circle_filled(center, radius * 0.86, theme::PANEL_RAISED);
-    painter.circle_stroke(
-        center,
-        radius * 0.58,
-        egui::Stroke::new(line, theme::PANEL),
-    );
+    painter.circle_stroke(center, radius * 0.58, egui::Stroke::new(line, theme::PANEL));
     painter.add(egui::Shape::line(
         arc_points(center, radius * 0.95, 1.0),
         theme::silkscreen_stroke(line * 0.8),
@@ -144,7 +140,11 @@ mod tests {
         assert!((angle_for(1.0) - 135f32.to_radians()).abs() < 1e-5);
         let points = arc_points(Pos2::new(100.0, 100.0), 40.0, 0.5);
         assert!(points.len() > 8);
-        assert!(points.iter().all(|p| (p.distance(Pos2::new(100.0, 100.0)) - 40.0).abs() < 0.01));
+        assert!(
+            points
+                .iter()
+                .all(|p| (p.distance(Pos2::new(100.0, 100.0)) - 40.0).abs() < 0.01)
+        );
     }
 
     #[test]
@@ -164,7 +164,10 @@ mod tests {
         // previous frame's widget rects.
         for events in core::iter::once(Vec::new()).chain(events_per_frame) {
             let mut input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(400.0, 400.0))),
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(400.0, 400.0),
+                )),
                 ..Default::default()
             };
             if shift {
@@ -177,7 +180,13 @@ mod tests {
             }
             input.events.extend(events);
             let mut output = ctx.run_ui(input, |ui| {
-                knob(ui, egui::Id::unique("test-knob"), "TUNING", &mut value, diameter);
+                knob(
+                    ui,
+                    egui::Id::unique("test-knob"),
+                    "TUNING",
+                    &mut value,
+                    diameter,
+                );
             });
             output.textures_delta.clear();
         }
@@ -236,7 +245,13 @@ mod tests {
             true,
             60.0,
         );
-        assert!((coarse - 0.5).abs() > 0.05, "coarse drag should move it: {coarse}");
-        assert!((fine - 0.5).abs() < 0.02, "fine drag should barely move it: {fine}");
+        assert!(
+            (coarse - 0.5).abs() > 0.05,
+            "coarse drag should move it: {coarse}"
+        );
+        assert!(
+            (fine - 0.5).abs() < 0.02,
+            "fine drag should barely move it: {fine}"
+        );
     }
 }

@@ -80,10 +80,9 @@ fn block_size_never_changes_the_output() {
 #[test]
 fn position_advances_and_stop_silences() {
     let mut e = Engine::new(48_000.0);
-    e.set_pattern(Arc::new(Pattern::from_steps([
-        Step::note(Pitch::A, -1);
-        16
-    ])));
+    e.set_pattern(Arc::new(Pattern::from_steps(
+        [Step::note(Pitch::A, -1); 16],
+    )));
     e.set_bpm(240.0);
     e.start();
     e.render(&mut vec![0.0; 24_000]);

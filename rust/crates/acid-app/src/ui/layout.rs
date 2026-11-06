@@ -106,10 +106,7 @@ pub fn knob_cells(area: Rect, count: usize) -> Vec<Rect> {
             } else {
                 left + cell_width
             };
-            Rect::from_min_max(
-                Pos2::new(left, area.top()),
-                Pos2::new(right, area.bottom()),
-            )
+            Rect::from_min_max(Pos2::new(left, area.top()), Pos2::new(right, area.bottom()))
         })
         .collect()
 }
@@ -169,13 +166,17 @@ mod tests {
         assert_eq!(keys.len(), 16);
         assert!(keys.iter().all(|k| k.width() > 12.0 && k.height() > 20.0));
         for pair in keys.windows(2) {
-            assert!((pair[1].left() - pair[0].left() - (keys[1].left() - keys[0].left())).abs() < 0.5);
+            assert!(
+                (pair[1].left() - pair[0].left() - (keys[1].left() - keys[0].left())).abs() < 0.5
+            );
         }
     }
 
     #[test]
     fn the_panel_keeps_its_aspect_and_scales_within_bounds() {
-        assert!((scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(980.0, 560.0))) - 1.0).abs() < 0.01);
+        assert!(
+            (scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(980.0, 560.0))) - 1.0).abs() < 0.01
+        );
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(100.0, 100.0))) >= 0.65);
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(4000.0, 3000.0))) <= 1.6);
         let r = design_rect(Rect::from_min_size(Pos2::ZERO, egui::vec2(1600.0, 900.0)));

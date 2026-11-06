@@ -46,7 +46,12 @@ fn editing_one_step_keeps_the_other_fifteen() {
     assert!(read.steps[2].accent);
     assert_eq!(read.steps[2].pitch, Pitch::G);
     assert_eq!(read.steps.len(), 16);
-    assert!(read.steps.iter().enumerate().all(|(i, st)| i == 2 || !st.on));
+    assert!(
+        read.steps
+            .iter()
+            .enumerate()
+            .all(|(i, st)| i == 2 || !st.on)
+    );
 }
 
 #[test]

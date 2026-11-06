@@ -71,5 +71,8 @@ fn a_slide_step_does_not_restart_the_envelope() {
     // constant means 125 ms of step gets it to ~87 Hz, not 92.5 — hence the threshold sits below the
     // target, and the trend is what is being asserted here.
     let late = dominant_hz(&buf[9_500..11_900], sr);
-    assert!(late > 78.0, "should have glided up toward the octave: {late} Hz");
+    assert!(
+        late > 78.0,
+        "should have glided up toward the octave: {late} Hz"
+    );
 }

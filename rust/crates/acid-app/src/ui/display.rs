@@ -109,14 +109,15 @@ fn paint_segments(painter: &Painter, cell: Rect, segments: [bool; 7], scale: f32
             color,
         );
     };
-    let vert = |painter: &Painter, x: f32, top: f32, bottom: f32, thick: f32, color: egui::Color32| {
-        bar(
-            painter,
-            Pos2::new(x - thick * 0.5, top + thick),
-            Pos2::new(x + thick * 0.5, bottom - thick),
-            color,
-        );
-    };
+    let vert =
+        |painter: &Painter, x: f32, top: f32, bottom: f32, thick: f32, color: egui::Color32| {
+            bar(
+                painter,
+                Pos2::new(x - thick * 0.5, top + thick),
+                Pos2::new(x + thick * 0.5, bottom - thick),
+                color,
+            );
+        };
 
     let halo = egui::Color32::from_rgba_unmultiplied(0xFF, 0xE0, 0x66, 102); // 40 % LED_ON
     if segments[A] {

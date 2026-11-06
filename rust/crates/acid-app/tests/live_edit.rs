@@ -11,8 +11,7 @@ use acid_core::pitch::Pitch;
 #[test]
 fn an_edit_made_while_rendering_is_heard_on_the_next_pass() {
     let s = SharedState::new();
-    s.playing
-        .store(true, std::sync::atomic::Ordering::Relaxed);
+    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
     s.tempo_bpm.set(240.0); // 3000 samples per step at 48k
     s.set_pattern(std::sync::Arc::new(Pattern::empty())); // everything silent
     let mut r = AudioRenderer::new(48_000.0, 2, s.clone(), 4_096);
@@ -79,7 +78,11 @@ fn clicking_a_step_key_toggles_it_in_the_shared_state() {
         modifiers: egui::Modifiers::default(),
     };
     // Warm-up frame, then press, then release: egui routes interaction through the previous frame.
-    for events in [vec![], vec![egui::Event::PointerMoved(pos), press], vec![release]] {
+    for events in [
+        vec![],
+        vec![egui::Event::PointerMoved(pos), press],
+        vec![release],
+    ] {
         let mut input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,

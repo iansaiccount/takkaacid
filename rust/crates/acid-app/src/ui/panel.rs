@@ -80,7 +80,10 @@ pub fn paint_panel(painter: &Painter, layout: &PanelLayout) {
         painter.circle_stroke(pos, r, theme::silkscreen_stroke(1.0 * s));
         // A single slot, so the screw reads as a screw and not a rivet.
         painter.line_segment(
-            [pos - egui::vec2(r * 0.6, 0.0), pos + egui::vec2(r * 0.6, 0.0)],
+            [
+                pos - egui::vec2(r * 0.6, 0.0),
+                pos + egui::vec2(r * 0.6, 0.0),
+            ],
             theme::silkscreen_stroke(1.0 * s),
         );
     }
@@ -128,7 +131,10 @@ mod tests {
         assert!(pattern.right() <= tempo.left());
         assert!(tempo.right() <= l.top.right());
         for r in [brand, pattern, tempo] {
-            assert!(l.top.contains_rect(r), "region escapes the top strip: {r:?}");
+            assert!(
+                l.top.contains_rect(r),
+                "region escapes the top strip: {r:?}"
+            );
         }
     }
 

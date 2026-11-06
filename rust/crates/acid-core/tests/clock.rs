@@ -77,8 +77,16 @@ fn tempo_changes_apply_to_the_step_in_flight() {
         "the remaining half-step halves with the tempo: {}",
         c.samples_until_next_step()
     );
-    assert_eq!(c.advance_by(1_000), 0, "1000 samples is under the 1500 left");
-    assert_eq!(c.advance_by(1_000), 1, "2000 samples clears the boundary at the new tempo");
+    assert_eq!(
+        c.advance_by(1_000),
+        0,
+        "1000 samples is under the 1500 left"
+    );
+    assert_eq!(
+        c.advance_by(1_000),
+        1,
+        "2000 samples clears the boundary at the new tempo"
+    );
 }
 
 #[test]
