@@ -17,6 +17,9 @@ pub const MARGIN: f32 = 16.0;
 /// Gap between neighbouring controls.
 pub const GAP: f32 = 6.0;
 
+/// Radius of the four corner screws at 1× scale.
+pub const SCREW_RADIUS: f32 = 4.0;
+
 /// Panel face — near black, never pure black.
 pub const PANEL: Color32 = Color32::from_rgb(0x0B, 0x0B, 0x0B);
 /// Knob bodies and raised button faces.
@@ -41,6 +44,11 @@ pub const WHITE_KEY: Color32 = Color32::from_rgb(0xE8, 0xE2, 0xD0);
 /// The silkscreen font at a given size.
 pub fn legend(size: f32) -> FontId {
     FontId::new(size, egui::FontFamily::Proportional)
+}
+
+/// An engraving stroke: amber-dim, never pure white, never a shadow.
+pub fn silkscreen_stroke(width: f32) -> egui::Stroke {
+    egui::Stroke::new(width, SILKSCREEN_DIM)
 }
 
 /// Rec. 709 relative luminance in `0.0..=1.0`, computed on linearised sRGB so dark colours separate
