@@ -63,14 +63,16 @@ pub fn dominant_hz(buf: &[f32], sample_rate: f32) -> f32 {
         *slot = corr(lag);
     }
 
+    // A smooth waveform correlates near 1.0 at tiny lags, so the search starts only after the
+    // correlation has first gone negative — one half period in, which no waveform can fake.
+    let search_from = (min_lag..=max_lag)
+        .find(|&lag| corr_at[lag] < 0.0)
+        .map(|lag| lag + 1)
+        .unwrap_or(min_lag);
+
     let mut best_lag = 0usize;
     let mut best = 0.0f32;
-    for (lag, &c) in corr_at
-        .iter()
-        .enumerate()
-        .take(max_lag + 1)
-        .skip(min_lag)
-    {
+    for (lag, &c) in corr_at.iter().enumerate().take(max_lag + 1).skip(search_from) {
         if c > best {
             best = c;
             best_lag = lag;
@@ -84,7 +86,7 @@ pub fn dominant_hz(buf: &[f32], sample_rate: f32) -> f32 {
     // reports an octave low. Take the earliest local peak that is nearly as strong instead.
     let threshold = best * 0.9;
     let mut chosen = best_lag;
-    for lag in (min_lag + 1)..max_lag {
+    for lag in search_from.max(min_lag + 1)..max_lag {
         let c = corr_at[lag];
         if c >= threshold && c >= corr_at[lag - 1] && c >= corr_at[lag + 1] {
             chosen = lag;
