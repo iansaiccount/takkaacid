@@ -114,6 +114,30 @@ pub fn dominant_hz(buf: &[f32], sample_rate: f32) -> f32 {
     if lag <= 0.0 { 0.0 } else { sample_rate / lag }
 }
 
+/// Ratio of high-frequency energy to total energy — a cheap brightness proxy.
+///
+/// `rms(first difference) / rms(buf)`. Used by every brightness assertion in Phase 04; `0.0` for
+/// silence and for buffers too short to difference.
+pub fn brightness(buf: &[f32]) -> f32 {
+    if buf.len() < 2 {
+        return 0.0;
+    }
+    let mut diff_energy = 0.0f64;
+    let mut energy = 0.0f64;
+    for pair in buf.windows(2) {
+        let d = (pair[1] - pair[0]) as f64;
+        diff_energy += d * d;
+    }
+    for s in buf {
+        energy += (*s as f64) * (*s as f64);
+    }
+    if energy <= 1e-20 {
+        0.0
+    } else {
+        (diff_energy / energy).sqrt() as f32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,6 @@
 pub mod analysis;
 pub mod engine;
+pub mod filter;
 pub mod oscillator;
 pub mod param;
 pub mod pitch;
