@@ -85,9 +85,10 @@ impl AudioHandle {
 }
 
 /// Open the default output device and pull mono frames from `render_mono` forever.
-pub fn start<F>(render_mono: F) -> Result<AudioHandle>
+fn start_inner<F, E>(render_mono: F, on_error: E) -> Result<AudioHandle>
 where
     F: FnMut(&mut [f32]) + Send + 'static,
+    E: FnMut(cpal::Error) + Send + 'static,
 {
     let host = cpal::default_host();
     let device = host
@@ -126,7 +127,6 @@ where
     let mut mono = vec![0.0f32; MAX_BLOCK];
     let mut render = render_mono;
     let ch = channels as usize;
-    let error_callback = |err| eprintln!("takka-acid: audio stream error: {err}");
 
     let stream = match format {
         SampleFormat::F32 => device.build_output_stream(
@@ -144,7 +144,7 @@ where
                     done += n;
                 }
             },
-            error_callback,
+            on_error,
             None,
         )?,
         other => return Err(anyhow!("unsupported sample format {other:?}")),
@@ -159,10 +159,6 @@ where
     })
 }
 
-/// A silent stream, used when the app must keep running without a device.
-pub fn start_silent() -> Result<AudioHandle> {
-    start(|buf| buf.fill(0.0))
-}
 
 #[cfg(test)]
 mod tests {
@@ -175,5 +171,108 @@ mod tests {
         assert_eq!(pick_rate(&[96_000, 44_100]), Some(44_100));
         assert_eq!(pick_rate(&[192_000, 96_000]), Some(96_000));
         assert_eq!(pick_rate(&[]), None);
+    }
+}
+
+pub mod supervisor;
+
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::time::Instant;
+
+pub use supervisor::{Action, Supervisor};
+
+/// A mono render closure the callback can own.
+pub type RenderFn = Box<dyn FnMut(&mut [f32]) + Send>;
+
+/// Like [`start`], but reports stream errors on a channel instead of printing them.
+pub fn start<F>(render_mono: F, errors: Sender<()>) -> Result<AudioHandle>
+where
+    F: FnMut(&mut [f32]) + Send + 'static,
+{
+    // The device's error callback fires on its own thread; a send never blocks the audio path.
+    start_inner(render_mono, move |_err| {
+        let _ = errors.send(());
+    })
+}
+
+
+/// Owns the stream, reopens it after a failure, and exposes a one-line status for the UI.
+pub struct Rig {
+    open: Box<dyn Fn() -> RenderFn>,
+    handle: Option<AudioHandle>,
+    errors: Option<Receiver<()>>,
+    supervisor: Supervisor,
+    retry_at: Option<Instant>,
+    status: String,
+}
+
+impl Rig {
+    /// `open` is called once now and again after every failure, so it must build a fresh closure.
+    pub fn new(open: impl Fn() -> RenderFn + 'static) -> Self {
+        let mut rig = Self {
+            open: Box::new(open),
+            handle: None,
+            errors: None,
+            supervisor: Supervisor::new(),
+            retry_at: None,
+            status: "starting".to_string(),
+        };
+        rig.attempt();
+        rig
+    }
+
+    /// Drain stream errors and reopen when the retry delay has elapsed. Never blocks.
+    pub fn poll(&mut self) {
+        let mut failed = false;
+        if let Some(rx) = &self.errors {
+            while rx.try_recv().is_ok() {
+                failed = true;
+            }
+        }
+        if failed {
+            self.handle = None;
+            self.errors = None;
+            match self.supervisor.on_error() {
+                Action::GiveUp => {
+                    self.status = "failed: audio device lost".to_string();
+                    self.retry_at = None;
+                }
+                _ => {
+                    self.status = format!(
+                        "reconnecting (attempt {}/{})",
+                        self.supervisor.attempts(),
+                        supervisor::MAX_RETRIES
+                    );
+                    self.retry_at = Some(Instant::now() + supervisor::RETRY_DELAY);
+                }
+            }
+        }
+        if let Some(at) = self.retry_at
+            && Instant::now() >= at {
+                self.retry_at = None;
+                self.attempt();
+            }
+    }
+
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+
+
+    fn attempt(&mut self) {
+        let (tx, rx) = channel();
+        match start((self.open)(), tx) {
+            Ok(handle) => {
+                self.status = format!("{} Hz - {}", handle.sample_rate(), handle.device());
+                self.supervisor.on_success();
+                self.handle = Some(handle);
+                self.errors = Some(rx);
+            }
+            Err(err) => {
+                self.status = format!("failed: {err}");
+                self.handle = None;
+                self.errors = None;
+            }
+        }
     }
 }
