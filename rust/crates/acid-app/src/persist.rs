@@ -179,3 +179,72 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         swing: snapshot.swing,
     }
 }
+
+/// Never fails: a missing or broken save file means "first run", so the app always opens.
+pub fn load_or_default(dir: &Path) -> SavedState {
+    match load(dir) {
+        Ok(Some(mut state)) => {
+            sanitize(&mut state);
+            state
+        }
+        Ok(None) => SavedState::default(),
+        Err(error) => {
+            eprintln!("takka-acid: ignoring unreadable save file: {error}");
+            SavedState::default()
+        }
+    }
+}
+
+/// Clamp everything a hand-edited file could get wrong, so an edited JSON can never build an invalid
+/// engine.
+pub fn sanitize(state: &mut SavedState) {
+    state.bpm = acid_core::timing::clamp_bpm(state.bpm);
+    state.swing = state.swing.clamp(0.0, 1.0);
+    state.knobs.waveform = state.knobs.waveform.min(1);
+    state.knobs.tuning = state.knobs.tuning.clamp(0.0, 1.0);
+    state.knobs.cutoff = state.knobs.cutoff.clamp(0.0, 1.0);
+    state.knobs.resonance = state.knobs.resonance.clamp(0.0, 1.0);
+    state.knobs.env_mod = state.knobs.env_mod.clamp(0.0, 1.0);
+    state.knobs.decay = state.knobs.decay.clamp(0.0, 1.0);
+    state.knobs.accent = state.knobs.accent.clamp(0.0, 1.0);
+    state.knobs.volume = state.knobs.volume.clamp(0.0, 1.0);
+    let current = state.bank.current();
+    state.bank.select(current);
+}
+
+/// How long the panel may stay dirty before it is written.
+pub const AUTOSAVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Debounces saves: the first change saves at once, later ones wait for the interval.
+#[derive(Debug)]
+pub struct Autosave {
+    last_save: Option<std::time::Instant>,
+}
+
+impl Default for Autosave {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Autosave {
+    pub fn new() -> Self {
+        Self { last_save: None }
+    }
+
+    /// True when there are unsaved changes and either nothing has been saved yet or the interval has
+    /// passed. Recording the save time here keeps every caller from having to.
+    pub fn should_save(&mut self, dirty: bool, now: std::time::Instant) -> bool {
+        if !dirty {
+            return false;
+        }
+        let due = match self.last_save {
+            None => true,
+            Some(last) => now.duration_since(last) >= AUTOSAVE_INTERVAL,
+        };
+        if due {
+            self.last_save = Some(now);
+        }
+        due
+    }
+}
