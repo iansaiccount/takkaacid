@@ -24,6 +24,9 @@ fn glide_reaches_the_target_and_never_overshoots() {
 #[test]
 fn glide_does_not_retrigger_the_gate() {
     let mut v = Voice::new(48_000.0);
+    // Long decay so the VCA envelope is effectively flat across the comparison window: this test is
+    // about the *gate* not retriggering, not about the amp envelope's shape.
+    v.set_decay_knob(1.0);
     v.note_on(55.0, false);
     let mut buf = vec![0.0; 4_800];
     v.render(&mut buf);

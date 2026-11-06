@@ -102,6 +102,9 @@ impl Envelope {
     }
 
     /// Advance one sample and return the new level.
+    // Named `next` because the plan and every DSP call site use that word; an `Envelope` is not an
+    // iterator — it has no `Iterator` semantics, no `Item`, and no end.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> f32 {
         match self.stage {
             Stage::Idle => self.level = 0.0,
