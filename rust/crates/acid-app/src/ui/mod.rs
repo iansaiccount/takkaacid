@@ -13,6 +13,8 @@ use std::sync::Arc;
 use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN};
 use acid_core::timing::DEFAULT_BPM;
 
+use crate::state::SharedState;
+
 /// Everything the panel needs in order to draw itself.
 ///
 /// Phase 07 replaces the interior with reads from `SharedState`; the fields and the `draw_panel` signature
@@ -49,10 +51,13 @@ impl Default for PanelState {
 ///
 /// Painting uses absolute rects from `layout`, so the panel lands in the same place whatever the Ui's own
 /// cursor is doing. Returns nothing: Phase 07 wires the controls to the engine.
-pub fn draw_panel(state: &mut PanelState, ui: &mut egui::Ui) {
+pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::Ui) {
     let window = ui.max_rect();
     let l = layout::layout(window);
     let s = layout::scale(window);
+    // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
+    state.pattern = shared.pattern();
+    state.playing = shared.is_playing();
     panel::paint_panel(ui.painter(), &l);
 
     display::paint_display(
@@ -85,7 +90,13 @@ pub fn draw_panel(state: &mut PanelState, ui: &mut egui::Ui) {
     for (i, cell) in keys.iter().enumerate() {
         let step = state.pattern.steps[i % STEPS_PER_PATTERN];
         let view = step_key::step_view(&step, i, state.position, state.playing);
-        step_key::step_key(ui, i, &view, *cell);
+        if step_key::step_key(ui, i, &view, *cell).clicked() {
+            // Phase 08 Task 38 refines the gesture; for now a click toggles the note on and off.
+            let mut edited = step;
+            edited.on = !edited.on;
+            shared.set_step(i % STEPS_PER_PATTERN, edited);
+            state.pattern = shared.pattern();
+        }
     }
 
     // Switches are engraved legends for now; Phase 07 (Task 33) turns them into controls.
