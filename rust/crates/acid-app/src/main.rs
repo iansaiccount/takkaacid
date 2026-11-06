@@ -1,9 +1,19 @@
+mod audio;
 mod ui;
 
 use eframe::egui;
 use ui::theme;
 
 fn main() -> eframe::Result {
+    // Silence for now — the voice arrives in Task 7.
+    let handle = match audio::start_silent() {
+        Ok(h) => Some(h),
+        Err(err) => {
+            eprintln!("takka-acid: no audio ({err}); running silently");
+            None
+        }
+    };
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(theme::WINDOW_SIZE)
@@ -13,12 +23,13 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "takka-acid",
         options,
-        Box::new(|_cc| Ok(Box::new(TakkaApp))),
+        Box::new(move |_cc| Ok(Box::new(TakkaApp { _audio: handle }))),
     )
 }
 
-#[derive(Default)]
-struct TakkaApp;
+struct TakkaApp {
+    _audio: Option<audio::AudioHandle>,
+}
 
 impl eframe::App for TakkaApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
