@@ -4,6 +4,7 @@
 //! envelope; accent multiplies its output.
 
 use crate::envelope::Envelope;
+use crate::filter::LadderFilter;
 use crate::oscillator::{Oscillator, Waveform};
 use crate::param;
 
@@ -28,6 +29,20 @@ const ATTACK_MS: f32 = 2.0;
 const SUSTAIN: f32 = 0.35;
 const RELEASE_MS: f32 = 20.0;
 const AMPLITUDE: f32 = 0.3;
+/// How far the filter envelope sweeps at `env_mod = 1.0`, in octaves.
+pub const ENV_MOD_OCTAVES: f32 = 4.0;
+/// Filter envelope attack — snappier than the VCA's.
+const FILTER_ATTACK_MS: f32 = 1.0;
+/// The filter envelope decays faster than the VCA: the classic "bwaap" is the filter closing first.
+const FILTER_DECAY_RATIO: f32 = 0.6;
+/// How much further an accented note opens the filter.
+const ACCENT_FILTER_MULTIPLIER: f32 = 1.5;
+/// CUT OFF knob position at launch.
+pub const DEFAULT_CUTOFF_KNOB: f32 = 0.35;
+/// RESONANCE knob position at launch.
+pub const DEFAULT_RESONANCE_KNOB: f32 = 0.55;
+/// ENV MOD knob position at launch.
+pub const DEFAULT_ENV_MOD_KNOB: f32 = 0.5;
 
 pub struct Voice {
     oscillator: Oscillator,
@@ -43,6 +58,11 @@ pub struct Voice {
     tuning_semitones: f32,
     accent: bool,
     accent_amount: f32,
+    filter: LadderFilter,
+    filter_env: Envelope,
+    cutoff_knob: f32,
+    resonance_knob: f32,
+    env_mod_knob: f32,
 }
 
 impl Voice {
@@ -64,6 +84,25 @@ impl Voice {
             tuning_semitones: 0.0,
             accent: false,
             accent_amount: DEFAULT_ACCENT_KNOB,
+            filter: {
+                let mut filter = LadderFilter::new(sample_rate);
+                filter.set_cutoff_hz(param::cutoff_hz(DEFAULT_CUTOFF_KNOB));
+                filter.set_resonance(param::resonance(DEFAULT_RESONANCE_KNOB));
+                filter
+            },
+            filter_env: {
+                let mut env = Envelope::new(sample_rate);
+                env.set_attack_ms(FILTER_ATTACK_MS);
+                env.set_sustain(0.0);
+                env.set_release_ms(RELEASE_MS);
+                env.set_decay_seconds(
+                    FILTER_DECAY_RATIO * param::decay_seconds(DEFAULT_DECAY_KNOB),
+                );
+                env
+            },
+            cutoff_knob: DEFAULT_CUTOFF_KNOB,
+            resonance_knob: DEFAULT_RESONANCE_KNOB,
+            env_mod_knob: DEFAULT_ENV_MOD_KNOB,
         };
         voice.apply_pitch();
         voice
@@ -74,6 +113,7 @@ impl Voice {
         self.accent = accent;
         self.apply_pitch();
         self.amp_env.gate_on();
+        self.filter_env.gate_on();
     }
 
     pub fn set_pitch(&mut self, hz: f32) {
@@ -107,7 +147,26 @@ impl Voice {
 
     /// DECAY knob in `0.0..=1.0`, mapped by [`param::decay_seconds`].
     pub fn set_decay_knob(&mut self, knob: f32) {
-        self.amp_env.set_decay_seconds(param::decay_seconds(knob));
+        let seconds = param::decay_seconds(knob);
+        self.amp_env.set_decay_seconds(seconds);
+        self.filter_env
+            .set_decay_seconds(FILTER_DECAY_RATIO * seconds);
+    }
+
+    /// CUT OFF knob in `0.0..=1.0`.
+    pub fn set_cutoff_knob(&mut self, knob: f32) {
+        self.cutoff_knob = knob.clamp(0.0, 1.0);
+    }
+
+    /// RESONANCE knob in `0.0..=1.0`.
+    pub fn set_resonance_knob(&mut self, knob: f32) {
+        self.resonance_knob = knob.clamp(0.0, 1.0);
+        self.filter.set_resonance(param::resonance(self.resonance_knob));
+    }
+
+    /// ENV MOD knob in `0.0..=1.0`: how far the envelope sweeps the cutoff.
+    pub fn set_env_mod_knob(&mut self, knob: f32) {
+        self.env_mod_knob = param::env_mod(knob);
     }
 
     /// ACCENT knob in `0.0..=1.0`: how much an accented note pushes.
@@ -150,9 +209,19 @@ impl Voice {
             }
             self.oscillator.set_frequency(self.current_hz);
 
-            let env = self.amp_env.next();
-            let sample = self.oscillator.next_sample() * env * amp;
-            *slot = sample.clamp(-0.999, 0.999);
+            let amp_level = self.amp_env.next();
+            let filter_level = self.filter_env.next();
+            let accent_mult = if self.accent {
+                ACCENT_FILTER_MULTIPLIER
+            } else {
+                1.0
+            };
+            let octaves = ENV_MOD_OCTAVES * self.env_mod_knob * filter_level * accent_mult;
+            let cutoff = param::cutoff_hz(self.cutoff_knob) * 2f32.powf(octaves);
+            self.filter.set_cutoff_hz(cutoff);
+
+            let filtered = self.filter.process(self.oscillator.next_sample());
+            *slot = (filtered * amp_level * amp).clamp(-0.999, 0.999);
         }
     }
 

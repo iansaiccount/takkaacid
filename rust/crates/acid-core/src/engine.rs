@@ -79,4 +79,29 @@ impl Engine {
         self.voice
             .set_tuning_semitones(crate::param::tuning_semitones(knob));
     }
+
+    /// CUT OFF knob.
+    pub fn set_cutoff(&mut self, knob: f32) {
+        self.voice.set_cutoff_knob(knob);
+    }
+
+    /// RESONANCE knob.
+    pub fn set_resonance(&mut self, knob: f32) {
+        self.voice.set_resonance_knob(knob);
+    }
+
+    /// ENV MOD knob.
+    pub fn set_env_mod(&mut self, knob: f32) {
+        self.voice.set_env_mod_knob(knob);
+    }
+
+    /// DECAY knob.
+    pub fn set_decay(&mut self, knob: f32) {
+        self.voice.set_decay_knob(knob);
+    }
+
+    /// ACCENT knob.
+    pub fn set_accent(&mut self, knob: f32) {
+        self.voice.set_accent_knob(knob);
+    }
 }

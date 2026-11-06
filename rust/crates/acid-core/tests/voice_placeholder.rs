@@ -9,7 +9,9 @@ fn a_held_note_sounds_at_the_requested_pitch() {
     v.render(&mut buf);
     let hz = dominant_hz(&buf[4_800..], 48_000.0);
     assert!((hz - 440.0).abs() < 8.0, "got {hz}");
-    assert!(rms(&buf) > 0.05);
+    // Filtered from Task 17 on: a 440 Hz note sits well above the default cutoff, so its RMS is
+    // legitimately far below the unfiltered amplitude. The pitch assertion is the real test.
+    assert!(rms(&buf) > 0.01, "buffer too quiet: {}", rms(&buf));
 }
 
 #[test]
