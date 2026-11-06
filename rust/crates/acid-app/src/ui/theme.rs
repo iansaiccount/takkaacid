@@ -20,6 +20,17 @@ pub const GAP: f32 = 6.0;
 /// Radius of the four corner screws at 1× scale.
 pub const SCREW_RADIUS: f32 = 4.0;
 
+/// The seven knob legends, left to right. ASCII only: a knob has no glyph face to fall back on.
+pub const KNOB_LABELS: [&str; 7] = [
+    "WAVEFORM",
+    "TUNING",
+    "CUT OFF",
+    "RESONANCE",
+    "ENV MOD",
+    "DECAY",
+    "ACCENT",
+];
+
 /// Panel face — near black, never pure black.
 pub const PANEL: Color32 = Color32::from_rgb(0x0B, 0x0B, 0x0B);
 /// Knob bodies and raised button faces.

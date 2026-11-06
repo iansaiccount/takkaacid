@@ -4,3 +4,4 @@
 pub mod theme;
 pub mod layout;
 pub mod panel;
+pub mod knob;
