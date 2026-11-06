@@ -1,0 +1,12 @@
+[package]
+name = "acid-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "takka-acid"
+path = "src/main.rs"
+
+[dependencies]
+acid-core = { path = "../acid-core" }
