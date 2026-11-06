@@ -58,6 +58,19 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
     state.pattern = shared.pattern();
     state.playing = shared.is_playing();
+    // Knobs are read from the shared state each frame and written back after the widget runs, so the panel
+    // and the engine can never hold different values for the same control.
+    state.knobs[0] = match shared.waveform() {
+        acid_core::oscillator::Waveform::Saw => 0.0,
+        acid_core::oscillator::Waveform::Square => 1.0,
+    };
+    state.knobs[1] = shared.tuning.get();
+    state.knobs[2] = shared.cutoff.get();
+    state.knobs[3] = shared.resonance.get();
+    state.knobs[4] = shared.env_mod.get();
+    state.knobs[5] = shared.decay.get();
+    state.knobs[6] = shared.accent.get();
+    state.tempo = shared.tempo_bpm.get();
     panel::paint_panel(ui.painter(), &l);
 
     display::paint_display(
@@ -84,6 +97,17 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             &mut state.knobs[i],
             diameter,
         );
+        // Publish straight away: the audio thread's next block picks it up, so the move is heard now.
+        match i {
+            0 => shared.set_waveform(waveform_from_knob(state.knobs[0])),
+            1 => shared.tuning.set(state.knobs[1]),
+            2 => shared.cutoff.set(state.knobs[2]),
+            3 => shared.resonance.set(state.knobs[3]),
+            4 => shared.env_mod.set(state.knobs[4]),
+            5 => shared.decay.set(state.knobs[5]),
+            6 => shared.accent.set(state.knobs[6]),
+            _ => {}
+        }
     }
 
     let keys = layout::step_cells(l.steps);
@@ -129,5 +153,14 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
             theme::legend(12.0 * scale),
             theme::SILKSCREEN,
         );
+    }
+}
+
+/// The WAVEFORM knob is a two-position switch drawn as a knob: past the midpoint is the square wave.
+pub fn waveform_from_knob(knob: f32) -> acid_core::oscillator::Waveform {
+    if knob >= 0.5 {
+        acid_core::oscillator::Waveform::Square
+    } else {
+        acid_core::oscillator::Waveform::Saw
     }
 }
