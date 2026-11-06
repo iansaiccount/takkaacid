@@ -692,3 +692,11 @@ git commit -m "feat(core): 64-pattern bank with seamless live switching"
 
 **Phase 05 done when:** `cargo test --workspace` is green, and a temporary hard-coded pattern loops
 cleanly in the app with audible accents and slides, unaffected by block size or tempo changes.
+
+## Revisions from execution (2026-11-06)
+
+The step-duration arithmetic in Tasks 21–25 was written 2x too long: a 16th note at 120 BPM is 125 ms,
+which is **6000** samples at 48 kHz (8 steps/second), not 12000. `timing::samples_per_step` implements
+`sample_rate * 60 / (bpm * 4)` correctly; the Task 21 tests were corrected to 6000 / 5512.5 samples and the
+Task 22 clock expectations ("one second crosses 4 steps", "step boundary at sample 24000") must be halved
+the same way when that task is executed — one second at 120 BPM crosses **8** steps.

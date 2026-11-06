@@ -6,7 +6,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::pitch::{step_hz, Pitch};
+use crate::pitch::{Pitch, step_hz};
 
 /// Steps in one pattern.
 pub const STEPS_PER_PATTERN: usize = 16;

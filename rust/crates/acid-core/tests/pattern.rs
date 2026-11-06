@@ -1,4 +1,4 @@
-use acid_core::pattern::{Pattern, PatternId, Step, STEPS_PER_PATTERN};
+use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
 use acid_core::pitch::Pitch;
 
 #[test]
@@ -35,28 +35,7 @@ fn patterns_round_trip_through_json() {
 
 #[test]
 fn pattern_ids_read_like_the_hardware() {
-    assert_eq!(
-        PatternId {
-            bank: 0,
-            number: 0
-        }
-        .to_string(),
-        "A1"
-    );
-    assert_eq!(
-        PatternId {
-            bank: 2,
-            number: 4
-        }
-        .to_string(),
-        "C5"
-    );
-    assert_eq!(
-        PatternId {
-            bank: 7,
-            number: 7
-        }
-        .to_string(),
-        "H8"
-    );
+    assert_eq!(PatternId { bank: 0, number: 0 }.to_string(), "A1");
+    assert_eq!(PatternId { bank: 2, number: 4 }.to_string(), "C5");
+    assert_eq!(PatternId { bank: 7, number: 7 }.to_string(), "H8");
 }
