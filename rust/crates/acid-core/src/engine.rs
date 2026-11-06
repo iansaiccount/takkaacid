@@ -4,9 +4,12 @@
 //! at construction, so `render` never allocates and never locks. The engine also *stores* every knob
 //! position: the UI writes knobs here, the panel reads them back, and Phase 08 persists them.
 
+use std::sync::Arc;
+
 use crate::oscillator::Waveform;
 use crate::param;
-use crate::pitch::{Pitch, step_hz};
+use crate::pattern::Pattern;
+use crate::sequencer::Sequencer;
 use crate::voice::{
     DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
     DEFAULT_RESONANCE_KNOB, Voice,
@@ -48,6 +51,7 @@ impl Default for Knobs {
 pub struct Engine {
     sample_rate: f32,
     voice: Voice,
+    sequencer: Sequencer,
     playing: bool,
     knobs: Knobs,
 }
@@ -67,6 +71,7 @@ impl Engine {
         Self {
             sample_rate,
             voice,
+            sequencer: Sequencer::new(sample_rate),
             playing: false,
             knobs,
         }
@@ -78,12 +83,9 @@ impl Engine {
 
     /// Fill `out` with the next block of mono samples.
     pub fn render(&mut self, out: &mut [f32]) {
-        // Keep rendering through the release tail after a stop, so it never cuts mid-cycle.
-        if self.playing || self.voice.is_active() {
-            self.voice.render(out);
-        } else {
-            out.fill(0.0);
-        }
+        // The sequencer owns the transport: it splits at step boundaries, triggers the steps, and keeps
+        // rendering the release tail after a stop so it never cuts mid-cycle.
+        self.sequencer.render(&mut self.voice, out);
     }
 
     pub fn is_playing(&self) -> bool {
@@ -96,15 +98,41 @@ impl Engine {
     }
 
     /// Start the transport. Until the sequencer exists (Phase 05) this holds the root note.
+    /// Start the transport at step 0 of the current pattern.
     pub fn start(&mut self) {
         self.playing = true;
-        self.voice.note_on(step_hz(Pitch::C, 0), false);
+        self.sequencer.start();
     }
 
-    /// Stop the transport and close the gate.
+    /// Stop the transport and close the gate. Closing it here as well as in the sequencer means a stop
+    /// silences immediately even if no render follows.
     pub fn stop(&mut self) {
         self.playing = false;
-        self.voice.note_off();
+        self.sequencer.stop();
+    }
+
+    /// Swap the playing pattern without disturbing position, glide history or the clock.
+    pub fn set_pattern(&mut self, pattern: Arc<Pattern>) {
+        self.sequencer.set_pattern(pattern);
+    }
+
+    /// TEMPO, in BPM; the clock clamps it to the panel's range.
+    pub fn set_bpm(&mut self, bpm: f32) {
+        self.sequencer.set_bpm(bpm);
+    }
+
+    pub fn bpm(&self) -> f32 {
+        self.sequencer.clock().bpm()
+    }
+
+    /// SWING, `0.0` straight to `1.0` full shuffle.
+    pub fn set_swing(&mut self, swing: f32) {
+        self.sequencer.set_swing(swing);
+    }
+
+    /// The step being played, `0..16`.
+    pub fn position(&self) -> usize {
+        self.sequencer.position()
     }
 
     /// Play a note directly, outside the sequencer (auditioning and MIDI keys).

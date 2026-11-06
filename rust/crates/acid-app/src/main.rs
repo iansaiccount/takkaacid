@@ -5,6 +5,7 @@ use acid_app::audio::Rig;
 use acid_app::state::{self, AudioStatus};
 use acid_app::ui::theme;
 use acid_core::engine::Engine;
+use acid_core::pattern::{Pattern, Step};
 use eframe::egui;
 
 fn main() -> eframe::Result {
@@ -16,6 +17,9 @@ fn main() -> eframe::Result {
         move |sample_rate| {
             let state = Arc::clone(&state);
             let mut engine = Engine::new(sample_rate);
+            // Temporary demo pattern until the step editor lands in Phase 06/07: the RUN button needs
+            // something to play. Task 26's factory bank takes over from here.
+            engine.set_pattern(Arc::new(demo_pattern()));
             Box::new(move |buf: &mut [f32]| {
                 let want = state.is_playing();
                 if want != engine.is_playing() {
@@ -101,6 +105,69 @@ impl eframe::App for TakkaApp {
             self.rig.status(),
             theme::legend(12.0),
             theme::SILKSCREEN_DIM,
+        );
+    }
+}
+
+/// Temporary demo pattern for the RUN button until the step editor arrives (Phase 06/07).
+///
+/// It is deliberately placed here rather than in `Engine::new`: a default pattern inside the library would
+/// make every engine test noisy, and Task 26's factory bank is where a default really belongs.
+fn demo_pattern() -> Pattern {
+    use acid_core::pitch::Pitch;
+    let mut steps = [Step::rest(); 16];
+    steps[0] = Step::note(Pitch::A, -1);
+    steps[2] = Step {
+        accent: true,
+        ..Step::note(Pitch::A, -1)
+    };
+    steps[4] = Step::note(Pitch::C, 0);
+    steps[7] = Step {
+        slide: true,
+        ..Step::note(Pitch::E, 0)
+    };
+    steps[8] = Step::note(Pitch::A, -1);
+    steps[10] = Step {
+        accent: true,
+        ..Step::note(Pitch::G, 0)
+    };
+    steps[12] = Step::note(Pitch::A, 0);
+    steps[15] = Step {
+        slide: true,
+        ..Step::note(Pitch::C, 1)
+    };
+    Pattern::from_steps(steps)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::demo_pattern;
+    use acid_core::engine::Engine;
+    use std::sync::Arc;
+
+    /// Offline stand-in for the plan's "listen to the loop" step: nothing in the render may jump hard
+    /// enough to click, and that includes the wrap from step 15 back to step 0.
+    #[test]
+    fn the_demo_pattern_loops_without_a_click_at_the_wrap() {
+        let sr = 48_000.0;
+        let mut e = Engine::new(sr);
+        e.set_pattern(Arc::new(demo_pattern()));
+        e.set_bpm(130.0);
+        e.start();
+        // 16 steps at 130 bpm.
+        let loop_len = (sr * 60.0 / (130.0 * 4.0) * 16.0).round() as usize;
+        let mut buf = vec![0.0; loop_len * 2];
+        e.render(&mut buf);
+
+        let biggest = buf
+            .windows(2)
+            .map(|w| (w[1] - w[0]).abs())
+            .fold(0.0f32, f32::max);
+
+        assert!(biggest < 0.25, "a click-sized jump: {biggest}");
+        assert!(
+            buf[loop_len - 1_000..loop_len + 1_000].iter().any(|s| s.abs() > 0.01),
+            "the loop wrap should be in the middle of a phrase, not in silence"
         );
     }
 }
