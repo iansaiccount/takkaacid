@@ -7,6 +7,7 @@ pub mod oscillator;
 pub mod param;
 pub mod pattern;
 pub mod pitch;
+pub mod sequencer;
 pub mod timing;
 pub mod voice;
 
