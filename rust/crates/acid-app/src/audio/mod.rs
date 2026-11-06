@@ -13,6 +13,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, StreamConfig, SupportedStreamConfig};
 
 pub mod supervisor;
+pub mod renderer;
 
 pub use supervisor::{Action, Supervisor};
 
@@ -20,7 +21,7 @@ pub use supervisor::{Action, Supervisor};
 pub const PREFERRED_RATES: [u32; 3] = [48_000, 44_100, 96_000];
 
 /// Largest block the callback is prepared for; bigger device buffers are rendered in chunks.
-const MAX_BLOCK: usize = 8_192;
+pub const MAX_BLOCK: usize = 8_192;
 
 /// A mono render closure the callback can own.
 pub type RenderFn = Box<dyn FnMut(&mut [f32]) + Send>;

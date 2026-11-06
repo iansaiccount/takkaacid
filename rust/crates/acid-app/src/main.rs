@@ -1,36 +1,32 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use acid_app::audio::Rig;
+use acid_app::audio::{self, Rig};
 use acid_app::state::{self, AudioStatus};
 use acid_app::ui as panel_ui;
-use acid_core::engine::Engine;
+
 use acid_core::pattern::{Pattern, Step};
 use eframe::egui;
 
 fn main() -> eframe::Result {
     let state = state::SharedState::new();
+    // Temporary demo pattern until the step editor lands in Phase 08: the RUN button needs something to
+    // play. Task 42's factory bank takes over from here.
+    state.set_pattern(Arc::new(demo_pattern()));
 
     // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
     let rig = Rig::new({
         let state = Arc::clone(&state);
         move |sample_rate| {
             let state = Arc::clone(&state);
-            let mut engine = Engine::new(sample_rate);
-            // Temporary demo pattern until the step editor lands in Phase 06/07: the RUN button needs
-            // something to play. Task 26's factory bank takes over from here.
-            engine.set_pattern(Arc::new(demo_pattern()));
-            Box::new(move |buf: &mut [f32]| {
-                let want = state.is_playing();
-                if want != engine.is_playing() {
-                    if want {
-                        engine.start();
-                    } else {
-                        engine.stop();
-                    }
-                }
-                engine.render(buf);
-            })
+            // Mono out: `Opened::spawn` duplicates every sample to every channel.
+            let mut renderer = audio::renderer::AudioRenderer::new(
+                sample_rate,
+                1,
+                state,
+                audio::MAX_BLOCK,
+            );
+            Box::new(move |buf: &mut [f32]| renderer.render_mono(buf))
         }
     });
 
