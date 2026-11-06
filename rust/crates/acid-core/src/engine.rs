@@ -1,22 +1,74 @@
 //! The audio engine — the only type the audio thread touches.
 //!
 //! Created with the device's sample rate and asked to fill buffers. Everything it needs is preallocated
-//! at construction, so `render` never allocates and never locks.
+//! at construction, so `render` never allocates and never locks. The engine also *stores* every knob
+//! position: the UI writes knobs here, the panel reads them back, and Phase 08 persists them.
 
-use crate::voice::Voice;
+use crate::oscillator::Waveform;
+use crate::param;
+use crate::pitch::{step_hz, Pitch};
+use crate::voice::{
+    Voice, DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
+    DEFAULT_RESONANCE_KNOB,
+};
+
+/// TUNING knob at launch: centred, no transpose.
+pub const DEFAULT_TUNING_KNOB: f32 = 0.5;
+/// VOLUME knob at launch. Applied by the master section in Phase 09; stored from now on.
+pub const DEFAULT_VOLUME_KNOB: f32 = 0.8;
+
+/// Every knob position, so readback and persistence have one source of truth.
+#[derive(Copy, Clone, Debug)]
+struct Knobs {
+    waveform: Waveform,
+    tuning: f32,
+    cutoff: f32,
+    resonance: f32,
+    env_mod: f32,
+    decay: f32,
+    accent: f32,
+    volume: f32,
+}
+
+impl Default for Knobs {
+    fn default() -> Self {
+        Self {
+            waveform: Waveform::Saw,
+            tuning: DEFAULT_TUNING_KNOB,
+            cutoff: DEFAULT_CUTOFF_KNOB,
+            resonance: DEFAULT_RESONANCE_KNOB,
+            env_mod: DEFAULT_ENV_MOD_KNOB,
+            decay: DEFAULT_DECAY_KNOB,
+            accent: DEFAULT_ACCENT_KNOB,
+            volume: DEFAULT_VOLUME_KNOB,
+        }
+    }
+}
 
 pub struct Engine {
     sample_rate: f32,
     voice: Voice,
     playing: bool,
+    knobs: Knobs,
 }
 
 impl Engine {
     pub fn new(sample_rate: f32) -> Self {
+        let knobs = Knobs::default();
+        let mut voice = Voice::new(sample_rate);
+        // Push the launch patch into the voice so a fresh engine already sounds like the panel.
+        voice.set_waveform(knobs.waveform);
+        voice.set_tuning_semitones(param::tuning_semitones(knobs.tuning));
+        voice.set_cutoff_knob(knobs.cutoff);
+        voice.set_resonance_knob(knobs.resonance);
+        voice.set_env_mod_knob(knobs.env_mod);
+        voice.set_decay_knob(knobs.decay);
+        voice.set_accent_knob(knobs.accent);
         Self {
             sample_rate,
-            voice: Voice::new(sample_rate),
+            voice,
             playing: false,
+            knobs,
         }
     }
 
@@ -46,8 +98,7 @@ impl Engine {
     /// Start the transport. Until the sequencer exists (Phase 05) this holds the root note.
     pub fn start(&mut self) {
         self.playing = true;
-        self.voice
-            .note_on(crate::pitch::step_hz(crate::pitch::Pitch::C, 0), false);
+        self.voice.note_on(step_hz(Pitch::C, 0), false);
     }
 
     /// Stop the transport and close the gate.
@@ -56,7 +107,7 @@ impl Engine {
         self.voice.note_off();
     }
 
-    /// Play a note directly, outside the sequencer (used by the first audible milestone and MIDI keys).
+    /// Play a note directly, outside the sequencer (auditioning and MIDI keys).
     pub fn note_on(&mut self, hz: f32, accent: bool) {
         self.voice.note_on(hz, accent);
     }
@@ -65,48 +116,90 @@ impl Engine {
         self.voice.note_off();
     }
 
-    /// SLIDE: glide to `hz` without retriggering the envelope (auditioning, and the ear-check demo).
+    /// SLIDE: glide to `hz` without retriggering the envelope.
     pub fn glide_to(&mut self, hz: f32) {
         self.voice.glide_to(hz);
     }
 
+    // ---- knobs: set, then read back -------------------------------------------------------------
+
     /// WAVEFORM switch.
-    pub fn set_waveform(&mut self, waveform: crate::oscillator::Waveform) {
+    pub fn set_waveform(&mut self, waveform: Waveform) {
+        self.knobs.waveform = waveform;
         self.voice.set_waveform(waveform);
     }
 
-    pub fn waveform(&self) -> crate::oscillator::Waveform {
-        self.voice.waveform()
+    pub fn waveform(&self) -> Waveform {
+        self.knobs.waveform
     }
 
     /// TUNING knob, in knob domain: `0.5` is centre.
     pub fn set_tuning(&mut self, knob: f32) {
+        self.knobs.tuning = knob.clamp(0.0, 1.0);
         self.voice
-            .set_tuning_semitones(crate::param::tuning_semitones(knob));
+            .set_tuning_semitones(param::tuning_semitones(self.knobs.tuning));
+    }
+
+    pub fn tuning(&self) -> f32 {
+        self.knobs.tuning
     }
 
     /// CUT OFF knob.
     pub fn set_cutoff(&mut self, knob: f32) {
-        self.voice.set_cutoff_knob(knob);
+        self.knobs.cutoff = knob.clamp(0.0, 1.0);
+        self.voice.set_cutoff_knob(self.knobs.cutoff);
+    }
+
+    pub fn cutoff(&self) -> f32 {
+        self.knobs.cutoff
     }
 
     /// RESONANCE knob.
     pub fn set_resonance(&mut self, knob: f32) {
-        self.voice.set_resonance_knob(knob);
+        self.knobs.resonance = knob.clamp(0.0, 1.0);
+        self.voice.set_resonance_knob(self.knobs.resonance);
+    }
+
+    pub fn resonance(&self) -> f32 {
+        self.knobs.resonance
     }
 
     /// ENV MOD knob.
     pub fn set_env_mod(&mut self, knob: f32) {
-        self.voice.set_env_mod_knob(knob);
+        self.knobs.env_mod = knob.clamp(0.0, 1.0);
+        self.voice.set_env_mod_knob(self.knobs.env_mod);
+    }
+
+    pub fn env_mod(&self) -> f32 {
+        self.knobs.env_mod
     }
 
     /// DECAY knob.
     pub fn set_decay(&mut self, knob: f32) {
-        self.voice.set_decay_knob(knob);
+        self.knobs.decay = knob.clamp(0.0, 1.0);
+        self.voice.set_decay_knob(self.knobs.decay);
+    }
+
+    pub fn decay(&self) -> f32 {
+        self.knobs.decay
     }
 
     /// ACCENT knob.
     pub fn set_accent(&mut self, knob: f32) {
-        self.voice.set_accent_knob(knob);
+        self.knobs.accent = knob.clamp(0.0, 1.0);
+        self.voice.set_accent_knob(self.knobs.accent);
+    }
+
+    pub fn accent(&self) -> f32 {
+        self.knobs.accent
+    }
+
+    /// VOLUME knob — stored now, applied by the master section in Phase 09.
+    pub fn set_volume(&mut self, knob: f32) {
+        self.knobs.volume = knob.clamp(0.0, 1.0);
+    }
+
+    pub fn volume(&self) -> f32 {
+        self.knobs.volume
     }
 }

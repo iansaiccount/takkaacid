@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use acid_core::engine::Engine;
 use acid_core::oscillator::Waveform;
-use acid_core::pitch::{step_hz, Pitch};
+use acid_core::pitch::{Pitch, step_hz};
 
 const SAMPLE_RATE: f32 = 48_000.0;
 const BLOCK: usize = 512;
