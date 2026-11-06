@@ -2,6 +2,7 @@ pub mod analysis;
 pub mod bank;
 pub mod clock;
 pub mod drive;
+pub mod limiter;
 pub mod engine;
 pub mod envelope;
 pub mod factory;

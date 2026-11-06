@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::oscillator::Waveform;
 use crate::param;
 use crate::drive::Drive;
+use crate::limiter::Limiter;
 use crate::pattern::Pattern;
 use crate::sequencer::Sequencer;
 use crate::voice::{
@@ -58,6 +59,7 @@ pub struct Engine {
     voice: Voice,
     sequencer: Sequencer,
     drive: Drive,
+    limiter: Limiter,
     playing: bool,
     knobs: Knobs,
 }
@@ -79,6 +81,7 @@ impl Engine {
             voice,
             sequencer: Sequencer::new(sample_rate),
             drive: Drive::new(sample_rate),
+            limiter: Limiter::new(sample_rate),
             playing: false,
             knobs,
         }
@@ -93,10 +96,10 @@ impl Engine {
         // The sequencer owns the transport: it splits at step boundaries, triggers the steps, and keeps
         // rendering the release tail after a stop so it never cuts mid-cycle.
         self.sequencer.render(&mut self.voice, out);
-        // Master chain: the voice feeds the drive; the limiter (Task 44) and the VOLUME knob (Task 46) come
-        // after it, in that order.
+        // Master chain, in this order: voice/sequencer → drive → limiter → (VOLUME, Task 46). The limiter
+        // sits before the volume so the ceiling holds whatever the volume knob is doing.
         for sample in out.iter_mut() {
-            *sample = self.drive.process(*sample);
+            *sample = self.limiter.process(self.drive.process(*sample));
         }
     }
 

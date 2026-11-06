@@ -1,4 +1,7 @@
 //! The drive stage: bounded, monotonic clipping that is also a wire at zero.
+//!
+//! `amount_zero_is_transparent` is the one that matters — a Drive at 0 must be a wire, which is why the
+//! stage blends dry into clipped rather than normalising the clip alone.
 
 use acid_core::drive::{Drive, MAX_DRIVE_GAIN, soft_clip};
 
