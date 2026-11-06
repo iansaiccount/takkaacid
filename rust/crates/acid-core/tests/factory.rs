@@ -16,11 +16,7 @@ fn there_are_eight_factory_patterns_and_the_first_is_a_line() {
         .filter(|(_, s)| s.on)
         .map(|(i, _)| i)
         .collect();
-    assert_eq!(
-        notes,
-        vec![0, 1, 3, 5, 6, 8, 10, 12, 13, 15],
-        "A1's rhythm"
-    );
+    assert_eq!(notes, vec![0, 1, 3, 5, 6, 8, 10, 12, 13, 15], "A1's rhythm");
     assert!(
         a1.steps.iter().filter(|s| s.accent).count() >= 3,
         "needs accents"
@@ -63,7 +59,10 @@ fn every_factory_pattern_renders_without_clipping() {
         e.start();
         let mut buf = vec![0.0; 48_000 * 2];
         e.render(&mut buf);
-        assert!(buf.iter().all(|s| s.is_finite()), "pattern {i} produced NaN");
+        assert!(
+            buf.iter().all(|s| s.is_finite()),
+            "pattern {i} produced NaN"
+        );
         assert!(
             acid_core::analysis::peak(&buf) > 0.01,
             "pattern {i} is silent"

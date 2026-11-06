@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use crate::oscillator::Waveform;
 use crate::param;
+use crate::drive::Drive;
 use crate::pattern::Pattern;
 use crate::sequencer::Sequencer;
 use crate::voice::{
@@ -19,6 +20,8 @@ use crate::voice::{
 pub const DEFAULT_TUNING_KNOB: f32 = 0.5;
 /// VOLUME knob at launch. Applied by the master section in Phase 09; stored from now on.
 pub const DEFAULT_VOLUME_KNOB: f32 = 0.8;
+/// DRIVE knob at launch: clean, so the first thing you hear is the voice, not the clipping.
+pub const DEFAULT_DRIVE_KNOB: f32 = 0.0;
 
 /// Every knob position, so readback and persistence have one source of truth.
 #[derive(Copy, Clone, Debug)]
@@ -31,6 +34,7 @@ struct Knobs {
     decay: f32,
     accent: f32,
     volume: f32,
+    drive: f32,
 }
 
 impl Default for Knobs {
@@ -44,6 +48,7 @@ impl Default for Knobs {
             decay: DEFAULT_DECAY_KNOB,
             accent: DEFAULT_ACCENT_KNOB,
             volume: DEFAULT_VOLUME_KNOB,
+            drive: DEFAULT_DRIVE_KNOB,
         }
     }
 }
@@ -52,6 +57,7 @@ pub struct Engine {
     sample_rate: f32,
     voice: Voice,
     sequencer: Sequencer,
+    drive: Drive,
     playing: bool,
     knobs: Knobs,
 }
@@ -72,6 +78,7 @@ impl Engine {
             sample_rate,
             voice,
             sequencer: Sequencer::new(sample_rate),
+            drive: Drive::new(sample_rate),
             playing: false,
             knobs,
         }
@@ -86,6 +93,11 @@ impl Engine {
         // The sequencer owns the transport: it splits at step boundaries, triggers the steps, and keeps
         // rendering the release tail after a stop so it never cuts mid-cycle.
         self.sequencer.render(&mut self.voice, out);
+        // Master chain: the voice feeds the drive; the limiter (Task 44) and the VOLUME knob (Task 46) come
+        // after it, in that order.
+        for sample in out.iter_mut() {
+            *sample = self.drive.process(*sample);
+        }
     }
 
     pub fn is_playing(&self) -> bool {
@@ -97,7 +109,6 @@ impl Engine {
         self.voice.is_active()
     }
 
-    /// Start the transport. Until the sequencer exists (Phase 05) this holds the root note.
     /// Start the transport at step 0 of the current pattern.
     pub fn start(&mut self) {
         self.playing = true;
@@ -229,5 +240,15 @@ impl Engine {
 
     pub fn volume(&self) -> f32 {
         self.knobs.volume
+    }
+
+    /// DRIVE knob: `0.0` is a wire, `1.0` is maximum dirt.
+    pub fn set_drive(&mut self, knob: f32) {
+        self.knobs.drive = knob.clamp(0.0, 1.0);
+        self.drive.set_amount(self.knobs.drive);
+    }
+
+    pub fn drive(&self) -> f32 {
+        self.knobs.drive
     }
 }
