@@ -38,6 +38,11 @@ impl Engine {
         self.playing
     }
 
+    /// True while a note is sounding, regardless of what the transport is doing.
+    pub fn is_playing_something(&self) -> bool {
+        self.voice.is_active()
+    }
+
     /// Start the transport. Until the sequencer exists (Phase 05) this holds the root note.
     pub fn start(&mut self) {
         self.playing = true;
