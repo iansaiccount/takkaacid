@@ -8,6 +8,7 @@ pub mod knob;
 pub mod step_key;
 pub mod display;
 pub mod transport;
+pub mod edit;
 
 use std::sync::Arc;
 
@@ -15,6 +16,8 @@ use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN};
 use acid_core::timing::DEFAULT_BPM;
 
 use crate::state::SharedState;
+
+use acid_core::pitch::Pitch;
 
 /// Everything the panel needs in order to draw itself.
 ///
@@ -33,6 +36,10 @@ pub struct PanelState {
     pub playing: bool,
     /// Step the transport is on, `0..16`.
     pub position: usize,
+    /// Pitch a step takes when a gesture turns a rest into a note.
+    pub last_pitch: Pitch,
+    /// Octave that goes with `last_pitch`.
+    pub last_octave: i8,
 }
 
 impl Default for PanelState {
@@ -44,6 +51,8 @@ impl Default for PanelState {
             tempo: DEFAULT_BPM,
             playing: false,
             position: 0,
+            last_pitch: acid_core::pitch::Pitch::C,
+            last_octave: 0,
         }
     }
 }
@@ -116,10 +125,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     for (i, cell) in keys.iter().enumerate() {
         let step = state.pattern.steps[i % STEPS_PER_PATTERN];
         let view = step_key::step_view(&step, i, state.position, state.playing);
-        if step_key::step_key(ui, i, &view, *cell).clicked() {
-            // Phase 08 Task 38 refines the gesture; for now a click toggles the note on and off.
-            let mut edited = step;
-            edited.on = !edited.on;
+        let response = step_key::step_key(ui, i, &view, *cell);
+        let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
+        let gesture = edit::gesture_from_input(response.clicked(), shift, alt, response.double_clicked());
+        if let Some(gesture) = gesture {
+            let edited = edit::apply_gesture(step, gesture, state.last_pitch, state.last_octave);
+            if edited.on {
+                state.last_pitch = edited.pitch;
+                state.last_octave = edited.octave_offset;
+            }
             shared.set_step(i % STEPS_PER_PATTERN, edited);
             state.pattern = shared.pattern();
         }

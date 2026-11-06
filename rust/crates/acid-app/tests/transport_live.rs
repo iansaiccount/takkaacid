@@ -108,3 +108,4 @@ fn the_tempo_buttons_nudge_the_shared_tempo() {
     click_transport(&shared, &mut panel, 2); // TEMPO −
     assert!((shared.tempo_bpm.get() - before).abs() < 1e-6);
 }
+
