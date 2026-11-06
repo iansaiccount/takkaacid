@@ -85,6 +85,10 @@ impl AudioRenderer {
             self.engine.render(&mut out[offset..offset + take]);
             offset += take;
         }
+        // Publish the step so the panel's LEDs can chase the audio rather than the wall clock.
+        self.state
+            .position
+            .store(self.engine.position(), std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Render one interleaved block, duplicating each mono frame to every channel.

@@ -7,6 +7,7 @@ pub mod panel;
 pub mod knob;
 pub mod step_key;
 pub mod display;
+pub mod transport;
 
 use std::sync::Arc;
 
@@ -71,6 +72,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     state.knobs[5] = shared.decay.get();
     state.knobs[6] = shared.accent.get();
     state.tempo = shared.tempo_bpm.get();
+    state.position = shared.position.load(std::sync::atomic::Ordering::Relaxed);
     panel::paint_panel(ui.painter(), &l);
 
     display::paint_display(
@@ -130,9 +132,23 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     {
         paint_switch(ui.painter(), cell, s, label);
     }
-    // The transport row keeps its faces blank: the app owns the one working button until Phase 07.
-    for cell in layout::knob_cells(l.transport, 4) {
-        paint_switch(ui.painter(), cell, s, "");
+    // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
+    let cells = layout::knob_cells(l.transport, 4);
+    if let [run, stop, tempo_down, tempo_up] = cells[..] {
+        let playing = shared.is_playing();
+        if transport::transport_button(ui, "run", run, "RUN", playing).clicked() {
+            shared.set_playing(true);
+        }
+        if transport::transport_button(ui, "stop", stop, "STOP", !playing).clicked() {
+            shared.set_playing(false);
+        }
+        let bpm = shared.tempo_bpm.get();
+        if transport::transport_button(ui, "tempo-down", tempo_down, "TEMPO -", false).clicked() {
+            shared.tempo_bpm.set(transport::nudge_tempo(bpm, -1));
+        }
+        if transport::transport_button(ui, "tempo-up", tempo_up, "TEMPO +", false).clicked() {
+            shared.tempo_bpm.set(transport::nudge_tempo(bpm, 1));
+        }
     }
 }
 

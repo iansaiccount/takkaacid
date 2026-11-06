@@ -84,15 +84,6 @@ impl eframe::App for TakkaApp {
         let rect = ui.max_rect();
         panel_ui::draw_panel(&mut self.panel, &self.state, ui);
 
-        // The one working control until Phase 07 wires the panel: RUN/STOP in the first transport cell.
-        let transport = panel_ui::layout::knob_cells(panel_ui::layout::layout(rect).transport, 4);
-        let playing = self.state.is_playing();
-        let label = if playing { "STOP" } else { "RUN" };
-        if let Some(cell) = transport.first()
-            && ui.put(*cell, egui::Button::new(label)).clicked()
-        {
-            self.state.toggle_playing();
-        }
 
         ui.painter().text(
             rect.center_bottom() - egui::vec2(0.0, 6.0),

@@ -52,7 +52,10 @@ fn dragging_the_tuning_knob_publishes_to_the_shared_state() {
 fn every_knob_reaches_its_own_shared_field() {
     let shared = SharedState::new();
     for (index, read) in [
-        (2usize, (|s: &SharedState| s.cutoff.get()) as fn(&SharedState) -> f32),
+        (
+            2usize,
+            (|s: &SharedState| s.cutoff.get()) as fn(&SharedState) -> f32,
+        ),
         (3, |s: &SharedState| s.resonance.get()),
         (4, |s: &SharedState| s.env_mod.get()),
         (5, |s: &SharedState| s.decay.get()),
