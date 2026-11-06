@@ -16,7 +16,7 @@ pub const PATTERNS_PER_BANK: usize = 8;
 pub const TOTAL_PATTERNS: usize = BANKS * PATTERNS_PER_BANK;
 
 /// All 64 patterns plus which one is selected.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PatternBank {
     patterns: Vec<Pattern>,

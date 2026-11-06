@@ -19,3 +19,8 @@ arc-swap = "1.9.3"
 cpal = "0.18.2"
 eframe = "0.37.0"
 egui = "0.37.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+[dev-dependencies]
+tempfile = "3.27.0"
