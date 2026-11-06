@@ -161,7 +161,8 @@ impl Voice {
     /// RESONANCE knob in `0.0..=1.0`.
     pub fn set_resonance_knob(&mut self, knob: f32) {
         self.resonance_knob = knob.clamp(0.0, 1.0);
-        self.filter.set_resonance(param::resonance(self.resonance_knob));
+        self.filter
+            .set_resonance(param::resonance(self.resonance_knob));
     }
 
     /// ENV MOD knob in `0.0..=1.0`: how far the envelope sweeps the cutoff.
@@ -221,7 +222,10 @@ impl Voice {
             self.filter.set_cutoff_hz(cutoff);
 
             let filtered = self.filter.process(self.oscillator.next_sample());
-            *slot = (filtered * amp_level * amp).clamp(-0.999, 0.999);
+            let sample = (filtered * amp_level * amp).clamp(-0.999, 0.999);
+            // Flush denormals: a released note leaves the filter ringing at 1e-30 magnitudes, which
+            // costs CPU on every later sample for no audible signal.
+            *slot = if sample.abs() < 1e-20 { 0.0 } else { sample };
         }
     }
 
