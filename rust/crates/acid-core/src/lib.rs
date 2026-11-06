@@ -1,3 +1,5 @@
+pub mod analysis;
+pub mod engine;
 pub mod param;
 pub mod pitch;
 
