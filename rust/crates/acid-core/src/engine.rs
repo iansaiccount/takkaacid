@@ -6,10 +6,10 @@
 
 use crate::oscillator::Waveform;
 use crate::param;
-use crate::pitch::{step_hz, Pitch};
+use crate::pitch::{Pitch, step_hz};
 use crate::voice::{
-    Voice, DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
-    DEFAULT_RESONANCE_KNOB,
+    DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
+    DEFAULT_RESONANCE_KNOB, Voice,
 };
 
 /// TUNING knob at launch: centred, no transpose.

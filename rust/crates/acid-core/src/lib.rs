@@ -4,6 +4,7 @@ pub mod envelope;
 pub mod filter;
 pub mod oscillator;
 pub mod param;
+pub mod pattern;
 pub mod pitch;
 pub mod voice;
 
