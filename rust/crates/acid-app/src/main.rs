@@ -60,7 +60,10 @@ impl eframe::App for TakkaApp {
         };
         if text != self.rig.status() {
             self.state.set_status(match &status {
-                AudioStatus::Running { device, sample_rate } => AudioStatus::Running {
+                AudioStatus::Running {
+                    device,
+                    sample_rate,
+                } => AudioStatus::Running {
                     device: device.clone(),
                     sample_rate: *sample_rate,
                 },

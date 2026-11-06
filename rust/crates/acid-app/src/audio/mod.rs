@@ -5,10 +5,10 @@
 //! owns its scratch buffer (sized once at open), never allocates, never locks, and duplicates each mono
 //! sample to every channel.
 
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Instant;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, StreamConfig, SupportedStreamConfig};
 
@@ -37,7 +37,8 @@ pub fn pick_rate(rates: &[u32]) -> Option<u32> {
 
 /// Pick a usable stream config: the preferred rate where possible, stereo before mono.
 pub fn pick_config(configs: &[SupportedStreamConfig]) -> Option<SupportedStreamConfig> {
-    let usable: Vec<&SupportedStreamConfig> = configs.iter().filter(|c| c.channels() >= 1).collect();
+    let usable: Vec<&SupportedStreamConfig> =
+        configs.iter().filter(|c| c.channels() >= 1).collect();
     if usable.is_empty() {
         return None;
     }

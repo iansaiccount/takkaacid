@@ -15,7 +15,10 @@ fn glide_reaches_the_target_and_never_overshoots() {
         early > 55.0 && early < 110.0,
         "should be mid-glide, got {early}"
     );
-    assert!((late - 110.0).abs() < 1.5, "should have arrived, got {late}");
+    assert!(
+        (late - 110.0).abs() < 1.5,
+        "should have arrived, got {late}"
+    );
 }
 
 #[test]

@@ -79,6 +79,9 @@ mod tests {
     #[test]
     fn silkscreen_is_yellow_not_white() {
         let c = SILKSCREEN;
-        assert!(c.r() > 200 && c.g() > 150 && c.b() < 80, "expected amber, got {c:?}");
+        assert!(
+            c.r() > 200 && c.g() > 150 && c.b() < 80,
+            "expected amber, got {c:?}"
+        );
     }
 }

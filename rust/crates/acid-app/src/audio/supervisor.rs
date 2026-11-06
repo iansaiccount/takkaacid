@@ -48,7 +48,6 @@ impl Supervisor {
     pub fn attempts(&self) -> u32 {
         self.attempts
     }
-
 }
 
 #[cfg(test)]

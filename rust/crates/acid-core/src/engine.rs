@@ -76,6 +76,7 @@ impl Engine {
 
     /// TUNING knob, in knob domain: `0.5` is centre.
     pub fn set_tuning(&mut self, knob: f32) {
-        self.voice.set_tuning_semitones(crate::param::tuning_semitones(knob));
+        self.voice
+            .set_tuning_semitones(crate::param::tuning_semitones(knob));
     }
 }

@@ -49,7 +49,11 @@ pub fn dominant_hz(buf: &[f32], sample_rate: f32) -> f32 {
             e2 += b * b;
         }
         let denom = (e1 * e2).sqrt();
-        if denom > 1e-12 { (sum / denom) as f32 } else { 0.0 }
+        if denom > 1e-12 {
+            (sum / denom) as f32
+        } else {
+            0.0
+        }
     };
 
     // Correlation for every candidate lag, built once — the sub-octave guard re-reads it.
@@ -72,7 +76,12 @@ pub fn dominant_hz(buf: &[f32], sample_rate: f32) -> f32 {
 
     let mut best_lag = 0usize;
     let mut best = 0.0f32;
-    for (lag, &c) in corr_at.iter().enumerate().take(max_lag + 1).skip(search_from) {
+    for (lag, &c) in corr_at
+        .iter()
+        .enumerate()
+        .take(max_lag + 1)
+        .skip(search_from)
+    {
         if c > best {
             best = c;
             best_lag = lag;
