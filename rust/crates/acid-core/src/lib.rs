@@ -3,6 +3,7 @@ pub mod bank;
 pub mod clock;
 pub mod engine;
 pub mod envelope;
+pub mod factory;
 pub mod filter;
 pub mod oscillator;
 pub mod param;

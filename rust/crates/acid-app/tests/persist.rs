@@ -62,7 +62,11 @@ fn save_is_atomic_and_leaves_no_temp_file() {
 #[test]
 fn only_non_empty_patterns_get_their_own_file() {
     let dir = tempfile::tempdir().unwrap();
-    let mut saved = SavedState::default();
+    // An explicitly empty bank, so the factory line is not what is being counted.
+    let mut saved = SavedState {
+        bank: acid_core::bank::PatternBank::new_empty(),
+        ..Default::default()
+    };
     saved.bank.select(3);
     saved.bank.replace(3, Pattern::from_steps([Step::note(Pitch::A, 0); 16]));
     save(dir.path(), &saved).unwrap();

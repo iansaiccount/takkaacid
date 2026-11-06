@@ -69,8 +69,7 @@ pub struct SavedState {
 impl Default for SavedState {
     fn default() -> Self {
         Self {
-            // Task 42 replaces this with `PatternBank::factory()`.
-            bank: PatternBank::new_empty(),
+            bank: PatternBank::factory(),
             knobs: Knobs::default(),
             bpm: DEFAULT_BPM,
             swing: 0.0,

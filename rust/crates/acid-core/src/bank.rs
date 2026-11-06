@@ -32,6 +32,15 @@ impl PatternBank {
         }
     }
 
+    /// The bank the app ships with: bank `A` holds the factory phrase, `B`–`H` are empty.
+    pub fn factory() -> Self {
+        let mut bank = Self::new_empty();
+        for (index, pattern) in crate::factory::factory_patterns().iter().enumerate() {
+            bank.replace(index, *pattern);
+        }
+        bank
+    }
+
     /// The hardware's name for a slot: `0 -> A1`, `63 -> H8`. Out-of-range indices wrap.
     pub fn id_of(index: usize) -> PatternId {
         let index = index % TOTAL_PATTERNS;

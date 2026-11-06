@@ -3,16 +3,17 @@ use std::time::Duration;
 
 use acid_app::audio::{self, Rig};
 use acid_app::state::{self, AudioStatus};
+use acid_app::persist;
 use acid_app::ui as panel_ui;
+use acid_core::bank::PatternBank;
 
-use acid_core::pattern::{Pattern, Step};
 use eframe::egui;
 
 fn main() -> eframe::Result {
-    let state = state::SharedState::new();
-    // Temporary demo pattern until the step editor lands in Phase 08: the RUN button needs something to
-    // play. Task 42's factory bank takes over from here.
-    state.set_pattern(Arc::new(demo_pattern()));
+    // Restore the last session; a first run opens on the factory line.
+    let saved = persist::load_or_default(&persist::data_dir());
+    let state = persist::saved_to_shared(&saved);
+    let bank = saved.bank.clone();
 
     // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
     let rig = Rig::new({
@@ -41,10 +42,16 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |_cc| {
             let panel = panel_ui::PanelState {
-                pattern: Arc::new(demo_pattern()),
+                pattern: state.pattern(),
                 ..Default::default()
             };
-            Ok(Box::new(TakkaApp { rig, state, panel }))
+            Ok(Box::new(TakkaApp {
+                rig,
+                state,
+                panel,
+                bank,
+                autosave: persist::Autosave::new(),
+            }))
         }),
     )
 }
@@ -53,6 +60,9 @@ struct TakkaApp {
     rig: Rig,
     state: Arc<state::SharedState>,
     panel: panel_ui::PanelState,
+    /// The bank as loaded from disk; only the playing pattern is kept in `state`.
+    bank: PatternBank,
+    autosave: persist::Autosave,
 }
 
 impl eframe::App for TakkaApp {
@@ -78,6 +88,18 @@ impl eframe::App for TakkaApp {
             });
         }
         ctx.request_repaint_after(Duration::from_millis(200));
+        // Write the session when something changed and the interval has passed.
+        if self
+            .autosave
+            .should_save(self.panel.dirty, std::time::Instant::now())
+        {
+            self.save();
+        }
+    }
+
+    /// Closing the window is one last chance to keep whatever the user just did.
+    fn on_exit(&mut self) {
+        self.save();
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -95,39 +117,21 @@ impl eframe::App for TakkaApp {
     }
 }
 
-/// Temporary demo pattern for the RUN button until the step editor arrives (Phase 06/07).
-///
-/// It is deliberately placed here rather than in `Engine::new`: a default pattern inside the library would
-/// make every engine test noisy, and Task 26's factory bank is where a default really belongs.
-fn demo_pattern() -> Pattern {
-    use acid_core::pitch::Pitch;
-    let mut steps = [Step::rest(); 16];
-    steps[0] = Step::note(Pitch::A, -1);
-    steps[2] = Step {
-        accent: true,
-        ..Step::note(Pitch::A, -1)
-    };
-    steps[4] = Step::note(Pitch::C, 0);
-    steps[7] = Step {
-        slide: true,
-        ..Step::note(Pitch::E, 0)
-    };
-    steps[8] = Step::note(Pitch::A, -1);
-    steps[10] = Step {
-        accent: true,
-        ..Step::note(Pitch::G, 0)
-    };
-    steps[12] = Step::note(Pitch::A, 0);
-    steps[15] = Step {
-        slide: true,
-        ..Step::note(Pitch::C, 1)
-    };
-    Pattern::from_steps(steps)
+impl TakkaApp {
+    /// Write the session, keeping the other 63 patterns from the bank as loaded.
+    fn save(&mut self) {
+        let saved = persist::shared_to_saved(&self.state, self.bank.clone());
+        match persist::save(&persist::data_dir(), &saved) {
+            Ok(()) => self.panel.dirty = false,
+            Err(error) => eprintln!("takka-acid: could not save: {error}"),
+        }
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
-    use super::demo_pattern;
+    use acid_core::factory::launcher;
     use acid_core::engine::Engine;
     use std::sync::Arc;
 
@@ -137,7 +141,7 @@ mod tests {
     fn the_demo_pattern_loops_without_a_click_at_the_wrap() {
         let sr = 48_000.0;
         let mut e = Engine::new(sr);
-        e.set_pattern(Arc::new(demo_pattern()));
+        e.set_pattern(Arc::new(launcher()));
         e.set_bpm(130.0);
         e.start();
         // 16 steps at 130 bpm.

@@ -42,6 +42,8 @@ pub struct PanelState {
     pub last_octave: i8,
     /// A pitch drag in progress: the step, the pitch it started on, and pixels moved so far.
     pub drag: Option<(usize, Pitch, i8, f32)>,
+    /// True when something has changed since the last save.
+    pub dirty: bool,
 }
 
 impl Default for PanelState {
@@ -56,6 +58,7 @@ impl Default for PanelState {
             last_pitch: acid_core::pitch::Pitch::C,
             last_octave: 0,
             drag: None,
+            dirty: false,
         }
     }
 }
@@ -104,6 +107,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let diameter = cell.width().min(cell.height() * 0.78);
         let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(cell.shrink(2.0 * s)));
         cell_ui.set_clip_rect(*cell);
+        let before = state.knobs[i];
         knob::knob(
             &mut cell_ui,
             egui::Id::unique(("knob", i)),
@@ -122,6 +126,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             6 => shared.accent.set(state.knobs[6]),
             _ => {}
         }
+        if state.knobs[i] != before {
+            state.dirty = true;
+        }
     }
 
     let keys = layout::step_cells(l.steps);
@@ -139,6 +146,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             }
             shared.set_step(i % STEPS_PER_PATTERN, edited);
             state.pattern = shared.pattern();
+            state.dirty = true;
         }
 
         // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
@@ -163,6 +171,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.last_octave = octave;
             shared.set_step(index, dragged);
             state.pattern = shared.pattern();
+            state.dirty = true;
             ui.painter().text(
                 cell.center(),
                 egui::Align2::CENTER_CENTER,
@@ -188,16 +197,20 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let playing = shared.is_playing();
         if transport::transport_button(ui, "run", run, "RUN", playing).clicked() {
             shared.set_playing(true);
+            state.dirty = true;
         }
         if transport::transport_button(ui, "stop", stop, "STOP", !playing).clicked() {
             shared.set_playing(false);
+            state.dirty = true;
         }
         let bpm = shared.tempo_bpm.get();
         if transport::transport_button(ui, "tempo-down", tempo_down, "TEMPO -", false).clicked() {
             shared.tempo_bpm.set(transport::nudge_tempo(bpm, -1));
+            state.dirty = true;
         }
         if transport::transport_button(ui, "tempo-up", tempo_up, "TEMPO +", false).clicked() {
             shared.tempo_bpm.set(transport::nudge_tempo(bpm, 1));
+            state.dirty = true;
         }
     }
 }
