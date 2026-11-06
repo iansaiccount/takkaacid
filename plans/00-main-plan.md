@@ -160,7 +160,7 @@ Updated 2026-11-06. The ledger with per-task evidence and every ruling lives in
 | 11 polish | 52–56 | not started |
 | 12 deferred accuracy | — | backlog |
 
-Current tree: 71 tests green in 22 suites, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+Current tree: 72 tests green in 22 suites, `cargo clippy --workspace --all-targets -- -D warnings` clean,
 app opens a 48 kHz stream and plays a held note on the temporary RUN button. Resume at **Task 22**.
 
 ## Execution notes
