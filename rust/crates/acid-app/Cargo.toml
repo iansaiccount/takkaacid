@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 acid-core = { path = "../acid-core" }
 anyhow = "1.0.104"
+arc-swap = "1.9.3"
 cpal = "0.18.2"
 eframe = "0.37.0"
 egui = "0.37.0"

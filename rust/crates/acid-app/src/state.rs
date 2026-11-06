@@ -3,9 +3,17 @@
 //! Everything here is either an atomic or a short-lived mutex the audio thread never touches, so the
 //! audio callback can never be blocked by the user moving a knob.
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use acid_core::engine::DEFAULT_TUNING_KNOB;
+use acid_core::oscillator::Waveform;
+use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::voice::{
+    DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
+    DEFAULT_RESONANCE_KNOB,
+};
+use arc_swap::ArcSwap;
 /// Tempo used until the sequencer owns one (Phase 05's `timing` module takes this over).
 pub const DEFAULT_BPM: f32 = 130.0;
 
@@ -37,13 +45,44 @@ pub enum AudioStatus {
     Running { device: String, sample_rate: u32 },
     Failed { reason: String },
 }
+/// Every control in one `Copy` value: what the audio callback reads once per block.
+#[derive(Copy, Clone, Debug)]
+pub struct Parameters {
+    pub waveform: Waveform,
+    pub tuning: f32,
+    pub cutoff: f32,
+    pub resonance: f32,
+    pub env_mod: f32,
+    pub decay: f32,
+    pub accent: f32,
+    pub volume: f32,
+    pub tempo_bpm: f32,
+    pub swing: f32,
+    pub playing: bool,
+}
 
 /// The seam between the two threads.
+///
+/// Every knob is an atomic read once per audio block; the pattern lives behind an `ArcSwap`, so an edit on
+/// the UI thread publishes a new `Arc` and the audio thread's `load` never waits. `status` is a mutex, but
+/// only the UI thread touches it.
 #[derive(Debug)]
 pub struct SharedState {
     pub playing: AtomicBool,
+    /// Step the transport is on, `0..16`, published by the audio thread for the LEDs.
+    pub position: AtomicUsize,
     pub tempo_bpm: AtomicF32,
+    pub swing: AtomicF32,
+    /// `0` = saw, `1` = square.
+    pub waveform: AtomicUsize,
+    pub tuning: AtomicF32,
+    pub cutoff: AtomicF32,
+    pub resonance: AtomicF32,
+    pub env_mod: AtomicF32,
+    pub decay: AtomicF32,
+    pub accent: AtomicF32,
     pub volume: AtomicF32,
+    pub pattern: ArcSwap<Pattern>,
     pub status: Mutex<AudioStatus>,
 }
 
@@ -51,8 +90,19 @@ impl SharedState {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             playing: AtomicBool::new(false),
+            position: AtomicUsize::new(0),
             tempo_bpm: AtomicF32::new(DEFAULT_BPM),
+            swing: AtomicF32::new(0.0),
+            waveform: AtomicUsize::new(0),
+            // The launch patch is the engine's, so the panel and the engine cannot disagree about it.
+            tuning: AtomicF32::new(DEFAULT_TUNING_KNOB),
+            cutoff: AtomicF32::new(DEFAULT_CUTOFF_KNOB),
+            resonance: AtomicF32::new(DEFAULT_RESONANCE_KNOB),
+            env_mod: AtomicF32::new(DEFAULT_ENV_MOD_KNOB),
+            decay: AtomicF32::new(DEFAULT_DECAY_KNOB),
+            accent: AtomicF32::new(DEFAULT_ACCENT_KNOB),
             volume: AtomicF32::new(DEFAULT_VOLUME),
+            pattern: ArcSwap::from_pointee(Pattern::empty()),
             status: Mutex::new(AudioStatus::Starting),
         })
     }
@@ -69,6 +119,60 @@ impl SharedState {
         let next = !self.is_playing();
         self.set_playing(next);
         next
+    }
+
+    /// Every control at once, as the audio callback wants them: eleven relaxed loads, no allocation.
+    pub fn snapshot(&self) -> Parameters {
+        Parameters {
+            waveform: self.waveform(),
+            tuning: self.tuning.get(),
+            cutoff: self.cutoff.get(),
+            resonance: self.resonance.get(),
+            env_mod: self.env_mod.get(),
+            decay: self.decay.get(),
+            accent: self.accent.get(),
+            volume: self.volume.get(),
+            tempo_bpm: self.tempo_bpm.get(),
+            swing: self.swing.get(),
+            playing: self.is_playing(),
+        }
+    }
+
+    pub fn set_waveform(&self, waveform: Waveform) {
+        let raw = match waveform {
+            Waveform::Saw => 0,
+            Waveform::Square => 1,
+        };
+        self.waveform.store(raw, Ordering::Relaxed);
+    }
+
+    pub fn waveform(&self) -> Waveform {
+        if self.waveform.load(Ordering::Relaxed) == 1 {
+            Waveform::Square
+        } else {
+            Waveform::Saw
+        }
+    }
+
+    /// Publish a whole pattern. The audio thread sees either the old or the new one, never a half-built one.
+    pub fn set_pattern(&self, pattern: Arc<Pattern>) {
+        self.pattern.store(pattern);
+    }
+
+    pub fn pattern(&self) -> Arc<Pattern> {
+        self.pattern.load_full()
+    }
+
+    /// Clone-on-write one step. Stray indices are ignored: this is reachable from the UI.
+    pub fn set_step(&self, index: usize, step: Step) {
+        if index >= STEPS_PER_PATTERN {
+            return;
+        }
+        self.pattern.rcu(|current| {
+            let mut next = **current;
+            next.steps[index] = step;
+            Arc::new(next)
+        });
     }
 
     pub fn status(&self) -> AudioStatus {
