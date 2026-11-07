@@ -38,9 +38,10 @@ pub const DEFAULT_ACCENT_KNOB: f32 = 0.8;
 const ATTACK_MS: f32 = 2.0;
 const SUSTAIN: f32 = 0.35;
 const RELEASE_MS: f32 = 20.0;
-/// Output staged so the factory pattern measures about -17 dBFS RMS at `volume = 1.0, drive = 0.0`, with
-/// peaks near 0.81. -14 dBFS was the target, but this patch's crest factor is 5.8x, which would put peaks at
-/// 1.15 and make the limiter do the level control — `tests/gain_staging.rs` requires peaks under 0.9.
+/// Output staged so the factory pattern measures about -17 dBFS RMS at `volume = 1.0, drive = 0.0`, with peaks near
+/// 0.85. -14 dBFS was the target, but this patch's crest factor is 5.8x, which would put peaks over 1.0 and make the
+/// limiter do the level control — `tests/gain_staging.rs` requires peaks under 0.9. The figure came down from 0.92 when
+/// the accent gained its +4 dB lift: the staging has to fit the loudest step, not the average one.
 const AMPLITUDE: f32 = 0.88;
 /// How far the filter envelope sweeps at `env_mod = 1.0`, in octaves.
 pub const ENV_MOD_OCTAVES: f32 = 4.0;
