@@ -98,6 +98,8 @@ impl eframe::App for TakkaApp {
                 egui::Key::ArrowDown,
                 egui::Key::ArrowRight,
                 egui::Key::ArrowLeft,
+                egui::Key::F1,
+                egui::Key::Questionmark,
             ]
             .into_iter()
             .filter(|key| input.key_pressed(*key))
@@ -107,6 +109,10 @@ impl eframe::App for TakkaApp {
         for (key, shift) in presses {
             if let Some(shortcut) = panel_ui::shortcuts::shortcut_for(key, shift) {
                 panel_ui::shortcuts::apply(shortcut, &self.state, &mut self.bank);
+                // The help card is panel state, so it is toggled here rather than in `apply`.
+                if matches!(shortcut, panel_ui::shortcuts::Shortcut::ToggleHelp) {
+                    self.panel.help_visible = !self.panel.help_visible;
+                }
             }
         }
 

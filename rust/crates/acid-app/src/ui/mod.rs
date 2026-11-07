@@ -9,6 +9,7 @@ pub mod step_key;
 pub mod display;
 pub mod keys;
 pub mod shortcuts;
+pub mod help;
 pub mod transport;
 pub mod edit;
 
@@ -55,6 +56,8 @@ pub struct PanelState {
     pub midi_given_up: bool,
     /// Set by the panel when REPROBE is clicked; the app clears it.
     pub reprobe_requested: bool,
+    /// True while the help card is showing.
+    pub help_visible: bool,
     pub volume: f32,
 }
 
@@ -76,6 +79,7 @@ impl Default for PanelState {
             midi_status: "MIDI: none (retrying)".to_string(),
             midi_given_up: false,
             reprobe_requested: false,
+            help_visible: false,
         }
     }
 }
@@ -302,6 +306,39 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             shared.volume.set(state.volume);
             state.dirty = true;
         }
+    }
+
+    // A small `?` at the end of the wordmark opens the help card, and the card covers the panel while it is
+    // showing — it is the only thing that needs no explanation of its own.
+    let help_dot = egui::Rect::from_center_size(
+        egui::Pos2::new(
+            panel::brand_rect(l.top).right() - 10.0 * s,
+            l.top.center().y,
+        ),
+        egui::vec2(18.0 * s, 18.0 * s),
+    );
+    let help_response = ui.interact(
+        help_dot,
+        ui.scope_id().with("help-toggle"),
+        egui::Sense::click(),
+    );
+    ui.painter().circle_stroke(
+        help_dot.center(),
+        8.0 * s,
+        theme::silkscreen_stroke(s),
+    );
+    ui.painter().text(
+        help_dot.center(),
+        egui::Align2::CENTER_CENTER,
+        "?",
+        theme::legend(11.0 * s),
+        theme::SILKSCREEN,
+    );
+    if help_response.clicked() {
+        state.help_visible = !state.help_visible;
+    }
+    if state.help_visible {
+        help::paint_help(ui.painter(), l.panel, s);
     }
 }
 
