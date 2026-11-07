@@ -82,12 +82,14 @@ pub fn handle(
     if matches!(shortcut, shortcuts::Shortcut::ToggleHelp) {
         panel.help_visible = !panel.help_visible;
     }
-    // The selection names a position in the pattern on screen, so a new pattern starts at 1.
+    // The selection names a position in the pattern on screen and the display names the pattern itself, so a
+    // new pattern starts at its first step and the display follows the bank.
     if matches!(
         shortcut,
         shortcuts::Shortcut::NextPattern | shortcuts::Shortcut::PrevPattern
     ) {
         panel.selected = 0;
+        panel.pattern_id = PatternBank::id_of(bank.current());
     }
     Handled::Shortcut(shortcut)
 }
@@ -151,6 +153,32 @@ mod tests {
             bank.current(),
             current,
             "and must not switch pattern either"
+        );
+    }
+
+    #[test]
+    fn the_pattern_display_follows_the_bank() {
+        // The panel prints `pattern_id`, and nothing kept it up to date: the display stayed on A1 while the
+        // arrows moved through the bank underneath it.
+        let shared = lit_shared();
+        let mut bank = PatternBank::factory();
+        bank.select(0);
+        let mut panel = PanelState::default();
+
+        handle(
+            KeyPress {
+                key: Key::ArrowRight,
+                shift: false,
+            },
+            &mut panel,
+            &shared,
+            &mut bank,
+        );
+
+        assert_eq!(panel.pattern_id, PatternBank::id_of(bank.current()));
+        assert_eq!(
+            panel.pattern_id,
+            acid_core::pattern::PatternId { bank: 0, number: 1 }
         );
     }
 

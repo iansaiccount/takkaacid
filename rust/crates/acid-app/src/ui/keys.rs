@@ -46,6 +46,23 @@ pub fn key_hz(pitch: Pitch, octave: i32) -> f32 {
     step_hz(pitch, offset)
 }
 
+/// Every key the frame reports as freshly pressed, with egui's auto-repeats dropped: a held key is one press,
+/// and a repeated one would re-gate the voice at the repeat rate and stutter the note.
+pub fn fresh_presses(events: &[eframe::egui::Event]) -> Vec<Key> {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            eframe::egui::Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                ..
+            } => Some(*key),
+            _ => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -58,6 +75,24 @@ mod tests {
         assert_eq!(pitch_for(Key::K), Some(Pitch::CHigh));
         assert_eq!(pitch_for(Key::Q), None);
         assert_eq!(KEY_MAP.len(), 13);
+    }
+
+    #[test]
+    fn a_held_note_key_is_one_press_not_one_per_repeat() {
+        use eframe::egui::{Event, Modifiers};
+        let key = |pressed: bool, repeat: bool| Event::Key {
+            key: Key::A,
+            physical_key: None,
+            pressed,
+            repeat,
+            modifiers: Modifiers::default(),
+        };
+        // One real press, then the auto-repeats egui emits while the key is held.
+        let events = vec![key(true, false), key(true, true), key(true, true)];
+        assert_eq!(fresh_presses(&events), vec![Key::A]);
+        // Releases and other events are not presses.
+        assert!(fresh_presses(&[key(false, false)]).is_empty());
+        assert!(fresh_presses(&[]).is_empty());
     }
 
     #[test]

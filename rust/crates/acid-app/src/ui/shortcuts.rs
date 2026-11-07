@@ -36,6 +36,13 @@ pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
     }
 }
 
+/// Copy the live pattern back into the slot it came from. `SharedState` holds the pattern being edited and the
+/// bank holds the saved copies, so without this a pattern loses every edit the moment the selection moves.
+fn stash_current(state: &SharedState, bank: &mut PatternBank) {
+    let current = bank.current();
+    bank.replace(current, *state.pattern());
+}
+
 /// Carry out a shortcut. Returns true when shared state changed.
 ///
 /// Pattern moves push the new pattern into `SharedState`, exactly as the panel's pattern switch does.
@@ -55,11 +62,13 @@ pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) ->
             true
         }
         Shortcut::NextPattern => {
+            stash_current(state, bank);
             bank.select((bank.current() + 1) % TOTAL_PATTERNS);
             state.set_pattern(Arc::new(*bank.current_pattern()));
             true
         }
         Shortcut::PrevPattern => {
+            stash_current(state, bank);
             bank.select((bank.current() + TOTAL_PATTERNS - 1) % TOTAL_PATTERNS);
             state.set_pattern(Arc::new(*bank.current_pattern()));
             true
@@ -71,6 +80,8 @@ pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use acid_core::pattern::Step;
+    use acid_core::pitch::Pitch;
 
     #[test]
     fn space_toggles_the_transport() {
@@ -104,6 +115,49 @@ mod tests {
         assert_eq!(bank.current(), 63);
         apply(Shortcut::NextPattern, &s, &mut bank);
         assert_eq!(bank.current(), 0);
+    }
+
+    #[test]
+    fn switching_away_and_back_keeps_the_edits_you_made() {
+        // The bank holds the saved copies; `SharedState` holds the live pattern. Moving the selection used to
+        // re-publish the stale bank copy, so the pattern lost every edit on the way out.
+        let s = SharedState::new();
+        let mut bank = PatternBank::factory();
+        bank.select(0);
+        s.set_pattern(Arc::new(*bank.current_pattern()));
+        s.set_step(0, Step::note(Pitch::E, 1));
+
+        apply(Shortcut::NextPattern, &s, &mut bank);
+        apply(Shortcut::PrevPattern, &s, &mut bank);
+
+        let back = s.pattern();
+        assert_eq!(
+            (back.steps[0].pitch, back.steps[0].octave_offset),
+            (Pitch::E, 1)
+        );
+    }
+
+    #[test]
+    fn a_pattern_you_switch_to_is_its_own_and_not_the_one_you_left() {
+        let s = SharedState::new();
+        let mut bank = PatternBank::factory();
+        bank.select(0);
+        s.set_pattern(Arc::new(*bank.current_pattern()));
+        let untouched = *bank.get(1);
+        s.set_step(0, Step::note(Pitch::E, 1));
+
+        apply(Shortcut::NextPattern, &s, &mut bank);
+
+        assert_eq!(
+            *s.pattern(),
+            untouched,
+            "the edit must not leak into the pattern you moved to"
+        );
+        assert_eq!(
+            bank.get(0).steps[0].pitch,
+            Pitch::E,
+            "and must be kept in the pattern you left"
+        );
     }
 
     #[test]

@@ -72,6 +72,11 @@ pub fn gesture_from_input(
     ctrl: bool,
     double: bool,
 ) -> Option<StepGesture> {
+    // No click means no gesture. The panel asks for a gesture for all sixteen keys on every frame, so a held
+    // modifier without this guard would read as a gesture on every key, every frame.
+    if !left && !double {
+        return None;
+    }
     if double {
         Some(StepGesture::Clear)
     } else if shift {
@@ -246,6 +251,20 @@ mod tests {
             Some(StepGesture::Clear)
         );
         assert_eq!(gesture_from_input(false, false, false, false, false), None);
+    }
+
+    #[test]
+    fn a_held_modifier_is_not_a_gesture() {
+        // The panel asks every one of the sixteen keys for a gesture on every frame. Without this guard a
+        // held ctrl read as ctrl+click on all of them, so every key flashed on and off at frame rate.
+        assert_eq!(gesture_from_input(false, false, false, true, false), None);
+        assert_eq!(gesture_from_input(false, true, false, false, false), None);
+        assert_eq!(gesture_from_input(false, false, true, false, false), None);
+        // A double click is its own trigger — egui reports it alongside the click.
+        assert_eq!(
+            gesture_from_input(false, false, false, false, true),
+            Some(StepGesture::Clear)
+        );
     }
 
     #[test]

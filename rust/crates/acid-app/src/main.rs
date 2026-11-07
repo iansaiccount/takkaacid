@@ -40,6 +40,8 @@ fn main() -> eframe::Result {
         Box::new(move |_cc| {
             let panel = panel_ui::PanelState {
                 pattern: state.pattern(),
+                // The saved session may have been left on another pattern, so the display starts from the bank.
+                pattern_id: PatternBank::id_of(bank.current()),
                 ..Default::default()
             };
             Ok(Box::new(TakkaApp {

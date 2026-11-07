@@ -395,17 +395,15 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui) {
 
     let octave = shared.octave.load(Ordering::Relaxed);
     ui.input(|input| {
-        for (key, pitch) in keys::KEY_MAP {
-            if input.key_pressed(key) {
+        // One pass over the frame's freshly pressed keys: a held key must not re-gate the voice on every
+        // auto-repeat, and Z/X move the octave the same way.
+        for key in keys::fresh_presses(&input.events) {
+            if let Some(pitch) = keys::pitch_for(key) {
                 shared.midi_hz.set(keys::key_hz(pitch, octave));
                 shared.midi_accent.store(false, Ordering::Relaxed);
                 shared.midi_gate.store(true, Ordering::Relaxed);
             }
-        }
-        for key in [egui::Key::Z, egui::Key::X] {
-            if input.key_pressed(key)
-                && let Some(delta) = keys::octave_key(key)
-            {
+            if let Some(delta) = keys::octave_key(key) {
                 let next = (octave + i32::from(delta)).clamp(-2, 2);
                 shared.octave.store(next, Ordering::Relaxed);
             }

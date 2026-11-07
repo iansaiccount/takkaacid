@@ -200,6 +200,60 @@ fn a_click_while_the_help_card_is_up_does_not_select() {
 }
 
 #[test]
+fn a_held_modifier_edits_nothing_while_the_pointer_rests_on_a_step() {
+    // Reported symptom: holding ctrl alone edited every key. The panel computes a gesture for all sixteen
+    // keys every frame, so a modifier without a click must map to no gesture at all.
+    for mods in [
+        Modifiers {
+            ctrl: true,
+            ..Modifiers::default()
+        },
+        Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        },
+        Modifiers {
+            alt: true,
+            ..Modifiers::default()
+        },
+    ] {
+        let ctx = Context::default();
+        let shared = lit_shared();
+        let before = shared.pattern().steps;
+        let mut panel = PanelState::default();
+        let at = step_centre(4);
+        run_on(
+            &ctx,
+            screen(),
+            &mut panel,
+            &shared,
+            vec![Event::PointerMoved(at)],
+        );
+        run_on(
+            &ctx,
+            screen(),
+            &mut panel,
+            &shared,
+            vec![Event::ModifiersChanged(mods)],
+        );
+        // Two more frames, so the modifier is down for three frames in all. Three is the point: an
+        // implementation that edits once per frame leaves the steps edited, where two toggles would cancel
+        // out and hide the bug.
+        run_on(&ctx, screen(), &mut panel, &shared, vec![]);
+        run_on(&ctx, screen(), &mut panel, &shared, vec![]);
+        assert_eq!(
+            shared.pattern().steps,
+            before,
+            "a held modifier must not edit a step: {mods:?}"
+        );
+        assert!(
+            !panel.dirty,
+            "and must not mark the pattern for saving: {mods:?}"
+        );
+    }
+}
+
+#[test]
 fn clicking_one_step_then_another_moves_the_outline() {
     let ctx = Context::default();
     let shared = lit_shared();
