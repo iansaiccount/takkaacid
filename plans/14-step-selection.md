@@ -45,7 +45,7 @@
   - `selection::nudge_step(step: Step, semitones: i8, last_pitch: Pitch, last_octave: i8) -> Step`.
   - `PanelState::selected: usize` (defaults to `0`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `ui/edit.rs`'s test module:
 
@@ -87,12 +87,12 @@ fn nudging_a_rest_takes_the_last_pitch_already_moved() {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app selection`
 Expected: FAIL — `cannot find function 'move_selection'` and `cannot find function 'transpose'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `edit::transpose` moves by absolute semitones and re-uses the existing private `from_absolute`, which already clamps and canonicalises. Rewrite `nudge_pitch` as `transpose(pitch, 0, semitones)` so the two cannot drift.
 
@@ -112,12 +112,12 @@ pub fn nudge_step(step: Step, semitones: i8, last_pitch: Pitch, last_octave: i8)
 
 Add `pub mod selection;` to `ui/mod.rs` and `pub selected: usize` to `PanelState` (default `0`).
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test -p acid-app selection`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app
@@ -139,7 +139,7 @@ git commit -m "feat(ui): selection rules and step transposition"
   - `StepView` gains `pub selected: bool`.
   - `step_view(step: &Step, index: usize, position: usize, playing: bool, selected: bool) -> StepView`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[test]
@@ -159,12 +159,12 @@ fn the_view_carries_the_selection() {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app step_key`
 Expected: FAIL — `cannot find function 'step_label'`, `StepView has no field named 'selected'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `step_label(step)` returns `"--"` when `!step.on`, otherwise `edit::pitch_name(step.pitch, step.octave_offset)`.
 
@@ -174,12 +174,12 @@ When `view.selected`, stroke `rect` (the whole cell, not `keycap`) with `egui::S
 
 Update the three existing `step_view` calls in `ui/mod.rs` to pass `index == state.selected`.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test -p acid-app step_key`
 Expected: PASS — 5 tests (the three existing ones updated for the new argument, plus the two new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app
@@ -200,7 +200,7 @@ git commit -m "feat(ui): keycaps print their note and outline the selected step"
   - `StepGesture::Select` (new variant).
   - `gesture_from_input(left: bool, shift: bool, alt: bool, ctrl: bool, double: bool) -> Option<StepGesture>` — plain click gives `Select`, ctrl+click gives `Toggle`, double gives `Clear`, shift gives `Accent`, alt gives `Slide`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `ui/edit.rs`:
 
@@ -252,12 +252,12 @@ fn dragging_a_rest_selects_it_and_brings_it_in() {
 
 Fill the harness setup from `tests/dismiss_live.rs` (`run_on`, `moved`, `button`, plus a `button_with(at, pressed, modifiers)` that sets `modifiers.ctrl`); the assertions above are the whole test.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app selection`
 Expected: FAIL — `no variant named 'Select'`, and the live test fails to find the selection field's effect.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add `Select` to `StepGesture`; in `apply_gesture`, return `step` unchanged for it. Add the `ctrl` parameter to `gesture_from_input`, ordered `double`, then `shift`, then `alt`, then `ctrl`, then plain `left` → `Select` — so a modifier still beats the plain click, exactly as before.
 
@@ -265,12 +265,12 @@ In `draw_panel`'s step loop, set `state.selected = index` whenever the response 
 
 A rest responds to a drag by selecting and bringing the note in at the dragged pitch; the drag's baseline is the rest's own remembered `(pitch, octave)`, never `last_pitch` (Review Focus 4, as ruled after review).
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test --workspace`
 Expected: PASS. The existing gesture tests that asserted click → toggle now assert click → select; switch them to ctrl+click rather than changing what they prove.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app
@@ -283,6 +283,7 @@ git commit -m "feat(ui): click selects a step, ctrl+click toggles it"
 
 **Files:**
 - Modify: `rust/crates/acid-app/src/ui/selection.rs`
+- Create: `rust/crates/acid-app/src/ui/dispatch.rs` (the press loop and its ordering — moved out of `main.rs`, which is a binary and cannot be tested)
 - Modify: `rust/crates/acid-app/src/main.rs` (key dispatch, pattern-change reset)
 - Modify: `rust/crates/acid-app/src/ui/help.rs` (the card's gesture table — this plan missed it the first time round; the new keys and the click/ctrl+click split must be on the card)
 - Test: `rust/crates/acid-app/src/ui/selection.rs`, `rust/crates/acid-app/tests/selection_live.rs`
@@ -294,8 +295,9 @@ git commit -m "feat(ui): click selects a step, ctrl+click toggles it"
   - `selection::edit_key(key: egui::Key, shift: bool) -> Option<EditKey>`.
   - `selection::Press { NotOurs, Applied, Refused }` plus `Press::consumed() -> bool` — a bool cannot express the third case (a key this module owns but refuses while the help card is up), and a refused press must be swallowed, not passed to the shortcuts.
   - `selection::dispatch(key: egui::Key, shift: bool, panel: &mut PanelState, shared: &SharedState) -> Press` — applies the key and reports what it did.
+  - `dispatch::{KeyPress { key, shift }, Handled { Selection, Shortcut, Refused, Nothing }, presses(events, shift) -> Vec<KeyPress>, handle(press, panel, shared, bank) -> Handled}` — the ordering rule and the repeat filter, where they can be tested.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `ui/selection.rs`:
 
@@ -337,12 +339,12 @@ fn enter_toggles_the_selected_step() {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app selection`
 Expected: FAIL — `cannot find function 'edit_key'` and `cannot find function 'dispatch'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `edit_key` maps shift+arrows to the four `EditKey`s and `Key::Enter` (with or without shift) to `ToggleSelected`; everything else is `None`.
 
@@ -352,14 +354,14 @@ Expected: FAIL — `cannot find function 'edit_key'` and `cannot find function '
 - note up/down: `let step = shared.pattern().steps[panel.selected];` then `shared.set_step(panel.selected, nudge_step(step, ±1, panel.last_pitch, panel.last_octave))`;
 - toggle: `apply_gesture(step, StepGesture::Toggle, panel.last_pitch, panel.last_octave)` through `shared.set_step`.
 
-In `main.rs`, add `egui::Key::Enter` to the collected presses and, inside the loop, dispatch to `selection::dispatch(key, shift, &mut self.panel, &self.state)` first and `continue` when the result is `.consumed()` — that is what keeps shift+right from also reaching `shortcuts::shortcut_for` (Review Focus 3). A press the step editor refuses is *also* consumed: the help card is modal, so a refused shift+right must not change the pattern behind it. After `shortcuts::apply` changes the pattern, reset `self.panel.selected = 0`.
+In `main.rs`, replace the hand-rolled press loop with `ui::dispatch`: `presses(&input.events, shift)` in one `ctx.input`, then `handle(press, &mut self.panel, &self.state, &mut self.bank)` for each. `handle` runs `selection::dispatch` first and only then `shortcuts::shortcut_for`, which is what keeps shift+right from also stepping the pattern (Review Focus 3); a press the step editor refuses is spent too, because the help card is modal. The pattern-change reset of `panel.selected` and the help toggle live in `handle`, since both are panel state.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test --workspace`
 Expected: PASS, and `cargo clippy --workspace --all-targets -- -D warnings` clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app
@@ -374,10 +376,12 @@ git commit -m "feat(ui): keyboard moves the selection and transposes its note"
 |---|---|---|
 | Click while the card is up must not select | `a_click_while_the_help_card_is_up_does_not_select` (`tests/selection_live.rs`: card visible, click a step, `selected` unchanged) | 3 |
 | `ctrl` read from `modifiers.ctrl` | `a_plain_click_only_selects_and_ctrl_click_toggles` + the ctrl+click live test | 3 |
-| Shift+arrow must not fire its unshifted action | `shift_right_moves_the_selection_and_leaves_the_pattern_alone` | 4 |
+| Shift+arrow must not fire its unshifted action | `shift_right_moves_the_selection_and_leaves_the_pattern_alone` (the contract) and `ui::dispatch::tests::shift_right_moves_the_selection_and_never_reaches_the_pattern` (the glue, round-3 fix) | 4 |
 | Dragging a rest brings the note in from the rest's own pitch | live test `dragging_a_rest_selects_it_and_brings_it_in` | 3 |
 | Clamped, not wrapped | `the_selection_moves_and_clamps_at_both_ends` | 1 |
 | Keyboard must not edit behind the card (round-2 fix) | `the_help_card_refuses_the_editing_keys_instead_of_passing_them_on`, and `a_press_with_the_card_away_is_ours_and_applied` for the `NotOurs` half | 4 |
+| A held key must not repeat a toggle (round-3 fix) | `ui::dispatch::tests::a_held_key_repeats_only_for_the_tempo` | 4 |
+| Keycap note and drag readout must not collide (round-3 fix) | `step_key::tests::a_dragged_keycap_leaves_the_pitch_to_the_readout` | 2 |
 
 ## Handoff
 
@@ -433,3 +437,23 @@ behaviour regressions. Its remaining findings, and what was done:
   `NotOurs` (refused presses must not swallow the keys that close the card), and renamed
   `a_press_with_the_card_down_is_ours_and_applied` → `a_press_with_the_card_away_is_ours_and_applied`, which is
   what it always tested.
+
+### Review Response, round 3 (2026-11-07)
+
+Round 2's deferred minors, now fixed:
+
+- **The glue line has a headless test.** The press loop moved out of `main.rs` (a binary, so untestable) into
+  `ui::dispatch`: `presses(events, shift)` collects the frame's presses, `handle(press, panel, shared, bank)`
+  resolves each one — step editor first, then the shortcuts — and reports `Handled`. `main.rs` is now a
+  three-line call. `shift_right_moves_the_selection_and_never_reaches_the_pattern` finally tests Review Focus 3
+  end to end instead of leaning on `selection::dispatch` alone.
+- **Held keys no longer repeat their action.** Only the tempo nudges repeat (`repeats_allowed`), so a held
+  `Enter` cannot flip a step at frame rate and a held arrow cannot race through the bank.
+  `presses` reads egui's `repeat` flag, which `key_pressed` did not expose.
+- **The keycap stands back while its step is dragged.** `StepView::dragging` suppresses the centre note, leaving
+  the cell's live-pitch readout as the only label; pinned by `a_dragged_keycap_leaves_the_pitch_to_the_readout`.
+- **The keycap label no longer allocates.** `edit::pitch_name` returns a `&'static str` from a 37-entry table
+  covering `-12..=24`, checked against `from_absolute`'s spelling rule by
+  `every_label_in_range_matches_the_canonical_spelling`. (The step *number* still formats per keycap per frame —
+  egui takes a `ToString`, and that string is one digit.)
+- **The checkboxes above are ticked**, as `AGENTS.md` asks.
