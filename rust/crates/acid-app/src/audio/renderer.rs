@@ -42,6 +42,8 @@ pub struct AudioRenderer {
     pattern: Arc<Pattern>,
     channels: usize,
     max_block: usize,
+    /// Whether a MIDI note was held at the last block, so only changes trigger a note.
+    midi_gate_on: bool,
 }
 
 impl AudioRenderer {
@@ -61,6 +63,7 @@ impl AudioRenderer {
             pattern,
             channels: channels.max(1),
             max_block: max_block.max(1),
+            midi_gate_on: false,
         }
     }
 
@@ -72,6 +75,26 @@ impl AudioRenderer {
     pub fn render_mono(&mut self, out: &mut [f32]) {
         let params = self.state.snapshot();
         apply(&params, &mut self.engine);
+
+        // MIDI: a rising gate starts a note, a falling one releases it. Only edges act, so a held note is
+        // not retriggered every block. The sequencer keeps running underneath — this plays over the pattern.
+        let gate = self
+            .state
+            .midi_gate
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if gate != self.midi_gate_on {
+            if gate {
+                self.engine.note_on(
+                    self.state.midi_hz.get(),
+                    self.state
+                        .midi_accent
+                        .load(std::sync::atomic::Ordering::Relaxed),
+                );
+            } else {
+                self.engine.note_off();
+            }
+            self.midi_gate_on = gate;
+        }
 
         let latest = self.state.pattern();
         if !Arc::ptr_eq(&latest, &self.pattern) {

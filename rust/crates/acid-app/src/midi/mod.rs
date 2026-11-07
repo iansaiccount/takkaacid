@@ -5,3 +5,4 @@
 //! to open and play without one.
 
 pub mod ports;
+pub mod message;

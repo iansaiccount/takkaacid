@@ -82,6 +82,12 @@ pub struct SharedState {
     pub decay: AtomicF32,
     pub accent: AtomicF32,
     pub volume: AtomicF32,
+    /// Frequency of the note a MIDI keyboard is holding, in Hz.
+    pub midi_hz: AtomicF32,
+    /// True while a MIDI note is held.
+    pub midi_gate: AtomicBool,
+    /// True when the held note was struck hard enough to accent.
+    pub midi_accent: AtomicBool,
     pub pattern: ArcSwap<Pattern>,
     pub status: Mutex<AudioStatus>,
 }
@@ -103,6 +109,9 @@ impl SharedState {
             accent: AtomicF32::new(DEFAULT_ACCENT_KNOB),
             volume: AtomicF32::new(DEFAULT_VOLUME),
             pattern: ArcSwap::from_pointee(Pattern::empty()),
+            midi_hz: AtomicF32::new(0.0),
+            midi_gate: AtomicBool::new(false),
+            midi_accent: AtomicBool::new(false),
             status: Mutex::new(AudioStatus::Starting),
         })
     }

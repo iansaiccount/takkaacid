@@ -81,3 +81,26 @@ fn block_size_never_changes_what_the_renderer_produces() {
         assert!((x - y).abs() < 1e-6, "sample {i}: {x} vs {y}");
     }
 }
+
+/// A keyboard note has to be audible even with the transport stopped and no pattern.
+#[test]
+fn a_midi_note_sounds_and_releases_over_a_silent_pattern() {
+    let s = SharedState::new();
+    s.midi_hz.set(220.0);
+    s.midi_gate
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    let mut r = AudioRenderer::new(48_000.0, 1, s.clone(), 2_048);
+
+    let mut buf = vec![0.0f32; 24_000];
+    r.render_into(&mut buf);
+    assert!(peak(&buf) > 0.01, "the held MIDI note never sounded");
+
+    s.midi_gate
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    let mut tail = vec![0.0f32; 24_000];
+    r.render_into(&mut tail);
+    assert!(
+        peak(&tail[4_800..]) < 0.001,
+        "the note should have released"
+    );
+}
