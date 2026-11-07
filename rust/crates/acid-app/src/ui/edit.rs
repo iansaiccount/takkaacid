@@ -21,13 +21,21 @@ pub enum StepGesture {
 /// Apply one gesture. `last_pitch`/`last_octave` are the pitch a newly-enabled step should take.
 ///
 /// Resting a step keeps its pitch and flags, so toggling it back restores exactly what was there. A flag
-/// gesture forces the step on — a lit accent with no note would be invisible on the panel.
+/// Resting a step keeps its pitch and flags, so toggling it back restores what was there. The exception is
+/// a bare `Step::rest()`, which remembers nothing and comes in at `last_pitch`/`last_octave`. A flag gesture
+/// forces the step on — a lit accent with no note would be invisible on the panel.
 pub fn apply_gesture(step: Step, gesture: StepGesture, last_pitch: Pitch, last_octave: i8) -> Step {
     let enable = |mut step: Step| -> Step {
         if !step.on {
+            // A rest that differs from `Step::rest()` is remembering a note, and that note wins — only a
+            // bare rest has nothing to restore, so `last_pitch` is its fallback rather than the rule. Read
+            // the comparison before turning the step on, or every rest would look bare.
+            let bare = step == Step::rest();
             step.on = true;
-            step.pitch = last_pitch;
-            step.octave_offset = last_octave;
+            if bare {
+                step.pitch = last_pitch;
+                step.octave_offset = last_octave;
+            }
         }
         step
     };
@@ -163,6 +171,17 @@ mod tests {
         assert!(rest.accent && rest.slide);
         let back = apply_gesture(rest, StepGesture::Toggle, Pitch::C, 0);
         assert!(back.on && back.accent && back.slide);
+    }
+
+    #[test]
+    fn a_rested_note_comes_back_at_its_own_pitch() {
+        // Review finding 4, ruled "fix the behaviour": a rest remembers its note, so toggling it back
+        // restores that note — not whatever was played last.
+        let step = Step::note(Pitch::E, 1);
+        let rest = apply_gesture(step, StepGesture::Toggle, Pitch::G, 0);
+        assert!(!rest.on);
+        let back = apply_gesture(rest, StepGesture::Toggle, Pitch::G, 0);
+        assert_eq!((back.pitch, back.octave_offset), (Pitch::E, 1));
     }
 
     #[test]

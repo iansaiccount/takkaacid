@@ -113,8 +113,10 @@ impl eframe::App for TakkaApp {
         });
         for (key, shift) in presses {
             // Selection and note editing first: shift+arrows must never reach the tempo and pattern
-            // shortcuts, which act on the same four keys without a modifier.
-            if panel_ui::selection::dispatch(key, shift, &mut self.panel, &self.state) {
+            // shortcuts, which act on the same four keys without a modifier. A press the step editor
+            // refuses — the help card is modal — is still spent here, or shift+right would quietly change
+            // the pattern behind the card.
+            if panel_ui::selection::dispatch(key, shift, &mut self.panel, &self.state).consumed() {
                 continue;
             }
             if let Some(shortcut) = panel_ui::shortcuts::shortcut_for(key, shift) {

@@ -271,6 +271,11 @@ fn enter_toggles_the_selected_step() {
         back.on && back.accent,
         "a second enter brings the flags back"
     );
+    assert_eq!(
+        (back.pitch, back.octave_offset),
+        (Pitch::E, 0),
+        "the note comes back as it was, not as the last pitch played"
+    );
 }
 
 fn selection_dispatch(
@@ -279,7 +284,7 @@ fn selection_dispatch(
     panel: &mut PanelState,
     shared: &SharedState,
 ) -> bool {
-    acid_app::ui::selection::dispatch(key, shift, panel, shared)
+    acid_app::ui::selection::dispatch(key, shift, panel, shared).consumed()
 }
 
 #[test]
@@ -290,5 +295,4 @@ fn the_layout_gives_sixteen_distinct_cells() {
     for pair in cells.windows(2) {
         assert!(pair[0].right() <= pair[1].left() + 0.01);
     }
-    let _ = egui::vec2(0.0, 0.0);
 }

@@ -13,7 +13,8 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
         (
             "STEPS",
             &[
-                "click: note on or off",
+                "click: select the step",
+                "ctrl+click: note on or off",
                 "shift+click: accent (louder, brighter)",
                 "alt+click: slide into the next note",
                 "drag up or down: change pitch",
@@ -28,6 +29,9 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "SPACE: start or stop, same as RUN / STOP",
                 "left / right: previous or next pattern",
                 "up / down: tempo by 1 BPM",
+                "shift+left / right: move the selection",
+                "shift+up / down: note up or down",
+                "enter: note on or off",
                 "F1 or shift+?: this card",
             ],
         ),
@@ -126,11 +130,36 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         for needle in [
-            "click", "shift", "alt", "drag", "double", "SPACE", "RUN", "F1", "Z", "X", "MIDI",
-            "clock", "CC",
+            "click",
+            "ctrl+click",
+            "shift+click",
+            "alt+click",
+            "drag",
+            "double",
+            "SPACE",
+            "RUN",
+            "F1",
+            "Z",
+            "X",
+            "shift+left",
+            "shift+up",
+            "enter",
+            "MIDI",
+            "clock",
+            "CC",
         ] {
             assert!(text.contains(needle), "help is missing {needle:?}");
         }
+        // The card is the only manual, so the two gestures that matter most are pinned word for word: a
+        // stale "click: note on or off" would satisfy a loose needle and then mislead the user.
+        assert!(
+            text.contains("click: select the step"),
+            "the card must say what a plain click does"
+        );
+        assert!(
+            text.contains("ctrl+click: note on or off"),
+            "the card must name the gesture that edits a note"
+        );
         assert!(help_line_count() >= 12);
     }
 

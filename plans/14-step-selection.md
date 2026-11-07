@@ -24,7 +24,7 @@
 1. **A click while the help card is up must not select behind it** — the card is modal (Ruling 111); a click there closes the card and must leave the selection alone.
 2. **Ctrl+click toggles, and `ctrl` is read as `modifiers.ctrl`** — on Linux `command` and `ctrl` coincide, but reading the wrong one makes the toggle dead on every platform that differs.
 3. **Shift+arrow must not also fire its unshifted action** — shift+right moves the selection and must not change the pattern.
-4. **Dragging a rest selects it and changes nothing else** — a rest carries a remembered pitch, and a drag must not resurrect it silently.
+4. **A drag on a rest brings the note in, and starts from the rest's own pitch** — ruled after review (2026-11-07): the drag keeps its pre-existing meaning (the spec's gesture table: "change pitch *and* select the step it started on"), so what a drag must never do is re-derive its base pitch from `last_pitch`; it starts from the rest's remembered `(pitch, octave)`.
 5. **The selection is clamped, not wrapped** — shift+left on step 1 stays on step 1; a wrap would silently jump to the far end mid-line.
 
 ---
@@ -241,11 +241,12 @@ fn ctrl_click_selects_and_toggles() {
 }
 
 #[test]
-fn dragging_a_rest_selects_it_and_leaves_it_off() {
-    // Step 3 is a rest; a drag over it selects it and must not revive its remembered pitch.
+fn dragging_a_rest_selects_it_and_brings_it_in() {
+    // Step 3 is a rest: the drag selects it and brings the note in, at the pitch the drag lands on measured
+    // from the rest's own remembered pitch — never from `last_pitch`.
     // ... harness setup, then:
     assert_eq!(panel.selected, 3);
-    assert!(!shared.pattern().steps[3].on);
+    assert!(shared.pattern().steps[3].on);
 }
 ```
 
@@ -262,7 +263,7 @@ Add `Select` to `StepGesture`; in `apply_gesture`, return `step` unchanged for i
 
 In `draw_panel`'s step loop, set `state.selected = index` whenever the response is clicked or drag-started — **every** click moves the selection, ctrl+click included — then apply the gesture only when it is not `Select`. The drag path keeps writing pitch as it does now, and because the selection moved, the drag also decides what the keyboard edits.
 
-A rest responds to a drag by selecting and doing nothing else: it stays off, and its remembered pitch is untouched.
+A rest responds to a drag by selecting and bringing the note in at the dragged pitch; the drag's baseline is the rest's own remembered `(pitch, octave)`, never `last_pitch` (Review Focus 4, as ruled after review).
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -372,7 +373,7 @@ git commit -m "feat(ui): keyboard moves the selection and transposes its note"
 | Click while the card is up must not select | extend `tests/dismiss_live.rs`: card visible, click a step, `selected` unchanged | 3 |
 | `ctrl` read from `modifiers.ctrl` | `a_plain_click_only_selects_and_ctrl_click_toggles` + the ctrl+click live test | 3 |
 | Shift+arrow must not fire its unshifted action | `shift_right_moves_the_selection_and_leaves_the_pattern_alone` | 4 |
-| Dragging a rest selects and changes nothing | live test: drag over an off step leaves it off with its pitch intact | 3 |
+| Dragging a rest brings the note in from the rest's own pitch | live test `dragging_a_rest_selects_it_and_brings_it_in` | 3 |
 | Clamped, not wrapped | `the_selection_moves_and_clamps_at_both_ends` | 1 |
 
 ## Handoff
@@ -380,3 +381,28 @@ git commit -m "feat(ui): keyboard moves the selection and transposes its note"
 Read the spec before starting. Tasks 1 and 2 are independent of 3 and 4 in code, but not in behaviour: do them in
 order so each task's tests can lean on the one before. `selection::dispatch` is the only place the keyboard edits
 a note; if a later task needs to nudge a note from elsewhere, call it rather than opening a second path.
+
+---
+
+## Review Response (2026-11-07)
+
+A reviewer subagent graded the shipped work against this plan. Its findings and the human partner's rulings:
+
+- **Important 1 — the help card still said "click: note on or off".** Fixed in `ui/help.rs`: the card now reads
+  "click: select the step" / "ctrl+click: note on or off" and names the new keys (shift+left / right, shift+up /
+  down, enter). `the_help_card_names_every_gesture_and_shortcut` pins those two exact lines so it cannot rot.
+  This plan never listed `help.rs` in a task's files — a plan gap, now closed.
+- **Important 2 — the keyboard edited behind the modal card.** Fixed: `selection::dispatch` returns the new
+  `selection::Press` (`NotOurs` / `Applied` / `Refused`) and refuses its keys while `panel.help_visible`, so a
+  press is swallowed rather than handed to the transport shortcuts behind the card. Pinned by
+  `the_help_card_refuses_the_editing_keys_instead_of_passing_them_on`.
+- **Important 3 — a drag on a rest.** Ruled: keep the existing behaviour and correct this plan (row 4 of Review
+  Focus, the Task 3 test block, and the prose under Task 3 Step 3), which is what those three edits did.
+- **Important 4 — toggling a note off and on changed its note.** Ruled: fix the behaviour. `edit::apply_gesture`'s
+  `enable` and `selection::nudge_step` now restore (or transpose) the step's own remembered pitch and fall back to
+  `last_pitch` only for a bare `Step::rest()`, which is the one value that genuinely remembers nothing. Pinned by
+  `a_rested_note_comes_back_at_its_own_pitch`, `nudging_a_rested_note_moves_the_note_it_remembers`, and the pitch
+  assertion in `enter_toggles_the_selected_step`.
+- **Minor 8 — dead line** removed from `tests/selection_live.rs`. The remaining minors (plan checkboxes, the
+  `main.rs` glue line still having no headless test, the keycap/drag-readout collision, the per-frame label
+  `String`, held-Enter auto-repeat) are recorded in the ledger, not fixed.
