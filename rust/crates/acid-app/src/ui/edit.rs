@@ -110,6 +110,15 @@ pub fn from_midi_note(note: u8) -> (Pitch, i8) {
     from_absolute(i32::from(note) - 33)
 }
 
+/// The panel's `(pitch, octave)` for a note played at the computer keyboard's octave offset.
+///
+/// The keyboard reaches `-2..=2` while the panel carries `-1..=1`, so the offset is clamped into the panel's range and
+/// the pitch class is then always kept. Going through a MIDI number instead clamped the *absolute* note, which turned
+/// every key into the same C at either end of the octave range — the bug behind "it always adds a C1".
+pub fn from_keyboard(pitch: Pitch, octave: i32) -> (Pitch, i8) {
+    transpose(pitch, octave.clamp(-1, 1) as i8, 0)
+}
+
 /// Move a pitch by whole semitones from `(pitch, octave)`, rolling into the octave and clamping to
 /// `-12..=24` absolute.
 ///
@@ -160,6 +169,30 @@ pub fn pitch_name(pitch: Pitch, octave: i8) -> &'static str {
 mod tests {
     use super::*;
 
+    #[test]
+    fn the_keyboard_keeps_every_pitch_class_at_every_octave_of_its_range() {
+        // The report was "it always adds a C1": at either end of the keyboard's octave range the round trip through a
+        // MIDI number clamped the absolute note, so every key wrote the same C. The pitch class must always survive and
+        // only the octave may be clamped.
+        for pitch in Pitch::ALL[..12].iter() {
+            for octave in -2..=2 {
+                let (kept, placed) = from_keyboard(*pitch, octave);
+                assert_eq!(kept, *pitch, "{pitch:?} at octave {octave} lost its class");
+                assert_eq!(placed, octave.clamp(-1, 1) as i8, "{pitch:?} at {octave}");
+            }
+        }
+
+        // The thirteenth button is the C above whichever octave is set — so it sits an octave up from the clamped
+        // offset, and clamps to the panel's top.
+        for octave in -2..=2 {
+            let expected_octave = (octave.clamp(-1, 1) as i8 + 1).clamp(-1, 1);
+            assert_eq!(
+                from_keyboard(Pitch::CHigh, octave),
+                (Pitch::C, expected_octave),
+                "at offset {octave}"
+            );
+        }
+    }
     #[test]
     fn transposition_respects_the_saved_octave() {
         assert_eq!(transpose(Pitch::C, 1, 1), (Pitch::CSharp, 1));

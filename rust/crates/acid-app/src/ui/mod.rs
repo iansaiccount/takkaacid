@@ -93,6 +93,9 @@ pub struct PanelState {
     pub learn: learn::Step,
     /// Step mode: a note typed on a keyboard writes the selected step and walks to the next one.
     pub step_mode: bool,
+    /// The keys that have written a step and not been released yet. A press for a key that is already here is a repeat
+    /// however egui labelled it, so it writes nothing; the release is what walks the border on.
+    pub placed: Vec<egui::Key>,
 }
 
 impl Default for PanelState {
@@ -126,6 +129,7 @@ impl Default for PanelState {
             song_name: None,
             learn: learn::Step::Idle,
             step_mode: false,
+            placed: Vec::new(),
         }
     }
 }
@@ -148,6 +152,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
         let (pitch, octave) = edit::from_midi_note(waiting.note);
         selection::place_note(state, shared, pitch, octave, Some(waiting.velocity));
+        // A MIDI keyboard's release never reaches this queue, so its note walks here, on arrival: one note, one step.
+        if state.step_mode {
+            selection::walk(state);
+        }
     }
     let l = layout::layout(window);
     let s = layout::scale(window);
@@ -665,38 +673,59 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 /// A held key keeps the gate open; the gate closes when every mapped key is up. Releasing a computer key therefore
 /// also ends a MIDI note that is sounding — one voice, one gate.
 ///
-/// With shift held, or in step mode, a key is an *edit*: the note goes into the selected step instead of the voice,
-/// and step mode walks to the next step so a typed scale lands on consecutive steps.
+/// With shift held, or in step mode, a key is an *edit*: the note goes into the selected step instead of the voice.
+///
+/// One press writes one step, and step mode walks the border on the key **release**: a held key cannot fill the pattern
+/// at its repeat rate, and a press the platform repeats (which egui may not flag) writes nothing because the key is
+/// already in [`PanelState::placed`].
 fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelState) {
     use std::sync::atomic::Ordering;
 
     let octave = shared.octave.load(Ordering::Relaxed);
     ui.input(|input| {
-        // One pass over the frame's freshly pressed keys: a held key must not re-gate the voice on every
-        // auto-repeat, and Z/X move the octave the same way. Shift comes with each press, not from the frame.
-        for (key, shift) in keys::fresh_presses(&input.events) {
-            let editing = state.step_mode || shift;
-            if let Some(pitch) = keys::pitch_for(key) {
-                if editing {
-                    // `key_hz` clamps the octave to the computer keyboard's range; the step stores the pitch and
-                    // its own octave offset, so it takes the same pair the audition would have played.
-                    let (pitch, step_octave) = edit::from_midi_note(keys::midi_note(pitch, octave));
-                    selection::place_note(state, shared, pitch, step_octave, None);
-                } else {
-                    shared.midi_hz.set(keys::key_hz(pitch, octave));
-                    shared.midi_accent.store(false, Ordering::Relaxed);
-                    shared.midi_gate.store(true, Ordering::Relaxed);
+        // A window that lost the focus will never deliver the releases for what was held, so forget them rather than
+        // leave a key wedged down forever.
+        if !input.focused {
+            state.placed.clear();
+        }
+        for action in keys::key_actions(&input.events) {
+            match action {
+                keys::KeyAction::Press { key, shift } => {
+                    let editing = state.step_mode || shift;
+                    // A key already down is a repeat, whatever egui calls it: it writes nothing and walks nothing.
+                    let fresh = keys::first_press(&mut state.placed, key);
+                    if let Some(pitch) = keys::pitch_for(key) {
+                        if editing {
+                            if fresh {
+                                // The octave is the keyboard's, and `transpose` canonicalises it into the panel's
+                                // range by moving whole octaves — the pitch class always survives, which is what a
+                                // round trip through a MIDI number used to lose at the ends of the octave range.
+                                let (step_pitch, step_octave) = edit::from_keyboard(pitch, octave);
+                                selection::place_note(state, shared, step_pitch, step_octave, None);
+                            }
+                        } else {
+                            shared.midi_hz.set(keys::key_hz(pitch, octave));
+                            shared.midi_accent.store(false, Ordering::Relaxed);
+                            shared.midi_gate.store(true, Ordering::Relaxed);
+                        }
+                    }
+                    // Backspace empties the selected step to a rest while editing: the keyboard's counterpart to
+                    // clicking a step with the modifier that clears it. Plain Backspace is not ours.
+                    if editing && key == eframe::egui::Key::Backspace && fresh {
+                        selection::rest_step(state, shared);
+                    }
+                    if let Some(delta) = keys::octave_key(key) {
+                        let next = (octave + i32::from(delta)).clamp(-2, 2);
+                        shared.octave.store(next, Ordering::Relaxed);
+                    }
                 }
-            }
-            // Backspace empties the selected step to a rest while editing: the keyboard's counterpart to clicking a
-            // step with the modifier that clears it. Plain Backspace (not editing) is not ours — it may mean undo
-            // somewhere else one day, and it does nothing here.
-            if editing && key == eframe::egui::Key::Backspace {
-                selection::rest_step(state, shared);
-            }
-            if let Some(delta) = keys::octave_key(key) {
-                let next = (octave + i32::from(delta)).clamp(-2, 2);
-                shared.octave.store(next, Ordering::Relaxed);
+                keys::KeyAction::Release { key } => {
+                    // Only a key this panel wrote with walks on: an auditioned note is not an edit, and a release with
+                    // no press behind it (a lost frame, a stuck key) moves nothing.
+                    if keys::release(&mut state.placed, key) && state.step_mode {
+                        selection::walk(state);
+                    }
+                }
             }
         }
         if !keys::KEY_MAP.iter().any(|(key, _)| input.key_down(*key)) {

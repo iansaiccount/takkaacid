@@ -183,3 +183,42 @@ step twice.
   drops the newest note rather than blocking the MIDI thread.
 - [x] **Step 4: Mutation-check** that a one-slot limit fails the two-note test.
 - [x] **Step 5: Verify** — 51 suites green, clippy `-D warnings`, fmt clean.
+
+---
+
+### Task 9: one press, one step — and the pitch class always survives
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/ui/keys.rs` (`KeyAction`, `key_actions`, `first_press`, `release`), `rust/crates/acid-app/src/ui/edit.rs` (`from_keyboard`), `rust/crates/acid-app/src/ui/selection.rs` (`place_note`/`rest_step` stop walking; `walk` is new), `rust/crates/acid-app/src/ui/mod.rs` (`play_computer_keys`, `PanelState::placed`), `rust/crates/acid-app/src/ui/help.rs`
+- Test: all four modules plus `rust/crates/acid-app/tests/step_mode_live.rs`
+
+**The report:** typing in step mode filled two steps per press, and every key wrote the same `C1`.
+
+**Cause 1 — the walk was on the press.** Placement advanced the border immediately, so anything that delivered the press
+twice (a second frame, a repeat egui did not label) wrote two steps. Advancing is now on the key **release**, so a held
+key cannot fill the pattern at the repeat rate; a press for a key already down is a repeat and writes nothing.
+
+**Cause 2 — a round trip that clamped the wrong end.** The computer keyboard placed `from_midi_note(midi_note(pitch, octave))`.
+The keyboard's octave reaches `-2..=2` but the panel carries `-1..=1`, and `from_absolute` clamped the *absolute* note
+before the pitch class was read back — so at `+2` everything became `(C, 1)` and at `-2` everything became `(C, -1)`.
+`edit::from_keyboard` clamps the octave first and keeps the pitch class; the test sweeps every pitch at every offset.
+
+**A finding about the tests:** egui drops a `pressed` event for a key it already believes is down, so a live panel can
+never show the duplicated press. The rule therefore lives in `keys::first_press`/`keys::release` as plain functions with
+their own unit tests; the live test covers the other half (one release walks one step, a second walks nothing, nothing is
+written ahead). A live test here would have passed without ever exercising the case.
+
+- [x] **Step 1: The failing tests** — press writes and the release walks (wraps after 16); a release with no press walks
+  nothing; every pitch keeps its class at octaves `-2..=2`; a second press of a held key is not a second note; a release
+  of a key that never went down is not ours.
+- [x] **Step 2: Run them** (the octave test and the walk tests failed; the duplicate-press test failed to compile, then
+  proved to be untestable through a live panel — see the finding above).
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Mutation-check** — reverting to the MIDI round trip fails the octave test; making `first_press` always
+  succeed fails its unit test; calling the walk on the press fails the release tests.
+- [x] **Step 5: Help card** — `STEP: key down writes, key up walks on` and `backspace: rest, shift+note: write where you
+  are`.
+- [x] **Step 6: Verify** — 51 suites green, clippy `-D warnings`, fmt clean.
+
+**Not changed:** a MIDI note still walks immediately, because the queue carries note-ons and no release; one note in, one
+step on.

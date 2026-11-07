@@ -123,8 +123,8 @@ pub fn nudge_step(step: Step, semitones: i8, last_pitch: Pitch, last_octave: i8)
     }
 }
 
-/// Write a pitch into the selected step. In step mode the selection then walks to the next step, wrapping after the
-/// last one, so a scale typed on the keyboard lands on successive steps.
+/// Write a pitch into the selected step. The border stays put: step mode walks it on the key *release*, so one press is
+/// one note and the hand may hold a key for as long as it likes.
 ///
 /// `velocity` is the note's own MIDI velocity: a MIDI keyboard says `Some(..)` and the step takes that level (and its
 /// accent, when the hit was hard enough), while a computer key says `None` and the step keeps the velocity and accent it
@@ -142,8 +142,8 @@ pub fn place_note(
     placed
 }
 
-/// Empty the selected step to a rest, keeping its pitch and its flags so a re-note after a rest is one key away. In
-/// step mode the selection walks on, so typing a rhythm of rests and notes alternates without a second gesture.
+/// Empty the selected step to a rest, keeping its pitch and its flags so a re-note after a rest is one key away. The
+/// border stays put here too; the release walks it.
 pub fn rest_step(panel: &mut PanelState, shared: &SharedState) -> Step {
     place(panel, shared, None, None)
 }
@@ -172,10 +172,13 @@ fn place(
     shared.set_step(index, placed);
     panel.pattern = shared.pattern();
     panel.dirty = true;
-    if panel.step_mode {
-        panel.selected = (index + 1) % STEPS_PER_PATTERN;
-    }
     placed
+}
+
+/// Walk the border to the next step, wrapping after the last one: step mode does this on a key *release*, so one press
+/// writes one step and nothing is written ahead of the hand.
+pub fn walk(panel: &mut PanelState) {
+    panel.selected = (panel.selected.min(STEPS_PER_PATTERN - 1) + 1) % STEPS_PER_PATTERN;
 }
 
 #[cfg(test)]
@@ -335,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn a_rest_keeps_the_pitch_and_walks_in_step_mode() {
+    fn a_rest_keeps_the_pitch_and_the_flags() {
         let shared = crate::state::SharedState::new();
         shared.set_step(
             15,
@@ -362,7 +365,26 @@ mod tests {
         assert_eq!(rested.octave_offset, 1);
         assert!(rested.accent && rested.slide, "the flags are untouched");
         assert!(!shared.pattern().steps[15].on);
-        assert_eq!(panel.selected, 0, "the walk wraps after step 16");
+        assert_eq!(
+            panel.selected, 15,
+            "the border does not move on the press: the release walks it"
+        );
+    }
+
+    #[test]
+    fn walking_wraps_after_the_last_step() {
+        let mut panel = PanelState {
+            selected: 15,
+            ..PanelState::default()
+        };
+        walk(&mut panel);
+        assert_eq!(panel.selected, 0, "after step 16 comes step 1");
+        walk(&mut panel);
+        assert_eq!(panel.selected, 1);
+
+        panel.selected = 99;
+        walk(&mut panel);
+        assert_eq!(panel.selected, 0, "a stale border is pulled back in first");
     }
 
     #[test]

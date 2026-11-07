@@ -46,12 +46,21 @@ pub fn key_hz(pitch: Pitch, octave: i32) -> f32 {
     step_hz(pitch, offset)
 }
 
-/// Every key the frame reports as freshly pressed, with egui's auto-repeats dropped: a held key is one press, and a
-/// repeated one would re-gate the voice at the repeat rate and stutter the note.
+/// What one key event asks of the panel.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum KeyAction {
+    /// A key went down. `shift` is the modifier as it was at that moment.
+    Press { key: Key, shift: bool },
+    /// A key came up. This is what lets step mode walk on, so one press is one note and one step.
+    Release { key: Key },
+}
+
+/// The frame's key events in order, with egui's auto-repeats dropped: a held key is one press, and a repeated one would
+/// re-gate the voice at the repeat rate and stutter the note.
 ///
 /// The shift flag comes from the *event*, not from the frame's input state: the event carries the modifier that was
 /// down at the moment of the press, and egui only refreshes `modifiers` from a `ModifiersChanged` event.
-pub fn fresh_presses(events: &[eframe::egui::Event]) -> Vec<(Key, bool)> {
+pub fn key_actions(events: &[eframe::egui::Event]) -> Vec<KeyAction> {
     events
         .iter()
         .filter_map(|event| match event {
@@ -61,10 +70,43 @@ pub fn fresh_presses(events: &[eframe::egui::Event]) -> Vec<(Key, bool)> {
                 repeat: false,
                 modifiers,
                 ..
-            } => Some((*key, modifiers.shift)),
+            } => Some(KeyAction::Press {
+                key: *key,
+                shift: modifiers.shift,
+            }),
+            eframe::egui::Event::Key {
+                key,
+                pressed: false,
+                ..
+            } => Some(KeyAction::Release { key: *key }),
             _ => None,
         })
         .collect()
+}
+
+/// Record a press, saying whether it is the first one for that key.
+///
+/// A key already down is a repeat, whatever egui labelled it, and must not write a second step. This lives here, as a
+/// plain function, because a live panel cannot show the case: egui drops a `pressed` event for a key it already believes
+/// is down, so the window would never deliver the duplicate that this guards against.
+pub fn first_press(held: &mut Vec<Key>, key: Key) -> bool {
+    if held.contains(&key) {
+        return false;
+    }
+    held.push(key);
+    true
+}
+
+/// Forget a released key, saying whether this panel had written with it. Only then does step mode walk on: an auditioned
+/// note is not an edit, and a release with no press behind it moves nothing.
+pub fn release(held: &mut Vec<Key>, key: Key) -> bool {
+    match held.iter().position(|down| *down == key) {
+        Some(index) => {
+            held.remove(index);
+            true
+        }
+        None => false,
+    }
 }
 
 /// The MIDI note number a mapped key asks for at the keyboard's octave offset. The panel's zero is MIDI 33 (55 Hz),
@@ -100,10 +142,46 @@ mod tests {
         };
         // One real press, then the auto-repeats egui emits while the key is held.
         let events = vec![key(true, false), key(true, true), key(true, true)];
-        assert_eq!(fresh_presses(&events), vec![(Key::A, false)]);
-        // Releases and other events are not presses.
-        assert!(fresh_presses(&[key(false, false)]).is_empty());
-        assert!(fresh_presses(&[]).is_empty());
+        let press = KeyAction::Press {
+            key: Key::A,
+            shift: false,
+        };
+        assert_eq!(&key_actions(&events)[..1], &[press]);
+        // A release is its own action — it is what lets step mode walk — and other events are neither.
+        assert_eq!(
+            key_actions(&[key(false, false)]),
+            vec![KeyAction::Release { key: Key::A }]
+        );
+        assert!(key_actions(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_second_press_of_a_key_already_down_is_not_a_second_note() {
+        // The "one press, two notes" bug: a repeat must not write again, and only a release may re-arm the key.
+        let mut held = Vec::new();
+        assert!(first_press(&mut held, Key::A), "the first press writes");
+        assert!(!first_press(&mut held, Key::A), "a repeat does not");
+        assert!(!first_press(&mut held, Key::A));
+        assert_eq!(held, vec![Key::A]);
+
+        assert!(release(&mut held, Key::A), "the release re-arms it");
+        assert!(
+            !release(&mut held, Key::A),
+            "a second release is not a release"
+        );
+        assert!(
+            first_press(&mut held, Key::A),
+            "and a fresh press writes again"
+        );
+    }
+
+    #[test]
+    fn a_release_of_a_key_that_never_went_down_is_not_ours() {
+        // Releasing a key the panel never wrote with must not walk the border: the note that was auditioned is not an
+        // edit, and a key released after the window lost focus leaves nothing behind.
+        let mut held = Vec::new();
+        assert!(!release(&mut held, Key::J));
+        assert!(held.is_empty());
     }
 
     #[test]

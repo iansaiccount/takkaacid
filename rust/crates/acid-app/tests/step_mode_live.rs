@@ -49,6 +49,17 @@ fn press(key: Key, shift: bool) -> Event {
     }
 }
 
+/// A key release, which is what walks the selection on when step mode is on.
+fn release(key: Key) -> Event {
+    Event::Key {
+        key,
+        physical_key: None,
+        pressed: false,
+        repeat: false,
+        modifiers: Modifiers::default(),
+    }
+}
+
 /// STEP is the eighth switches cell.
 fn step_centre() -> Pos2 {
     switches::cell(layout(screen()).switches, Switch::Step).center()
@@ -93,14 +104,21 @@ fn step_mode_writes_the_note_and_walks_on() {
     click(&ctx, &mut panel, &shared, step_centre());
     assert!(panel.step_mode, "STEP turns step mode on");
 
-    // A, then W: C then C sharp, onto steps 1 and 2.
+    // A, then W: C then C sharp, onto steps 1 and 2. The press writes the step and the release walks on, so the
+    // selection only moves once the key is up.
     run_on(&ctx, &mut panel, &shared, vec![press(Key::A, false)]);
+    assert_eq!(panel.selected, 0, "a held key has not walked yet");
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::A)]);
     run_on(&ctx, &mut panel, &shared, vec![press(Key::W, false)]);
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::W)]);
 
     let steps = shared.pattern().steps;
     assert_eq!(steps[0].pitch, Pitch::C);
     assert_eq!(steps[1].pitch, Pitch::CSharp);
-    assert_eq!(panel.selected, 2, "the selection walked with the notes");
+    assert_eq!(
+        panel.selected, 2,
+        "the selection walked with the released keys"
+    );
 }
 
 #[test]
@@ -114,6 +132,7 @@ fn step_mode_wraps_after_the_last_step() {
     };
 
     run_on(&ctx, &mut panel, &shared, vec![press(Key::A, false)]);
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::A)]);
 
     assert_eq!(shared.pattern().steps[15].pitch, Pitch::C);
     assert_eq!(panel.selected, 0, "after step 16 comes step 1");
@@ -219,6 +238,7 @@ fn backspace_rests_the_selected_step_and_walks_in_step_mode() {
         &shared,
         vec![press(Key::Backspace, false)],
     );
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::Backspace)]);
 
     assert!(!shared.pattern().steps[3].on, "the step became a rest");
     assert_eq!(
@@ -319,4 +339,83 @@ fn notes_wait_for_the_panel_even_when_it_is_not_editing() {
     panel.step_mode = true;
     run_on(&ctx, &mut panel, &shared, vec![]);
     assert_eq!(shared.pattern().steps, before, "and it never comes back");
+}
+
+#[test]
+fn every_key_keeps_its_pitch_at_the_edges_of_the_octave_range() {
+    // Review finding: the keyboard's octave reaches `-2..=2` but the panel only carries `-1..=1`, and the round trip
+    // through a MIDI number clamped *before* the pitch class was read back — so at either end of the octave range every
+    // key wrote the same C. The pitch class must survive; only the octave may be clamped.
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        step_mode: true,
+        ..PanelState::default()
+    };
+
+    shared.octave.store(2, Ordering::Relaxed);
+    run_on(&ctx, &mut panel, &shared, vec![press(Key::D, false)]);
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::D)]);
+    assert_eq!(
+        shared.pattern().steps[0].pitch,
+        Pitch::E,
+        "a high octave must not turn every key into C"
+    );
+
+    shared.octave.store(-2, Ordering::Relaxed);
+    run_on(&ctx, &mut panel, &shared, vec![press(Key::G, false)]);
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::G)]);
+    assert_eq!(
+        shared.pattern().steps[1].pitch,
+        Pitch::G,
+        "nor must a low one"
+    );
+}
+
+#[test]
+fn a_release_walks_once_and_only_for_a_key_the_panel_wrote() {
+    // A live panel cannot show a duplicated press — egui drops a `pressed` event for a key it already believes is down —
+    // so the one-note-per-press rule is tested where it lives, in `keys::first_press` (see `ui::keys`). What this proves
+    // is the other half: one release walks one step, a second release walks nothing, and nothing is written ahead.
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        step_mode: true,
+        ..PanelState::default()
+    };
+    let before = shared.pattern().steps;
+
+    run_on(&ctx, &mut panel, &shared, vec![press(Key::A, false)]);
+
+    assert_eq!(panel.selected, 0, "no release, so no walk");
+    assert_eq!(panel.placed, vec![Key::A], "the key is recorded as down");
+
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::A)]);
+    assert_eq!(panel.selected, 1, "one release walks one step");
+    assert!(
+        panel.placed.is_empty(),
+        "and the key is forgotten until it is pressed again"
+    );
+
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::A)]);
+    assert_eq!(panel.selected, 1, "a second release is not a second step");
+
+    // One press, one step: the next step is untouched.
+    let steps = shared.pattern().steps;
+    assert_eq!(steps[1], before[1], "the next step was never written");
+}
+
+#[test]
+fn a_release_without_a_press_never_walks() {
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        selected: 5,
+        step_mode: true,
+        ..PanelState::default()
+    };
+
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::A)]);
+
+    assert_eq!(panel.selected, 5, "nothing was pressed, so nothing walks");
 }
