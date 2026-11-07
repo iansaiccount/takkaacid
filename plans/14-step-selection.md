@@ -457,3 +457,29 @@ Round 2's deferred minors, now fixed:
   `every_label_in_range_matches_the_canonical_spelling`. (The step *number* still formats per keycap per frame —
   egui takes a `ToString`, and that string is one digit.)
 - **The checkboxes above are ticked**, as `AGENTS.md` asks.
+
+### Hands-on fixes (2026-11-07)
+
+Found by using the panel, after the reviews above. Three reported, one more in the same sweep:
+
+- **A held modifier edited every key.** `draw_panel` asks all sixteen keys for a gesture on every frame, and
+  `gesture_from_input` returned the modifier's gesture without requiring a click — so holding ctrl toggled every
+  step every frame (every key flashing), shift toggled every accent, alt every slide. No click now means no
+  gesture; `a_held_modifier_is_not_a_gesture` and the live
+  `a_held_modifier_edits_nothing_while_the_pointer_rests_on_a_step` pin it. The live test uses **three** frames
+  with the modifier down on purpose: an even number of toggles cancels out and would hide the bug.
+- **A pattern lost every edit when you moved off it.** The bank holds the saved copies and `SharedState` holds the
+  live pattern; switching re-published the bank's stale copy. `shortcuts::apply` now stashes the live pattern into
+  its slot first (`stash_current`), the fold `persist::shared_to_saved` already did. Pinned by
+  `switching_away_and_back_keeps_the_edits_you_made` and `a_pattern_you_switch_to_is_its_own_and_not_the_one_you_left`.
+- **The pattern display never moved.** `panel.pattern_id` was declared, defaulted to `A1` and never written, so the
+  display kept saying A1 while the arrows walked the bank. `ui::dispatch::handle` now sets it from the bank on a
+  pattern change, and `main.rs` seeds it from the restored session. Pinned by
+  `the_pattern_display_follows_the_bank`.
+- **A held audition key re-gated the voice.** `play_computer_keys` used `key_pressed`, which counts egui's
+  auto-repeats, so a held note retriggered at the repeat rate. `keys::fresh_presses` drops repeats; pinned by
+  `a_held_note_key_is_one_press_not_one_per_repeat`.
+
+Left alone deliberately: ctrl/alt+**drag** still changes pitch (a ctrl+click that slips into a drag edits the note
+instead of toggling it), and the unshifted arrows and audition letters still act while the help card is up — the
+first is a rounding-off decision, the second is the earlier ruling on the card's modality.
