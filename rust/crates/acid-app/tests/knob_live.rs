@@ -52,10 +52,7 @@ fn drag_knob_in_steps(
         pressed: true,
         modifiers: egui::Modifiers::default(),
     };
-    let mut frames = vec![
-        vec![],
-        vec![egui::Event::PointerMoved(pos), press],
-    ];
+    let mut frames = vec![vec![], vec![egui::Event::PointerMoved(pos), press]];
     for step in 1..=steps {
         let dy = step_pixels * step as f32;
         frames.push(vec![egui::Event::PointerMoved(pos - egui::vec2(0.0, dy))]);

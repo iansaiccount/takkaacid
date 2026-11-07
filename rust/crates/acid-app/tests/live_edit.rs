@@ -109,7 +109,14 @@ fn clicking_a_step_key_toggles_it_in_the_shared_state() {
 
 /// Run `clicks` clicks on step key `index` with the given modifiers through `draw_panel`. Two quick clicks
 /// are a double-click as far as egui is concerned, which is why the double-click test passes `2`.
-fn click_step(shared: &SharedState, panel: &mut PanelState, index: usize, shift: bool, alt: bool, clicks: usize) {
+fn click_step(
+    shared: &SharedState,
+    panel: &mut PanelState,
+    index: usize,
+    shift: bool,
+    alt: bool,
+    clicks: usize,
+) {
     let ctx = egui::Context::default();
     let pos = layout::step_cells(layout::layout(window()).steps)[index].center();
     let button = |pressed: bool| egui::Event::PointerButton {

@@ -8,7 +8,9 @@ fn stopping_silences_the_engine_within_twenty_ms() {
     let mut e = Engine::new(48_000.0);
     // Task 25: `start` runs the sequencer, so a transport needs a pattern with a note in it — the Phase 02
     // placeholder note in `Engine::start` is gone.
-    e.set_pattern(Arc::new(Pattern::from_steps([Step::note(Pitch::A, -1); 16])));
+    e.set_pattern(Arc::new(Pattern::from_steps(
+        [Step::note(Pitch::A, -1); 16],
+    )));
     e.start();
     let mut warm = vec![0.0; 9_600];
     e.render(&mut warm);

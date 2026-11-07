@@ -1,17 +1,18 @@
 // The palette and layout constants are the panel's vocabulary: they are introduced here and consumed
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
-#[allow(dead_code)]
-pub mod theme;
+pub mod display;
+pub mod edit;
+pub mod help;
+pub mod keys;
+pub mod knob;
 pub mod layout;
 pub mod panel;
-pub mod knob;
-pub mod step_key;
-pub mod display;
-pub mod keys;
+pub mod picker;
 pub mod shortcuts;
-pub mod help;
+pub mod step_key;
+#[allow(dead_code)]
+pub mod theme;
 pub mod transport;
-pub mod edit;
 
 use std::sync::Arc;
 
@@ -208,7 +209,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let view = step_key::step_view(&step, i, state.position, state.playing);
         let response = step_key::step_key(ui, i, &view, *cell);
         let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
-        let gesture = edit::gesture_from_input(response.clicked(), shift, alt, response.double_clicked());
+        let gesture =
+            edit::gesture_from_input(response.clicked(), shift, alt, response.double_clicked());
         if let Some(gesture) = gesture {
             let edited = edit::apply_gesture(step, gesture, state.last_pitch, state.last_octave);
             if edited.on {
@@ -328,11 +330,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         ui.scope_id().with("help-toggle"),
         egui::Sense::click(),
     );
-    ui.painter().circle_stroke(
-        help_dot.center(),
-        8.0 * s,
-        theme::silkscreen_stroke(s),
-    );
+    ui.painter()
+        .circle_stroke(help_dot.center(), 8.0 * s, theme::silkscreen_stroke(s));
     ui.painter().text(
         help_dot.center(),
         egui::Align2::CENTER_CENTER,
@@ -340,11 +339,23 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         theme::legend(11.0 * s),
         theme::SILKSCREEN,
     );
-    if help_response.clicked() {
-        state.help_visible = !state.help_visible;
+    // The card must not re-close on the click that opened it, so dismissal reads the frame-start value.
+    let help_was_visible = state.help_visible;
+    if help_response.clicked() && !help_was_visible {
+        state.help_visible = true;
     }
-    if state.help_visible {
+    if help_was_visible {
         help::paint_help(ui.painter(), l.panel, s);
+        // The card is modal while it is up: a click anywhere closes it, and the shield keeps that click
+        // from also pressing whatever sits underneath.
+        let shield = ui.interact(
+            l.panel,
+            ui.scope_id().with("help-shield"),
+            egui::Sense::click(),
+        );
+        if shield.clicked() {
+            state.help_visible = false;
+        }
     }
 }
 

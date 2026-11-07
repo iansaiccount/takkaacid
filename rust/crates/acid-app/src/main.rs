@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use acid_app::audio::{self, Rig};
-use acid_app::state::{self, AudioStatus};
 use acid_app::midi;
 use acid_app::persist;
+use acid_app::state::{self, AudioStatus};
 use acid_app::ui as panel_ui;
 use acid_core::bank::PatternBank;
 
@@ -22,12 +22,8 @@ fn main() -> eframe::Result {
         move |sample_rate| {
             let state = Arc::clone(&state);
             // Mono out: `Opened::spawn` duplicates every sample to every channel.
-            let mut renderer = audio::renderer::AudioRenderer::new(
-                sample_rate,
-                1,
-                state,
-                audio::MAX_BLOCK,
-            );
+            let mut renderer =
+                audio::renderer::AudioRenderer::new(sample_rate, 1, state, audio::MAX_BLOCK);
             Box::new(move |buf: &mut [f32]| renderer.render_mono(buf))
         }
     });
@@ -91,6 +87,14 @@ impl eframe::App for TakkaApp {
             });
         }
         // Keyboard shortcuts. F1 and `?` join this list when the help card lands (Task 54).
+        // Escape closes whatever is open, help first: it is the thing covering the panel.
+        if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+            if self.panel.help_visible {
+                self.panel.help_visible = false;
+            } else {
+                self.panel.device_list = None;
+            }
+        }
         let presses: Vec<(egui::Key, bool)> = ctx.input(|input| {
             [
                 egui::Key::Space,
@@ -149,13 +153,13 @@ impl eframe::App for TakkaApp {
         let rect = ui.max_rect();
         panel_ui::draw_panel(&mut self.panel, &self.state, ui);
 
-
         // The audio status doubles as the device picker: click the line to list the outputs, click a name
         // to move the stream there.
         let status_rect = egui::Rect::from_center_size(
             rect.center_bottom() - egui::vec2(0.0, 8.0),
             egui::vec2(rect.width().min(420.0), 18.0),
         );
+        // The status line toggles the list, so a second click on it is a dismissal and not a reopen.
         if ui
             .interact(
                 status_rect,
@@ -164,7 +168,11 @@ impl eframe::App for TakkaApp {
             )
             .clicked()
         {
-            self.panel.device_list = Some(audio::list_output_devices());
+            self.panel.device_list = if self.panel.device_list.is_some() {
+                None
+            } else {
+                Some(audio::list_output_devices())
+            };
         }
         ui.painter().text(
             status_rect.center(),
@@ -178,6 +186,7 @@ impl eframe::App for TakkaApp {
             let width = 360.0;
             let base = status_rect.top() - 6.0;
             let mut chosen = None;
+            let mut rows = Vec::with_capacity(devices.len());
             for (index, name) in devices.iter().enumerate() {
                 let row = egui::Rect::from_min_size(
                     egui::Pos2::new(
@@ -186,6 +195,7 @@ impl eframe::App for TakkaApp {
                     ),
                     egui::vec2(width, row_height),
                 );
+                rows.push(row);
                 ui.painter()
                     .rect_filled(row, 2.0, panel_ui::theme::PANEL_RAISED);
                 ui.painter().text(
@@ -196,7 +206,11 @@ impl eframe::App for TakkaApp {
                     panel_ui::theme::SILKSCREEN,
                 );
                 if ui
-                    .interact(row, ui.scope_id().with(("device", index)), egui::Sense::click())
+                    .interact(
+                        row,
+                        ui.scope_id().with(("device", index)),
+                        egui::Sense::click(),
+                    )
                     .clicked()
                 {
                     chosen = Some(name.clone());
@@ -205,6 +219,18 @@ impl eframe::App for TakkaApp {
             if let Some(name) = chosen {
                 self.panel.device_list = None;
                 self.panel.device_choice = Some(name);
+            } else {
+                // A click outside the list takes the list away without touching the stream.
+                let click = ui.input(|i| {
+                    if i.pointer.any_click() {
+                        i.pointer.interact_pos()
+                    } else {
+                        None
+                    }
+                });
+                if panel_ui::picker::should_close(click, &rows, status_rect) {
+                    self.panel.device_list = None;
+                }
             }
         }
         if let Some(name) = self.panel.device_choice.take() {
@@ -313,11 +339,10 @@ impl Midi {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use acid_core::factory::launcher;
     use acid_core::engine::Engine;
+    use acid_core::factory::launcher;
     use std::sync::Arc;
 
     /// Offline stand-in for the plan's "listen to the loop" step: nothing in the render may jump hard
@@ -341,7 +366,9 @@ mod tests {
 
         assert!(biggest < 0.25, "a click-sized jump: {biggest}");
         assert!(
-            buf[loop_len - 1_000..loop_len + 1_000].iter().any(|s| s.abs() > 0.01),
+            buf[loop_len - 1_000..loop_len + 1_000]
+                .iter()
+                .any(|s| s.abs() > 0.01),
             "the loop wrap should be in the middle of a phrase, not in silence"
         );
     }

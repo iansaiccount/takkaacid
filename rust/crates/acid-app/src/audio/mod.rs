@@ -12,15 +12,14 @@ use anyhow::{Context, Result, anyhow};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, StreamConfig, SupportedStreamConfig};
 
-pub mod supervisor;
 pub mod renderer;
 pub mod status;
+pub mod supervisor;
 
 pub use supervisor::{Action, Supervisor};
 
 /// Preferred sample rates, best first. 48 kHz matches most interfaces; 44.1 kHz matches most files.
 pub const PREFERRED_RATES: [u32; 3] = [48_000, 44_100, 96_000];
-
 
 /// Every output device the host reports, by name. Never opens a stream.
 pub fn list_output_devices() -> Vec<String> {
@@ -316,7 +315,6 @@ impl Rig {
             self.retry_at = None;
             self.attempt();
         }
-
     }
     /// Reopen on a named output device (`None` = the default). Called from the UI thread: the stream is
     /// dropped and rebuilt, so this never happens on the audio thread.

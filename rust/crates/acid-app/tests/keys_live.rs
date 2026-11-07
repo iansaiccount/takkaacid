@@ -42,22 +42,17 @@ fn holding_a_key_opens_the_gate_and_releasing_it_closes_it() {
         vec![vec![], vec![key_event(Key::A, true)]],
     );
     assert!(
-        shared
-            .midi_gate
-            .load(std::sync::atomic::Ordering::Relaxed),
+        shared.midi_gate.load(std::sync::atomic::Ordering::Relaxed),
         "A should open the gate"
     );
-    assert!((shared.midi_hz.get() - 55.0).abs() < 0.5, "A is the 55 Hz anchor");
-
-    frames(
-        &shared,
-        &mut panel,
-        vec![vec![key_event(Key::A, false)]],
-    );
     assert!(
-        !shared
-            .midi_gate
-            .load(std::sync::atomic::Ordering::Relaxed),
+        (shared.midi_hz.get() - 55.0).abs() < 0.5,
+        "A is the 55 Hz anchor"
+    );
+
+    frames(&shared, &mut panel, vec![vec![key_event(Key::A, false)]]);
+    assert!(
+        !shared.midi_gate.load(std::sync::atomic::Ordering::Relaxed),
         "releasing every mapped key should close the gate"
     );
 }
