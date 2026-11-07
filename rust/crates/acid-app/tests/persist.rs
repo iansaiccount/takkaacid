@@ -3,7 +3,9 @@
 use acid_app::persist::{
     ENV_DATA_DIR, SAVE_VERSION, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved,
 };
-use acid_app::persist::{delete_song, list_songs, load_song, new_song, save_song, song_name};
+use acid_app::persist::{
+    delete_song, list_songs, load_song, new_song, rename_song, save_song, song_name,
+};
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
 
@@ -95,6 +97,29 @@ fn deleting_a_song_removes_its_file_and_refuses_a_bad_name() {
         delete_song(dir.path(), "../oops").is_err(),
         "a path is not a name"
     );
+}
+
+#[test]
+fn renaming_a_song_moves_its_file_and_refuses_a_taken_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState::default();
+    save_song(dir.path(), "Old", &saved).unwrap();
+    save_song(dir.path(), "Taken", &saved).unwrap();
+
+    rename_song(dir.path(), "Old", "New").unwrap();
+    assert_eq!(
+        list_songs(dir.path()),
+        vec!["New".to_string(), "Taken".to_string()],
+        "the file moved, and the list says so"
+    );
+
+    // Retyping the name you see is not an error.
+    assert!(rename_song(dir.path(), "New", "New").is_ok());
+    // Renaming onto another song would destroy it.
+    assert!(rename_song(dir.path(), "New", "Taken").is_err());
+    // A missing source and a path-shaped name are errors.
+    assert!(rename_song(dir.path(), "Gone", "Other").is_err());
+    assert!(rename_song(dir.path(), "New", "../oops").is_err());
 }
 
 #[test]

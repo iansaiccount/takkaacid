@@ -54,9 +54,9 @@ fn field_y() -> f32 {
 /// The name field and SAVE AS share the first row of the card.
 fn save_as_centre() -> Pos2 {
     let width = card().width() - padding() * 2.0;
-    let left = card().left() + padding() + width * 0.62 + padding();
+    let left = card().left() + padding() + width * 0.46 + padding();
     Pos2::new(
-        left + (width * 0.38 - padding()) * 0.5,
+        left + (width * 0.26 - padding()) * 0.5,
         field_y() + row_height() * 0.5,
     )
 }
@@ -169,6 +169,55 @@ fn delete_centre(index: usize) -> Pos2 {
         card().left() + padding() + width * 0.66 + padding() + width * 0.07,
         song_row_centre(index).y,
     )
+}
+
+/// RENAME sits after SAVE AS on the name row.
+fn rename_centre() -> Pos2 {
+    let width = card().width() - padding() * 2.0;
+    let save_left = card().left() + padding() + width * 0.46 + padding();
+    let rename_left = save_left + width * 0.26 - padding() + padding();
+    Pos2::new(
+        rename_left + (width * 0.28 - padding()) * 0.5,
+        field_y() + row_height() * 0.5,
+    )
+}
+
+fn open_song_card(names: Vec<&str>, name: &str, open: Option<&str>) -> PanelState {
+    let mut panel = open_card(names, name);
+    if let Some(card) = panel.songs.as_mut() {
+        card.open = open.map(str::to_string);
+    }
+    panel
+}
+
+#[test]
+fn rename_asks_for_the_typed_name_of_the_open_song() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_song_card(vec!["Acid 1"], "Acid 2", Some("Acid 1"));
+
+    click(&ctx, &mut panel, &shared, rename_centre());
+
+    assert_eq!(
+        panel.song_request,
+        Some(Request::Rename("Acid 2".to_string()))
+    );
+}
+
+#[test]
+fn rename_is_dark_with_no_open_song_or_an_unchanged_name() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+
+    // Nothing open: renaming has no subject.
+    let mut nothing_open = open_song_card(vec!["Acid 1"], "Acid 2", None);
+    click(&ctx, &mut nothing_open, &shared, rename_centre());
+    assert_eq!(nothing_open.song_request, None);
+
+    // The typed name is the open song's own name: nothing to do, so nothing is asked for.
+    let mut unchanged = open_song_card(vec!["Acid 1"], "Acid 1", Some("Acid 1"));
+    click(&ctx, &mut unchanged, &shared, rename_centre());
+    assert_eq!(unchanged.song_request, None);
 }
 
 #[test]

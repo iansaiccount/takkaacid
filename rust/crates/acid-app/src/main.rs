@@ -142,6 +142,7 @@ impl eframe::App for TakkaApp {
                             if let Some(card) = self.panel.songs.as_mut() {
                                 card.names = persist::list_songs(&dir);
                                 card.name = name.clone();
+                                card.open = Some(name.clone());
                                 card.message = Some(format!("saved {name}"));
                             }
                         }
@@ -163,9 +164,32 @@ impl eframe::App for TakkaApp {
                     self.panel.dirty = true;
                     if let Some(card) = self.panel.songs.as_mut() {
                         card.name.clear();
+                        card.open = None;
                         card.names = persist::list_songs(&dir);
                         card.delete_armed = None;
                         card.message = Some("new song".to_string());
+                    }
+                }
+                panel_ui::songs::Request::Rename(to) => {
+                    if let Some(from) = self.panel.song_name.clone() {
+                        match persist::rename_song(&dir, &from, &to) {
+                            Ok(()) => {
+                                self.panel.song_name = Some(to.clone());
+                                // The session file remembers the new name, or the next restart would look for the old one.
+                                self.save();
+                                if let Some(card) = self.panel.songs.as_mut() {
+                                    card.names = persist::list_songs(&dir);
+                                    card.name = to.clone();
+                                    card.open = Some(to.clone());
+                                    card.message = Some(format!("renamed {from} to {to}"));
+                                }
+                            }
+                            Err(error) => {
+                                if let Some(card) = self.panel.songs.as_mut() {
+                                    card.message = Some(format!("could not rename: {error}"));
+                                }
+                            }
+                        }
                     }
                 }
                 panel_ui::songs::Request::Delete(name) => {
@@ -178,6 +202,9 @@ impl eframe::App for TakkaApp {
                             if let Some(card) = self.panel.songs.as_mut() {
                                 card.names = persist::list_songs(&dir);
                                 card.delete_armed = None;
+                                if card.open.as_deref() == Some(name.as_str()) {
+                                    card.open = None;
+                                }
                                 card.message = Some(format!("deleted {name}"));
                             }
                         }
@@ -203,6 +230,7 @@ impl eframe::App for TakkaApp {
                         if let Some(card) = self.panel.songs.as_mut() {
                             card.names = persist::list_songs(&dir);
                             card.name = name.clone();
+                            card.open = Some(name.clone());
                             card.message = Some(format!("loaded {name}"));
                         }
                     }

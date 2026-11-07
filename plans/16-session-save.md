@@ -266,4 +266,20 @@ wordmark`, and `SONGS: name the session, keep it, load one`.
 loading a row clears a pending delete. `NEW SONG` sits bottom-left, `CLOSE` bottom-right. `main` saves the session
 before both New and Load, so the work on screen is never the thing that disappears.
 
-**Not in this plan (still):** a file browser, and renaming a song from the card.
+### Task 8: rename (third amendment)
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/persist.rs` (`rename_song`), `rust/crates/acid-app/src/ui/songs.rs` (`Songs::open`, RENAME), `rust/crates/acid-app/src/ui/mod.rs` (fill `open` when the card opens), `rust/crates/acid-app/src/main.rs` (Rename)
+- Test: `rust/crates/acid-app/tests/persist.rs`, `rust/crates/acid-app/tests/songs_live.rs`
+
+**Interfaces:**
+- `persist::rename_song(dir, from, to) -> Result<()>` — both names validated (`song_name`), an existing target refused
+  so a rename can never overwrite another song, and renaming to the name already shown is a no-op rather than an error.
+- `Songs::open: Option<String>` — the song the session is on; `ui::songs::Request::Rename(String)` — the typed name.
+
+**Rules:** RENAME renames the **open** song, so it is dark when nothing is open or when the typed name is already the
+current one. A dark key is only a paint, so the click handler is gated on the same condition — a test caught the
+version where an unlit RENAME still fired. A successful rename updates `song_name`, the card's list and `open`, and
+saves the session so the next restart looks for the new name.
+
+**Not in this plan (still):** a file browser, and renaming a song that is not the open one.

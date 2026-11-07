@@ -306,6 +306,23 @@ pub fn delete_song(dir: &Path, name: &str) -> Result<()> {
     std::fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))
 }
 
+/// Rename a saved song. Both names are validated, an existing target is refused, and renaming to the same name is
+/// a no-op rather than an error — a person who retypes the name they see should not get a complaint.
+pub fn rename_song(dir: &Path, from: &str, to: &str) -> Result<()> {
+    let (Some(from), Some(to)) = (song_name(from), song_name(to)) else {
+        return Err(anyhow!("that is not a song name"));
+    };
+    if from == to {
+        return Ok(());
+    }
+    let (source, target) = (song_path(dir, &from), song_path(dir, &to));
+    if target.exists() {
+        return Err(anyhow!("{to} already exists"));
+    }
+    std::fs::rename(&source, &target)
+        .with_context(|| format!("renaming {} to {}", source.display(), target.display()))
+}
+
 /// A brand-new song: the starter phrase in the first pattern, every other pattern empty, knobs and tempo at their
 /// defaults — so a new song sounds like the panel intends before a hand touches it.
 pub fn new_song() -> SavedState {

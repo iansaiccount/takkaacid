@@ -19,6 +19,8 @@ pub struct Songs {
     pub message: Option<String>,
     /// The song whose delete cross has been clicked once. Deleting a file has no undo, so it takes two clicks.
     pub delete_armed: Option<String>,
+    /// The song the session is on, if any: RENAME acts on this one, and is dark when there is none.
+    pub open: Option<String>,
 }
 
 /// What the card asked for. `main` does the work, so the card stays a pure painter.
@@ -29,6 +31,8 @@ pub enum Request {
     Save(String),
     Load(String),
     Delete(String),
+    /// Rename the open song to this name.
+    Rename(String),
     Close,
 }
 
@@ -63,7 +67,7 @@ pub fn paint(ui: &mut Ui, panel: Rect, scale: f32, songs: &mut Songs) -> Option<
     // The name field, then SAVE AS beside it.
     let field = Rect::from_min_size(
         egui::Pos2::new(left, y),
-        egui::vec2(width * 0.62, row_height),
+        egui::vec2(width * 0.46, row_height),
     );
     ui.put(
         field,
@@ -73,11 +77,26 @@ pub fn paint(ui: &mut Ui, panel: Rect, scale: f32, songs: &mut Songs) -> Option<
     );
     let save_rect = Rect::from_min_size(
         egui::Pos2::new(field.right() + padding, y),
-        egui::vec2(width * 0.38 - padding, row_height),
+        egui::vec2(width * 0.26 - padding, row_height),
     );
-    let can_save = crate::persist::song_name(&songs.name).is_some();
-    if transport::transport_button(ui, "song-save-as", save_rect, "SAVE AS", can_save).clicked() {
-        request = crate::persist::song_name(&songs.name).map(Request::Save);
+    let rename_rect = Rect::from_min_size(
+        egui::Pos2::new(save_rect.right() + padding, y),
+        egui::vec2(width * 0.28 - padding, row_height),
+    );
+    let typed = crate::persist::song_name(&songs.name);
+    if transport::transport_button(ui, "song-save-as", save_rect, "SAVE AS", typed.is_some())
+        .clicked()
+    {
+        request = typed.clone().map(Request::Save);
+    }
+    // RENAME renames the song the session is on, so it is dark until there is one and the name really differs.
+    let can_rename = matches!((&typed, &songs.open), (Some(new), Some(open)) if new != open);
+    if can_rename
+        && transport::transport_button(ui, "song-rename", rename_rect, "RENAME", can_rename)
+            .clicked()
+        && let Some(new) = typed.clone()
+    {
+        request = Some(Request::Rename(new));
     }
     y += row_height + padding;
 
