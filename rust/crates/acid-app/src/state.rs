@@ -88,6 +88,8 @@ pub struct SharedState {
     pub midi_gate: AtomicBool,
     /// True when the held note was struck hard enough to accent.
     pub midi_accent: AtomicBool,
+    /// True while a MIDI clock is driving the tempo.
+    pub external_clock: AtomicBool,
     pub pattern: ArcSwap<Pattern>,
     pub status: Mutex<AudioStatus>,
 }
@@ -112,6 +114,7 @@ impl SharedState {
             midi_hz: AtomicF32::new(0.0),
             midi_gate: AtomicBool::new(false),
             midi_accent: AtomicBool::new(false),
+            external_clock: AtomicBool::new(false),
             status: Mutex::new(AudioStatus::Starting),
         })
     }

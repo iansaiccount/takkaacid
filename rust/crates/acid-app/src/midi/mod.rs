@@ -6,3 +6,4 @@
 
 pub mod ports;
 pub mod message;
+pub mod tempo;
