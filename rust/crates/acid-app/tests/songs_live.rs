@@ -1,8 +1,9 @@
 //! The songs card: it lists the songs on disk, reports SAVE AS and LOAD, and never touches the disk itself.
 
 use acid_app::state::SharedState;
-use acid_app::ui::layout::{knob_cells, layout, scale};
+use acid_app::ui::layout::{layout, scale};
 use acid_app::ui::songs::{Request, Songs};
+use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, draw_panel, theme};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
@@ -145,7 +146,7 @@ fn the_songs_key_opens_and_closes_the_card() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     // Six cells now: BANK, PATTERN, MODE, CLEAR, SAVE, SONGS.
-    let songs = knob_cells(layout(screen()).switches, 8)[5].center();
+    let songs = switches::cell(layout(screen()).switches, Switch::Songs).center();
 
     click(&ctx, &mut panel, &shared, songs);
     assert!(panel.songs.is_some(), "the SONGS key opens the card");

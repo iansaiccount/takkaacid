@@ -4,6 +4,7 @@ use acid_app::midi::cc::{self, CcTarget};
 use acid_app::state::SharedState;
 use acid_app::ui::layout::{knob_cells, layout};
 use acid_app::ui::learn::Step;
+use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::transport::TRANSPORT_CELLS;
 use acid_app::ui::{PanelState, draw_panel, panel};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
@@ -122,7 +123,7 @@ fn the_waveform_selector_is_not_learnable() {
 
 /// RESET is the seventh switches cell, after BANK..SONGS.
 fn reset_centre() -> Pos2 {
-    knob_cells(layout(screen()).switches, 8)[6].center()
+    switches::cell(layout(screen()).switches, Switch::Reset).center()
 }
 
 #[test]

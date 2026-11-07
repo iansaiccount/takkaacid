@@ -1,7 +1,8 @@
 //! Step mode and note placement: a note typed on a keyboard writes the selected step, and step mode walks on.
 
 use acid_app::state::SharedState;
-use acid_app::ui::layout::{knob_cells, layout};
+use acid_app::ui::layout::layout;
+use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::pattern::Step;
 use acid_core::pitch::Pitch;
@@ -50,7 +51,7 @@ fn press(key: Key, shift: bool) -> Event {
 
 /// STEP is the eighth switches cell.
 fn step_centre() -> Pos2 {
-    knob_cells(layout(screen()).switches, 8)[7].center()
+    switches::cell(layout(screen()).switches, Switch::Step).center()
 }
 
 fn lit_shared() -> std::sync::Arc<SharedState> {
@@ -161,4 +162,104 @@ fn a_midi_note_writes_the_step_when_the_panel_is_editing() {
     let after = shared.pattern().steps;
     run_on(&ctx, &mut panel, &shared, vec![]);
     assert_eq!(shared.pattern().steps, after);
+}
+
+/// Publish a MIDI note the way the MIDI thread does: the velocity first (it becomes the accent), then the note number
+/// and the counter that wakes the panel.
+fn midi_note(shared: &SharedState, note: i32, velocity: u8) {
+    // The real predicate, so a change to the accent threshold is felt here rather than silently duplicated.
+    shared.midi_accent.store(
+        acid_app::midi::message::is_accent(velocity),
+        Ordering::Relaxed,
+    );
+    shared.step_note.store(note, Ordering::Relaxed);
+    shared.step_note_seq.fetch_add(1, Ordering::Relaxed);
+}
+
+#[test]
+fn a_hard_midi_note_accents_the_step_and_a_soft_one_does_not() {
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        step_mode: true,
+        ..PanelState::default()
+    };
+
+    midi_note(&shared, 36, 110);
+    run_on(&ctx, &mut panel, &shared, vec![]);
+    assert!(
+        shared.pattern().steps[0].accent,
+        "a velocity at the accent threshold accents the step it lands on"
+    );
+
+    midi_note(&shared, 36, 30);
+    run_on(&ctx, &mut panel, &shared, vec![]);
+    assert!(
+        !shared.pattern().steps[1].accent,
+        "a soft note leaves the next step unaccented"
+    );
+}
+
+#[test]
+fn backspace_rests_the_selected_step_and_walks_in_step_mode() {
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        selected: 3,
+        step_mode: true,
+        ..PanelState::default()
+    };
+    shared.set_step(3, Step::note(Pitch::G, 0));
+
+    run_on(
+        &ctx,
+        &mut panel,
+        &shared,
+        vec![press(Key::Backspace, false)],
+    );
+
+    assert!(!shared.pattern().steps[3].on, "the step became a rest");
+    assert_eq!(
+        shared.pattern().steps[3].pitch,
+        Pitch::G,
+        "the rest keeps the pitch it had"
+    );
+    assert_eq!(panel.selected, 4, "step mode walked on");
+}
+
+#[test]
+fn shift_and_backspace_rests_the_step_without_walking() {
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        selected: 5,
+        ..PanelState::default()
+    };
+
+    run_on(&ctx, &mut panel, &shared, vec![press(Key::Backspace, true)]);
+
+    assert!(!shared.pattern().steps[5].on);
+    assert_eq!(panel.selected, 5, "no step mode, no walk");
+}
+
+#[test]
+fn backspace_alone_is_not_ours() {
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        selected: 2,
+        ..PanelState::default()
+    };
+    let before = shared.pattern().steps;
+
+    run_on(
+        &ctx,
+        &mut panel,
+        &shared,
+        vec![press(Key::Backspace, false)],
+    );
+
+    assert_eq!(shared.pattern().steps, before, "nothing was written");
+    assert_eq!(panel.selected, 2);
+    assert!(!panel.dirty, "and nothing was marked for saving");
 }

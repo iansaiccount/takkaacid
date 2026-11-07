@@ -1,7 +1,8 @@
 //! The CLEAR button: emptying the pattern is the one action on the panel with no undo, so it takes two clicks.
 
 use acid_app::state::SharedState;
-use acid_app::ui::layout::{knob_cells, layout};
+use acid_app::ui::layout::layout;
+use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::pattern::Step;
 use acid_core::pitch::Pitch;
@@ -23,7 +24,7 @@ fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: V
 
 /// The CLEAR button is the fourth cell of the switches row.
 fn clear_centre() -> Pos2 {
-    knob_cells(layout(screen()).switches, 8)[3].center()
+    switches::cell(layout(screen()).switches, Switch::Clear).center()
 }
 
 fn step_centre(index: usize) -> Pos2 {
@@ -160,6 +161,6 @@ fn a_click_on_the_panel_elsewhere_leaves_the_pattern_alone() {
 #[test]
 fn the_clear_button_sits_where_the_layout_says() {
     // Cheap guard for the harness: a button outside the window could never be clicked.
-    let cell = knob_cells(layout(screen()).switches, 8)[3];
+    let cell = switches::cell(layout(screen()).switches, Switch::Clear);
     assert!(screen().contains_rect(cell));
 }

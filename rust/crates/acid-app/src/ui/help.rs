@@ -32,7 +32,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "shift+left / right: previous or next pattern",
                 "up / down: tempo by 1 BPM",
                 "left / right: move the selection",
-                "STEP or shift+note: write the selected step",
+                "STEP/shift+note: write, backspace: rest",
                 "shift+up / down: note up or down",
                 "enter: note on or off",
                 "F1 or shift+?: this card",

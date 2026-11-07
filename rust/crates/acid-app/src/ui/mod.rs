@@ -16,6 +16,7 @@ pub mod selection;
 pub mod shortcuts;
 pub mod songs;
 pub mod step_key;
+pub mod switches;
 #[allow(dead_code)]
 pub mod theme;
 pub mod transport;
@@ -149,8 +150,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let note = shared.step_note.load(std::sync::atomic::Ordering::Relaxed);
         let editing = state.step_mode || ui.input(|input| input.modifiers.shift);
         if editing && note >= 0 {
+            // The velocity that arrived with this note decides the step's accent (`midi_accent` is set from it before
+            // the counter moves), so a soft note and a hard hit land differently.
+            let accent = shared
+                .midi_accent
+                .load(std::sync::atomic::Ordering::Relaxed);
             let (pitch, octave) = edit::from_midi_note(note as u8);
-            selection::place_note(state, shared, pitch, octave);
+            selection::place_note(state, shared, pitch, octave, Some(accent));
         }
     }
     let l = layout::layout(window);
@@ -401,13 +407,19 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
 
-    // BANK, PATTERN and MODE are engraving for now; CLEAR empties the pattern on screen (the one action here
-    // with no undo, so it takes two clicks — see `ui::clear`) and SAVE writes the session now.
-    let switch_cells = layout::knob_cells(l.switches, 8);
-    for (label, cell) in ["BANK", "PATTERN", "MODE"].iter().zip(switch_cells.iter()) {
-        paint_switch(ui.painter(), *cell, s, label);
+    // BANK, PATTERN and MODE are engraving for now; CLEAR empties the pattern on screen (the one action here with no
+    // undo, so it takes two clicks — see `ui::clear`), SAVE writes the session, and the rest are their own modules.
+    // Every key comes from `ui::switches`, so adding one does not mean renumbering anything.
+    for switch in switches::Switch::ALL.iter().filter(|s| !s.is_live()) {
+        paint_switch(
+            ui.painter(),
+            switches::cell(l.switches, *switch),
+            s,
+            switch.label(),
+        );
     }
-    if let Some(&clear_cell) = switch_cells.get(3) {
+    {
+        let clear_cell = switches::cell(l.switches, switches::Switch::Clear);
         let now = std::time::Instant::now();
         let armed = clear::is_armed(state.clear_armed_at, now);
         let label = if armed { "CLEAR?" } else { "CLEAR" };
@@ -424,14 +436,16 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             }
         }
     }
-    if let Some(&save_cell) = switch_cells.get(4) {
+    {
+        let save_cell = switches::cell(l.switches, switches::Switch::Save);
         // Lit while something is unsaved, so the key doubles as the "there is work to keep" lamp.
         let dirty = state.dirty;
         if transport::transport_button(ui, "save-session", save_cell, "SAVE", dirty).clicked() {
             state.save_requested = true;
         }
     }
-    if let Some(&songs_cell) = switch_cells.get(5) {
+    {
+        let songs_cell = switches::cell(l.switches, switches::Switch::Songs);
         // The card lists what is on disk, so opening it reads the songs directory once.
         if transport::transport_button(ui, "songs", songs_cell, "SONGS", state.songs.is_some())
             .clicked()
@@ -447,7 +461,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             };
         }
     }
-    if let Some(&reset_cell) = switch_cells.get(6) {
+    {
+        let reset_cell = switches::cell(l.switches, switches::Switch::Reset);
         // RESET wipes the whole mapped rig, so it is dark unless a learn is in progress — and the click is gated on
         // the same test, because a dark key still reports clicks.
         let learning = state.learn != learn::Step::Idle;
@@ -460,7 +475,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.dirty = true;
         }
     }
-    if let Some(&step_cell) = switch_cells.get(7) {
+    {
+        let step_cell = switches::cell(l.switches, switches::Switch::Step);
         // STEP mode: a note typed on a keyboard writes the selected step, then walks to the next one.
         if transport::transport_button(ui, "step-mode", step_cell, "STEP", state.step_mode)
             .clicked()
@@ -675,12 +691,18 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
                     // `key_hz` clamps the octave to the computer keyboard's range; the step stores the pitch and
                     // its own octave offset, so it takes the same pair the audition would have played.
                     let (pitch, step_octave) = edit::from_midi_note(keys::midi_note(pitch, octave));
-                    selection::place_note(state, shared, pitch, step_octave);
+                    selection::place_note(state, shared, pitch, step_octave, None);
                 } else {
                     shared.midi_hz.set(keys::key_hz(pitch, octave));
                     shared.midi_accent.store(false, Ordering::Relaxed);
                     shared.midi_gate.store(true, Ordering::Relaxed);
                 }
+            }
+            // Backspace empties the selected step to a rest while editing: the keyboard's counterpart to clicking a
+            // step with the modifier that clears it. Plain Backspace (not editing) is not ours — it may mean undo
+            // somewhere else one day, and it does nothing here.
+            if editing && key == eframe::egui::Key::Backspace {
+                selection::rest_step(state, shared);
             }
             if let Some(delta) = keys::octave_key(key) {
                 let next = (octave + i32::from(delta)).clamp(-2, 2);

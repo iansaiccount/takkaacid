@@ -124,18 +124,50 @@ pub fn nudge_step(step: Step, semitones: i8, last_pitch: Pitch, last_octave: i8)
 
 /// Write a pitch into the selected step. In step mode the selection then walks to the next step, wrapping after the
 /// last one, so a scale typed on the keyboard lands on successive steps.
-pub fn place_note(panel: &mut PanelState, shared: &SharedState, pitch: Pitch, octave: i8) -> Step {
+///
+/// `accent` is the note's own velocity reduced to a hard/soft choice: a MIDI keyboard says `Some(..)` and the step takes
+/// it, while a computer key says `None` and the step keeps the accent it had — typing a pitch should not silently
+/// unaccent a step that was already accented.
+pub fn place_note(
+    panel: &mut PanelState,
+    shared: &SharedState,
+    pitch: Pitch,
+    octave: i8,
+    accent: Option<bool>,
+) -> Step {
+    let placed = place(panel, shared, Some((pitch, octave)), accent);
+    panel.last_pitch = placed.pitch;
+    panel.last_octave = placed.octave_offset;
+    placed
+}
+
+/// Empty the selected step to a rest, keeping its pitch and its flags so a re-note after a rest is one key away. In
+/// step mode the selection walks on, so typing a rhythm of rests and notes alternates without a second gesture.
+pub fn rest_step(panel: &mut PanelState, shared: &SharedState) -> Step {
+    place(panel, shared, None, None)
+}
+
+/// The one writer: `note` writes a pitch (or a rest, when it is `None`), then walks in step mode.
+fn place(
+    panel: &mut PanelState,
+    shared: &SharedState,
+    note: Option<(Pitch, i8)>,
+    accent: Option<bool>,
+) -> Step {
     let index = panel.selected.min(STEPS_PER_PATTERN - 1);
     let step = shared.pattern().steps[index];
+    let (on, pitch, octave_offset) = match note {
+        Some((pitch, octave)) => (true, pitch, octave),
+        None => (false, step.pitch, step.octave_offset),
+    };
     let placed = Step {
-        on: true,
+        on,
         pitch,
-        octave_offset: octave,
+        octave_offset,
+        accent: accent.unwrap_or(step.accent),
         ..step
     };
     shared.set_step(index, placed);
-    panel.last_pitch = placed.pitch;
-    panel.last_octave = placed.octave_offset;
     panel.pattern = shared.pattern();
     panel.dirty = true;
     if panel.step_mode {
@@ -256,5 +288,87 @@ mod tests {
             Press::NotOurs,
             "shift+right belongs to the pattern shortcut"
         );
+    }
+
+    #[test]
+    fn a_hard_note_sets_the_accent_and_a_soft_one_clears_it() {
+        let shared = crate::state::SharedState::new();
+        let mut panel = PanelState::default();
+
+        let soft = place_note(&mut panel, &shared, Pitch::E, 0, Some(false));
+        assert!(!soft.accent);
+        let hard = place_note(&mut panel, &shared, Pitch::E, 0, Some(true));
+        assert!(hard.accent, "a hard hit accents the step it lands on");
+        assert!(shared.pattern().steps[0].accent);
+    }
+
+    #[test]
+    fn a_computer_key_keeps_the_accent_the_step_already_had() {
+        // No velocity comes with a computer key, so it must not silently unaccent an accented step (nor accent a
+        // soft one) — `None` means "leave that field alone".
+        let shared = crate::state::SharedState::new();
+        let mut panel = PanelState::default();
+        shared.set_step(
+            0,
+            Step {
+                accent: true,
+                ..Step::note(Pitch::C, 0)
+            },
+        );
+
+        let kept = place_note(&mut panel, &shared, Pitch::E, 0, None);
+        assert!(kept.accent, "the accent survived a typed pitch");
+        assert_eq!(kept.pitch, Pitch::E);
+
+        shared.set_step(1, Step::note(Pitch::C, 0));
+        panel.selected = 1;
+        let still_soft = place_note(&mut panel, &shared, Pitch::E, 0, None);
+        assert!(!still_soft.accent);
+    }
+
+    #[test]
+    fn a_rest_keeps_the_pitch_and_walks_in_step_mode() {
+        let shared = crate::state::SharedState::new();
+        shared.set_step(
+            15,
+            Step {
+                accent: true,
+                slide: true,
+                ..Step::note(Pitch::G, 1)
+            },
+        );
+        let mut panel = PanelState {
+            selected: 15,
+            step_mode: true,
+            ..PanelState::default()
+        };
+
+        let rested = rest_step(&mut panel, &shared);
+
+        assert!(!rested.on, "the step is silent");
+        assert_eq!(
+            rested.pitch,
+            Pitch::G,
+            "its pitch is waiting for the next note"
+        );
+        assert_eq!(rested.octave_offset, 1);
+        assert!(rested.accent && rested.slide, "the flags are untouched");
+        assert!(!shared.pattern().steps[15].on);
+        assert_eq!(panel.selected, 0, "the walk wraps after step 16");
+    }
+
+    #[test]
+    fn a_rest_without_step_mode_leaves_the_border_where_it_is() {
+        let shared = crate::state::SharedState::new();
+        shared.set_step(4, Step::note(Pitch::A, 0));
+        let mut panel = PanelState {
+            selected: 4,
+            ..PanelState::default()
+        };
+
+        rest_step(&mut panel, &shared);
+
+        assert!(!shared.pattern().steps[4].on);
+        assert_eq!(panel.selected, 4, "no step mode, no walk");
     }
 }

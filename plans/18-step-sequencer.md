@@ -93,3 +93,51 @@ UI state has to live in the audio/MIDI path.
 - [x] **Step 3: Implement** — `message::handle` stores the note number and bumps the counter; the panel places it when
   the counter moves and the panel is editing; STEP is the eighth switches cell.
 - [x] **Step 4: Verify and commit.**
+
+---
+
+### Task 4: the switches row owns its own count
+
+**Files:**
+- Create: `rust/crates/acid-app/src/ui/switches.rs`
+- Modify: `rust/crates/acid-app/src/ui/mod.rs` (the row), and the live harnesses `clear_live`/`save_live`/`songs_live`/`learn_live`/`step_mode_live`
+
+**Interfaces:**
+- `switches::Switch` (`ALL`, `index`, `label`, `is_live`) and `switches::cell(Rect, Switch) -> Rect`
+
+The count `8` had been copied into five live test harnesses, and each new key broke them in turn (four times). They
+ask `switches::cell` now, so the row's length lives exactly once, and `Switch::is_live` says which keys are engraving.
+
+- [x] **Step 1: The failing test** — every key is numbered and labelled in order, ASCII only; a cell sits inside the row
+  and clear of its neighbour; only the first three are engraving.
+- [x] **Step 2: Run it.**
+- [x] **Step 3: Implement** and move the row and all five harnesses onto it.
+- [x] **Step 4: Verify.** 50 suites green.
+
+### Task 5: velocity becomes the step's accent
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/ui/selection.rs` (`place_note` takes `accent: Option<bool>`), `rust/crates/acid-app/src/ui/mod.rs` (both call sites)
+- Test: `rust/crates/acid-app/src/ui/selection.rs`, `rust/crates/acid-app/tests/step_mode_live.rs`
+
+- [x] **Step 1: The failing tests** — a hard MIDI note accents the step it lands on and a soft one does not; a hard note
+  clears an accent that was there, and `None` (a computer key) keeps whatever the step had.
+- [x] **Step 2: Run them.**
+- [x] **Step 3: Implement** — the MIDI thread already reduces velocity with `message::is_accent` and stores `midi_accent`
+  before it bumps the note counter, so the panel reads that value when it places the note; the computer keyboard passes
+  `None`, because a typed pitch must not silently unaccent an accented step.
+- [x] **Step 4: Verify, and mutation-check** that passing `None` fails the hard-note test.
+
+### Task 6: a rest from the keyboard
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/ui/selection.rs` (`rest_step`, one shared `place`), `rust/crates/acid-app/src/ui/mod.rs` (Backspace), `rust/crates/acid-app/src/ui/help.rs`
+- Test: both of the above
+
+- [x] **Step 1: The failing tests** — Backspace rests the selected step and walks in step mode; shift+Backspace rests it
+  and stays; plain Backspace writes nothing and marks nothing for saving; a rest keeps the pitch and the flags.
+- [x] **Step 2: Run them.**
+- [x] **Step 3: Implement** — `place_note` and `rest_step` share one private `place(note: Option<(Pitch, i8)>, accent)`, so
+  there is still exactly one writer of a step; a rest sets `on: false` and keeps `pitch`/`slide`/`accent` so the next
+  note is one key away.
+- [x] **Step 4: Verify.** Help card line now reads `STEP/shift+note: write, backspace: rest`.

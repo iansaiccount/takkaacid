@@ -2,7 +2,8 @@
 //! whether anything is unsaved.
 
 use acid_app::state::SharedState;
-use acid_app::ui::layout::{knob_cells, layout};
+use acid_app::ui::layout::layout;
+use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, draw_panel};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
@@ -46,7 +47,7 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
 
 /// The switches row now holds five cells: BANK, PATTERN, MODE, CLEAR, SAVE.
 fn save_centre() -> Pos2 {
-    knob_cells(layout(screen()).switches, 8)[4].center()
+    switches::cell(layout(screen()).switches, Switch::Save).center()
 }
 
 #[test]
