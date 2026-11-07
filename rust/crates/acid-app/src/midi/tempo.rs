@@ -152,7 +152,10 @@ mod tests {
         let stray = start + step * 49 + Duration::from_millis(15);
         let after = f.on_clock(stray);
         let after_bpm = after.unwrap_or(settled);
-        assert!((after_bpm - settled).abs() < 5.0, "{settled} -> {after_bpm}");
+        assert!(
+            (after_bpm - settled).abs() < 5.0,
+            "{settled} -> {after_bpm}"
+        );
     }
 
     #[test]
@@ -174,6 +177,10 @@ mod tests {
         assert!(f.bpm().is_some());
         f.reset();
         assert_eq!(f.bpm(), None);
-        assert_eq!(f.on_clock(start), None, "the first tick after a reset only starts the clock");
+        assert_eq!(
+            f.on_clock(start),
+            None,
+            "the first tick after a reset only starts the clock"
+        );
     }
 }

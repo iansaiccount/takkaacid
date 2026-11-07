@@ -60,7 +60,8 @@ impl MidiIn {
         port_name: Option<&str>,
         mut handler: impl FnMut(u64, &[u8]) + Send + 'static,
     ) -> Result<Self> {
-        let input = MidiInput::new("takka-acid").map_err(|error| anyhow!("opening MIDI: {error}"))?;
+        let input =
+            MidiInput::new("takka-acid").map_err(|error| anyhow!("opening MIDI: {error}"))?;
         let ports = input.ports();
         let names: Vec<String> = ports
             .iter()

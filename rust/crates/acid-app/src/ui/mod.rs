@@ -7,6 +7,7 @@ pub mod panel;
 pub mod knob;
 pub mod step_key;
 pub mod display;
+pub mod keys;
 pub mod transport;
 pub mod edit;
 
@@ -84,6 +85,7 @@ impl Default for PanelState {
 /// cursor is doing. Returns nothing: Phase 07 wires the controls to the engine.
 pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::Ui) {
     let window = ui.max_rect();
+    play_computer_keys(shared, ui);
     let l = layout::layout(window);
     let s = layout::scale(window);
     // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
@@ -300,6 +302,36 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.dirty = true;
         }
     }
+}
+
+/// The computer keyboard plays through the same route as a MIDI keyboard, so both share one voice.
+///
+/// A held key keeps the gate open; the gate closes when every mapped key is up. Releasing a computer key
+/// therefore also ends a MIDI note that is sounding — one voice, one gate.
+fn play_computer_keys(shared: &SharedState, ui: &egui::Ui) {
+    use std::sync::atomic::Ordering;
+
+    let octave = shared.octave.load(Ordering::Relaxed);
+    ui.input(|input| {
+        for (key, pitch) in keys::KEY_MAP {
+            if input.key_pressed(key) {
+                shared.midi_hz.set(keys::key_hz(pitch, octave));
+                shared.midi_accent.store(false, Ordering::Relaxed);
+                shared.midi_gate.store(true, Ordering::Relaxed);
+            }
+        }
+        for key in [egui::Key::Z, egui::Key::X] {
+            if input.key_pressed(key)
+                && let Some(delta) = keys::octave_key(key)
+            {
+                let next = (octave + i32::from(delta)).clamp(-2, 2);
+                shared.octave.store(next, Ordering::Relaxed);
+            }
+        }
+        if !keys::KEY_MAP.iter().any(|(key, _)| input.key_down(*key)) {
+            shared.midi_gate.store(false, Ordering::Relaxed);
+        }
+    });
 }
 
 /// A static button face: raised, engraved, with a silkscreen caption when `label` is not empty.

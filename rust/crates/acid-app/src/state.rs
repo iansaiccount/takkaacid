@@ -3,7 +3,7 @@
 //! Everything here is either an atomic or a short-lived mutex the audio thread never touches, so the
 //! audio callback can never be blocked by the user moving a knob.
 
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use acid_core::engine::DEFAULT_TUNING_KNOB;
@@ -90,6 +90,8 @@ pub struct SharedState {
     pub midi_accent: AtomicBool,
     /// True while a MIDI clock is driving the tempo.
     pub external_clock: AtomicBool,
+    /// The computer keyboard's octave offset, `-2..=2`.
+    pub octave: AtomicI32,
     pub pattern: ArcSwap<Pattern>,
     pub status: Mutex<AudioStatus>,
 }
@@ -115,6 +117,7 @@ impl SharedState {
             midi_gate: AtomicBool::new(false),
             midi_accent: AtomicBool::new(false),
             external_clock: AtomicBool::new(false),
+            octave: AtomicI32::new(0),
             status: Mutex::new(AudioStatus::Starting),
         })
     }

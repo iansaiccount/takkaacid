@@ -75,6 +75,7 @@ pub fn layout(window: Rect) -> PanelLayout {
         )
     };
     let knobs_area = band(1);
+
     PanelLayout {
         panel,
         top: band(0),

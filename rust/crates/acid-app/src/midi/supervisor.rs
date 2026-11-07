@@ -105,7 +105,10 @@ mod tests {
             action = s.on_error(t0 + MIDI_RETRY * (i + 1));
         }
         assert_eq!(action, MidiAction::GiveUp);
-        assert!(!s.should_probe(t0 + MIDI_RETRY * 40), "given up means quiet");
+        assert!(
+            !s.should_probe(t0 + MIDI_RETRY * 40),
+            "given up means quiet"
+        );
         s.on_success();
         assert_eq!(s.on_error(t0 + MIDI_RETRY * 40), MidiAction::Wait);
     }

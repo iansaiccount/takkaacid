@@ -32,9 +32,13 @@ pub fn parse(bytes: &[u8]) -> Option<MidiEvent> {
         [0xFA] => Some(MidiEvent::Start),
         [0xFB] => Some(MidiEvent::Continue),
         [0xFC] => Some(MidiEvent::Stop),
-        [status, note, velocity] if status & 0xF0 == 0x90 => Some(MidiEvent::NoteOn { note, velocity }),
+        [status, note, velocity] if status & 0xF0 == 0x90 => {
+            Some(MidiEvent::NoteOn { note, velocity })
+        }
         [status, note, _] if status & 0xF0 == 0x80 => Some(MidiEvent::NoteOff { note }),
-        [status, cc, value] if status & 0xF0 == 0xB0 => Some(MidiEvent::ControlChange { cc, value }),
+        [status, cc, value] if status & 0xF0 == 0xB0 => {
+            Some(MidiEvent::ControlChange { cc, value })
+        }
         _ => None,
     }
 }
@@ -98,7 +102,10 @@ mod tests {
             })
         );
         assert_eq!(parse(&[0x80, 60, 0]), Some(MidiEvent::NoteOff { note: 60 }));
-        assert_eq!(parse(&[0x8A, 61, 64]), Some(MidiEvent::NoteOff { note: 61 }));
+        assert_eq!(
+            parse(&[0x8A, 61, 64]),
+            Some(MidiEvent::NoteOff { note: 61 })
+        );
     }
 
     #[test]
