@@ -505,3 +505,12 @@ From using the panel again: the slide had no visible cue and "didn't do a lot".
 - The saved session's A1 was patched by hand (its slide sat on D♯→D♯). The patch script validated the pattern
   before writing, kept a `state.json.bak-*` beside it, and touched both copies the app keeps (`state.json`, which
   is what it loads, and `patterns/A1.json`).
+- **A rest carrying a `slide` flag silenced the next note.** Resting a step keeps its flags, so a rest can carry
+  `slide`; the sequencer left it pending and the next sounding note took the glide branch — retune with the gate
+  shut — and never sounded (measured rms 0). A rest now clears the pending slide, so no key sequence in the panel
+  can produce a silent note (`a_slide_flag_on_a_rest_does_not_silence_the_next_note`).
+- **The rest of the saved bank was repaired** by moving each inert flag back onto the nearest step that leads into
+  a note (12 flags across A2, A3, A5–A8; no notes added or removed). `StepView::slide_glides` also requires the
+  step itself to sound, so a rest carrying a flag shows the dim cue.
+- Ruling from the human partner: the saved patterns are scratch data for testing, so repairing them is
+  preferred to leaving them inert. A proper save/load feature is the next piece of work.
