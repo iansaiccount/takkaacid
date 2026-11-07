@@ -349,7 +349,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // The card is modal while it is up: a click anywhere closes it, and the shield keeps that click
         // from also pressing whatever sits underneath.
         let shield = ui.interact(
-            l.panel,
+            window,
             ui.scope_id().with("help-shield"),
             egui::Sense::click(),
         );
