@@ -22,16 +22,17 @@ pub enum Shortcut {
     ToggleHelp,
 }
 
-/// Which shortcut a key press means. `shift` is only consulted for `?`.
+/// Which shortcut a key press means. Shift picks the pattern out of the arrows; the tempo nudges stay unshifted,
+/// because shift+up/down belongs to the note editor.
 pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
-    match key {
-        Key::Space => Some(Shortcut::PlayStop),
-        Key::ArrowUp => Some(Shortcut::TempoUp),
-        Key::ArrowDown => Some(Shortcut::TempoDown),
-        Key::ArrowRight => Some(Shortcut::NextPattern),
-        Key::ArrowLeft => Some(Shortcut::PrevPattern),
-        Key::F1 => Some(Shortcut::ToggleHelp),
-        Key::Questionmark if shift => Some(Shortcut::ToggleHelp),
+    match (key, shift) {
+        (Key::Space, _) => Some(Shortcut::PlayStop),
+        (Key::ArrowUp, false) => Some(Shortcut::TempoUp),
+        (Key::ArrowDown, false) => Some(Shortcut::TempoDown),
+        (Key::ArrowRight, true) => Some(Shortcut::NextPattern),
+        (Key::ArrowLeft, true) => Some(Shortcut::PrevPattern),
+        (Key::F1, _) => Some(Shortcut::ToggleHelp),
+        (Key::Questionmark, true) => Some(Shortcut::ToggleHelp),
         _ => None,
     }
 }

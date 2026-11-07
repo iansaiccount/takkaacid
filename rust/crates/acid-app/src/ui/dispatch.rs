@@ -128,14 +128,43 @@ mod tests {
     }
 
     #[test]
-    fn shift_right_moves_the_selection_and_never_reaches_the_pattern() {
-        // The glue line `main.rs` used to own: shift+right must be spent by the step editor, or the same press
-        // also steps the pattern (Review Focus 3).
+    fn a_plain_arrow_moves_the_selection_and_leaves_the_pattern_alone() {
+        // The plain arrows belong to the step sequencer: the same press must never also step the pattern.
         let shared = lit_shared();
         let before = *shared.pattern();
         let mut bank = PatternBank::factory();
         let current = bank.current();
         let mut panel = PanelState::default();
+
+        let handled = handle(
+            KeyPress {
+                key: Key::ArrowRight,
+                shift: false,
+            },
+            &mut panel,
+            &shared,
+            &mut bank,
+        );
+
+        assert_eq!(handled, Handled::Selection);
+        assert_eq!(panel.selected, 1);
+        assert_eq!(*shared.pattern(), before, "a plain arrow must not edit");
+        assert_eq!(
+            bank.current(),
+            current,
+            "and must not switch pattern either"
+        );
+    }
+
+    #[test]
+    fn shift_right_steps_the_pattern_and_leaves_the_selection_alone() {
+        let shared = lit_shared();
+        let mut bank = PatternBank::factory();
+        bank.select(0);
+        let mut panel = PanelState {
+            selected: 7,
+            ..PanelState::default()
+        };
 
         let handled = handle(
             KeyPress {
@@ -147,18 +176,13 @@ mod tests {
             &mut bank,
         );
 
-        assert_eq!(handled, Handled::Selection);
-        assert_eq!(panel.selected, 1);
         assert_eq!(
-            *shared.pattern(),
-            before,
-            "shift+right must not touch the pattern"
+            handled,
+            Handled::Shortcut(shortcuts::Shortcut::NextPattern),
+            "shift reaches past the step to the pattern"
         );
-        assert_eq!(
-            bank.current(),
-            current,
-            "and must not switch pattern either"
-        );
+        assert_ne!(bank.current(), 0, "the bank moved on");
+        assert_eq!(panel.selected, 0, "a new pattern starts at its first step");
     }
 
     #[test]
@@ -173,7 +197,7 @@ mod tests {
         handle(
             KeyPress {
                 key: Key::ArrowRight,
-                shift: false,
+                shift: true,
             },
             &mut panel,
             &shared,
@@ -185,32 +209,6 @@ mod tests {
             panel.pattern_id,
             acid_core::pattern::PatternId { bank: 0, number: 1 }
         );
-    }
-
-    #[test]
-    fn an_unshifted_arrow_steps_the_pattern_and_puts_the_selection_back_at_the_first_step() {
-        let shared = lit_shared();
-        let mut bank = PatternBank::factory();
-        bank.select(0);
-        let mut panel = PanelState {
-            selected: 7,
-            ..PanelState::default()
-        };
-
-        let handled = handle(
-            KeyPress {
-                key: Key::ArrowRight,
-                shift: false,
-            },
-            &mut panel,
-            &shared,
-            &mut bank,
-        );
-
-        assert_eq!(handled, Handled::Shortcut(shortcuts::Shortcut::NextPattern));
-        assert_ne!(bank.current(), 0, "the bank moved on");
-        assert_eq!(panel.selected, 0, "a new pattern starts at its first step");
-        assert_eq!(*shared.pattern(), *bank.current_pattern());
     }
 
     #[test]

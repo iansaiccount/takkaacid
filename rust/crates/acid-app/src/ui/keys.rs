@@ -46,9 +46,12 @@ pub fn key_hz(pitch: Pitch, octave: i32) -> f32 {
     step_hz(pitch, offset)
 }
 
-/// Every key the frame reports as freshly pressed, with egui's auto-repeats dropped: a held key is one press,
-/// and a repeated one would re-gate the voice at the repeat rate and stutter the note.
-pub fn fresh_presses(events: &[eframe::egui::Event]) -> Vec<Key> {
+/// Every key the frame reports as freshly pressed, with egui's auto-repeats dropped: a held key is one press, and a
+/// repeated one would re-gate the voice at the repeat rate and stutter the note.
+///
+/// The shift flag comes from the *event*, not from the frame's input state: the event carries the modifier that was
+/// down at the moment of the press, and egui only refreshes `modifiers` from a `ModifiersChanged` event.
+pub fn fresh_presses(events: &[eframe::egui::Event]) -> Vec<(Key, bool)> {
     events
         .iter()
         .filter_map(|event| match event {
@@ -56,11 +59,19 @@ pub fn fresh_presses(events: &[eframe::egui::Event]) -> Vec<Key> {
                 key,
                 pressed: true,
                 repeat: false,
+                modifiers,
                 ..
-            } => Some(*key),
+            } => Some((*key, modifiers.shift)),
             _ => None,
         })
         .collect()
+}
+
+/// The MIDI note number a mapped key asks for at the keyboard's octave offset. The panel's zero is MIDI 33 (55 Hz),
+/// which is what `edit::from_midi_note` counts back from.
+pub fn midi_note(pitch: Pitch, octave: i32) -> u8 {
+    let offset = octave.clamp(-2, 2);
+    (33 + i32::from(pitch.semitones()) + 12 * offset).clamp(0, 127) as u8
 }
 
 #[cfg(test)]
@@ -89,7 +100,7 @@ mod tests {
         };
         // One real press, then the auto-repeats egui emits while the key is held.
         let events = vec![key(true, false), key(true, true), key(true, true)];
-        assert_eq!(fresh_presses(&events), vec![Key::A]);
+        assert_eq!(fresh_presses(&events), vec![(Key::A, false)]);
         // Releases and other events are not presses.
         assert!(fresh_presses(&[key(false, false)]).is_empty());
         assert!(fresh_presses(&[]).is_empty());

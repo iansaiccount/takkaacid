@@ -278,36 +278,36 @@ fn clicking_one_step_then_another_moves_the_outline() {
 }
 
 #[test]
-fn shift_right_moves_the_selection_and_leaves_the_pattern_alone() {
+fn a_plain_arrow_moves_the_selection_and_leaves_the_pattern_alone() {
     let shared = lit_shared();
     let before = shared.pattern().steps;
     let mut panel = PanelState::default();
 
-    let consumed = selection_dispatch(egui::Key::ArrowRight, true, &mut panel, &shared);
+    let consumed = selection_dispatch(egui::Key::ArrowRight, false, &mut panel, &shared);
 
     assert!(
         consumed,
-        "shift+right must be consumed before the shortcuts see it"
+        "a plain arrow must be consumed before the shortcuts see it"
     );
     assert_eq!(panel.selected, 1);
     assert_eq!(
         shared.pattern().steps,
         before,
-        "shift+right must not touch the pattern"
+        "a plain arrow must not touch the pattern"
     );
 }
 
 #[test]
-fn a_plain_arrow_is_left_for_the_transport_shortcuts() {
+fn a_shifted_arrow_is_left_for_the_pattern_shortcut() {
     let shared = lit_shared();
     let mut panel = PanelState::default();
     assert!(
-        !selection_dispatch(egui::Key::ArrowRight, false, &mut panel, &shared),
-        "unshifted arrows belong to the pattern shortcut"
+        !selection_dispatch(egui::Key::ArrowRight, true, &mut panel, &shared),
+        "shift+right belongs to the pattern shortcut"
     );
     assert_eq!(
         panel.selected, 0,
-        "an unshifted arrow must not move the selection"
+        "a shifted arrow must not move the selection"
     );
 }
 

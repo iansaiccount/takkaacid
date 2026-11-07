@@ -104,6 +104,12 @@ fn from_absolute(absolute: i32) -> (Pitch, i8) {
     (Pitch::ALL[index], octave as i8)
 }
 
+/// The panel's `(pitch, octave)` for a MIDI note number. The panel's zero is MIDI 33 (55 Hz, `Pitch::C` octave 0),
+/// so a note below it lands on the bottom of the panel's range rather than wrapping.
+pub fn from_midi_note(note: u8) -> (Pitch, i8) {
+    from_absolute(i32::from(note) - 33)
+}
+
 /// Move a pitch by whole semitones from `(pitch, octave)`, rolling into the octave and clamping to
 /// `-12..=24` absolute.
 ///

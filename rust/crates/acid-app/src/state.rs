@@ -98,6 +98,10 @@ pub struct SharedState {
     pub learn_active: AtomicBool,
     /// The controller the MIDI thread saw while learning; `-1` until one arrives.
     pub learn_cc: AtomicI32,
+    /// The MIDI note the panel should write into the selected step; `-1` until one arrives.
+    pub step_note: AtomicI32,
+    /// Bumped on every MIDI note-on, so the panel can tell a new note from the one it already placed.
+    pub step_note_seq: AtomicU32,
     pub pattern: ArcSwap<Pattern>,
     pub status: Mutex<AudioStatus>,
 }
@@ -129,6 +133,8 @@ impl SharedState {
             }),
             learn_active: AtomicBool::new(false),
             learn_cc: AtomicI32::new(-1),
+            step_note: AtomicI32::new(-1),
+            step_note_seq: AtomicU32::new(0),
             status: Mutex::new(AudioStatus::Starting),
         })
     }

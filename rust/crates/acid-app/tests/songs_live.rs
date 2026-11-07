@@ -145,7 +145,7 @@ fn the_songs_key_opens_and_closes_the_card() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     // Six cells now: BANK, PATTERN, MODE, CLEAR, SAVE, SONGS.
-    let songs = knob_cells(layout(screen()).switches, 7)[5].center();
+    let songs = knob_cells(layout(screen()).switches, 8)[5].center();
 
     click(&ctx, &mut panel, &shared, songs);
     assert!(panel.songs.is_some(), "the SONGS key opens the card");

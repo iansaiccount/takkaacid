@@ -20,9 +20,12 @@ pub enum EditKey {
 
 /// Shift turns the arrows into editing keys; enter toggles. Unshifted arrows keep tempo and pattern.
 pub fn edit_key(key: Key, shift: bool) -> Option<EditKey> {
+    // The plain arrows walk the steps, because that is what an arrow does in a step sequencer; shift reaches past
+    // the step to the pattern, and shift+up/down still edits the note. (Ruled by the operator: the old pairing put
+    // the frequent action behind a modifier.)
     match (key, shift) {
-        (Key::ArrowRight, true) => Some(EditKey::SelectNext),
-        (Key::ArrowLeft, true) => Some(EditKey::SelectPrev),
+        (Key::ArrowRight, false) => Some(EditKey::SelectNext),
+        (Key::ArrowLeft, false) => Some(EditKey::SelectPrev),
         (Key::ArrowUp, true) => Some(EditKey::NoteUp),
         (Key::ArrowDown, true) => Some(EditKey::NoteDown),
         (Key::Enter, _) => Some(EditKey::ToggleSelected),
@@ -119,19 +122,44 @@ pub fn nudge_step(step: Step, semitones: i8, last_pitch: Pitch, last_octave: i8)
     }
 }
 
+/// Write a pitch into the selected step. In step mode the selection then walks to the next step, wrapping after the
+/// last one, so a scale typed on the keyboard lands on successive steps.
+pub fn place_note(panel: &mut PanelState, shared: &SharedState, pitch: Pitch, octave: i8) -> Step {
+    let index = panel.selected.min(STEPS_PER_PATTERN - 1);
+    let step = shared.pattern().steps[index];
+    let placed = Step {
+        on: true,
+        pitch,
+        octave_offset: octave,
+        ..step
+    };
+    shared.set_step(index, placed);
+    panel.last_pitch = placed.pitch;
+    panel.last_octave = placed.octave_offset;
+    panel.pattern = shared.pattern();
+    panel.dirty = true;
+    if panel.step_mode {
+        panel.selected = (index + 1) % STEPS_PER_PATTERN;
+    }
+    placed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn shift_turns_the_arrows_into_editing_keys() {
-        assert_eq!(edit_key(Key::ArrowRight, true), Some(EditKey::SelectNext));
-        assert_eq!(edit_key(Key::ArrowLeft, true), Some(EditKey::SelectPrev));
+    fn the_plain_arrows_walk_the_steps_and_shift_still_edits_the_note() {
+        // The plain arrows are the step sequencer's; shift reaches past the step to the pattern (see `shortcuts`)
+        // and keeps the note edit for up/down.
+        assert_eq!(edit_key(Key::ArrowRight, false), Some(EditKey::SelectNext));
+        assert_eq!(edit_key(Key::ArrowLeft, false), Some(EditKey::SelectPrev));
         assert_eq!(edit_key(Key::ArrowUp, true), Some(EditKey::NoteUp));
         assert_eq!(edit_key(Key::ArrowDown, true), Some(EditKey::NoteDown));
         assert_eq!(edit_key(Key::Enter, false), Some(EditKey::ToggleSelected));
-        // Unshifted arrows belong to tempo and pattern; they must not be swallowed here.
-        assert_eq!(edit_key(Key::ArrowRight, false), None);
+        // Shift+left/right belongs to the pattern shortcut; this module must not swallow it.
+        assert_eq!(edit_key(Key::ArrowRight, true), None);
+        assert_eq!(edit_key(Key::ArrowLeft, true), None);
         assert_eq!(edit_key(Key::ArrowUp, false), None);
     }
 
@@ -186,7 +214,7 @@ mod tests {
         };
         for (key, shift) in [
             (Key::Enter, false),
-            (Key::ArrowRight, true),
+            (Key::ArrowRight, false),
             (Key::ArrowUp, true),
         ] {
             assert_eq!(
@@ -219,14 +247,14 @@ mod tests {
         let mut panel = PanelState::default();
 
         assert_eq!(
-            dispatch(Key::ArrowRight, true, &mut panel, &shared),
+            dispatch(Key::ArrowRight, false, &mut panel, &shared),
             Press::Applied
         );
         assert_eq!(panel.selected, 1);
         assert_eq!(
-            dispatch(Key::ArrowRight, false, &mut panel, &shared),
+            dispatch(Key::ArrowRight, true, &mut panel, &shared),
             Press::NotOurs,
-            "an unshifted arrow still belongs to the pattern shortcut"
+            "shift+right belongs to the pattern shortcut"
         );
     }
 }

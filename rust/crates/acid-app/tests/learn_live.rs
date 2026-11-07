@@ -122,7 +122,7 @@ fn the_waveform_selector_is_not_learnable() {
 
 /// RESET is the seventh switches cell, after BANK..SONGS.
 fn reset_centre() -> Pos2 {
-    knob_cells(layout(screen()).switches, 7)[6].center()
+    knob_cells(layout(screen()).switches, 8)[6].center()
 }
 
 #[test]

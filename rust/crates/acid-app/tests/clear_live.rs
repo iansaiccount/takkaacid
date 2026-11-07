@@ -23,7 +23,7 @@ fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: V
 
 /// The CLEAR button is the fourth cell of the switches row.
 fn clear_centre() -> Pos2 {
-    knob_cells(layout(screen()).switches, 7)[3].center()
+    knob_cells(layout(screen()).switches, 8)[3].center()
 }
 
 fn step_centre(index: usize) -> Pos2 {
@@ -160,6 +160,6 @@ fn a_click_on_the_panel_elsewhere_leaves_the_pattern_alone() {
 #[test]
 fn the_clear_button_sits_where_the_layout_says() {
     // Cheap guard for the harness: a button outside the window could never be clicked.
-    let cell = knob_cells(layout(screen()).switches, 7)[3];
+    let cell = knob_cells(layout(screen()).switches, 8)[3];
     assert!(screen().contains_rect(cell));
 }
