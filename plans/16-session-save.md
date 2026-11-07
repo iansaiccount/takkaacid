@@ -155,7 +155,7 @@ git commit -m "refactor(persist): one save file, and no write-only pattern copie
   - `PanelState::save_requested: bool` — set by the panel, taken by `main`.
   - `ui::save::state_label(dirty: bool) -> (&'static str, egui::Color32)` — `("UNSAVED", LED_ACCENT)` / `("SAVED", SILKSCREEN_DIM)`.
   - `ui::panel::save_indicator_rect(top, s) -> Rect` — the rect the label is painted in.
-  - The switches row becomes five cells: `BANK`, `PATTERN`, `MODE`, `CLEAR`, `SAVE`.
+  - The switches row gains SAVE: `BANK`, `PATTERN`, `MODE`, `CLEAR`, `SAVE` — five cells here, **six** once the songs amendment below adds `SONGS`.
 
 - [x] **Step 1: Write the failing tests**
 
@@ -195,3 +195,56 @@ Expected: PASS, and the switches row still fits inside the panel at 0.65x (the l
 git add rust/crates/acid-app
 git commit -m "feat(ui): a SAVE key and a saved-or-unsaved indicator"
 ```
+
+---
+
+## Amendment: named songs (added after the first pass)
+
+**Scope added at the human partner's request:** a song can be **named**, kept, and loaded again — several songs
+side by side — and the help card is allowed to be bigger so the panel can say so.
+
+### Task 4: songs on disk
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/persist.rs` (`SONGS_DIR`, `song_path`, `song_name`, `list_songs`, `save_song`, `load_song`, `apply_saved`, `SavedState::song`)
+- Test: `rust/crates/acid-app/tests/persist.rs`
+
+**Interfaces:**
+- Consumes: `SavedState` (a song *is* a session file, same format and version).
+- Produces:
+  - `pub const SONGS_DIR: &str = "songs";`
+  - `pub fn song_name(typed: &str) -> Option<String>` — trimmed, at most 48 chars, no path separators or `..`, no leading dot.
+  - `pub fn song_path(dir: &Path, name: &str) -> PathBuf`, `pub fn save_song(dir, name, &SavedState) -> Result<()>`,
+    `pub fn load_song(dir, name) -> Result<SavedState>` (upgraded like the session file), `pub fn list_songs(dir) -> Vec<String>` (sorted).
+  - `pub fn apply_saved(&SavedState, &SharedState, &mut PatternBank)` — pour a saved song into a running app; `saved_to_shared` delegates to it, so a load and a restart cannot disagree about a field.
+  - `SavedState::song: Option<String>` — which song the session is working on.
+- Tests: `a_song_name_has_to_be_a_name_and_not_a_path`, `songs_round_trip_and_are_listed` (a refused name writes nothing).
+
+### Task 5: the songs card
+
+**Files:**
+- Create: `rust/crates/acid-app/src/ui/songs.rs`
+- Modify: `rust/crates/acid-app/src/ui/mod.rs` (`PanelState::{songs, song_request, song_name}`, the SONGS key, the card)
+- Modify: `rust/crates/acid-app/src/main.rs` (save/load requests, Escape, session field)
+- Test: `rust/crates/acid-app/tests/songs_live.rs`
+
+**Interfaces:**
+- Consumes: `persist::{song_name, list_songs}`, `transport::transport_button`.
+- Produces: `ui::songs::{Songs { names, name, message }, Request { Save, Load, Close }, paint(ui, panel, scale, &mut Songs) -> Option<Request>}`.
+- The switches row becomes six cells: `BANK`, `PATTERN`, `MODE`, `CLEAR`, `SAVE`, `SONGS`.
+
+**Rules the card follows:** it never touches the disk — `main` owns the files. Loading a song first saves the
+session, so work that only lived in memory is not thrown away. A refused name leaves `SAVE AS` unlit and raises no
+request. Escape closes the card before it reaches the device list.
+
+### Task 6: a bigger help card
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/ui/help.rs` (`CARD_INSET`, `card_rect`, tighter line height and padding, three new lines)
+- Test: `rust/crates/acid-app/src/ui/help.rs`
+
+The card was already at its 0.65x limit, so `card_rect` insets by 4 design px instead of the panel margin and the
+body line height drops from 15 to 13. The three lines it gained: the dim-slide note, `SAVED / UNSAVED sits by the
+wordmark`, and `SONGS: name the session, keep it, load one`.
+
+**Not in this plan (still):** a file browser, and renaming or deleting a song from the card.

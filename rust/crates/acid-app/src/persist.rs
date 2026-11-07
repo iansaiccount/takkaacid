@@ -15,7 +15,7 @@ use acid_core::voice::{
     DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
     DEFAULT_RESONANCE_KNOB,
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::state::SharedState;
@@ -71,6 +71,9 @@ pub struct SavedState {
     /// The MIDI input the player chose, by port name; `None` means "the first one the system reports".
     #[serde(default)]
     pub midi_input: Option<String>,
+    /// The named song this session is working on, if any; `None` until it is first saved by name.
+    #[serde(default)]
+    pub song: Option<String>,
 }
 
 impl Default for SavedState {
@@ -82,6 +85,7 @@ impl Default for SavedState {
             bpm: DEFAULT_BPM,
             swing: 0.0,
             midi_input: None,
+            song: None,
         }
     }
 }
@@ -142,6 +146,15 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
 /// Build the shared state the app runs on from a saved document.
 pub fn saved_to_shared(state: &SavedState) -> Arc<SharedState> {
     let shared = SharedState::new();
+    let mut bank = state.bank.clone();
+    apply_saved(state, &shared, &mut bank);
+    shared
+}
+
+/// Pour a saved document into a running app: the shared state the audio thread reads, and the bank the panel
+/// navigates. Loading a song uses this, so a load and a restart cannot disagree about what a field means.
+pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternBank) {
+    *bank = state.bank.clone();
     shared.tempo_bpm.set(state.bpm);
     shared.swing.set(state.swing);
     shared.set_waveform(if state.knobs.waveform == 1 {
@@ -156,8 +169,7 @@ pub fn saved_to_shared(state: &SavedState) -> Arc<SharedState> {
     shared.decay.set(state.knobs.decay);
     shared.accent.set(state.knobs.accent);
     shared.volume.set(state.knobs.volume);
-    shared.set_pattern(Arc::new(*state.bank.current_pattern()));
-    shared
+    shared.set_pattern(Arc::new(*bank.current_pattern()));
 }
 
 /// Capture the running state for saving. The bank comes from `bank`, so callers keep the other 63 patterns.
@@ -187,6 +199,8 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         swing: snapshot.swing,
         // The MIDI choice lives with the app, not with the shared state; `main` fills it in before saving.
         midi_input: None,
+        // Which named song is loaded; `main` fills it in, like the MIDI choice.
+        song: None,
     }
 }
 
@@ -222,6 +236,66 @@ pub fn sanitize(state: &mut SavedState) {
     state.bank.select(current);
 }
 
+/// Where named songs live: one file each, under the data directory.
+pub const SONGS_DIR: &str = "songs";
+
+/// The file a named song lives in.
+pub fn song_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(SONGS_DIR).join(format!("{name}.json"))
+}
+
+/// A name that can be a file name, or `None` when the typed one cannot: blank, too long, or shaped like a path.
+/// The rules are deliberately conservative — a song name is typed into a panel, not a shell.
+pub fn song_name(typed: &str) -> Option<String> {
+    let name = typed.trim();
+    if name.is_empty() || name.chars().count() > 48 {
+        return None;
+    }
+    let forbidden = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+    if name.chars().any(|c| forbidden.contains(&c)) || name.starts_with('.') || name.contains("..")
+    {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+/// Every song already saved, sorted so the card's list does not jump about.
+pub fn list_songs(dir: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir.join(SONGS_DIR)) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.strip_suffix(".json").map(str::to_string)
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Write a named song. Same format as the session file, so reading one is the same read.
+pub fn save_song(dir: &Path, name: &str, state: &SavedState) -> Result<()> {
+    let Some(name) = song_name(name) else {
+        return Err(anyhow!("a song needs a name"));
+    };
+    let path = song_path(dir, &name);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    write_atomic(&path, &serde_json::to_vec_pretty(state)?)
+}
+
+/// Read a named song back, upgrading it like the session file.
+pub fn load_song(dir: &Path, name: &str) -> Result<SavedState> {
+    let path = song_path(dir, name);
+    let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+    let state: SavedState =
+        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+    Ok(state.upgraded())
+}
 /// How long the panel may stay dirty before it is written.
 pub const AUTOSAVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 

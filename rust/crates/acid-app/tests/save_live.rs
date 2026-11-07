@@ -46,7 +46,7 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
 
 /// The switches row now holds five cells: BANK, PATTERN, MODE, CLEAR, SAVE.
 fn save_centre() -> Pos2 {
-    knob_cells(layout(screen()).switches, 5)[4].center()
+    knob_cells(layout(screen()).switches, 6)[4].center()
 }
 
 #[test]

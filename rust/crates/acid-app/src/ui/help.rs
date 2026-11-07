@@ -19,7 +19,8 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "alt+click: slide (dim = next step rests)",
                 "drag up or down: change pitch",
                 "double click: clear the step",
-                "CLEAR: empty (twice), SAVE: write now",
+                "CLEAR: empty the pattern (twice)",
+                "a dim slide leads into a rest, so it cannot glide",
             ],
         ),
         (
@@ -53,7 +54,9 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "the top strip names the audio device",
                 "MIDI status sits beside the pattern display",
                 "one voice: MIDI and the keyboard share it",
+                "SAVED / UNSAVED sits by the wordmark",
                 "saved on exit and 2 s after a change",
+                "SONGS: name the session, keep it, load one",
             ],
         ),
     ]
@@ -67,8 +70,8 @@ pub fn help_line_count() -> usize {
 /// Height the card's contents need at this scale — the card has to fit the panel at 0.65x and 1.6x.
 pub fn help_content_height(scale: f32) -> f32 {
     let heading_size = 13.0 * scale;
-    let line_height = 15.0 * scale;
-    let padding = 12.0 * scale;
+    let line_height = 13.0 * scale;
+    let padding = 8.0 * scale;
     let mut height = padding;
     for (_, lines) in help_sections() {
         height += heading_size + line_height * 0.4;
@@ -78,9 +81,18 @@ pub fn help_content_height(scale: f32) -> f32 {
     height + padding
 }
 
+/// The card's own rectangle: the panel, less a small inset so the card can be big — the panel is a fixed face
+/// and the card is the one place with room to spare.
+pub fn card_rect(panel: Rect, scale: f32) -> Rect {
+    panel.shrink(CARD_INSET * scale)
+}
+
+/// How far the card is inset from the panel's edge, in design pixels.
+pub const CARD_INSET: f32 = 4.0;
+
 /// Draw the card inside `panel`, scaled. Everything is sized from `scale`, so it fits at 0.65x and 1.6x.
 pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
-    let card = panel.shrink(theme::MARGIN * scale);
+    let card = card_rect(panel, scale);
     painter.rect_filled(card, 6.0 * scale, theme::PANEL_RAISED);
     painter.rect_stroke(
         card,
@@ -91,8 +103,8 @@ pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
 
     let heading_size = 13.0 * scale;
     let body_size = 11.0 * scale;
-    let line_height = 15.0 * scale;
-    let padding = 12.0 * scale;
+    let line_height = 13.0 * scale;
+    let padding = 8.0 * scale;
     let mut y = card.top() + padding;
     let left = card.left() + padding;
 
@@ -147,6 +159,8 @@ mod tests {
             "shift+up",
             "enter",
             "CLEAR",
+            "SONGS",
+            "SAVED",
             "MIDI",
             "clock",
             "CC",
@@ -188,7 +202,7 @@ mod tests {
     fn the_card_fits_inside_the_panel_at_both_scale_extremes() {
         for scale in [0.65f32, 1.0, 1.6] {
             let panel = Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE * scale);
-            let card = panel.shrink(theme::MARGIN * scale);
+            let card = card_rect(panel, scale);
             let needed = help_content_height(scale);
             assert!(
                 needed <= card.height(),

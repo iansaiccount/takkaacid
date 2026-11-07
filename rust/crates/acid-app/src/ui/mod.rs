@@ -13,6 +13,7 @@ pub mod picker;
 pub mod save;
 pub mod selection;
 pub mod shortcuts;
+pub mod songs;
 pub mod step_key;
 #[allow(dead_code)]
 pub mod theme;
@@ -80,6 +81,12 @@ pub struct PanelState {
     pub clear_armed_at: Option<std::time::Instant>,
     /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
     pub save_requested: bool,
+    /// The songs card while it is open, `None` when it is closed.
+    pub songs: Option<songs::Songs>,
+    /// What the songs card asked for; consumed by `main`, which owns the files.
+    pub song_request: Option<songs::Request>,
+    /// The song this session is working on, once it has a name.
+    pub song_name: Option<String>,
 }
 
 impl Default for PanelState {
@@ -108,6 +115,9 @@ impl Default for PanelState {
             device_choice: None,
             clear_armed_at: None,
             save_requested: false,
+            songs: None,
+            song_request: None,
+            song_name: None,
         }
     }
 }
@@ -301,7 +311,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
     // BANK, PATTERN and MODE are engraving for now; CLEAR empties the pattern on screen (the one action here
     // with no undo, so it takes two clicks — see `ui::clear`) and SAVE writes the session now.
-    let switch_cells = layout::knob_cells(l.switches, 5);
+    let switch_cells = layout::knob_cells(l.switches, 6);
     for (label, cell) in ["BANK", "PATTERN", "MODE"].iter().zip(switch_cells.iter()) {
         paint_switch(ui.painter(), *cell, s, label);
     }
@@ -327,6 +337,21 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let dirty = state.dirty;
         if transport::transport_button(ui, "save-session", save_cell, "SAVE", dirty).clicked() {
             state.save_requested = true;
+        }
+    }
+    if let Some(&songs_cell) = switch_cells.get(5) {
+        // The card lists what is on disk, so opening it reads the songs directory once.
+        if transport::transport_button(ui, "songs", songs_cell, "SONGS", state.songs.is_some())
+            .clicked()
+        {
+            state.songs = match state.songs {
+                Some(_) => None,
+                None => Some(songs::Songs {
+                    names: crate::persist::list_songs(&crate::persist::data_dir()),
+                    name: state.song_name.clone().unwrap_or_default(),
+                    message: None,
+                }),
+            };
         }
     }
     // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.
@@ -500,6 +525,28 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         );
         if shield.clicked() {
             state.help_visible = false;
+        }
+    }
+
+    // The songs card sits over everything, so its shield is registered before the card's own controls: a click on
+    // a row or the text field is theirs, a click anywhere else dismisses.
+    if state.songs.is_some() {
+        let shield = ui.interact(
+            window,
+            ui.scope_id().with("songs-shield"),
+            egui::Sense::click(),
+        );
+        let mut request = None;
+        if let Some(card) = state.songs.as_mut() {
+            request = songs::paint(ui, l.panel, s, card);
+        }
+        if shield.clicked() {
+            request = Some(songs::Request::Close);
+        }
+        match request {
+            Some(songs::Request::Close) => state.songs = None,
+            Some(other) => state.song_request = Some(other),
+            None => {}
         }
     }
 }

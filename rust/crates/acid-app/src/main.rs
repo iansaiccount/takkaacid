@@ -20,6 +20,7 @@ fn main() -> eframe::Result {
         Some(name) => midi::ports::PortChoice::Named(name.to_string()),
         None => midi::ports::PortChoice::Any,
     };
+    let song_name = saved.song.clone();
 
     // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
     let rig = Rig::new({
@@ -47,6 +48,8 @@ fn main() -> eframe::Result {
                 pattern: state.pattern(),
                 // The saved session may have been left on another pattern, so the display starts from the bank.
                 pattern_id: PatternBank::id_of(bank.current()),
+                // The song the last session was working on, if it had a name.
+                song_name: song_name.clone(),
                 ..Default::default()
             };
             Ok(Box::new(TakkaApp {
@@ -98,6 +101,8 @@ impl eframe::App for TakkaApp {
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
             if self.panel.help_visible {
                 self.panel.help_visible = false;
+            } else if self.panel.songs.is_some() {
+                self.panel.songs = None;
             } else {
                 self.panel.device_list = None;
             }
@@ -116,6 +121,62 @@ impl eframe::App for TakkaApp {
         if self.panel.save_requested {
             self.panel.save_requested = false;
             self.save();
+        }
+
+        // The songs card: keep the session under a name, or load one. Loading saves what is on screen first, so a
+        // load never throws away work that only lived in memory.
+        if let Some(request) = self.panel.song_request.take() {
+            let dir = persist::data_dir();
+            match request {
+                panel_ui::songs::Request::Close => {}
+                panel_ui::songs::Request::Save(name) => {
+                    let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
+                    saved.midi_input = self.midi.preference_name();
+                    saved.song = Some(name.clone());
+                    match persist::save_song(&dir, &name, &saved) {
+                        Ok(()) => {
+                            self.panel.song_name = Some(name.clone());
+                            self.panel.dirty = false;
+                            // The session file remembers which song is open.
+                            let _ = persist::save(&dir, &saved);
+                            if let Some(card) = self.panel.songs.as_mut() {
+                                card.names = persist::list_songs(&dir);
+                                card.name = name.clone();
+                                card.message = Some(format!("saved {name}"));
+                            }
+                        }
+                        Err(error) => {
+                            if let Some(card) = self.panel.songs.as_mut() {
+                                card.message = Some(format!("could not save: {error}"));
+                            }
+                        }
+                    }
+                }
+                panel_ui::songs::Request::Load(name) => match persist::load_song(&dir, &name) {
+                    Ok(saved) => {
+                        self.save();
+                        persist::apply_saved(&saved, &self.state, &mut self.bank);
+                        self.panel.pattern = self.state.pattern();
+                        self.panel.pattern_id = PatternBank::id_of(self.bank.current());
+                        self.panel.selected = 0;
+                        self.panel.dirty = false;
+                        self.panel.song_name = Some(name.clone());
+                        if let Some(port) = saved.midi_input.clone() {
+                            self.midi.choose(midi::ports::PortChoice::Named(port));
+                        }
+                        if let Some(card) = self.panel.songs.as_mut() {
+                            card.names = persist::list_songs(&dir);
+                            card.name = name.clone();
+                            card.message = Some(format!("loaded {name}"));
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(card) = self.panel.songs.as_mut() {
+                            card.message = Some(format!("could not load: {error}"));
+                        }
+                    }
+                },
+            }
         }
         // A port chosen on the panel: drop the old connection and probe the new one now.
         if let Some(choice) = self.panel.midi_port_choice.take() {
@@ -246,6 +307,7 @@ impl TakkaApp {
     fn save(&mut self) {
         let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
         saved.midi_input = self.midi.preference_name();
+        saved.song = self.panel.song_name.clone();
         match persist::save(&persist::data_dir(), &saved) {
             Ok(()) => self.panel.dirty = false,
             Err(error) => eprintln!("takka-acid: could not save: {error}"),

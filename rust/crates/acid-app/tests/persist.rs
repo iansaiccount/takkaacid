@@ -3,8 +3,64 @@
 use acid_app::persist::{
     ENV_DATA_DIR, SAVE_VERSION, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved,
 };
+use acid_app::persist::{list_songs, load_song, save_song, song_name};
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
+
+#[test]
+fn a_song_name_has_to_be_a_name_and_not_a_path() {
+    assert_eq!(song_name("Acid 1").as_deref(), Some("Acid 1"));
+    assert_eq!(song_name("  Acid 1  ").as_deref(), Some("Acid 1"));
+    assert_eq!(
+        song_name(&"x".repeat(48)).as_deref(),
+        Some("x".repeat(48).as_str())
+    );
+    for bad in [
+        "",
+        "   ",
+        "../escape",
+        "a/b",
+        "a\\b",
+        ".hidden",
+        "a:b",
+        "a?b",
+        &"x".repeat(49),
+    ] {
+        assert_eq!(song_name(bad), None, "{bad:?} should be refused");
+    }
+}
+
+#[test]
+fn songs_round_trip_and_are_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        bpm: 137.0,
+        song: Some("Acid 1".to_string()),
+        ..Default::default()
+    };
+    save_song(dir.path(), "Acid 1", &saved).unwrap();
+    save_song(dir.path(), "Another", &saved).unwrap();
+
+    assert_eq!(
+        list_songs(dir.path()),
+        vec!["Acid 1".to_string(), "Another".to_string()],
+        "listed by name, sorted"
+    );
+    let back = load_song(dir.path(), "Acid 1").unwrap();
+    assert!(
+        (back.bpm - 137.0).abs() < 1e-6,
+        "the song is the whole session"
+    );
+    assert_eq!(back.song.as_deref(), Some("Acid 1"));
+    assert_eq!(
+        back.version, SAVE_VERSION,
+        "songs are upgraded like the session file"
+    );
+
+    // A name that cannot be a file is refused rather than written somewhere surprising.
+    assert!(save_song(dir.path(), "../oops", &saved).is_err());
+    assert_eq!(list_songs(dir.path()).len(), 2, "and nothing was written");
+}
 
 #[test]
 fn a_missing_file_is_not_an_error() {
