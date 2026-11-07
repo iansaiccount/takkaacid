@@ -76,10 +76,7 @@ mod tests {
     fn space_toggles_the_transport() {
         let s = SharedState::new();
         let mut bank = PatternBank::factory();
-        assert_eq!(
-            shortcut_for(Key::Space, false),
-            Some(Shortcut::PlayStop)
-        );
+        assert_eq!(shortcut_for(Key::Space, false), Some(Shortcut::PlayStop));
         apply(Shortcut::PlayStop, &s, &mut bank);
         assert!(s.playing.load(std::sync::atomic::Ordering::Relaxed));
         apply(Shortcut::PlayStop, &s, &mut bank);

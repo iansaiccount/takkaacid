@@ -126,8 +126,8 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         for needle in [
-            "click", "shift", "alt", "drag", "double", "SPACE", "RUN", "F1", "Z", "X", "MIDI", "clock",
-            "CC",
+            "click", "shift", "alt", "drag", "double", "SPACE", "RUN", "F1", "Z", "X", "MIDI",
+            "clock", "CC",
         ] {
             assert!(text.contains(needle), "help is missing {needle:?}");
         }

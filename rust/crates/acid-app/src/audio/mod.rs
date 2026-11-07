@@ -14,12 +14,25 @@ use cpal::{SampleFormat, StreamConfig, SupportedStreamConfig};
 
 pub mod supervisor;
 pub mod renderer;
+pub mod status;
 
 pub use supervisor::{Action, Supervisor};
 
 /// Preferred sample rates, best first. 48 kHz matches most interfaces; 44.1 kHz matches most files.
 pub const PREFERRED_RATES: [u32; 3] = [48_000, 44_100, 96_000];
 
+
+/// Every output device the host reports, by name. Never opens a stream.
+pub fn list_output_devices() -> Vec<String> {
+    let host = cpal::default_host();
+    host.output_devices()
+        .map(|devices| {
+            devices
+                .filter_map(|device| device.description().ok().map(|d| d.name().to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
 /// Largest block the callback is prepared for; bigger device buffers are rendered in chunks.
 pub const MAX_BLOCK: usize = 8_192;
 
@@ -157,10 +170,28 @@ impl Opened {
 
 /// Resolve the default output device and a usable configuration.
 pub fn open_default() -> Result<Opened> {
+    open_device(None)
+}
+
+/// Resolve a named output device (or the default one) and a usable configuration.
+pub fn open_device(preferred: Option<&str>) -> Result<Opened> {
     let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .ok_or_else(|| anyhow!("no default output device"))?;
+    let device = match preferred {
+        Some(wanted) => host
+            .output_devices()
+            .map(|devices| {
+                devices.into_iter().find(|device| {
+                    device
+                        .description()
+                        .map(|d| d.name() == wanted)
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(None)
+            .or_else(|| host.default_output_device()),
+        None => host.default_output_device(),
+    };
+    let device = device.ok_or_else(|| anyhow!("no usable output device"))?;
     let name = device
         .description()
         .map(|d| d.name().to_string())
@@ -233,6 +264,8 @@ pub struct Rig {
     supervisor: Supervisor,
     retry_at: Option<Instant>,
     status: String,
+    /// The device the user picked, or `None` for the system default.
+    wanted: Option<String>,
 }
 
 impl Rig {
@@ -243,6 +276,7 @@ impl Rig {
             errors: None,
             supervisor: Supervisor::new(),
             retry_at: None,
+            wanted: None,
             status: "starting".to_string(),
         };
         rig.attempt();
@@ -257,6 +291,7 @@ impl Rig {
                 failed = true;
             }
         }
+
         if failed {
             self.handle = None;
             self.errors = None;
@@ -281,6 +316,17 @@ impl Rig {
             self.retry_at = None;
             self.attempt();
         }
+
+    }
+    /// Reopen on a named output device (`None` = the default). Called from the UI thread: the stream is
+    /// dropped and rebuilt, so this never happens on the audio thread.
+    pub fn request_device(&mut self, name: Option<String>) {
+        self.wanted = name;
+        self.handle = None;
+        self.errors = None;
+        self.retry_at = None;
+        self.supervisor.on_success();
+        self.attempt();
     }
 
     pub fn status(&self) -> &str {
@@ -288,7 +334,7 @@ impl Rig {
     }
 
     fn attempt(&mut self) {
-        let opened = match open_default() {
+        let opened = match open_device(self.wanted.as_deref()) {
             Ok(o) => o,
             Err(err) => {
                 self.status = format!("failed: {err}");
@@ -301,7 +347,10 @@ impl Rig {
         let render = (self.open)(opened.sample_rate_f32());
         match opened.spawn(render, tx) {
             Ok(handle) => {
-                self.status = format!("{} Hz - {}", handle.sample_rate(), handle.device());
+                self.status = status::status_text(&crate::state::AudioStatus::Running {
+                    device: handle.device().to_string(),
+                    sample_rate: handle.sample_rate(),
+                });
                 self.supervisor.on_success();
                 self.handle = Some(handle);
                 self.errors = Some(rx);

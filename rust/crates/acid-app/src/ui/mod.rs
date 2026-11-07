@@ -58,6 +58,10 @@ pub struct PanelState {
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
+    /// The output devices on offer while the picker is open, `None` when it is closed.
+    pub device_list: Option<Vec<String>>,
+    /// The device the user chose; consumed by `main` on the next frame.
+    pub device_choice: Option<String>,
     pub volume: f32,
 }
 
@@ -80,6 +84,8 @@ impl Default for PanelState {
             midi_given_up: false,
             reprobe_requested: false,
             help_visible: false,
+            device_list: None,
+            device_choice: None,
         }
     }
 }

@@ -150,13 +150,67 @@ impl eframe::App for TakkaApp {
         panel_ui::draw_panel(&mut self.panel, &self.state, ui);
 
 
+        // The audio status doubles as the device picker: click the line to list the outputs, click a name
+        // to move the stream there.
+        let status_rect = egui::Rect::from_center_size(
+            rect.center_bottom() - egui::vec2(0.0, 8.0),
+            egui::vec2(rect.width().min(420.0), 18.0),
+        );
+        if ui
+            .interact(
+                status_rect,
+                ui.scope_id().with("audio-status"),
+                egui::Sense::click(),
+            )
+            .clicked()
+        {
+            self.panel.device_list = Some(audio::list_output_devices());
+        }
         ui.painter().text(
-            rect.center_bottom() - egui::vec2(0.0, 6.0),
+            status_rect.center(),
             egui::Align2::CENTER_CENTER,
             self.rig.status(),
             panel_ui::theme::legend(11.0),
             panel_ui::theme::SILKSCREEN_DIM,
         );
+        if let Some(devices) = self.panel.device_list.clone() {
+            let row_height = 20.0;
+            let width = 360.0;
+            let base = status_rect.top() - 6.0;
+            let mut chosen = None;
+            for (index, name) in devices.iter().enumerate() {
+                let row = egui::Rect::from_min_size(
+                    egui::Pos2::new(
+                        rect.center().x - width / 2.0,
+                        base - (index as f32 + 1.0) * row_height,
+                    ),
+                    egui::vec2(width, row_height),
+                );
+                ui.painter()
+                    .rect_filled(row, 2.0, panel_ui::theme::PANEL_RAISED);
+                ui.painter().text(
+                    row.center(),
+                    egui::Align2::CENTER_CENTER,
+                    audio::status::device_label(name, 44),
+                    panel_ui::theme::legend(11.0),
+                    panel_ui::theme::SILKSCREEN,
+                );
+                if ui
+                    .interact(row, ui.scope_id().with(("device", index)), egui::Sense::click())
+                    .clicked()
+                {
+                    chosen = Some(name.clone());
+                }
+            }
+            if let Some(name) = chosen {
+                self.panel.device_list = None;
+                self.panel.device_choice = Some(name);
+            }
+        }
+        if let Some(name) = self.panel.device_choice.take() {
+            self.panel.device_list = None;
+            self.rig.request_device(Some(name));
+        }
     }
 }
 
