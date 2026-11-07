@@ -37,6 +37,33 @@ fn an_accented_step_peaks_higher_than_a_plain_one() {
     );
 }
 
+/// Resting a step keeps its flags, so a rest can carry `slide`. If that flag leaks into the trigger for the next
+/// note, the note retunes with the gate still shut and never sounds at all.
+#[test]
+fn a_slide_flag_on_a_rest_does_not_silence_the_next_note() {
+    let sr = 48_000.0;
+    let mut seq = Sequencer::new(sr);
+    let mut steps = [Step::rest(); 16];
+    steps[0] = Step::note(Pitch::A, 0);
+    steps[1] = Step {
+        slide: true,
+        ..Step::rest()
+    };
+    steps[2] = Step::note(Pitch::A, 0);
+    seq.set_pattern(Arc::new(Pattern::from_steps(steps)));
+    seq.set_bpm(120.0); // one 16th is 6000 samples: step 2 starts at 12 000
+    let mut v = Voice::new(sr);
+    seq.start();
+    let mut buf = vec![0.0; 18_000];
+    seq.render(&mut v, &mut buf);
+
+    let played = rms(&buf[12_400..13_800]);
+    assert!(
+        played > 0.01,
+        "the note after a rest carrying a slide flag was silent: {played}"
+    );
+}
+
 #[test]
 fn a_slide_step_does_not_restart_the_envelope() {
     let sr = 48_000.0;

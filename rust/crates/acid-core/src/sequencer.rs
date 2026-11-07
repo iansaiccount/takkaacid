@@ -94,7 +94,12 @@ impl Sequencer {
         let step = self.pattern.steps[position];
         if !step.on {
             voice.note_off();
-        } else if self.prev_slide {
+            // A rest cannot glide out of anything. A rest keeps its flags, so it may carry `slide`; letting
+            // that through would retune the next note with the gate still shut and it would never sound.
+            self.prev_slide = false;
+            return;
+        }
+        if self.prev_slide {
             // The previous step asked to slide into this one: retune without retriggering the envelopes.
             voice.glide_to(step.hz());
         } else {

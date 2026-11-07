@@ -38,7 +38,8 @@ pub fn step_view(
         on: step.on,
         accent: step.accent,
         slide: step.slide,
-        slide_glides: next_on,
+        // A rest cannot glide either — and a rest keeps its flags, so it can carry `slide`.
+        slide_glides: step.on && next_on,
         current: playing && index == position,
         beat: index.is_multiple_of(4),
         selected,
@@ -366,6 +367,12 @@ mod tests {
         };
         assert!(step_view(&step, 0, 0, false, false, false, true).slide_glides);
         assert!(!step_view(&step, 0, 0, false, false, false, false).slide_glides);
+        // A rest keeps its flags, so a rest can carry a slide — but it cannot glide out of one.
+        let rested = Step {
+            on: false,
+            ..Step::note(Pitch::C, 0)
+        };
+        assert!(!step_view(&rested, 0, 0, false, false, false, true).slide_glides);
     }
     /// The plan's "look at it" step, in headless form: sixteen keys paint, and the lit/accent/slide ones
     /// paint more than a bare key does.
