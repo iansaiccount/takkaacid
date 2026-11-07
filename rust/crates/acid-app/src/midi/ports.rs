@@ -14,19 +14,53 @@ pub fn empty_ports_error() -> &'static str {
     NO_PORTS
 }
 
+/// Which port to open: the first one the system reports, or a named one.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum PortChoice {
+    #[default]
+    Any,
+    Named(String),
+}
+
+impl PortChoice {
+    /// The name this choice asks for, if it asks for one.
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Self::Any => None,
+            Self::Named(name) => Some(name),
+        }
+    }
+
+    /// Resolve against the names the system reports. `Any` takes the first port; a name takes an exact match,
+    /// then a case-insensitive substring — and never a different port, because silently listening to the wrong
+    /// interface is worse than not listening at all.
+    pub fn resolve(&self, names: &[String]) -> Option<usize> {
+        let Some(wanted) = self.name() else {
+            return if names.is_empty() { None } else { Some(0) };
+        };
+        if let Some(exact) = names.iter().position(|name| name == wanted) {
+            return Some(exact);
+        }
+        let needle = wanted.to_lowercase();
+        names
+            .iter()
+            .position(|name| name.to_lowercase().contains(&needle))
+    }
+}
+
+impl From<Option<&str>> for PortChoice {
+    fn from(wanted: Option<&str>) -> Self {
+        match wanted {
+            Some(name) => Self::Named(name.to_string()),
+            None => Self::Any,
+        }
+    }
+}
+
 /// Choose a port: an exact name first, then a case-insensitive substring, then the first port when no
 /// preference was given.
 pub fn pick_port(names: &[String], wanted: Option<&str>) -> Option<usize> {
-    let Some(wanted) = wanted else {
-        return if names.is_empty() { None } else { Some(0) };
-    };
-    if let Some(exact) = names.iter().position(|name| name == wanted) {
-        return Some(exact);
-    }
-    let needle = wanted.to_lowercase();
-    names
-        .iter()
-        .position(|name| name.to_lowercase().contains(&needle))
+    PortChoice::from(wanted).resolve(names)
 }
 
 /// Every MIDI input port the system reports, by name.
@@ -57,7 +91,7 @@ impl MidiIn {
     /// `port_name` is a preference: exact match, then substring, then the first port. The handler must not
     /// block — it runs on the MIDI thread, so the wiring writes atomics and returns.
     pub fn open(
-        port_name: Option<&str>,
+        choice: &PortChoice,
         mut handler: impl FnMut(u64, &[u8]) + Send + 'static,
     ) -> Result<Self> {
         let input =
@@ -70,8 +104,9 @@ impl MidiIn {
         if names.is_empty() {
             return Err(anyhow!(empty_ports_error()));
         }
-        let index = pick_port(&names, port_name)
-            .ok_or_else(|| anyhow!("MIDI port {port_name:?} not found"))?;
+        let index = choice
+            .resolve(&names)
+            .ok_or_else(|| anyhow!("MIDI port {:?} not found", choice.name().unwrap_or("any")))?;
         let chosen = names[index].clone();
         let connection = input
             .connect(
@@ -110,6 +145,26 @@ mod tests {
         assert_eq!(pick_port(&names, Some("nope")), None);
         assert_eq!(pick_port(&[], None), None);
         assert_eq!(pick_port(&names, None), Some(0));
+    }
+
+    #[test]
+    fn any_takes_the_first_port_and_a_name_takes_its_own() {
+        let names = vec!["Arturia KeyStep".to_string(), "Launchkey MIDI".to_string()];
+        assert_eq!(PortChoice::Any.resolve(&names), Some(0));
+        assert_eq!(
+            PortChoice::Named("Launchkey MIDI".into()).resolve(&names),
+            Some(1)
+        );
+        assert_eq!(PortChoice::Named("keystep".into()).resolve(&names), Some(0));
+    }
+
+    #[test]
+    fn a_named_port_that_is_missing_resolves_to_nothing() {
+        // The rule that makes an explicit choice safe: never substitute a different interface.
+        let names = vec!["Port A".to_string()];
+        assert_eq!(PortChoice::Named("Port B".into()).resolve(&names), None);
+        assert_eq!(PortChoice::Named("Port B".into()).resolve(&[]), None);
+        assert_eq!(PortChoice::Any.resolve(&[]), None);
     }
 
     #[test]

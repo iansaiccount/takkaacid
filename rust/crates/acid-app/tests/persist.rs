@@ -46,6 +46,31 @@ fn corrupt_json_reports_an_error_and_writes_nothing() {
 }
 
 #[test]
+fn the_chosen_midi_port_round_trips_and_an_old_file_still_loads() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        midi_input: Some("Launchkey MIDI".to_string()),
+        ..Default::default()
+    };
+    save(dir.path(), &saved).unwrap();
+    assert_eq!(
+        load(dir.path()).unwrap().unwrap().midi_input.as_deref(),
+        Some("Launchkey MIDI")
+    );
+
+    // A file written before the field existed must still load, with no preference — and nothing may panic.
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    legacy.as_object_mut().unwrap().remove("midi_input");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(load(dir.path()).unwrap().unwrap().midi_input, None);
+}
+
+#[test]
 fn save_is_atomic_and_leaves_no_temp_file() {
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();

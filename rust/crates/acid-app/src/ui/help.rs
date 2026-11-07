@@ -16,11 +16,10 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "click: select the step",
                 "ctrl+click: note on or off",
                 "shift+click: accent (louder, brighter)",
-                "alt+click: slide into the next note",
+                "alt+click: slide (dim = next step rests)",
                 "drag up or down: change pitch",
                 "double click: clear the step",
                 "CLEAR button: empty the pattern (twice)",
-                "a dim slide leads into a rest, so it cannot glide",
             ],
         ),
         (
@@ -41,6 +40,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
             "MIDI",
             &[
                 "MIDI in: notes play over the pattern",
+                "click the MIDI line: choose an input port",
                 "clock: tempo follows a 24 ppqn source",
                 "CC 3 tuning, 5 accent, 7 volume",
                 "CC 71 resonance, 72 tempo, 73 swing",

@@ -15,6 +15,11 @@ fn main() -> eframe::Result {
     let saved = persist::load_or_default(&persist::data_dir());
     let state = persist::saved_to_shared(&saved);
     let bank = saved.bank.clone();
+    // The MIDI input the last session used, if any: a missing port is reported, never swapped for another.
+    let midi_preference = match saved.midi_input.as_deref() {
+        Some(name) => midi::ports::PortChoice::Named(name.to_string()),
+        None => midi::ports::PortChoice::Any,
+    };
 
     // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
     let rig = Rig::new({
@@ -50,7 +55,7 @@ fn main() -> eframe::Result {
                 panel,
                 bank,
                 autosave: persist::Autosave::new(),
-                midi: Midi::new(),
+                midi: Midi::new(midi_preference),
             }))
         }),
     )
@@ -105,6 +110,12 @@ impl eframe::App for TakkaApp {
             panel_ui::dispatch::handle(press, &mut self.panel, &self.state, &mut self.bank);
         }
 
+        // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
+        // thread — it runs on a spawned thread and reports through a channel.
+        // A port chosen on the panel: drop the old connection and probe the new one now.
+        if let Some(choice) = self.panel.midi_port_choice.take() {
+            self.midi.choose(choice);
+        }
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
         self.midi.poll();
@@ -228,7 +239,8 @@ impl eframe::App for TakkaApp {
 impl TakkaApp {
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
     fn save(&mut self) {
-        let saved = persist::shared_to_saved(&self.state, self.bank.clone());
+        let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
+        saved.midi_input = self.midi.preference_name();
         match persist::save(&persist::data_dir(), &saved) {
             Ok(()) => self.panel.dirty = false,
             Err(error) => eprintln!("takka-acid: could not save: {error}"),
@@ -245,16 +257,33 @@ struct Midi {
     supervisor: midi::supervisor::MidiSupervisor,
     pending: Option<std::sync::mpsc::Receiver<Result<midi::ports::MidiIn, String>>>,
     name: Option<String>,
+    /// Which port to open. `Any` is the first the system reports; a name never falls back to another port.
+    preference: midi::ports::PortChoice,
 }
 
 impl Midi {
-    fn new() -> Self {
+    fn new(preference: midi::ports::PortChoice) -> Self {
         Self {
             input: None,
             supervisor: midi::supervisor::MidiSupervisor::new(),
             pending: None,
             name: None,
+            preference,
         }
+    }
+
+    /// Switch ports: drop the open connection, remember the choice and probe straight away.
+    fn choose(&mut self, choice: midi::ports::PortChoice) {
+        self.input = None;
+        self.name = None;
+        self.pending = None;
+        self.preference = choice;
+        self.supervisor.on_success();
+    }
+
+    /// The port name the session should remember, `None` for "any".
+    fn preference_name(&self) -> Option<String> {
+        self.preference.name().map(str::to_string)
     }
 
     /// Start a probe unless one is already running or the supervisor is waiting.
@@ -264,9 +293,10 @@ impl Midi {
         }
         let (tx, rx) = std::sync::mpsc::channel();
         self.pending = Some(rx);
+        let choice = self.preference.clone();
         std::thread::spawn(move || {
             let mut follower = midi::tempo::TempoFollower::new();
-            let result = midi::ports::MidiIn::open(None, move |_, bytes| {
+            let result = midi::ports::MidiIn::open(&choice, move |_, bytes| {
                 let Some(event) = midi::message::parse(bytes) else {
                     return;
                 };

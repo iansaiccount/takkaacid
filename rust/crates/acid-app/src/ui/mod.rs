@@ -22,6 +22,7 @@ use std::sync::Arc;
 use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
 use acid_core::timing::DEFAULT_BPM;
 
+use crate::midi;
 use crate::state::SharedState;
 
 use acid_core::pitch::Pitch;
@@ -59,7 +60,12 @@ pub struct PanelState {
     /// True when the supervisor has given up, which shows the REPROBE target.
     pub midi_given_up: bool,
     /// Set by the panel when REPROBE is clicked; the app clears it.
+    /// Set by the panel when REPROBE is clicked; the app clears it.
     pub reprobe_requested: bool,
+    /// The MIDI inputs on offer while the picker is open, `None` when it is closed.
+    pub midi_ports: Option<Vec<String>>,
+    /// The port the user chose; consumed by `main` on the next frame.
+    pub midi_port_choice: Option<midi::ports::PortChoice>,
     /// True while the help card is showing.
     pub help_visible: bool,
     /// The step the keyboard edits; always in `0..16`, never saved.
@@ -91,6 +97,8 @@ impl Default for PanelState {
             midi_status: "MIDI: none (retrying)".to_string(),
             midi_given_up: false,
             reprobe_requested: false,
+            midi_ports: None,
+            midi_port_choice: None,
             help_visible: false,
             selected: 0,
             device_list: None,
@@ -149,13 +157,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
     // MIDI status: right-aligned between the wordmark and the pattern display, amber when the app has
     // stopped probing and a small REPROBE target appears with it.
-    let status = egui::Rect::from_min_max(
-        egui::Pos2::new(l.top.left() + l.top.width() * 0.42, l.top.top()),
-        egui::Pos2::new(
-            panel::pattern_display_rect(l.top).left() - theme::GAP * s,
-            l.top.bottom(),
-        ),
-    );
+    let status = panel::midi_status_rect(l.top, s);
     ui.painter().text(
         status.right_center(),
         egui::Align2::RIGHT_CENTER,
@@ -365,6 +367,77 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         if state.volume != before {
             shared.volume.set(state.volume);
             state.dirty = true;
+        }
+    }
+
+    // MIDI input picker: the status line is the handle. Rows paint here, after everything else, so they sit
+    // over the panel; the REPROBE dot keeps the left edge of the line while the supervisor has given up.
+    let mut handle = status;
+    if state.midi_given_up {
+        handle.min.x += 24.0 * s;
+    }
+    if ui
+        .interact(
+            handle,
+            ui.scope_id().with("midi-status"),
+            egui::Sense::click(),
+        )
+        .clicked()
+    {
+        state.midi_ports = match state.midi_ports {
+            Some(_) => None,
+            None => Some(midi::ports::list_ports().unwrap_or_default()),
+        };
+    }
+    if let Some(ports) = state.midi_ports.clone() {
+        let mut entries = vec![("any input".to_string(), midi::ports::PortChoice::Any)];
+        entries.extend(
+            ports
+                .iter()
+                .map(|name| (name.clone(), midi::ports::PortChoice::Named(name.clone()))),
+        );
+        let row_height = 20.0 * s;
+        let mut rows = Vec::new();
+        let mut chosen = None;
+        for (index, (label, choice)) in entries.iter().enumerate() {
+            let row = egui::Rect::from_min_size(
+                egui::Pos2::new(handle.left(), handle.bottom() + row_height * index as f32),
+                egui::vec2(handle.width(), row_height),
+            );
+            rows.push(row);
+            ui.painter().rect_filled(row, 2.0 * s, theme::PANEL_RAISED);
+            ui.painter().text(
+                row.left_center() + egui::vec2(6.0 * s, 0.0),
+                egui::Align2::LEFT_CENTER,
+                label,
+                theme::legend(10.0 * s),
+                theme::SILKSCREEN,
+            );
+            if ui
+                .interact(
+                    row,
+                    ui.scope_id().with(("midi-port", index)),
+                    egui::Sense::click(),
+                )
+                .clicked()
+            {
+                chosen = Some(choice.clone());
+            }
+        }
+        if let Some(choice) = chosen {
+            state.midi_port_choice = Some(choice);
+            state.midi_ports = None;
+        } else {
+            let click = ui.input(|i| {
+                if i.pointer.any_click() {
+                    i.pointer.interact_pos()
+                } else {
+                    None
+                }
+            });
+            if picker::should_close(click, &rows, handle) {
+                state.midi_ports = None;
+            }
         }
     }
 

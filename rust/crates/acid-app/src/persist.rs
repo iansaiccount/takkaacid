@@ -64,6 +64,9 @@ pub struct SavedState {
     pub knobs: Knobs,
     pub bpm: f32,
     pub swing: f32,
+    /// The MIDI input the player chose, by port name; `None` means "the first one the system reports".
+    #[serde(default)]
+    pub midi_input: Option<String>,
 }
 
 impl Default for SavedState {
@@ -73,6 +76,7 @@ impl Default for SavedState {
             knobs: Knobs::default(),
             bpm: DEFAULT_BPM,
             swing: 0.0,
+            midi_input: None,
         }
     }
 }
@@ -178,6 +182,8 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         },
         bpm: snapshot.tempo_bpm,
         swing: snapshot.swing,
+        // The MIDI choice lives with the app, not with the shared state; `main` fills it in before saving.
+        midi_input: None,
     }
 }
 
