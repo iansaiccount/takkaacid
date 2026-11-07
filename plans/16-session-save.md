@@ -49,7 +49,7 @@
   - `SavedState::version: u32` — first field, `#[serde(default)]`, so a file without it reads as `0`.
   - `SavedState::upgraded(self) -> Self` — sets `version` to `SAVE_VERSION` when it is `0`; called by `load_or_default`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[test]
@@ -67,21 +67,21 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app persist`
 Expected: FAIL — `no field version`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `SavedState::default()` writes `version: SAVE_VERSION`; `load_or_default` returns `state.upgraded()` on every path. `shared_to_saved` keeps the current version.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test -p acid-app persist`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app/src/persist.rs
@@ -100,7 +100,7 @@ git commit -m "feat(persist): version the save file and upgrade old ones on load
 - Consumes: nothing.
 - Produces: `save(dir, state)` writes exactly one file, `dir/state.json`. `PATTERN_DIR` and the per-pattern loop are deleted.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 #[test]
@@ -117,21 +117,21 @@ fn a_save_writes_one_file_and_leaves_no_pattern_directory() {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app persist`
 Expected: FAIL — the listing also holds `patterns`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Delete the directory creation and the `for (index, pattern) in (0..64)` loop from `save`, and the `PATTERN_DIR` constant with them. `load` is already unchanged (it reads `state.json` only).
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test -p acid-app persist`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app/src/persist.rs
@@ -157,7 +157,7 @@ git commit -m "refactor(persist): one save file, and no write-only pattern copie
   - `ui::panel::save_indicator_rect(top, s) -> Rect` — the rect the label is painted in.
   - The switches row becomes five cells: `BANK`, `PATTERN`, `MODE`, `CLEAR`, `SAVE`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[test]
@@ -175,21 +175,21 @@ fn clicking_save_asks_for_a_write_and_touching_a_step_asks_again() {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app save`
 Expected: FAIL — `no module named save`, `no field save_requested`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Switches row: `layout::knob_cells(l.switches, 5)`, first three engraved as now, CLEAR stays armed-then-clears, SAVE is a plain `transport_button` that sets `state.save_requested = true`. Paint the indicator at `panel::save_indicator_rect`, using `save::state_label(state.dirty)`. In `main.rs`, at the top of `logic`: `if self.panel.save_requested { self.panel.save_requested = false; self.save(); }` — `save()` already clears `dirty` on success and prints on failure. Add to the help card's NOTES section: `"SAVE: write the session now"`.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test --workspace`
 Expected: PASS, and the switches row still fits inside the panel at 0.65x (the layout test covers it).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app

@@ -49,7 +49,7 @@
   - `MidiIn::open(choice: &PortChoice, handler: impl FnMut(u64, &[u8]) + Send + 'static) -> Result<Self>` — replaces the `Option<&str>` parameter.
   - `pick_port(names, wanted: Option<&str>)` stays, implemented through `PortChoice`, so the two cannot drift.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[test]
@@ -70,21 +70,21 @@ fn a_named_port_that_is_missing_resolves_to_nothing() {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app midi::ports`
 Expected: FAIL — `cannot find type PortChoice`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `PortChoice::resolve` keeps today's rule exactly: `Any` → `0` when there are ports, `Named` → exact match, then case-insensitive substring, else `None`. `pick_port(names, wanted)` becomes `PortChoice::from(wanted).resolve(names)`; add `impl From<Option<&str>> for PortChoice`.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test -p acid-app midi::ports`
 Expected: PASS — the three existing tests plus the two new ones.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app/src/midi/ports.rs
@@ -110,7 +110,7 @@ git commit -m "feat(midi): a port choice that never substitutes another interfac
   - `ui::panel::midi_status_rect(l.top, s)` — the same rect the status text is painted in, so a test can click it.
   - `impl TakkaApp`: `Midi::choose(&mut self, choice: PortChoice)` — drop the connection, store the preference, probe now.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 #[test]
@@ -124,12 +124,12 @@ fn clicking_the_midi_line_lists_the_ports_and_a_row_chooses_one() {
 
 Seed the module's port source through a `PanelState` field is not possible, so the test drives the picker with `panel.midi_ports` pre-filled: opening sets it from `list_ports()` (which the test cannot rely on), so the test asserts the row click only, and the open-click is covered by a second test that asserts `midi_ports.is_some()` after clicking the line.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app --test midi_picker_live`
 Expected: FAIL — `no field midi_ports`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `draw_panel`, replace the ad-hoc `status` rect with `panel::midi_status_rect(l.top, s)`; make it an interactive `Sense::click()` target that toggles `state.midi_ports` (filling it from `midi::ports::list_ports().unwrap_or_default()`). Draw one row per port below the status line, each `s * 18.0` tall, with an "any" row first; a clicked row sets `state.midi_port_choice = Some(...)` and closes the list; `picker::should_close(click, &rows, status)` dismisses it. Keep the existing REPROBE dot working: rows and dot must not overlap.
 
@@ -137,12 +137,12 @@ In `main.rs`, after the device choice handling: `if let Some(choice) = self.pane
 
 Add to the help card's MIDI section: `"click the MIDI line: choose an input port"`.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test --workspace`
 Expected: PASS, and the help card still fits at 0.65x.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app
@@ -162,7 +162,7 @@ git commit -m "feat(ui): choose the MIDI input port from the panel"
 - Consumes: `PortChoice`.
 - Produces: `SavedState::midi_input: Option<String>` with `#[serde(default)]`; `Midi::preference(&self) -> PortChoice`; `Midi::new(preference: PortChoice)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 #[test]
@@ -180,21 +180,21 @@ fn the_chosen_midi_port_round_trips_and_an_old_file_still_loads() {
 
 (If the `bank` shape above does not deserialize, copy a real file's JSON from `SavedState::default()` and remove only the new field — the point is the missing-field case, not the hand-written shape.)
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd rust && cargo test -p acid-app persist`
 Expected: FAIL — `no field midi_input`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add the field with `#[serde(default)]`; `main.rs` writes `saved.midi_input = self.midi.preference_name()` inside `save()` and builds `Midi::new(...)` from `saved.midi_input` at startup. `Main`'s probe closes when the choice changes; nothing else changes.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd rust && cargo test --workspace`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add rust/crates/acid-app
