@@ -104,6 +104,7 @@ impl eframe::App for TakkaApp {
                 egui::Key::ArrowLeft,
                 egui::Key::F1,
                 egui::Key::Questionmark,
+                egui::Key::Enter,
             ]
             .into_iter()
             .filter(|key| input.key_pressed(*key))
@@ -111,11 +112,24 @@ impl eframe::App for TakkaApp {
             .collect()
         });
         for (key, shift) in presses {
+            // Selection and note editing first: shift+arrows must never reach the tempo and pattern
+            // shortcuts, which act on the same four keys without a modifier.
+            if panel_ui::selection::dispatch(key, shift, &mut self.panel, &self.state) {
+                continue;
+            }
             if let Some(shortcut) = panel_ui::shortcuts::shortcut_for(key, shift) {
                 panel_ui::shortcuts::apply(shortcut, &self.state, &mut self.bank);
                 // The help card is panel state, so it is toggled here rather than in `apply`.
                 if matches!(shortcut, panel_ui::shortcuts::Shortcut::ToggleHelp) {
                     self.panel.help_visible = !self.panel.help_visible;
+                }
+                // The selection names a position in the pattern on screen, so a new pattern starts at 1.
+                if matches!(
+                    shortcut,
+                    panel_ui::shortcuts::Shortcut::NextPattern
+                        | panel_ui::shortcuts::Shortcut::PrevPattern
+                ) {
+                    self.panel.selected = 0;
                 }
             }
         }

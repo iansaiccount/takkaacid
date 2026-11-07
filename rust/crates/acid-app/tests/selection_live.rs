@@ -71,6 +71,9 @@ fn click_with(
     run_on(ctx, screen(), panel, shared, vec![release(at)]);
 }
 
+
+
+
 fn lit_shared() -> std::sync::Arc<SharedState> {
     let shared = SharedState::new();
     for i in 0..16 {
@@ -205,6 +208,81 @@ fn clicking_one_step_then_another_moves_the_outline() {
         Modifiers::default(),
     );
     assert_eq!(panel.selected, 9);
+}
+
+#[test]
+fn shift_right_moves_the_selection_and_leaves_the_pattern_alone() {
+    let shared = lit_shared();
+    let before = shared.pattern().steps;
+    let mut panel = PanelState::default();
+
+    let consumed = selection_dispatch(egui::Key::ArrowRight, true, &mut panel, &shared);
+
+    assert!(
+        consumed,
+        "shift+right must be consumed before the shortcuts see it"
+    );
+    assert_eq!(panel.selected, 1);
+    assert_eq!(
+        shared.pattern().steps,
+        before,
+        "shift+right must not touch the pattern"
+    );
+}
+
+#[test]
+fn a_plain_arrow_is_left_for_the_transport_shortcuts() {
+    let shared = lit_shared();
+    let mut panel = PanelState::default();
+    assert!(
+        !selection_dispatch(egui::Key::ArrowRight, false, &mut panel, &shared),
+        "unshifted arrows belong to the pattern shortcut"
+    );
+    assert_eq!(
+        panel.selected, 0,
+        "an unshifted arrow must not move the selection"
+    );
+}
+
+#[test]
+fn shift_up_raises_the_selected_note_one_semitone() {
+    let shared = lit_shared();
+    let mut panel = PanelState::default();
+    selection_dispatch(egui::Key::ArrowUp, true, &mut panel, &shared);
+    let step = shared.pattern().steps[0];
+    assert_eq!((step.pitch, step.octave_offset), (Pitch::CSharp, 0));
+}
+
+#[test]
+fn enter_toggles_the_selected_step() {
+    let shared = lit_shared();
+    shared.set_step(
+        0,
+        Step {
+            accent: true,
+            ..Step::note(Pitch::E, 0)
+        },
+    );
+    let mut panel = PanelState::default();
+
+    selection_dispatch(egui::Key::Enter, false, &mut panel, &shared);
+    assert!(!shared.pattern().steps[0].on, "enter must rest the step");
+
+    selection_dispatch(egui::Key::Enter, false, &mut panel, &shared);
+    let back = shared.pattern().steps[0];
+    assert!(
+        back.on && back.accent,
+        "a second enter brings the flags back"
+    );
+}
+
+fn selection_dispatch(
+    key: egui::Key,
+    shift: bool,
+    panel: &mut PanelState,
+    shared: &SharedState,
+) -> bool {
+    acid_app::ui::selection::dispatch(key, shift, panel, shared)
 }
 
 #[test]
