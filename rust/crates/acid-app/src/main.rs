@@ -95,45 +95,12 @@ impl eframe::App for TakkaApp {
                 self.panel.device_list = None;
             }
         }
-        let presses: Vec<(egui::Key, bool)> = ctx.input(|input| {
-            [
-                egui::Key::Space,
-                egui::Key::ArrowUp,
-                egui::Key::ArrowDown,
-                egui::Key::ArrowRight,
-                egui::Key::ArrowLeft,
-                egui::Key::F1,
-                egui::Key::Questionmark,
-                egui::Key::Enter,
-            ]
-            .into_iter()
-            .filter(|key| input.key_pressed(*key))
-            .map(|key| (key, input.modifiers.shift))
-            .collect()
-        });
-        for (key, shift) in presses {
-            // Selection and note editing first: shift+arrows must never reach the tempo and pattern
-            // shortcuts, which act on the same four keys without a modifier. A press the step editor
-            // refuses — the help card is modal — is still spent here, or shift+right would quietly change
-            // the pattern behind the card.
-            if panel_ui::selection::dispatch(key, shift, &mut self.panel, &self.state).consumed() {
-                continue;
-            }
-            if let Some(shortcut) = panel_ui::shortcuts::shortcut_for(key, shift) {
-                panel_ui::shortcuts::apply(shortcut, &self.state, &mut self.bank);
-                // The help card is panel state, so it is toggled here rather than in `apply`.
-                if matches!(shortcut, panel_ui::shortcuts::Shortcut::ToggleHelp) {
-                    self.panel.help_visible = !self.panel.help_visible;
-                }
-                // The selection names a position in the pattern on screen, so a new pattern starts at 1.
-                if matches!(
-                    shortcut,
-                    panel_ui::shortcuts::Shortcut::NextPattern
-                        | panel_ui::shortcuts::Shortcut::PrevPattern
-                ) {
-                    self.panel.selected = 0;
-                }
-            }
+        // One press, one action: the step editor first, then the transport and pattern shortcuts (see
+        // `ui::dispatch`). A held key repeats only for the tempo nudges.
+        let presses =
+            ctx.input(|input| panel_ui::dispatch::presses(&input.events, input.modifiers.shift));
+        for press in presses {
+            panel_ui::dispatch::handle(press, &mut self.panel, &self.state, &mut self.bank);
         }
 
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this

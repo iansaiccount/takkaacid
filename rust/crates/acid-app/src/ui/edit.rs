@@ -131,12 +131,18 @@ pub fn drag_pitch(start: (Pitch, i8), dy_pixels: f32, fine: bool) -> (Pitch, i8)
 }
 
 /// The panel's spelling of a pitch: note name plus octave, always canonical.
-pub fn pitch_name(pitch: Pitch, octave: i8) -> String {
-    const NAMES: [&str; 12] = [
-        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+pub fn pitch_name(pitch: Pitch, octave: i8) -> &'static str {
+    /// The whole panel range, `-12..=24` absolute semitones, spelled out: the keycaps ask for one label per
+    /// step per frame, so a `String` each would be sixteen allocations every frame.
+    const LABELS: [&str; 37] = [
+        "C-1", "C#-1", "D-1", "D#-1", "E-1", "F-1", "F#-1", "G-1", "G#-1", "A-1", "A#-1", "B-1",
+        "C0", "C#0", "D0", "D#0", "E0", "F0", "F#0", "G0", "G#0", "A0", "A#0", "B0", "C1", "C#1",
+        "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1",
+        // 24 is two octaves above C, but the panel only carries `-1..=1`, so the top repeats.
+        "C1",
     ];
-    let (pitch, octave) = from_absolute(i32::from(pitch.semitones()) + 12 * i32::from(octave));
-    format!("{}{octave}", NAMES[pitch.semitones() as usize % 12])
+    let absolute = (i32::from(pitch.semitones()) + 12 * i32::from(octave)).clamp(-12, 24);
+    LABELS[(absolute + 12) as usize]
 }
 
 #[cfg(test)]
@@ -301,6 +307,34 @@ mod tests {
     fn dragging_a_step_up_a_fifth_lands_on_the_right_note() {
         assert_eq!(drag_pitch((Pitch::C, 0), -84.0, false), (Pitch::G, 0));
         assert_eq!(drag_pitch((Pitch::C, 0), 12.0, false), (Pitch::B, -1));
+    }
+
+    /// The label table is hand-written, so it is checked against the spelling rule it replaced: name plus the
+    /// octave `from_absolute` canonicalises to. A wrong entry would print a wrong note on a keycap.
+    #[test]
+    fn every_label_in_range_matches_the_canonical_spelling() {
+        const NAMES: [&str; 12] = [
+            "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+        ];
+        for absolute in -12..=24 {
+            let expected = from_absolute(absolute);
+            let name = NAMES[expected.0.semitones() as usize % 12];
+            // `pitch_name` takes the same absolute semitone as `from_absolute` does.
+            let spelled = pitch_name(
+                Pitch::ALL[(absolute + 12).rem_euclid(12) as usize],
+                ((absolute + 12).div_euclid(12) - 1) as i8,
+            );
+            let octave = expected.1;
+            assert!(
+                spelled.starts_with(name),
+                "at {absolute} the label {spelled:?} should start with {name:?}"
+            );
+            assert!(
+                spelled.ends_with(&octave.to_string()),
+                "at {absolute} the label {spelled:?} should end with the octave {octave}"
+            );
+            assert!(spelled.len() <= 4, "label too long: {spelled:?}");
+        }
     }
 
     #[test]

@@ -1,5 +1,6 @@
 // The palette and layout constants are the panel's vocabulary: they are introduced here and consumed
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
+pub mod dispatch;
 pub mod display;
 pub mod edit;
 pub mod help;
@@ -216,6 +217,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.position,
             state.playing,
             i % STEPS_PER_PATTERN == state.selected,
+            state.drag.is_some_and(|(dragged, ..)| dragged == i),
         );
         let response = step_key::step_key(ui, i, &step, &view, *cell);
         let (shift, alt, ctrl) =

@@ -8,7 +8,7 @@ use egui::{Rect, Response};
 use super::{edit, theme};
 use acid_core::pattern::Step;
 
-/// The five paint inputs for one key.
+/// The paint inputs for one key.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct StepView {
     pub on: bool,
@@ -17,15 +17,18 @@ pub struct StepView {
     pub current: bool,
     pub beat: bool,
     pub selected: bool,
+    /// This step is being dragged, so its keycap stands back and leaves the pitch to the drag readout.
+    pub dragging: bool,
 }
 
-/// Reduce a `Step` plus the transport state to the five things the keycap paints.
+/// Reduce a `Step` plus the transport state to the inputs the keycap paints.
 pub fn step_view(
     step: &Step,
     index: usize,
     position: usize,
     playing: bool,
     selected: bool,
+    dragging: bool,
 ) -> StepView {
     StepView {
         on: step.on,
@@ -34,15 +37,16 @@ pub fn step_view(
         current: playing && index == position,
         beat: index.is_multiple_of(4),
         selected,
+        dragging,
     }
 }
 
 /// What a keycap prints: the note it holds, or `--` for a rest.
-pub fn step_label(step: &Step) -> String {
+pub fn step_label(step: &Step) -> &'static str {
     if step.on {
         edit::pitch_name(step.pitch, step.octave_offset)
     } else {
-        "--".to_string()
+        "--"
     }
 }
 
@@ -105,13 +109,17 @@ pub fn step_key(
         egui::Stroke::new((1.0 * s).max(1.0), theme::PANEL),
         egui::StrokeKind::Inside,
     );
-    painter.text(
-        keycap.center() + egui::vec2(0.0, -s),
-        egui::Align2::CENTER_CENTER,
-        step_label(step),
-        theme::legend(12.0 * s),
-        theme::PANEL,
-    );
+    // While the step is being dragged the panel prints the live pitch in the cell, larger and in silk; a
+    // second label on the keycap would collide with it and read as two overlapping words.
+    if !view.dragging {
+        painter.text(
+            keycap.center() + egui::vec2(0.0, -s),
+            egui::Align2::CENTER_CENTER,
+            step_label(step),
+            theme::legend(12.0 * s),
+            theme::PANEL,
+        );
+    }
     // The step number keeps a home in the corner: the note is what you read, the number is what you count.
     painter.text(
         keycap.right_bottom() - egui::vec2(4.0 * s, 2.0 * s),
@@ -167,18 +175,18 @@ mod tests {
     #[test]
     fn the_view_carries_the_selection() {
         let step = Step::note(Pitch::C, 0);
-        assert!(step_view(&step, 0, 0, false, true).selected);
-        assert!(!step_view(&step, 0, 0, false, false).selected);
+        assert!(step_view(&step, 0, 0, false, true, false).selected);
+        assert!(!step_view(&step, 0, 0, false, false, false).selected);
     }
 
     #[test]
     fn only_the_playing_position_lights_up() {
         let step = Step::note(Pitch::C, 0);
-        let v = step_view(&step, 3, 3, true, false);
+        let v = step_view(&step, 3, 3, true, false, false);
         assert!(v.current && !v.beat);
-        let w = step_view(&step, 3, 4, true, false);
+        let w = step_view(&step, 3, 4, true, false, false);
         assert!(!w.current);
-        let stopped = step_view(&step, 3, 3, false, false);
+        let stopped = step_view(&step, 3, 3, false, false, false);
         assert!(!stopped.current);
     }
 
@@ -189,15 +197,15 @@ mod tests {
             slide: true,
             ..Step::note(Pitch::E, 0)
         };
-        let v = step_view(&step, 8, 0, false, false);
+        let v = step_view(&step, 8, 0, false, false, false);
         assert!(v.on && v.beat && v.accent && v.slide && !v.current);
-        assert!(!step_view(&step, 9, 0, false, false).beat);
+        assert!(!step_view(&step, 9, 0, false, false, false).beat);
     }
 
     #[test]
     fn an_off_step_still_reports_its_pitch_flags_but_is_not_lit() {
         let rest = Step::rest();
-        let v = step_view(&rest, 0, 0, true, false);
+        let v = step_view(&rest, 0, 0, true, false, false);
         assert!(!v.on && v.current);
     }
     /// The outline the human partner asked for must actually paint, not just be a flag on the view.
@@ -217,7 +225,7 @@ mod tests {
                     },
                     |ui| {
                         let step = Step::note(Pitch::C, 0);
-                        let view = step_view(&step, 0, 0, false, selected);
+                        let view = step_view(&step, 0, 0, false, selected, false);
                         let cell = egui::Rect::from_min_size(
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
@@ -233,6 +241,44 @@ mod tests {
         assert!(
             shapes(true) > shapes(false),
             "the selection outline did not paint"
+        );
+    }
+
+    /// While a step is being dragged the panel prints the live pitch in the cell, so the keycap's own note
+    /// must stand down: two labels in the same place read as one garbled word.
+    #[test]
+    fn a_dragged_keycap_leaves_the_pitch_to_the_readout() {
+        let shapes = |dragging: bool| {
+            let ctx = egui::Context::default();
+            let mut count = 0;
+            for _ in 0..2 {
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(200.0, 200.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ui| {
+                        let step = Step::note(Pitch::C, 0);
+                        let view = step_view(&step, 0, 0, false, false, dragging);
+                        let cell = egui::Rect::from_min_size(
+                            egui::Pos2::new(8.0, 8.0),
+                            egui::vec2(48.0, 104.0),
+                        );
+                        step_key(ui, 0, &step, &view, cell);
+                    },
+                );
+                output.textures_delta.clear();
+                count = output.shapes.len();
+            }
+            count
+        };
+        assert_eq!(
+            shapes(false) - shapes(true),
+            1,
+            "a dragged keycap must drop exactly its note label"
         );
     }
 
@@ -271,7 +317,7 @@ mod tests {
                     ));
                     for (i, cell) in cells.iter().enumerate() {
                         let step = pattern[i % pattern.len()];
-                        let view = step_view(&step, i, 1, false, false);
+                        let view = step_view(&step, i, 1, false, false, false);
                         step_key(ui, i, &step, &view, *cell);
                     }
                 },

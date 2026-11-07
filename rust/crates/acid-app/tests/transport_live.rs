@@ -73,7 +73,8 @@ fn stopping_clears_the_chase() {
     r.render_into(&mut vec![0.0f32; 4_096]);
     let position = s.position.load(std::sync::atomic::Ordering::Relaxed);
     let playing = s.playing.load(std::sync::atomic::Ordering::Relaxed);
-    let view = acid_app::ui::step_key::step_view(&Step::rest(), position, position, playing, false);
+    let view =
+        acid_app::ui::step_key::step_view(&Step::rest(), position, position, playing, false, false);
     assert!(!view.current, "an LED must not stay lit after stop");
 }
 
