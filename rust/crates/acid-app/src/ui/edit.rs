@@ -79,12 +79,19 @@ fn from_absolute(absolute: i32) -> (Pitch, i8) {
     (Pitch::ALL[index], octave as i8)
 }
 
-/// Move a pitch by whole semitones, rolling into `octave_offset` and clamping at `-12..=24` absolute.
+/// Move a pitch by whole semitones from `(pitch, octave)`, rolling into the octave and clamping to
+/// `-12..=24` absolute.
 ///
 /// The result is always canonical: an index in `0..=11` (plain `C`..`B`) plus an octave, so `CHigh` is
 /// spelled `(C, 1)` on the way out.
+pub fn transpose(pitch: Pitch, octave: i8, semitones: i8) -> (Pitch, i8) {
+    let absolute = i32::from(pitch.semitones()) + 12 * i32::from(octave) + i32::from(semitones);
+    from_absolute(absolute)
+}
+
+/// Move a pitch by whole semitones from octave zero, rolling into `octave_offset` the same way.
 pub fn nudge_pitch(pitch: Pitch, semitones: i8) -> (Pitch, i8) {
-    from_absolute(i32::from(pitch.semitones()) + i32::from(semitones))
+    transpose(pitch, 0, semitones)
 }
 
 /// Semitones covered by a vertical drag: up is higher, and shift quarters the sensitivity.
@@ -115,6 +122,15 @@ pub fn pitch_name(pitch: Pitch, octave: i8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transposition_respects_the_saved_octave() {
+        assert_eq!(transpose(Pitch::C, 1, 1), (Pitch::CSharp, 1));
+        assert_eq!(transpose(Pitch::C, 1, -12), (Pitch::C, 0));
+        assert_eq!(transpose(Pitch::B, -1, 1), (Pitch::C, 0));
+        // The clamp is the panel's, not the octave's: two octaves up is the ceiling.
+        assert_eq!(transpose(Pitch::C, 1, 12), (Pitch::C, 1));
+    }
 
     #[test]
     fn clicking_a_rest_makes_a_note_with_the_last_pitch() {

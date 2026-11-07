@@ -8,6 +8,7 @@ pub mod knob;
 pub mod layout;
 pub mod panel;
 pub mod picker;
+pub mod selection;
 pub mod shortcuts;
 pub mod step_key;
 #[allow(dead_code)]
@@ -59,6 +60,8 @@ pub struct PanelState {
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
+    /// The step the keyboard edits; always in `0..16`, never saved.
+    pub selected: usize,
     /// The output devices on offer while the picker is open, `None` when it is closed.
     pub device_list: Option<Vec<String>>,
     /// The device the user chose; consumed by `main` on the next frame.
@@ -85,6 +88,7 @@ impl Default for PanelState {
             midi_given_up: false,
             reprobe_requested: false,
             help_visible: false,
+            selected: 0,
             device_list: None,
             device_choice: None,
         }
