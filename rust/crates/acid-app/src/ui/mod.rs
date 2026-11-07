@@ -383,7 +383,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
     // BANK, PATTERN and MODE are engraving for now; CLEAR empties the pattern on screen (the one action here
     // with no undo, so it takes two clicks — see `ui::clear`) and SAVE writes the session now.
-    let switch_cells = layout::knob_cells(l.switches, 6);
+    let switch_cells = layout::knob_cells(l.switches, 7);
     for (label, cell) in ["BANK", "PATTERN", "MODE"].iter().zip(switch_cells.iter()) {
         paint_switch(ui.painter(), *cell, s, label);
     }
@@ -425,6 +425,19 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                     ..songs::Songs::default()
                 }),
             };
+        }
+    }
+    if let Some(&reset_cell) = switch_cells.get(6) {
+        // RESET wipes the whole mapped rig, so it is dark unless a learn is in progress — and the click is gated on
+        // the same test, because a dark key still reports clicks.
+        let learning = state.learn != learn::Step::Idle;
+        if transport::transport_button(ui, "midi-reset", reset_cell, "RESET", learning).clicked()
+            && learning
+        {
+            midi::cc::reset_defaults(shared);
+            learn::cancel(shared);
+            state.learn = learn::Step::Idle;
+            state.dirty = true;
         }
     }
     // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.

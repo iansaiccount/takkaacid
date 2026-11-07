@@ -112,3 +112,25 @@ MIDI thread reads the same numbers the panel writes and no lock crosses threads.
 - [x] **Step 3: Implement** — `#[serde(default = "default_cc_map")]`; `apply_saved` writes the slots; the help card
   gains `LEARN: pick a knob, then move a fader`.
 - [x] **Step 4: Verify and commit.**
+
+### Task 5: reset to the factory map (amendment)
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/midi/cc.rs` (`reset_defaults`), `rust/crates/acid-app/src/ui/mod.rs` (RESET key, seventh switches cell), `rust/crates/acid-app/src/ui/help.rs` (one line)
+- Test: `rust/crates/acid-app/src/midi/cc.rs`, `rust/crates/acid-app/tests/learn_live.rs`
+
+**Interfaces:**
+- `cc::reset_defaults(&SharedState)` — every learnable slot back to `DEFAULT_CC`; tempo/swing are untouched because
+  they were never learnable.
+
+**Rules:** `RESET` is the seventh switches cell and is **dark unless a learn is in progress** — a mapped rig is lost
+work, and a stray click should not take it. Because a dark key still reports clicks, the handler is gated on the same
+`state.learn != Idle` test (the lesson from RENAME). Resetting ends the learn, clears the shared listening flag and
+marks the panel dirty, so the factory map is written on the next save.
+
+- [x] **Step 1: The failing tests** — a reset restores every factory pairing and drops the learned one; a dark RESET
+  leaves a taught map alone.
+- [x] **Step 2: Run them.**
+- [x] **Step 3: Implement** — `cc::reset_defaults`, the RESET key with its gate, and the card line becomes
+  `LEARN: knob then fader, RESET: factory map` (same line count, so the 0.65x fit is unaffected).
+- [x] **Step 4: Verify and commit.**

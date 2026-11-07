@@ -57,7 +57,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "SAVED / UNSAVED sits by the wordmark",
                 "saved on exit and 2 s after a change",
                 "SONGS: new, save as, load, rename, delete",
-                "LEARN: pick a knob, then move a fader",
+                "LEARN: knob then fader, RESET: factory map",
             ],
         ),
     ]

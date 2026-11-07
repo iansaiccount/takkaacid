@@ -94,6 +94,14 @@ pub fn set_cc(state: &SharedState, target: CcTarget, cc: u8) {
     state.cc_map[slot].store(i32::from(cc), Ordering::Relaxed);
 }
 
+/// Put the whole map back to the factory pairing. The one action that undoes a bad learn, so the panel only offers
+/// it while a learn is in progress.
+pub fn reset_defaults(state: &SharedState) {
+    for (slot, cc) in DEFAULT_CC.iter().enumerate() {
+        state.cc_map[slot].store(i32::from(*cc), Ordering::Relaxed);
+    }
+}
+
 /// A controller value as a knob position, `0.0..=1.0`.
 pub fn cc_value(value: u8) -> f32 {
     f32::from(value) / 127.0
@@ -227,5 +235,24 @@ mod tests {
         }
         assert_eq!(cc_target(&s, 72), Some(CcTarget::Tempo));
         assert_eq!(cc_target(&s, 73), Some(CcTarget::Swing));
+    }
+
+    #[test]
+    fn resetting_puts_the_factory_pairing_back() {
+        let s = SharedState::new();
+        set_cc(&s, CcTarget::Cutoff, 21);
+        set_cc(&s, CcTarget::Volume, 40);
+        assert_eq!(cc_for(&s, CcTarget::Cutoff), Some(21));
+
+        reset_defaults(&s);
+
+        for target in LEARNABLE {
+            assert_eq!(
+                cc_for(&s, target),
+                Some(DEFAULT_CC[slot(target).unwrap()]),
+                "{target:?} should be back on its factory controller"
+            );
+        }
+        assert_eq!(cc_target(&s, 21), None, "the learned one is gone");
     }
 }
