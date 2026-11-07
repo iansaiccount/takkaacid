@@ -57,12 +57,11 @@ fn one_isolated_peak_is_caught_on_its_own_sample() {
 #[test]
 fn the_engine_never_leaves_the_ceiling_with_drive_at_maximum() {
     let mut e = acid_core::engine::Engine::new(48_000.0);
-    e.set_pattern(std::sync::Arc::new(acid_core::pattern::Pattern::from_steps(
-        [acid_core::pattern::Step::note(
-            acid_core::pitch::Pitch::A,
-            -1,
-        ); 16],
-    )));
+    e.set_pattern(std::sync::Arc::new(
+        acid_core::pattern::Pattern::from_steps(
+            [acid_core::pattern::Step::note(acid_core::pitch::Pitch::A, -1); 16],
+        ),
+    ));
     e.set_resonance(1.0);
     e.set_cutoff(1.0);
     e.set_drive(1.0);
@@ -71,7 +70,8 @@ fn the_engine_never_leaves_the_ceiling_with_drive_at_maximum() {
     for _ in 0..4 {
         e.render(&mut buf);
         assert!(
-            buf.iter().all(|s| s.is_finite() && s.abs() <= CEILING + 1e-6),
+            buf.iter()
+                .all(|s| s.is_finite() && s.abs() <= CEILING + 1e-6),
             "the master bus escaped the ceiling"
         );
     }

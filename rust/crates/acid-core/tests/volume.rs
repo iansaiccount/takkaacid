@@ -7,10 +7,9 @@ use acid_core::pitch::Pitch;
 /// A pattern that definitely makes sound.
 fn playing_engine() -> Engine {
     let mut e = Engine::new(48_000.0);
-    e.set_pattern(std::sync::Arc::new(Pattern::from_steps([
-        Step::note(Pitch::A, -1);
-        16
-    ])));
+    e.set_pattern(std::sync::Arc::new(Pattern::from_steps(
+        [Step::note(Pitch::A, -1); 16],
+    )));
     e
 }
 
