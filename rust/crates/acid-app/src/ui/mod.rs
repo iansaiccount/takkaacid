@@ -349,7 +349,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                 None => Some(songs::Songs {
                     names: crate::persist::list_songs(&crate::persist::data_dir()),
                     name: state.song_name.clone().unwrap_or_default(),
-                    message: None,
+                    ..songs::Songs::default()
                 }),
             };
         }

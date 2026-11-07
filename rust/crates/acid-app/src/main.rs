@@ -152,6 +152,42 @@ impl eframe::App for TakkaApp {
                         }
                     }
                 }
+                panel_ui::songs::Request::New => {
+                    self.save();
+                    let saved = persist::new_song();
+                    persist::apply_saved(&saved, &self.state, &mut self.bank);
+                    self.panel.pattern = self.state.pattern();
+                    self.panel.pattern_id = PatternBank::id_of(self.bank.current());
+                    self.panel.selected = 0;
+                    self.panel.song_name = None;
+                    self.panel.dirty = true;
+                    if let Some(card) = self.panel.songs.as_mut() {
+                        card.name.clear();
+                        card.names = persist::list_songs(&dir);
+                        card.delete_armed = None;
+                        card.message = Some("new song".to_string());
+                    }
+                }
+                panel_ui::songs::Request::Delete(name) => {
+                    match persist::delete_song(&dir, &name) {
+                        Ok(()) => {
+                            // The song is gone; the session is not, but it is no longer that song.
+                            if self.panel.song_name.as_deref() == Some(name.as_str()) {
+                                self.panel.song_name = None;
+                            }
+                            if let Some(card) = self.panel.songs.as_mut() {
+                                card.names = persist::list_songs(&dir);
+                                card.delete_armed = None;
+                                card.message = Some(format!("deleted {name}"));
+                            }
+                        }
+                        Err(error) => {
+                            if let Some(card) = self.panel.songs.as_mut() {
+                                card.message = Some(format!("could not delete: {error}"));
+                            }
+                        }
+                    }
+                }
                 panel_ui::songs::Request::Load(name) => match persist::load_song(&dir, &name) {
                     Ok(saved) => {
                         self.save();

@@ -43,6 +43,49 @@ pub fn launcher() -> Pattern {
     Pattern::from_steps(steps)
 }
 
+/// A fresh song's phrase: simpler than the launcher, so a new song starts from one clear idea — a driving C with
+/// an off beat, one octave hop, and three slides that land on a note. Every slide here leads into a step that
+/// sounds; a slide before a rest would be inert.
+pub fn starter() -> Pattern {
+    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    steps[0] = Step {
+        accent: true,
+        ..Step::note(Pitch::C, 0)
+    };
+    steps[2] = Step::note(Pitch::C, 0);
+    steps[3] = Step {
+        slide: true,
+        ..Step::note(Pitch::DSharp, 0)
+    };
+    steps[4] = Step::note(Pitch::G, 0);
+    steps[6] = Step {
+        accent: true,
+        ..Step::note(Pitch::C, 0)
+    };
+    steps[8] = Step {
+        accent: true,
+        ..Step::note(Pitch::C, 1)
+    };
+    steps[10] = Step {
+        accent: true,
+        ..Step::note(Pitch::G, 0)
+    };
+    steps[11] = Step {
+        slide: true,
+        ..Step::note(Pitch::ASharp, 0)
+    };
+    steps[12] = Step {
+        accent: true,
+        ..Step::note(Pitch::C, 0)
+    };
+    steps[14] = Step::note(Pitch::G, 0);
+    steps[15] = Step {
+        slide: true,
+        ..Step::note(Pitch::DSharp, 0)
+    };
+    Pattern::from_steps(steps)
+}
+
 /// A phrase moved `by` sixteenths later within the bar.
 fn displaced(base: &Pattern, by: usize) -> Pattern {
     let mut steps = [Step::rest(); STEPS_PER_PATTERN];

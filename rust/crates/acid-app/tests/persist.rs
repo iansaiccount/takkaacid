@@ -3,7 +3,7 @@
 use acid_app::persist::{
     ENV_DATA_DIR, SAVE_VERSION, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved,
 };
-use acid_app::persist::{list_songs, load_song, save_song, song_name};
+use acid_app::persist::{delete_song, list_songs, load_song, new_song, save_song, song_name};
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
 
@@ -60,6 +60,41 @@ fn songs_round_trip_and_are_listed() {
     // A name that cannot be a file is refused rather than written somewhere surprising.
     assert!(save_song(dir.path(), "../oops", &saved).is_err());
     assert_eq!(list_songs(dir.path()).len(), 2, "and nothing was written");
+}
+
+#[test]
+fn a_new_song_starts_from_the_starter_phrase_and_nothing_else() {
+    let song = new_song();
+    assert_eq!(
+        song.version, SAVE_VERSION,
+        "a new song is written in today's format"
+    );
+    assert_eq!(*song.bank.get(0), acid_core::factory::starter());
+    assert!(
+        song.bank.get(1).steps.iter().all(|step| !step.on),
+        "only the first pattern carries notes"
+    );
+    assert!((song.bpm - acid_core::timing::DEFAULT_BPM).abs() < 1e-6);
+    assert_eq!(song.song, None, "a new song has no name until it is saved");
+}
+
+#[test]
+fn deleting_a_song_removes_its_file_and_refuses_a_bad_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState::default();
+    save_song(dir.path(), "Doomed", &saved).unwrap();
+    assert_eq!(list_songs(dir.path()), vec!["Doomed".to_string()]);
+
+    delete_song(dir.path(), "Doomed").unwrap();
+    assert!(list_songs(dir.path()).is_empty());
+    assert!(
+        delete_song(dir.path(), "Doomed").is_err(),
+        "a second delete fails"
+    );
+    assert!(
+        delete_song(dir.path(), "../oops").is_err(),
+        "a path is not a name"
+    );
 }
 
 #[test]

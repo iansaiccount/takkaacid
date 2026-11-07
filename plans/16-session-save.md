@@ -247,4 +247,23 @@ The card was already at its 0.65x limit, so `card_rect` insets by 4 design px in
 body line height drops from 15 to 13. The three lines it gained: the dim-slide note, `SAVED / UNSAVED sits by the
 wordmark`, and `SONGS: name the session, keep it, load one`.
 
-**Not in this plan (still):** a file browser, and renaming or deleting a song from the card.
+### Task 7: new song and delete (second amendment)
+
+**Files:**
+- Modify: `rust/crates/acid-core/src/factory.rs` (`starter()`), `rust/crates/acid-app/src/persist.rs` (`new_song`, `delete_song`), `rust/crates/acid-app/src/ui/songs.rs` (NEW SONG, per-row delete cross), `rust/crates/acid-app/src/main.rs` (New/Delete), `rust/crates/acid-app/src/ui/help.rs` (one line)
+- Test: `rust/crates/acid-core/tests/factory.rs`, `rust/crates/acid-app/tests/persist.rs`, `rust/crates/acid-app/tests/songs_live.rs`
+
+**Interfaces:**
+- `factory::starter() -> Pattern` — simpler than the launcher: a driving C with an off beat, one octave hop, three
+  slides that each land on a sounding step.
+- `persist::new_song() -> SavedState` — starter in pattern `A1`, every other pattern empty, knobs, tempo and swing
+  at their defaults, no name.
+- `persist::delete_song(dir, name) -> Result<()>` — the name is validated first, then the file is removed; a bad or
+  missing name is an error.
+- `ui::songs::Request::{New, Delete(String)}`; `Songs::delete_armed: Option<String>`.
+
+**Rules:** the delete cross is per row and reads `x`, then `SURE` — a file has no undo, so it takes two clicks, and
+loading a row clears a pending delete. `NEW SONG` sits bottom-left, `CLOSE` bottom-right. `main` saves the session
+before both New and Load, so the work on screen is never the thing that disappears.
+
+**Not in this plan (still):** a file browser, and renaming a song from the card.

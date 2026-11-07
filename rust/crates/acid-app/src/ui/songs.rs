@@ -1,4 +1,5 @@
-//! The songs card: keep the session under a name, and load one you have kept.
+//! The songs card: start a new song, keep the session under a name, load one you have kept, delete one you do not
+//! want.
 //!
 //! It is drawn over the panel like the help card, because the 303 face has no room for a text field. The card
 //! never touches the disk itself — it reports what was asked for and `main` owns the files.
@@ -16,13 +17,18 @@ pub struct Songs {
     pub name: String,
     /// One line of feedback: "loaded X", "saved", or why the last attempt failed.
     pub message: Option<String>,
+    /// The song whose delete cross has been clicked once. Deleting a file has no undo, so it takes two clicks.
+    pub delete_armed: Option<String>,
 }
 
 /// What the card asked for. `main` does the work, so the card stays a pure painter.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
+    /// Start a new song from the starter phrase.
+    New,
     Save(String),
     Load(String),
+    Delete(String),
     Close,
 }
 
@@ -43,6 +49,7 @@ pub fn paint(ui: &mut Ui, panel: Rect, scale: f32, songs: &mut Songs) -> Option<
     let left = card.left() + padding;
     let width = card.width() - padding * 2.0;
     let mut y = card.top() + padding;
+    let mut request = None;
 
     painter.text(
         egui::Pos2::new(left, y),
@@ -69,28 +76,52 @@ pub fn paint(ui: &mut Ui, panel: Rect, scale: f32, songs: &mut Songs) -> Option<
         egui::vec2(width * 0.38 - padding, row_height),
     );
     let can_save = crate::persist::song_name(&songs.name).is_some();
-    let mut request = None;
     if transport::transport_button(ui, "song-save-as", save_rect, "SAVE AS", can_save).clicked() {
         request = crate::persist::song_name(&songs.name).map(Request::Save);
     }
     y += row_height + padding;
 
+    // One row per song: the name loads it, the cross beside it deletes it (twice, because there is no undo).
     for (index, name) in songs.names.iter().enumerate() {
         let row = Rect::from_min_size(
             egui::Pos2::new(left, y),
-            egui::vec2(width * 0.7, row_height),
+            egui::vec2(width * 0.66, row_height),
         );
         if transport::transport_button(ui, &format!("song-{index}"), row, name, false).clicked() {
             request = Some(Request::Load(name.clone()));
+            songs.delete_armed = None;
+        }
+        let armed = songs.delete_armed.as_deref() == Some(name.as_str());
+        let cross = Rect::from_min_size(
+            egui::Pos2::new(row.right() + padding, y),
+            egui::vec2(width * 0.14, row_height),
+        );
+        let label = if armed { "SURE" } else { "x" };
+        if transport::transport_button(ui, &format!("song-delete-{index}"), cross, label, armed)
+            .clicked()
+        {
+            if armed {
+                request = Some(Request::Delete(name.clone()));
+                songs.delete_armed = None;
+            } else {
+                songs.delete_armed = Some(name.clone());
+                request = None;
+            }
         }
         y += row_height + 2.0 * scale;
     }
 
+    // The bottom row: start a new song on the left, close on the right.
+    let bottom = card.bottom() - padding - row_height;
+    let new_rect = Rect::from_min_size(
+        egui::Pos2::new(left, bottom),
+        egui::vec2(120.0 * scale, row_height),
+    );
+    if transport::transport_button(ui, "song-new", new_rect, "NEW SONG", false).clicked() {
+        request = Some(Request::New);
+    }
     let close = Rect::from_min_size(
-        egui::Pos2::new(
-            card.right() - padding - 90.0 * scale,
-            card.bottom() - padding - row_height,
-        ),
+        egui::Pos2::new(card.right() - padding - 90.0 * scale, bottom),
         egui::vec2(90.0 * scale, row_height),
     );
     if transport::transport_button(ui, "song-close", close, "CLOSE", false).clicked() {
@@ -99,8 +130,8 @@ pub fn paint(ui: &mut Ui, panel: Rect, scale: f32, songs: &mut Songs) -> Option<
 
     if let Some(message) = &songs.message {
         ui.painter().text(
-            egui::Pos2::new(left, close.top() + 4.0 * scale),
-            egui::Align2::LEFT_TOP,
+            egui::Pos2::new(left + new_rect.width() + padding, bottom + row_height * 0.5),
+            egui::Align2::LEFT_CENTER,
             message,
             theme::legend(10.0 * scale),
             theme::SILKSCREEN_DIM,

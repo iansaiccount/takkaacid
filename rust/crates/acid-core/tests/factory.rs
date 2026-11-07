@@ -102,6 +102,38 @@ fn the_launcher_slide_actually_glides() {
     );
 }
 
+/// The starting point for a new song: simple enough to be one idea, and its slides have to reach a note.
+#[test]
+fn the_starter_is_a_simple_line_whose_slides_can_glide() {
+    let pattern = acid_core::factory::starter();
+    let sounding = pattern.steps.iter().filter(|step| step.on).count();
+    assert!(
+        (4..=12).contains(&sounding),
+        "a starter should be a phrase, not a wall of notes: {sounding} steps on"
+    );
+    assert!(
+        pattern.steps.iter().any(|step| step.accent),
+        "it needs an accent"
+    );
+    for (index, step) in pattern.steps.iter().enumerate() {
+        if step.slide {
+            assert!(
+                pattern.steps[(index + 1) % 16].on,
+                "step {index} slides into a rest, so nothing glides"
+            );
+        }
+    }
+
+    let mut engine = acid_core::engine::Engine::new(48_000.0);
+    engine.set_pattern(std::sync::Arc::new(pattern));
+    engine.start();
+    let mut buf = vec![0.0; 48_000];
+    engine.render(&mut buf);
+    let level = acid_core::analysis::peak(&buf);
+    assert!(level > 0.01, "the starter is silent");
+    assert!(level <= 0.999, "the starter clipped: {level}");
+}
+
 #[test]
 fn the_factory_bank_fills_bank_a_and_leaves_the_rest_empty() {
     let bank = PatternBank::factory();

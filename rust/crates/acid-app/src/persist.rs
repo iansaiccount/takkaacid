@@ -296,6 +296,27 @@ pub fn load_song(dir: &Path, name: &str) -> Result<SavedState> {
         serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
     Ok(state.upgraded())
 }
+
+/// Remove a saved song. The name is validated first, so a stray one can never point out of the songs directory.
+pub fn delete_song(dir: &Path, name: &str) -> Result<()> {
+    let Some(name) = song_name(name) else {
+        return Err(anyhow!("that is not a song name"));
+    };
+    let path = song_path(dir, &name);
+    std::fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))
+}
+
+/// A brand-new song: the starter phrase in the first pattern, every other pattern empty, knobs and tempo at their
+/// defaults — so a new song sounds like the panel intends before a hand touches it.
+pub fn new_song() -> SavedState {
+    let mut bank = PatternBank::new_empty();
+    bank.replace(0, acid_core::factory::starter());
+    SavedState {
+        version: SAVE_VERSION,
+        bank,
+        ..SavedState::default()
+    }
+}
 /// How long the panel may stay dirty before it is written.
 pub const AUTOSAVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
