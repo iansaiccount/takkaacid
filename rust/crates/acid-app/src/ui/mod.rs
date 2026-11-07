@@ -700,8 +700,12 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
             match action {
                 keys::KeyAction::Press { key, shift } => {
                     let editing = state.step_mode || shift;
+                    // Only a key that *writes a step* is remembered. Every other key (arrows, Z/X, anything else) must be
+                    // left alone: its press is replied to elsewhere, and its release would otherwise walk the border —
+                    // pressing left walked back one step and the release immediately walked forward again.
+                    let writes = keys::pitch_for(key).is_some() || key == eframe::egui::Key::Backspace;
                     // A key already down is a repeat, whatever egui calls it: it writes nothing and walks nothing.
-                    let fresh = keys::first_press(&mut state.placed, key);
+                    let fresh = writes && keys::first_press(&mut state.placed, key);
                     if let Some(pitch) = keys::pitch_for(key) {
                         if editing {
                             if fresh {

@@ -292,3 +292,40 @@ both writes walked the border: two steps per press.
 - [x] **Step 5: Mutation-check** — `if false` in `NoteGate::note_on` fails the duplicate test; the old `next_probe = None`
   fails the probe test.
 - [x] **Step 6: Verify** — 51 suites green, clippy `-D warnings`, fmt clean.
+
+---
+
+### Task 12: arrows do not walk, and a diagnostic that separates keyboard from app
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/ui/mod.rs` (only a key that writes a step is tracked), `rust/crates/acid-app/src/main.rs` (`--midi-map`, raw byte trace), `rust/crates/acid-app/src/midi/message.rs` (`concert_name`)
+- Test: `rust/crates/acid-app/tests/step_mode_live.rs`, `rust/crates/acid-app/src/midi/message.rs`
+
+**The arrow bug:** "left walks back a step, then it immediately jumps forward again". `first_press` was called for *every*
+press, so `ArrowLeft` was remembered as a held key; its press moved the border back (dispatch) and its release called
+`walk`, moving it forward. Only a key that writes a step (a mapped note, or Backspace) is tracked now, so an arrow's
+release does nothing.
+
+- [x] **Step 1: The failing test** — press+release `ArrowLeft`; the border must not move and nothing may be tracked.
+- [x] **Step 2: Run it** (fails: the release walks).
+- [x] **Step 3: Implement** — `let writes = pitch_for(key).is_some() || key == Backspace; let fresh = writes && first_press(..)`.
+- [x] **Step 4: Mutation-check** — dropping the `writes &&` guard fails the test.
+
+**The pitch question:** "I press a C and the app registers a different note — is it my keyboard or the app?" The app
+cannot answer that on its own, because its *own* register is not concert pitch: `step_hz` roots `C0` at MIDI 33, which is
+really A1 (55 Hz). So for a MIDI note `n` the app stores class `(n - 33) mod 12`, which runs **three semitones sharp** of
+the keyboard's name: a C4 (60) is stored as `D#1` and sounds 130.8 Hz, which *is* C3. Two offsets stack:
+
+| layer | offset |
+|---|---|
+| keyboard's own note | unknown until the raw bytes are read |
+| app's register (C0 = MIDI 33 = A1) | names run 3 semitones sharp; the sound keeps the class, an octave down |
+
+- [x] `--midi-map` prints, without a window or audio device, every note number with the keyboard's name, the pair the app
+  writes, the label it shows, and the frequency — so the app's half of the question is on paper.
+- [x] `TAKKA_TRACE_INPUT=1` now prints the **raw bytes** (`midi raw: 90 40 58`) before parsing, so the keyboard's half
+  is on paper too: if the bytes say `40` when the C key is pressed, the keyboard is transposed; if they say `3C`, the app
+  is the one relabelling it.
+
+**Open decision (operator's call):** make the labels truthful (no sound change: `D#1` would display as `C3`), or re-root
+the register so the panel's `C0` is a real C (labels and stored data right, every existing pattern 3 semitones higher).

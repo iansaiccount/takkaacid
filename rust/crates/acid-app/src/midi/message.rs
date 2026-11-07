@@ -54,6 +54,18 @@ pub fn note_hz(note: u8) -> f32 {
     midi_to_hz(f32::from(note) - 12.0)
 }
 
+/// The concert name of a MIDI note, `C4` for 60.
+///
+/// This is what a keyboard's own labels mean, so it is what a player compares against: the app's own names come from its
+/// instrument register (`--midi-map` prints both side by side).
+pub fn concert_name(note: u8) -> String {
+    const NAMES: [&str; 12] = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
+    let octave = i32::from(note) / 12 - 1;
+    format!("{}{octave}", NAMES[usize::from(note) % 12])
+}
+
 /// Apply an event to the shared state. Returns true when something changed, so callers can skip work.
 ///
 /// Only atomics are written: this runs on the MIDI thread. Clock, transport and continuous controllers are
@@ -89,6 +101,15 @@ pub fn handle(event: MidiEvent, state: &SharedState) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn concert_names_are_the_ones_printed_on_a_keyboard() {
+        assert_eq!(concert_name(60), "C4", "middle C");
+        assert_eq!(concert_name(69), "A4", "the tuning reference");
+        assert_eq!(concert_name(36), "C2");
+        assert_eq!(concert_name(61), "C#4");
+        assert_eq!(concert_name(72), "C5");
+        assert_eq!(concert_name(0), "C-1");
+    }
     #[test]
     fn note_on_and_off_parse_on_any_channel() {
         assert_eq!(

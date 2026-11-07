@@ -406,6 +406,37 @@ fn a_release_walks_once_and_only_for_a_key_the_panel_wrote() {
 }
 
 #[test]
+fn an_arrow_never_walks_the_border_on_its_release() {
+    // The bug: every key press was remembered, so pressing left (which walks back a step) had its *release* walk the
+    // border forward again — the note could not be nudged back without the mouse. Only keys that write a step are ours.
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        selected: 4,
+        step_mode: true,
+        ..PanelState::default()
+    };
+
+    run_on(
+        &ctx,
+        &mut panel,
+        &shared,
+        vec![press(Key::ArrowLeft, false)],
+    );
+    run_on(&ctx, &mut panel, &shared, vec![release(Key::ArrowLeft)]);
+
+    assert_eq!(
+        panel.selected, 4,
+        "an arrow is not a note: its release must not walk"
+    );
+    assert!(
+        panel.placed.is_empty(),
+        "and it is never tracked as a press"
+    );
+    assert_eq!(shared.pattern(), shared.pattern(), "and nothing is written");
+}
+
+#[test]
 fn a_release_without_a_press_never_walks() {
     let ctx = Context::default();
     let shared = lit_shared();

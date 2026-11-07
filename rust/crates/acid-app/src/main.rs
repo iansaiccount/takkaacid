@@ -11,6 +11,12 @@ use acid_core::bank::PatternBank;
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    // `--midi-map` answers "is it my keyboard or the app?" without opening a window or an audio device: it prints what
+    // the app makes of every note number, so a player can compare it with the note they pressed.
+    if std::env::args().any(|argument| argument == "--midi-map") {
+        print_midi_map();
+        return Ok(());
+    }
     // Restore the last session; a first run opens on the factory line.
     let saved = persist::load_or_default(&persist::data_dir());
     let state = persist::saved_to_shared(&saved);
@@ -444,6 +450,12 @@ impl Midi {
             let mut follower = midi::tempo::TempoFollower::new();
             let mut gate = midi::gate::NoteGate::new();
             let result = midi::ports::MidiIn::open(&choice, move |_, bytes| {
+                // The raw bytes are the ground truth: they are what the keyboard actually sent, before the app reads
+                // anything into them. Looking at them is how a player tells a transposed keyboard from a wrong mapping.
+                acid_app::trace::note("midi raw", || {
+                    let hex: Vec<String> = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
+                    format!("{} ({} bytes)", hex.join(" "), bytes.len())
+                });
                 let Some(event) = midi::message::parse(bytes) else {
                     return;
                 };
@@ -502,6 +514,26 @@ impl Midi {
     /// Try again now, whatever the supervisor thinks.
     fn reprobe(&mut self) {
         self.supervisor.probe_now();
+    }
+}
+
+/// Print what the app makes of each MIDI note, so a player can compare it with the note they pressed.
+///
+/// Two names appear per line on purpose. `keyboard` is what the note is called on a keyboard (MIDI 60 is C4); `app` is
+/// what the panel stores and shows, which comes from the instrument's own register — its C sits at MIDI 33, nine
+/// semitones below a keyboard's, so the app's name runs three semitones sharp of the keyboard's. Seeing both is the only
+/// way to tell a transposed keyboard from a mismatched register.
+fn print_midi_map() {
+    println!("note  keyboard  app writes  app shows  sounds");
+    for note in 21..=108u8 {
+        let (pitch, octave) = acid_app::ui::edit::from_midi_note(note);
+        let label = acid_app::ui::edit::pitch_name(pitch, octave);
+        let hz = acid_core::pitch::step_hz(pitch, octave);
+        let solid = if note % 12 == 0 { " <-- a C key" } else { "" };
+        println!(
+            "{note:>4}  {:>8}  {pitch:>9?} {octave:>2}  {label:>9}  {hz:>7.1} Hz{solid}",
+            midi::message::concert_name(note)
+        );
     }
 }
 
