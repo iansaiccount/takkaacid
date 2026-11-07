@@ -66,6 +66,7 @@ pub fn handle(event: MidiEvent, state: &SharedState) -> bool {
             true
         }
         MidiEvent::NoteOn { note, velocity } => {
+            crate::trace::note("midi in", || format!("note {note} velocity {velocity}"));
             state.midi_hz.set(note_hz(note));
             state
                 .midi_accent

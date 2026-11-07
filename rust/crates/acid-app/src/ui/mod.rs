@@ -151,6 +151,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             continue;
         }
         let (pitch, octave) = edit::from_midi_note(waiting.note);
+        crate::trace::note("place midi", || {
+            format!(
+                "note {} velocity {} -> {pitch:?} {octave} on step {}",
+                waiting.note,
+                waiting.velocity,
+                state.selected + 1
+            )
+        });
         selection::place_note(state, shared, pitch, octave, Some(waiting.velocity));
         // A MIDI keyboard's release never reaches this queue, so its note walks here, on arrival: one note, one step.
         if state.step_mode {
@@ -701,6 +709,13 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
                                 // range by moving whole octaves — the pitch class always survives, which is what a
                                 // round trip through a MIDI number used to lose at the ends of the octave range.
                                 let (step_pitch, step_octave) = edit::from_keyboard(pitch, octave);
+                                crate::trace::note("place key", || {
+                                    format!(
+                                        "{key:?} at octave {octave} -> {step_pitch:?} {step_octave} on step {} (t={:.3})",
+                                        state.selected + 1,
+                                        input.time
+                                    )
+                                });
                                 selection::place_note(state, shared, step_pitch, step_octave, None);
                             }
                         } else {

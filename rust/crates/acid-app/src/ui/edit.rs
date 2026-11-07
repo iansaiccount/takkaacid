@@ -104,10 +104,16 @@ fn from_absolute(absolute: i32) -> (Pitch, i8) {
     (Pitch::ALL[index], octave as i8)
 }
 
-/// The panel's `(pitch, octave)` for a MIDI note number. The panel's zero is MIDI 33 (55 Hz, `Pitch::C` octave 0),
-/// so a note below it lands on the bottom of the panel's range rather than wrapping.
+/// The panel's `(pitch, octave)` for a MIDI note number. The panel's zero is MIDI 33 (55 Hz, `Pitch::C` octave 0).
+///
+/// The class is always kept and only the octave is clamped into the panel's `-1..=1`. Clamping the *absolute* note first
+/// flattened everything past the top into `(C, 1)`: an E-MU Xboard25 spans MIDI 48..=72, so from 57 upwards every key
+/// wrote C1 — the report that "it always adds a C1 whatever I press". `from_absolute` still settles the octave.
 pub fn from_midi_note(note: u8) -> (Pitch, i8) {
-    from_absolute(i32::from(note) - 33)
+    let absolute = i32::from(note) - 33;
+    let octave = absolute.div_euclid(12).clamp(-1, 1) as i8;
+    let index = absolute.rem_euclid(12) as usize;
+    (Pitch::ALL[index], octave)
 }
 
 /// The panel's `(pitch, octave)` for a note played at the computer keyboard's octave offset.
@@ -191,6 +197,36 @@ mod tests {
                 (Pitch::C, expected_octave),
                 "at offset {octave}"
             );
+        }
+    }
+
+    #[test]
+    fn every_midi_note_keeps_its_pitch_class_and_only_clamps_the_octave() {
+        // The second half of the C1 report: a MIDI keyboard auditions the right note (its frequency is computed from the
+        // note number directly) but the step *stored* it clamped, so the sound and the saved pitch disagreed.
+        for note in 0..=127u8 {
+            let absolute = i32::from(note) - 33;
+            let (pitch, octave) = from_midi_note(note);
+            assert_eq!(
+                pitch,
+                Pitch::ALL[absolute.rem_euclid(12) as usize],
+                "MIDI {note} lost its class"
+            );
+            assert_eq!(
+                octave,
+                absolute.div_euclid(12).clamp(-1, 1) as i8,
+                "MIDI {note} clamped the wrong end"
+            );
+        }
+    }
+
+    #[test]
+    fn the_top_of_a_midi_keyboard_does_not_collapse_to_one_note() {
+        // An E-MU Xboard25 spans MIDI 48..=72 and every note above 57 used to become C1 — so the whole upper half of the
+        // keyboard wrote the same step, whatever was played.
+        let written: Vec<_> = (57..=72u8).map(|note| from_midi_note(note).0).collect();
+        for pair in written.windows(2) {
+            assert_ne!(pair[0], pair[1], "two neighbouring keys wrote one pitch");
         }
     }
     #[test]

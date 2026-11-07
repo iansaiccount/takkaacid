@@ -222,3 +222,38 @@ written ahead). A live test here would have passed without ever exercising the c
 
 **Not changed:** a MIDI note still walks immediately, because the queue carries note-ons and no release; one note in, one
 step on.
+
+---
+
+### Task 10: the MIDI clamp, and a trace for what the device really sends
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/ui/edit.rs` (`from_midi_note`), `rust/crates/acid-app/src/trace.rs` (new), `rust/crates/acid-app/src/midi/message.rs`, `rust/crates/acid-app/src/ui/mod.rs`
+- Test: `rust/crates/acid-app/src/ui/edit.rs`, `rust/crates/acid-app/src/trace.rs`
+
+**The report:** the correct note *sounds*, but the step that gets stored is C1 — and it happens on a normal note edit too.
+
+**Cause:** the sound and the stored step took different routes. A MIDI keyboard auditions through `note_hz(note)`, which
+computes the frequency from the note number directly, so it is always right; the stored step went through
+`from_midi_note` → `from_absolute`, which clamped the **absolute** note to `-12..=24` *before* the pitch class was read
+back. An E-MU Xboard25 spans MIDI 48..=72, and everything from 57 up clamped to 24 — `(C, 1)` — so the whole upper half
+of the keyboard stored C1 while sounding correctly. `from_midi_note` now keeps the class and clamps only the octave, like
+`from_keyboard` already did.
+
+- [x] **Step 1: The failing tests** — every MIDI note `0..=127` keeps its class and clamps only its octave; neighbouring
+  keys from 57 up never write the same pitch.
+- [x] **Step 2: Run them** (both fail against the old clamp).
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Mutation-check** — reinstating the clamp fails both tests.
+
+**The second symptom is not yet explained.** "One press writes two steps" cannot be reproduced headless: a test drives
+exactly one event per frame, and egui drops a repeated press for a key it already believes is down. Rather than guess a
+third time, `trace.rs` now prints, when `TAKKA_TRACE_INPUT=1` is set, every MIDI note that arrives and every step the
+panel places (with the frame time) — so the next report can carry the actual event stream:
+
+```
+[TAKKA_TRACE_INPUT] midi in: note 60 velocity 100
+[TAKKA_TRACE_INPUT] place midi: note 60 velocity 100 -> C 1 on step 7
+```
+
+A run of the harness with the flag shows one line per press, which is the behaviour to compare against.
