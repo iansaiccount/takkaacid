@@ -433,9 +433,13 @@ git commit -m "feat(app): restore on launch and debounced autosave"
 | on | ● | ● | · | ● | · | ● | ● | · | ● | · | ● | · | ● | ● | · | ● |
 | pitch | C | C | · | E♭ | · | G | E♭ | · | C | · | B♭ | · | C | C | · | G |
 | accent | ● | · | · | · | · | ● | · | · | ● | · | · | · | · | ● | · | · |
-| slide | · | · | · | ● | · | · | · | · | · | · | ● | · | · | · | · | · |
+| slide | · | · | · | · | · | ● | · | · | · | · | · | · | · | · | · | ● |
 
 (octave offsets all `0` for A1; `E♭` is `Pitch::DSharp`, `B♭` is `Pitch::ASharp`.)
+A slide glides into the **note** on the next step, not into a rest: the sequencer only glides while the note is
+still sounding, so a slide before a rest closes the gate and does nothing audible. That is why the two flags sit
+on steps 6 and 16 — step 6 leads into E♭, step 16 slur into the accented downbeat — and
+`every_slide_leads_into_a_sounding_step` keeps it that way.
 
 - [ ] **Step 1: Write the failing tests**
 
