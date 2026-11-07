@@ -284,6 +284,7 @@ git commit -m "feat(ui): click selects a step, ctrl+click toggles it"
 **Files:**
 - Modify: `rust/crates/acid-app/src/ui/selection.rs`
 - Modify: `rust/crates/acid-app/src/main.rs` (key dispatch, pattern-change reset)
+- Modify: `rust/crates/acid-app/src/ui/help.rs` (the card's gesture table — this plan missed it the first time round; the new keys and the click/ctrl+click split must be on the card)
 - Test: `rust/crates/acid-app/src/ui/selection.rs`, `rust/crates/acid-app/tests/selection_live.rs`
 
 **Interfaces:**
@@ -291,7 +292,8 @@ git commit -m "feat(ui): click selects a step, ctrl+click toggles it"
 - Produces:
   - `selection::EditKey { NoteUp, NoteDown, SelectPrev, SelectNext, ToggleSelected }`.
   - `selection::edit_key(key: egui::Key, shift: bool) -> Option<EditKey>`.
-  - `selection::dispatch(key: egui::Key, shift: bool, panel: &mut PanelState, shared: &SharedState) -> bool` — applies the key and returns `true` when it consumed it.
+  - `selection::Press { NotOurs, Applied, Refused }` plus `Press::consumed() -> bool` — a bool cannot express the third case (a key this module owns but refuses while the help card is up), and a refused press must be swallowed, not passed to the shortcuts.
+  - `selection::dispatch(key: egui::Key, shift: bool, panel: &mut PanelState, shared: &SharedState) -> Press` — applies the key and reports what it did.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -350,7 +352,7 @@ Expected: FAIL — `cannot find function 'edit_key'` and `cannot find function '
 - note up/down: `let step = shared.pattern().steps[panel.selected];` then `shared.set_step(panel.selected, nudge_step(step, ±1, panel.last_pitch, panel.last_octave))`;
 - toggle: `apply_gesture(step, StepGesture::Toggle, panel.last_pitch, panel.last_octave)` through `shared.set_step`.
 
-In `main.rs`, add `egui::Key::Enter` to the collected presses and, inside the loop, dispatch to `selection::dispatch(key, shift, &mut self.panel, &self.state)` first and `continue` when it returns `true` — that is what keeps shift+right from also reaching `shortcuts::shortcut_for` (Review Focus 3). After `shortcuts::apply` changes the pattern, reset `self.panel.selected = 0`.
+In `main.rs`, add `egui::Key::Enter` to the collected presses and, inside the loop, dispatch to `selection::dispatch(key, shift, &mut self.panel, &self.state)` first and `continue` when the result is `.consumed()` — that is what keeps shift+right from also reaching `shortcuts::shortcut_for` (Review Focus 3). A press the step editor refuses is *also* consumed: the help card is modal, so a refused shift+right must not change the pattern behind it. After `shortcuts::apply` changes the pattern, reset `self.panel.selected = 0`.
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -370,11 +372,12 @@ git commit -m "feat(ui): keyboard moves the selection and transposes its note"
 
 | Review Focus item | Test | Task |
 |---|---|---|
-| Click while the card is up must not select | extend `tests/dismiss_live.rs`: card visible, click a step, `selected` unchanged | 3 |
+| Click while the card is up must not select | `a_click_while_the_help_card_is_up_does_not_select` (`tests/selection_live.rs`: card visible, click a step, `selected` unchanged) | 3 |
 | `ctrl` read from `modifiers.ctrl` | `a_plain_click_only_selects_and_ctrl_click_toggles` + the ctrl+click live test | 3 |
 | Shift+arrow must not fire its unshifted action | `shift_right_moves_the_selection_and_leaves_the_pattern_alone` | 4 |
 | Dragging a rest brings the note in from the rest's own pitch | live test `dragging_a_rest_selects_it_and_brings_it_in` | 3 |
 | Clamped, not wrapped | `the_selection_moves_and_clamps_at_both_ends` | 1 |
+| Keyboard must not edit behind the card (round-2 fix) | `the_help_card_refuses_the_editing_keys_instead_of_passing_them_on`, and `a_press_with_the_card_away_is_ours_and_applied` for the `NotOurs` half | 4 |
 
 ## Handoff
 
@@ -391,7 +394,7 @@ A reviewer subagent graded the shipped work against this plan. Its findings and 
 - **Important 1 — the help card still said "click: note on or off".** Fixed in `ui/help.rs`: the card now reads
   "click: select the step" / "ctrl+click: note on or off" and names the new keys (shift+left / right, shift+up /
   down, enter). `the_help_card_names_every_gesture_and_shortcut` pins those two exact lines so it cannot rot.
-  This plan never listed `help.rs` in a task's files — a plan gap, now closed.
+  This plan never listed `help.rs` in a task's files — it is on Task 4's `Modify:` list now, and the "Review Focus → tests" table points at the tests that actually exist.
 - **Important 2 — the keyboard edited behind the modal card.** Fixed: `selection::dispatch` returns the new
   `selection::Press` (`NotOurs` / `Applied` / `Refused`) and refuses its keys while `panel.help_visible`, so a
   press is swallowed rather than handed to the transport shortcuts behind the card. Pinned by
@@ -406,3 +409,27 @@ A reviewer subagent graded the shipped work against this plan. Its findings and 
 - **Minor 8 — dead line** removed from `tests/selection_live.rs`. The remaining minors (plan checkboxes, the
   `main.rs` glue line still having no headless test, the keycap/drag-readout collision, the per-frame label
   `String`, held-Enter auto-repeat) are recorded in the ledger, not fixed.
+
+### Review Response, round 2 (2026-11-07)
+
+The reviewer re-ran over `351208a` (the fix commit) and confirmed all five round-1 findings resolved with no
+behaviour regressions. Its remaining findings, and what was done:
+
+- **Important 1 — the drag test could not tell the ruled rule from the rejected one.** The test dragged
+  `Step::rest()` (C0) on a default panel (`last_pitch` C0), so both baselines were the same pitch and the assertion
+  passed under the `last_pitch` implementation too. The test now drags a rest that remembers **G** on a panel whose
+  `last_pitch` is **C**, and asserts the drag lands on **A**.
+- **Minor 2 — a stale half-sentence left in `apply_gesture`'s doc comment** by the round-1 fix: removed.
+- **Minor 3 — the rule's edge was understated.** A `C0` step with no flags rests to the same bits as
+  `Step::rest()`, so it too comes in at `last_pitch`. Now stated in the doc comment and pinned by
+  `a_c0_step_with_no_flags_rests_to_the_same_bits_as_a_bare_rest`; removing the limit needs a distinguishing bit
+  in `Step`, which is its own change with a session-file migration.
+- **Minor 4 — this plan still described `dispatch -> bool`** in Task 4's interfaces and Step 3: corrected to
+  `-> Press` / `.consumed()`.
+- **Minor 5 — the plan claimed its `help.rs` gap was closed when it was not:** `help.rs` is now on Task 4's
+  `Modify:` list and the tests table names `tests/selection_live.rs` for the card-click test instead of
+  `tests/dismiss_live.rs`.
+- **Minor 6 — the ordering that keeps the card closable was unpinned.** Added `Space` and `Questionmark` →
+  `NotOurs` (refused presses must not swallow the keys that close the card), and renamed
+  `a_press_with_the_card_down_is_ours_and_applied` → `a_press_with_the_card_away_is_ours_and_applied`, which is
+  what it always tested.

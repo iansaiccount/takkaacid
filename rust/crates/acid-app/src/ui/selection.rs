@@ -195,6 +195,15 @@ mod tests {
                 "{key:?}"
             );
         }
+        // The refusal must come *after* `edit_key`: a key this module does not own has to stay `NotOurs`,
+        // or the card could not be closed with the keyboard it is refusing.
+        for (key, shift) in [(Key::Space, false), (Key::Questionmark, true)] {
+            assert_eq!(
+                dispatch(key, shift, &mut panel, &shared),
+                Press::NotOurs,
+                "{key:?} must still reach the shortcuts while the card is up"
+            );
+        }
         assert_eq!(
             panel.selected, 0,
             "a refused press must not move the border"
@@ -204,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn a_press_with_the_card_down_is_ours_and_applied() {
+    fn a_press_with_the_card_away_is_ours_and_applied() {
         let shared = crate::state::SharedState::new();
         shared.set_step(0, Step::note(Pitch::E, 0));
         let mut panel = PanelState::default();

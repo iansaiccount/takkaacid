@@ -20,10 +20,10 @@ pub enum StepGesture {
 
 /// Apply one gesture. `last_pitch`/`last_octave` are the pitch a newly-enabled step should take.
 ///
-/// Resting a step keeps its pitch and flags, so toggling it back restores exactly what was there. A flag
 /// Resting a step keeps its pitch and flags, so toggling it back restores what was there. The exception is
-/// a bare `Step::rest()`, which remembers nothing and comes in at `last_pitch`/`last_octave`. A flag gesture
-/// forces the step on — a lit accent with no note would be invisible on the panel.
+/// the rest that is bit-identical to `Step::rest()` — no flags, pitch `C0` — which has nothing to restore and
+/// comes in at `last_pitch`/`last_octave`. A flag gesture forces the step on — a lit accent with no note would
+/// be invisible on the panel.
 pub fn apply_gesture(step: Step, gesture: StepGesture, last_pitch: Pitch, last_octave: i8) -> Step {
     let enable = |mut step: Step| -> Step {
         if !step.on {
@@ -182,6 +182,17 @@ mod tests {
         assert!(!rest.on);
         let back = apply_gesture(rest, StepGesture::Toggle, Pitch::G, 0);
         assert_eq!((back.pitch, back.octave_offset), (Pitch::E, 1));
+    }
+
+    #[test]
+    fn a_c0_step_with_no_flags_rests_to_the_same_bits_as_a_bare_rest() {
+        // The known limit of the rule above, pinned so it is a documented edge and not a surprise: a step that
+        // held C0 with no flags is byte-for-byte `Step::rest()`, so it comes back at `last_pitch`. Telling the
+        // two apart needs a distinguishing bit in `Step` (its own change, with a session-file migration).
+        let rested = apply_gesture(Step::note(Pitch::C, 0), StepGesture::Toggle, Pitch::G, 0);
+        assert!(!rested.on);
+        let back = apply_gesture(rested, StepGesture::Toggle, Pitch::G, 0);
+        assert_eq!((back.pitch, back.octave_offset), (Pitch::G, 0));
     }
 
     #[test]

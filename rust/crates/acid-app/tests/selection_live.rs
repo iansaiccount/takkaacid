@@ -123,8 +123,20 @@ fn ctrl_click_selects_and_toggles() {
 fn dragging_a_rest_selects_it_and_brings_it_in() {
     let ctx = Context::default();
     let shared = lit_shared();
-    shared.set_step(3, Step::rest());
-    let mut panel = PanelState::default();
+    // The rest remembers G, and `last_pitch` is C: the two baselines differ, so the assertion below can tell
+    // the ruled rule ("start from the step's own pitch") from the rejected one ("start from last_pitch").
+    shared.set_step(
+        3,
+        Step {
+            on: false,
+            ..Step::note(Pitch::G, 0)
+        },
+    );
+    let mut panel = PanelState {
+        last_pitch: Pitch::C,
+        last_octave: 0,
+        ..PanelState::default()
+    };
 
     let at = step_centre(3);
     run_on(
@@ -159,7 +171,11 @@ fn dragging_a_rest_selects_it_and_brings_it_in() {
     assert_eq!(panel.selected, 3, "a drag selects the step it started on");
     let step = shared.pattern().steps[3];
     assert!(step.on, "dragging a rest brings it in");
-    assert_eq!(step.pitch, Pitch::D, "24 px up from C is D");
+    assert_eq!(
+        (step.pitch, step.octave_offset),
+        (Pitch::A, 0),
+        "24 px up from the rest's own G is A — never from last_pitch C"
+    );
 }
 
 #[test]
