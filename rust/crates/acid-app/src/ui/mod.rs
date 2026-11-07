@@ -10,6 +10,7 @@ pub mod knob;
 pub mod layout;
 pub mod panel;
 pub mod picker;
+pub mod save;
 pub mod selection;
 pub mod shortcuts;
 pub mod step_key;
@@ -77,6 +78,8 @@ pub struct PanelState {
     pub volume: f32,
     /// When CLEAR was first clicked: a second click inside the window empties the pattern on screen.
     pub clear_armed_at: Option<std::time::Instant>,
+    /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
+    pub save_requested: bool,
 }
 
 impl Default for PanelState {
@@ -104,6 +107,7 @@ impl Default for PanelState {
             device_list: None,
             device_choice: None,
             clear_armed_at: None,
+            save_requested: false,
         }
     }
 }
@@ -295,9 +299,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
 
-    // BANK, PATTERN and MODE are engraving for now; CLEAR is live — it empties the pattern on screen, which is
-    // the one action here with no undo, so it takes two clicks (see `ui::clear`).
-    let switch_cells = layout::knob_cells(l.switches, 4);
+    // BANK, PATTERN and MODE are engraving for now; CLEAR empties the pattern on screen (the one action here
+    // with no undo, so it takes two clicks — see `ui::clear`) and SAVE writes the session now.
+    let switch_cells = layout::knob_cells(l.switches, 5);
     for (label, cell) in ["BANK", "PATTERN", "MODE"].iter().zip(switch_cells.iter()) {
         paint_switch(ui.painter(), *cell, s, label);
     }
@@ -318,6 +322,22 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             }
         }
     }
+    if let Some(&save_cell) = switch_cells.get(4) {
+        // Lit while something is unsaved, so the key doubles as the "there is work to keep" lamp.
+        let dirty = state.dirty;
+        if transport::transport_button(ui, "save-session", save_cell, "SAVE", dirty).clicked() {
+            state.save_requested = true;
+        }
+    }
+    // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.
+    let (save_label, save_colour) = save::state_label(state.dirty);
+    ui.painter().text(
+        panel::save_indicator_rect(l.top, s).right_center(),
+        egui::Align2::RIGHT_CENTER,
+        save_label,
+        theme::legend(10.0 * s),
+        save_colour,
+    );
     // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
     if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {

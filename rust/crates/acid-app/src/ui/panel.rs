@@ -46,6 +46,15 @@ pub fn midi_status_rect(top: Rect, scale: f32) -> Rect {
     )
 }
 
+/// The saved-or-unsaved word: right end of the wordmark's corner, clear of the `?` that opens the help card.
+pub fn save_indicator_rect(top: Rect, scale: f32) -> Rect {
+    let brand = brand_rect(top);
+    Rect::from_min_max(
+        Pos2::new(brand.right() - 96.0 * scale, top.top()),
+        Pos2::new(brand.right() - 28.0 * scale, top.bottom()),
+    )
+}
+
 /// The pattern display well: right of the wordmark, left of the tempo display.
 pub fn pattern_display_rect(top: Rect) -> Rect {
     let right = top.right() - tempo_display_rect(top).width() - theme::GAP;

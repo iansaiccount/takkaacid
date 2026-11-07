@@ -1,7 +1,7 @@
 //! The save file: round-trip, atomicity, and the two conversions between disk and running state.
 
 use acid_app::persist::{
-    ENV_DATA_DIR, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved,
+    ENV_DATA_DIR, SAVE_VERSION, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved,
 };
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
@@ -71,6 +71,27 @@ fn the_chosen_midi_port_round_trips_and_an_old_file_still_loads() {
 }
 
 #[test]
+fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    assert_eq!(load(dir.path()).unwrap().unwrap().version, SAVE_VERSION);
+
+    // A file written before the field existed: it loads, and comes back versioned.
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    legacy.as_object_mut().unwrap().remove("version");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+    let old = load(dir.path()).unwrap().unwrap();
+    assert_eq!(old.version, 0, "no field, no version");
+    let upgraded = acid_app::persist::load_or_default(dir.path());
+    assert_eq!(upgraded.version, SAVE_VERSION, "loading upgrades it");
+}
+
+#[test]
 fn save_is_atomic_and_leaves_no_temp_file() {
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
@@ -87,9 +108,8 @@ fn save_is_atomic_and_leaves_no_temp_file() {
 }
 
 #[test]
-fn only_non_empty_patterns_get_their_own_file() {
+fn a_save_writes_one_file_and_leaves_no_pattern_directory() {
     let dir = tempfile::tempdir().unwrap();
-    // An explicitly empty bank, so the factory line is not what is being counted.
     let mut saved = SavedState {
         bank: acid_core::bank::PatternBank::new_empty(),
         ..Default::default()
@@ -99,14 +119,16 @@ fn only_non_empty_patterns_get_their_own_file() {
         .bank
         .replace(3, Pattern::from_steps([Step::note(Pitch::A, 0); 16]));
     save(dir.path(), &saved).unwrap();
-    let files: Vec<String> = std::fs::read_dir(dir.path().join("patterns"))
+
+    let mut names: Vec<String> = std::fs::read_dir(dir.path())
         .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
+    names.sort();
     assert_eq!(
-        files,
-        vec!["A4.json".to_string()],
-        "one file for one pattern"
+        names,
+        vec!["state.json".to_string()],
+        "one file, and it is the one load reads"
     );
 }
 

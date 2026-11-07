@@ -26,8 +26,6 @@ pub const APP_DIR: &str = "takka-acid";
 pub const ENV_DATA_DIR: &str = "TAKKA_ACID_DATA_DIR";
 /// The document that holds everything but the pattern bodies.
 const STATE_FILE: &str = "state.json";
-/// Where the per-pattern files live.
-const PATTERN_DIR: &str = "patterns";
 
 /// Every knob, as the file stores it. `waveform` is `0` saw / `1` square.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -57,9 +55,15 @@ impl Default for Knobs {
     }
 }
 
+/// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
+pub const SAVE_VERSION: u32 = 1;
+
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SavedState {
+    /// The format this file was written in; `0` means it predates the field.
+    #[serde(default)]
+    pub version: u32,
     pub bank: PatternBank,
     pub knobs: Knobs,
     pub bpm: f32,
@@ -72,12 +76,24 @@ pub struct SavedState {
 impl Default for SavedState {
     fn default() -> Self {
         Self {
+            version: SAVE_VERSION,
             bank: PatternBank::factory(),
             knobs: Knobs::default(),
             bpm: DEFAULT_BPM,
             swing: 0.0,
             midi_input: None,
         }
+    }
+}
+
+impl SavedState {
+    /// Bring a file from an older build up to this one. Version 0 predates the field: every field it can carry
+    /// still means what it meant, so the only work is to stamp it, and the next save writes it out.
+    pub fn upgraded(mut self) -> Self {
+        if self.version == 0 {
+            self.version = SAVE_VERSION;
+        }
+        self
     }
 }
 
@@ -95,23 +111,9 @@ pub fn data_dir() -> PathBuf {
     home.join(".local").join("share").join(APP_DIR)
 }
 
-/// Write `state.json` and every non-empty pattern, each through a `.tmp` file and a rename.
+/// Write `state.json`, through a `.tmp` file and a rename. It is the only file the app reads, so it is the only
+/// file it writes.
 pub fn save(dir: &Path, state: &SavedState) -> Result<()> {
-    let patterns = dir.join(PATTERN_DIR);
-    std::fs::create_dir_all(&patterns)
-        .with_context(|| format!("creating {}", patterns.display()))?;
-
-    for (index, pattern) in (0..64).map(|i| (i, *state.bank.get(i))) {
-        if pattern.steps.iter().all(|step| !step.on) {
-            continue;
-        }
-        let id = PatternBank::id_of(index).to_string();
-        write_atomic(
-            &patterns.join(format!("{id}.json")),
-            &serde_json::to_vec_pretty(&pattern)?,
-        )?;
-    }
-
     let json = serde_json::to_vec_pretty(state)?;
     write_atomic(&dir.join(STATE_FILE), &json)
 }
@@ -165,6 +167,7 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
     let current = bank.current();
     bank.replace(current, *shared.pattern());
     SavedState {
+        version: SAVE_VERSION,
         bank,
         knobs: Knobs {
             waveform: if snapshot.waveform == Waveform::Square {
@@ -192,9 +195,9 @@ pub fn load_or_default(dir: &Path) -> SavedState {
     match load(dir) {
         Ok(Some(mut state)) => {
             sanitize(&mut state);
-            state
+            state.upgraded()
         }
-        Ok(None) => SavedState::default(),
+        Ok(None) => SavedState::default(), // already the current version
         Err(error) => {
             eprintln!("takka-acid: ignoring unreadable save file: {error}");
             SavedState::default()

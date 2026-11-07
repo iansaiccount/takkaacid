@@ -112,6 +112,11 @@ impl eframe::App for TakkaApp {
 
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
+        // SAVE asks for a write; `save` clears `dirty` when it succeeds and prints when it does not.
+        if self.panel.save_requested {
+            self.panel.save_requested = false;
+            self.save();
+        }
         // A port chosen on the panel: drop the old connection and probe the new one now.
         if let Some(choice) = self.panel.midi_port_choice.take() {
             self.midi.choose(choice);

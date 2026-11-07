@@ -19,7 +19,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "alt+click: slide (dim = next step rests)",
                 "drag up or down: change pitch",
                 "double click: clear the step",
-                "CLEAR button: empty the pattern (twice)",
+                "CLEAR: empty (twice), SAVE: write now",
             ],
         ),
         (
