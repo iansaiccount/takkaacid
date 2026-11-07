@@ -18,6 +18,10 @@ pub struct VoiceParams {
 
 /// How much louder an accented step is, at a fully clockwise ACCENT knob.
 pub const ACCENT_GAIN: f32 = 1.4;
+/// MIDI velocity to output gain: linear over the full scale, `0.0..=1.0`, with `127` at unity.
+pub fn velocity_to_gain(velocity: u8) -> f32 {
+    f32::from(velocity.min(127)) / 127.0
+}
 /// SLIDE time constant: a step glides into the next note over roughly this long.
 pub const GLIDE_TC_MS: f32 = 60.0;
 /// DECAY knob position at launch.
@@ -60,6 +64,8 @@ pub struct Voice {
     /// TUNING in semitones, `-12.0..=12.0`.
     tuning_semitones: f32,
     accent: bool,
+    /// The level this note was struck at, `0.0..=1.0`: MIDI velocity, full scale for a step nothing struck.
+    velocity_gain: f32,
     accent_amount: f32,
     filter: LadderFilter,
     filter_env: Envelope,
@@ -86,6 +92,7 @@ impl Voice {
             base_hz: 55.0,
             tuning_semitones: 0.0,
             accent: false,
+            velocity_gain: 1.0,
             accent_amount: DEFAULT_ACCENT_KNOB,
             filter: {
                 let mut filter = LadderFilter::new(sample_rate);
@@ -111,7 +118,15 @@ impl Voice {
         voice
     }
 
+    /// Start a note at full velocity — auditioning, and the keyboard, have no velocity to offer.
     pub fn note_on(&mut self, hz: f32, accent: bool) {
+        self.note_at(hz, accent, crate::pattern::DEFAULT_VELOCITY);
+    }
+
+    /// Start a note at a MIDI velocity, `0..=127`. Full scale is unity, so a step nobody struck sounds exactly as loud
+    /// as it did before velocity existed; ACCENT stays a separate boost on top.
+    pub fn note_at(&mut self, hz: f32, accent: bool, velocity: u8) {
+        self.velocity_gain = velocity_to_gain(velocity);
         self.base_hz = hz;
         self.accent = accent;
         self.apply_pitch();
@@ -202,7 +217,7 @@ impl Voice {
     }
 
     pub fn render(&mut self, out: &mut [f32]) {
-        let amp = AMPLITUDE * self.accent_gain();
+        let amp = AMPLITUDE * self.accent_gain() * self.velocity_gain;
 
         for slot in out.iter_mut() {
             // Glide first: the oscillator must be at the right frequency for this very sample.

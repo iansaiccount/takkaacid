@@ -93,8 +93,6 @@ pub struct PanelState {
     pub learn: learn::Step,
     /// Step mode: a note typed on a keyboard writes the selected step and walks to the next one.
     pub step_mode: bool,
-    /// The MIDI note counter the panel has already handled, so one note is placed once.
-    pub step_note_seen: u32,
 }
 
 impl Default for PanelState {
@@ -128,7 +126,6 @@ impl Default for PanelState {
             song_name: None,
             learn: learn::Step::Idle,
             step_mode: false,
-            step_note_seen: 0,
         }
     }
 }
@@ -141,23 +138,16 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     let window = ui.max_rect();
     play_computer_keys(shared, ui, state);
 
-    // A MIDI note that arrived while the panel is editing (step mode, or shift held) belongs to the selected step.
-    let note_seq = shared
-        .step_note_seq
-        .load(std::sync::atomic::Ordering::Relaxed);
-    if note_seq != state.step_note_seen {
-        state.step_note_seen = note_seq;
-        let note = shared.step_note.load(std::sync::atomic::Ordering::Relaxed);
-        let editing = state.step_mode || ui.input(|input| input.modifiers.shift);
-        if editing && note >= 0 {
-            // The velocity that arrived with this note decides the step's accent (`midi_accent` is set from it before
-            // the counter moves), so a soft note and a hard hit land differently.
-            let accent = shared
-                .midi_accent
-                .load(std::sync::atomic::Ordering::Relaxed);
-            let (pitch, octave) = edit::from_midi_note(note as u8);
-            selection::place_note(state, shared, pitch, octave, Some(accent));
+    // Every MIDI note still waiting while the panel is editing (step mode, or shift held) belongs to the selected
+    // step. The queue is drained rather than peeked: two notes inside one frame are two steps, each at its own
+    // velocity — one slot and a counter used to lose the first of them.
+    let editing = state.step_mode || ui.input(|input| input.modifiers.shift);
+    while let Some(waiting) = shared.notes.pop() {
+        if !editing {
+            continue;
         }
+        let (pitch, octave) = edit::from_midi_note(waiting.note);
+        selection::place_note(state, shared, pitch, octave, Some(waiting.velocity));
     }
     let l = layout::layout(window);
     let s = layout::scale(window);

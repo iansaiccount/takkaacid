@@ -103,7 +103,8 @@ impl Sequencer {
             // The previous step asked to slide into this one: retune without retriggering the envelopes.
             voice.glide_to(step.hz());
         } else {
-            voice.note_on(step.hz(), step.accent);
+            // A step carries its own velocity; `note_on` would play it at full scale.
+            voice.note_at(step.hz(), step.accent, step.velocity);
         }
         self.prev_slide = step.slide;
     }

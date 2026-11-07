@@ -11,8 +11,18 @@ use crate::pitch::{Pitch, step_hz};
 /// Steps in one pattern.
 pub const STEPS_PER_PATTERN: usize = 16;
 
-/// One step of a pattern: a note or a rest, with its two performance flags.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+/// The velocity a step plays at when nothing struck it: MIDI's full scale, so an untouched pattern sounds exactly as
+/// loud as it did before velocity existed.
+pub const DEFAULT_VELOCITY: u8 = 127;
+
+/// Serde's stand-in for a file written before steps carried a velocity.
+#[cfg(feature = "serde")]
+fn default_velocity() -> u8 {
+    DEFAULT_VELOCITY
+}
+
+/// One step of a pattern: a note or a rest, with its two performance flags and the velocity it was struck at.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Step {
     /// A resting step still remembers its pitch and flags, so re-enabling restores them.
@@ -21,6 +31,25 @@ pub struct Step {
     pub octave_offset: i8,
     pub accent: bool,
     pub slide: bool,
+    /// MIDI velocity, `0..=127`: the step's level. ACCENT is a separate boost on top of it, so a soft accented note is
+    /// still louder than a soft plain one.
+    #[cfg_attr(feature = "serde", serde(default = "default_velocity"))]
+    pub velocity: u8,
+}
+
+impl Default for Step {
+    /// A rest at full velocity: `on: false` keeps it silent, and a rest that is switched on again must not be silent
+    /// too, which is what a zero velocity would make it.
+    fn default() -> Self {
+        Self {
+            on: false,
+            pitch: Pitch::default(),
+            octave_offset: 0,
+            accent: false,
+            slide: false,
+            velocity: DEFAULT_VELOCITY,
+        }
+    }
 }
 
 impl Step {
@@ -32,6 +61,7 @@ impl Step {
             octave_offset,
             accent: false,
             slide: false,
+            velocity: DEFAULT_VELOCITY,
         }
     }
 

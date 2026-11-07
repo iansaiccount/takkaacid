@@ -6,6 +6,7 @@ use acid_core::pitch::Pitch;
 use eframe::egui::Key;
 
 use super::{PanelState, edit};
+use crate::midi::message::is_accent;
 use crate::state::SharedState;
 
 /// What a key does to the selected step.
@@ -125,17 +126,17 @@ pub fn nudge_step(step: Step, semitones: i8, last_pitch: Pitch, last_octave: i8)
 /// Write a pitch into the selected step. In step mode the selection then walks to the next step, wrapping after the
 /// last one, so a scale typed on the keyboard lands on successive steps.
 ///
-/// `accent` is the note's own velocity reduced to a hard/soft choice: a MIDI keyboard says `Some(..)` and the step takes
-/// it, while a computer key says `None` and the step keeps the accent it had — typing a pitch should not silently
-/// unaccent a step that was already accented.
+/// `velocity` is the note's own MIDI velocity: a MIDI keyboard says `Some(..)` and the step takes that level (and its
+/// accent, when the hit was hard enough), while a computer key says `None` and the step keeps the velocity and accent it
+/// had — typing a pitch should not silently flatten a step that was already shaped.
 pub fn place_note(
     panel: &mut PanelState,
     shared: &SharedState,
     pitch: Pitch,
     octave: i8,
-    accent: Option<bool>,
+    velocity: Option<u8>,
 ) -> Step {
-    let placed = place(panel, shared, Some((pitch, octave)), accent);
+    let placed = place(panel, shared, Some((pitch, octave)), velocity);
     panel.last_pitch = placed.pitch;
     panel.last_octave = placed.octave_offset;
     placed
@@ -152,7 +153,7 @@ fn place(
     panel: &mut PanelState,
     shared: &SharedState,
     note: Option<(Pitch, i8)>,
-    accent: Option<bool>,
+    velocity: Option<u8>,
 ) -> Step {
     let index = panel.selected.min(STEPS_PER_PATTERN - 1);
     let step = shared.pattern().steps[index];
@@ -164,7 +165,8 @@ fn place(
         on,
         pitch,
         octave_offset,
-        accent: accent.unwrap_or(step.accent),
+        velocity: velocity.unwrap_or(step.velocity),
+        accent: velocity.map(is_accent).unwrap_or(step.accent),
         ..step
     };
     shared.set_step(index, placed);
@@ -291,39 +293,45 @@ mod tests {
     }
 
     #[test]
-    fn a_hard_note_sets_the_accent_and_a_soft_one_clears_it() {
+    fn a_hard_note_accents_the_step_and_a_soft_one_does_not() {
         let shared = crate::state::SharedState::new();
         let mut panel = PanelState::default();
 
-        let soft = place_note(&mut panel, &shared, Pitch::E, 0, Some(false));
+        let soft = place_note(&mut panel, &shared, Pitch::E, 0, Some(40));
         assert!(!soft.accent);
-        let hard = place_note(&mut panel, &shared, Pitch::E, 0, Some(true));
+        assert_eq!(soft.velocity, 40, "a soft note keeps its own level");
+
+        let hard = place_note(&mut panel, &shared, Pitch::E, 0, Some(110));
         assert!(hard.accent, "a hard hit accents the step it lands on");
-        assert!(shared.pattern().steps[0].accent);
+        assert_eq!(hard.velocity, 110);
+        assert_eq!(shared.pattern().steps[0].velocity, 110);
     }
 
     #[test]
-    fn a_computer_key_keeps_the_accent_the_step_already_had() {
-        // No velocity comes with a computer key, so it must not silently unaccent an accented step (nor accent a
-        // soft one) — `None` means "leave that field alone".
+    fn a_computer_key_keeps_the_shape_the_step_already_had() {
+        // No velocity comes with a computer key, so it must not silently unaccent an accented step, accent a soft one,
+        // or reset either level — `None` means "leave those fields alone".
         let shared = crate::state::SharedState::new();
         let mut panel = PanelState::default();
         shared.set_step(
             0,
             Step {
                 accent: true,
+                velocity: 96,
                 ..Step::note(Pitch::C, 0)
             },
         );
 
         let kept = place_note(&mut panel, &shared, Pitch::E, 0, None);
         assert!(kept.accent, "the accent survived a typed pitch");
+        assert_eq!(kept.velocity, 96, "and so did its level");
         assert_eq!(kept.pitch, Pitch::E);
 
         shared.set_step(1, Step::note(Pitch::C, 0));
         panel.selected = 1;
         let still_soft = place_note(&mut panel, &shared, Pitch::E, 0, None);
         assert!(!still_soft.accent);
+        assert_eq!(still_soft.velocity, 127, "the untouched default level");
     }
 
     #[test]

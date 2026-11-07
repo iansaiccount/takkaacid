@@ -141,3 +141,45 @@ ask `switches::cell` now, so the row's length lives exactly once, and `Switch::i
   there is still exactly one writer of a step; a rest sets `on: false` and keeps `pitch`/`slide`/`accent` so the next
   note is one key away.
 - [x] **Step 4: Verify.** Help card line now reads `STEP/shift+note: write, backspace: rest`.
+
+---
+
+### Task 7: velocity is a level, not just an accent
+
+**Files:**
+- Modify: `rust/crates/acid-core/src/pattern.rs` (`Step::velocity`, `DEFAULT_VELOCITY`, manual `Default`), `rust/crates/acid-core/src/voice.rs` (`note_at`, `velocity_to_gain`), `rust/crates/acid-core/src/sequencer.rs`, `rust/crates/acid-app/src/ui/selection.rs` (`place_note` takes `Option<u8>`), `rust/crates/acid-app/src/persist.rs` (`SAVE_VERSION` 2)
+- Test: `rust/crates/acid-core/tests/velocity.rs`, `rust/crates/acid-app/src/ui/selection.rs`, `rust/crates/acid-app/tests/step_mode_live.rs`
+
+**Model:** a step carries `velocity: u8` (`0..=127`) — the level it was struck at. `accent` stays a separate boost, so a
+soft accented note is still louder than a soft plain one, and an untouched step plays at `DEFAULT_VELOCITY = 127`, which
+is unity, so every existing pattern keeps its level exactly.
+
+- [x] **Step 1: The failing tests** — half the velocity is half the peak (the voice is linear in level); zero is silent;
+  a step nothing struck is at full scale; a step saved before the field loads at full scale; a round trip keeps it.
+- [x] **Step 2: Run them.**
+- [x] **Step 3: Implement** — `Step::velocity` with `#[serde(default)]` at `DEFAULT_VELOCITY` and a manual `Default` (a
+  derived one would make every rest silent the moment it was switched back on); `Voice::note_at(hz, accent, velocity)`
+  with `note_on` delegating at full scale, so nothing outside the sequencer changed; `velocity_to_gain` linear.
+- [x] **Step 4: Mutation-check** that dropping the gain factor from `render` fails the level test.
+- [x] **Step 5: Persistence** — `SAVE_VERSION` 2. The new field is `#[serde(default)]`, so a version-1 file loads with
+  full-scale steps and is stamped on the next save; old song files are per-pattern and take the same default.
+
+### Task 8: two notes in one frame are two notes
+
+**Files:**
+- Create: `rust/crates/acid-app/src/notes.rs` (`NoteQueue`, `WaitingNote`)
+- Modify: `rust/crates/acid-app/src/state.rs` (replace `step_note`/`step_note_seq`), `rust/crates/acid-app/src/midi/message.rs`, `rust/crates/acid-app/src/ui/mod.rs` (drain the queue)
+- Test: `rust/crates/acid-app/src/notes.rs`, `rust/crates/acid-app/tests/step_mode_live.rs`
+
+**Why:** one slot plus a counter could only ever place one note. A second note arriving in the same frame overwrote the
+first before the panel looked, so both steps took the later note's pitch and velocity — a rolled chord landed as one
+step twice.
+
+- [x] **Step 1: The failing tests** — two notes inside one frame land on consecutive steps with their own pitch, velocity
+  and accent; notes that arrive while the panel is not editing are drained, not left to leak into a later edit.
+- [x] **Step 2: Run them.**
+- [x] **Step 3: Implement** — a 32-slot lock-free SPSC ring, one `AtomicU32` per note (velocity high byte, number low),
+  free-running head/tail masked into the ring (the capacity divides 2^32, so a wrap needs no handling). A full queue
+  drops the newest note rather than blocking the MIDI thread.
+- [x] **Step 4: Mutation-check** that a one-slot limit fails the two-note test.
+- [x] **Step 5: Verify** — 51 suites green, clippy `-D warnings`, fmt clean.

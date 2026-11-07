@@ -150,30 +150,32 @@ fn a_midi_note_writes_the_step_when_the_panel_is_editing() {
     };
 
     // MIDI 36 is three semitones above the panel's zero (33), so it is E flat.
-    shared.step_note.store(36, Ordering::Relaxed);
-    shared.step_note_seq.fetch_add(1, Ordering::Relaxed);
+    midi_note(&shared, 36, 100);
     run_on(&ctx, &mut panel, &shared, vec![]);
 
     let step = shared.pattern().steps[8];
     assert_eq!(step.pitch, Pitch::DSharp, "MIDI 36 is E flat on this panel");
+    assert_eq!(
+        step.velocity, 100,
+        "and it landed at the velocity it was struck"
+    );
     assert_eq!(panel.selected, 9, "and step mode walked on");
 
-    // The same counter must not place the note twice.
+    // The queue was drained, so another frame places nothing.
     let after = shared.pattern().steps;
     run_on(&ctx, &mut panel, &shared, vec![]);
     assert_eq!(shared.pattern().steps, after);
 }
 
-/// Publish a MIDI note the way the MIDI thread does: the velocity first (it becomes the accent), then the note number
-/// and the counter that wakes the panel.
-fn midi_note(shared: &SharedState, note: i32, velocity: u8) {
+/// Publish a MIDI note the way the MIDI thread does: the audition side first, then the note for the panel to place.
+fn midi_note(shared: &SharedState, note: u8, velocity: u8) {
     // The real predicate, so a change to the accent threshold is felt here rather than silently duplicated.
+    shared.midi_gate.store(true, Ordering::Relaxed);
     shared.midi_accent.store(
         acid_app::midi::message::is_accent(velocity),
         Ordering::Relaxed,
     );
-    shared.step_note.store(note, Ordering::Relaxed);
-    shared.step_note_seq.fetch_add(1, Ordering::Relaxed);
+    assert!(shared.notes.push(note, velocity), "the queue has room");
 }
 
 #[test]
@@ -262,4 +264,59 @@ fn backspace_alone_is_not_ours() {
     assert_eq!(shared.pattern().steps, before, "nothing was written");
     assert_eq!(panel.selected, 2);
     assert!(!panel.dirty, "and nothing was marked for saving");
+}
+
+#[test]
+fn two_notes_inside_one_frame_both_land_with_their_own_pitch_and_velocity() {
+    // The regression the queue exists for: with one slot and a counter, the second note overwrote the first before the
+    // panel ever looked, so a rolled chord or a fast pair landed as one step twice.
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        step_mode: true,
+        ..PanelState::default()
+    };
+
+    midi_note(&shared, 36, 30); // E flat, soft
+    midi_note(&shared, 40, 120); // G, hard
+    run_on(&ctx, &mut panel, &shared, vec![]);
+
+    let steps = shared.pattern().steps;
+    assert_eq!(
+        steps[0].pitch,
+        Pitch::DSharp,
+        "the first note kept its pitch"
+    );
+    assert_eq!(steps[0].velocity, 30, "and its own velocity");
+    assert!(!steps[0].accent);
+    assert_eq!(steps[1].pitch, Pitch::G, "the second note landed next");
+    assert_eq!(steps[1].velocity, 120);
+    assert!(steps[1].accent, "and brought its own accent");
+    assert_eq!(panel.selected, 2, "the walk followed both");
+}
+
+#[test]
+fn notes_wait_for_the_panel_even_when_it_is_not_editing() {
+    // Nothing is placed while the panel is not editing, but the queue must still be drained: a note that arrived then
+    // must not be placed later, when a stray shift press turns editing on.
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState::default();
+    let before = shared.pattern().steps;
+
+    midi_note(&shared, 36, 100);
+    run_on(&ctx, &mut panel, &shared, vec![]);
+    assert_eq!(
+        shared.pattern().steps,
+        before,
+        "not editing, so nothing written"
+    );
+    assert!(
+        shared.notes.is_empty(),
+        "but the note was taken, not left waiting"
+    );
+
+    panel.step_mode = true;
+    run_on(&ctx, &mut panel, &shared, vec![]);
+    assert_eq!(shared.pattern().steps, before, "and it never comes back");
 }

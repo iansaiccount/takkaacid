@@ -72,9 +72,8 @@ pub fn handle(event: MidiEvent, state: &SharedState) -> bool {
                 .store(is_accent(velocity), Ordering::Relaxed);
             state.midi_gate.store(true, Ordering::Relaxed);
             // The panel decides whether this is an audition or a note for the selected step (step mode, or shift
-            // held): the MIDI thread only says that a note arrived and which one.
-            state.step_note.store(i32::from(note), Ordering::Relaxed);
-            state.step_note_seq.fetch_add(1, Ordering::Relaxed);
+            // held): the MIDI thread only says that a note arrived, which one, and how hard it was struck.
+            state.notes.push(note, velocity);
             true
         }
         MidiEvent::ControlChange { .. }
