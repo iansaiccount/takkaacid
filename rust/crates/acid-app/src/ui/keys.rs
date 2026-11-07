@@ -41,9 +41,11 @@ pub fn octave_key(key: Key) -> Option<i8> {
 }
 
 /// The frequency to play, at the computer keyboard's octave offset (clamped to `-2..=2`).
+///
+/// It is the frequency of the step the same key would write, so auditioning and placing cannot disagree about pitch.
 pub fn key_hz(pitch: Pitch, octave: i32) -> f32 {
-    let offset = octave.clamp(-2, 2) as i8;
-    step_hz(pitch, offset)
+    let (placed_pitch, placed_octave) = super::edit::from_keyboard(pitch, octave);
+    step_hz(placed_pitch, placed_octave)
 }
 
 /// What one key event asks of the panel.

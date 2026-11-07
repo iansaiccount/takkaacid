@@ -14,31 +14,31 @@ pub fn launcher() -> Pattern {
     let mut steps = [Step::rest(); STEPS_PER_PATTERN];
     steps[0] = Step {
         accent: true,
-        ..Step::note(Pitch::C, 0)
+        ..Step::note(Pitch::A, 1)
     };
-    steps[1] = Step::note(Pitch::C, 0);
-    steps[3] = Step::note(Pitch::DSharp, 0);
+    steps[1] = Step::note(Pitch::A, 1);
+    steps[3] = Step::note(Pitch::C, 2);
     // The slides sit where they can be heard: a slide glides into the *note* on the next step, so a slide
     // before a rest closes the gate and does nothing.
     steps[5] = Step {
         accent: true,
         slide: true,
-        ..Step::note(Pitch::G, 0)
+        ..Step::note(Pitch::E, 2)
     };
-    steps[6] = Step::note(Pitch::DSharp, 0);
+    steps[6] = Step::note(Pitch::C, 2);
     steps[8] = Step {
         accent: true,
-        ..Step::note(Pitch::C, 0)
+        ..Step::note(Pitch::A, 1)
     };
-    steps[10] = Step::note(Pitch::ASharp, 0);
-    steps[12] = Step::note(Pitch::C, 0);
+    steps[10] = Step::note(Pitch::G, 2);
+    steps[12] = Step::note(Pitch::A, 1);
     steps[13] = Step {
         accent: true,
-        ..Step::note(Pitch::C, 0)
+        ..Step::note(Pitch::A, 1)
     };
     steps[15] = Step {
         slide: true,
-        ..Step::note(Pitch::G, 0)
+        ..Step::note(Pitch::E, 2)
     };
     Pattern::from_steps(steps)
 }
@@ -50,38 +50,38 @@ pub fn starter() -> Pattern {
     let mut steps = [Step::rest(); STEPS_PER_PATTERN];
     steps[0] = Step {
         accent: true,
-        ..Step::note(Pitch::C, 0)
+        ..Step::note(Pitch::A, 1)
     };
-    steps[2] = Step::note(Pitch::C, 0);
+    steps[2] = Step::note(Pitch::A, 1);
     steps[3] = Step {
         slide: true,
-        ..Step::note(Pitch::DSharp, 0)
+        ..Step::note(Pitch::C, 2)
     };
-    steps[4] = Step::note(Pitch::G, 0);
+    steps[4] = Step::note(Pitch::E, 2);
     steps[6] = Step {
         accent: true,
-        ..Step::note(Pitch::C, 0)
+        ..Step::note(Pitch::A, 1)
     };
     steps[8] = Step {
         accent: true,
-        ..Step::note(Pitch::C, 1)
+        ..Step::note(Pitch::A, 2)
     };
     steps[10] = Step {
         accent: true,
-        ..Step::note(Pitch::G, 0)
+        ..Step::note(Pitch::E, 2)
     };
     steps[11] = Step {
         slide: true,
-        ..Step::note(Pitch::ASharp, 0)
+        ..Step::note(Pitch::G, 2)
     };
     steps[12] = Step {
         accent: true,
-        ..Step::note(Pitch::C, 0)
+        ..Step::note(Pitch::A, 1)
     };
-    steps[14] = Step::note(Pitch::G, 0);
+    steps[14] = Step::note(Pitch::E, 2);
     steps[15] = Step {
         slide: true,
-        ..Step::note(Pitch::DSharp, 0)
+        ..Step::note(Pitch::C, 2)
     };
     Pattern::from_steps(steps)
 }

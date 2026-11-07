@@ -73,6 +73,20 @@ impl Step {
     pub fn hz(&self) -> f32 {
         step_hz(self.pitch, self.octave_offset)
     }
+
+    /// This step moved by whole semitones, rolling into the octave: the same sound on a shifted lattice.
+    pub fn transposed(self, semitones: i8) -> Self {
+        let absolute = i32::from(self.pitch.semitones())
+            + 12 * i32::from(self.octave_offset)
+            + i32::from(semitones);
+        Self {
+            pitch: Pitch::ALL[absolute.rem_euclid(12) as usize],
+            octave_offset: absolute
+                .div_euclid(12)
+                .clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8,
+            ..self
+        }
+    }
 }
 
 /// Sixteen steps — one bar at 16th notes.
@@ -89,6 +103,16 @@ impl Pattern {
 
     pub fn from_steps(steps: [Step; STEPS_PER_PATTERN]) -> Self {
         Self { steps }
+    }
+
+    /// Every step moved by whole semitones: the same sound, spelled on a different lattice.
+    ///
+    /// This exists for one migration: the lattice root moved from MIDI 33 to MIDI 12, so a pattern written before that
+    /// has to be rewritten 21 semitones up to keep sounding the same.
+    pub fn transposed(self, semitones: i8) -> Self {
+        Self {
+            steps: self.steps.map(|step| step.transposed(semitones)),
+        }
     }
 }
 

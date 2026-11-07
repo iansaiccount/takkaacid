@@ -50,8 +50,12 @@ impl Pitch {
     }
 }
 
-/// MIDI note that sounds at 55 Hz — the frequency of [`Pitch::C`] at octave offset `0`.
-pub const ROOT_MIDI: u8 = 33;
+/// MIDI note that sounds at [`Pitch::C`] with octave offset `0`.
+///
+/// It is MIDI 12 — C0, 16.35 Hz — so a step's `(pitch, octave)` is the note it actually plays: `(C, 3)` is MIDI 48, C3,
+/// and a keyboard's C3 stores as C3. It used to be 33 (A1), which made every stored name three semitones sharp of the
+/// sound, so a keyboard's C3 was stored as `D#1` while sounding as C3.
+pub const ROOT_MIDI: u8 = 12;
 
 /// Equal-tempered frequency, 12-TET with A4 (MIDI 69) at 440 Hz.
 pub fn midi_to_hz(midi: f32) -> f32 {
@@ -84,10 +88,13 @@ mod tests {
     }
 
     #[test]
-    fn root_is_the_a_below_middle_c() {
-        assert!((step_hz(Pitch::C, 0) - 55.0).abs() < 0.05);
-        assert!((step_hz(Pitch::CHigh, 0) - 110.0).abs() < 0.1);
-        assert!((step_hz(Pitch::C, 1) - 110.0).abs() < 0.1);
-        assert!((step_hz(Pitch::C, -1) - 27.5).abs() < 0.05);
+    fn root_is_the_c_whose_number_the_step_carries() {
+        // A step's pair is the note it plays, so `(C, n)` is C-n on a keyboard: C0 is 16.35 Hz, C3 is 130.8 Hz, and the
+        // 55 Hz that used to be called "C0" is now, correctly, A1.
+        assert!((step_hz(Pitch::C, 0) - 16.35).abs() < 0.02);
+        assert!((step_hz(Pitch::C, 3) - 130.81).abs() < 0.05);
+        assert!((step_hz(Pitch::A, 1) - 55.0).abs() < 0.05);
+        assert!((step_hz(Pitch::CHigh, 0) - 32.7).abs() < 0.05);
+        assert!((step_hz(Pitch::C, -1) - 8.18).abs() < 0.02);
     }
 }

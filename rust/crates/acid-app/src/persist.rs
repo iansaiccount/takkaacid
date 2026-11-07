@@ -56,7 +56,7 @@ impl Default for Knobs {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 2;
+pub const SAVE_VERSION: u32 = 3;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -101,10 +101,14 @@ impl Default for SavedState {
 }
 
 impl SavedState {
-    /// Bring a file from an older build up to this one. Version 0 predates the field: every field it can carry
-    /// still means what it meant, so the only work is to stamp it, and the next save writes it out.
+    /// Bring a file from an older build up to this one.
+    ///
+    /// Version 2 and older were written when the pitch lattice was rooted at MIDI 33; it is rooted at MIDI 12 now, so the
+    /// same note is spelled 21 semitones higher. Shifting every step keeps the music exactly as it sounded — the
+    /// alternative would drop every saved pattern by a twelfth and a half.
     pub fn upgraded(mut self) -> Self {
-        if self.version == 0 {
+        if self.version < 3 {
+            self.bank.map_patterns(|pattern| pattern.transposed(21));
             self.version = SAVE_VERSION;
         }
         self

@@ -81,4 +81,14 @@ impl PatternBank {
             *slot = pattern;
         }
     }
+
+    /// Apply `f` to every pattern in the bank, keeping the selection.
+    ///
+    /// This is how a bank written before the lattice moved is brought forward: every pattern is the same music, spelled
+    /// on the new lattice.
+    pub fn map_patterns(&mut self, mut f: impl FnMut(&Pattern) -> Pattern) {
+        for slot in &mut self.patterns {
+            *slot = f(slot);
+        }
+    }
 }

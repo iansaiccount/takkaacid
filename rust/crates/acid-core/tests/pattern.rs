@@ -12,9 +12,9 @@ fn a_new_pattern_is_sixteen_rests() {
 fn a_note_step_reports_its_frequency() {
     let s = Step::note(Pitch::CHigh, 0);
     assert!(s.on);
-    assert!((s.hz() - 110.0).abs() < 0.1);
+    assert!((s.hz() - 32.7).abs() < 0.05, "C0 is 32.7 Hz");
     let up = Step::note(Pitch::CHigh, 1);
-    assert!((up.hz() - 220.0).abs() < 0.2);
+    assert!((up.hz() - 65.41).abs() < 0.1, "C1 is 65.4 Hz");
 }
 
 #[test]

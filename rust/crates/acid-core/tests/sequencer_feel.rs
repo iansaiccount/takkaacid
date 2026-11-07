@@ -68,9 +68,9 @@ fn a_slide_flag_on_a_rest_does_not_silence_the_next_note() {
 fn a_slide_step_does_not_restart_the_envelope() {
     let sr = 48_000.0;
     let mut seq = Sequencer::new(sr);
-    let mut first = Step::note(Pitch::A, -1);
+    let mut first = Step::note(Pitch::FSharp, 1);
     first.slide = true;
-    let second = Step::note(Pitch::A, 0);
+    let second = Step::note(Pitch::FSharp, 2);
     let mut steps = [Step::rest(); 16];
     steps[0] = first;
     steps[1] = second;

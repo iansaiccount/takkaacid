@@ -237,6 +237,58 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 }
 
 #[test]
+fn a_file_from_before_the_lattice_moved_keeps_its_sound() {
+    // Version 2 and older were written when the panel's `C0` was A1: the same note is spelled 21 semitones higher now.
+    // Loading one must shift every step, or every saved pattern would drop by a twelfth and a half.
+    let dir = tempfile::tempdir().unwrap();
+    // A file an older build would have written: version 2, before the lattice moved.
+    let mut saved = SavedState {
+        version: 2,
+        ..SavedState::default()
+    };
+    let mut steps = [Step::rest(); 16];
+    // The launcher's old spelling: D#0, which sounded 65.4 Hz.
+    steps[0] = Step::note(Pitch::DSharp, 0);
+    saved.bank.replace(0, Pattern::from_steps(steps));
+    save(dir.path(), &saved).unwrap();
+
+    // `load_or_default` is what the app runs at startup, and it is where the migration happens.
+    let loaded = acid_app::persist::load_or_default(dir.path());
+    let step = loaded.bank.get(0).steps[0];
+
+    assert_eq!(
+        loaded.version, SAVE_VERSION,
+        "stamped with this build's version"
+    );
+    assert!(
+        (step.hz() - 65.41).abs() < 0.5,
+        "the note kept its frequency: {} Hz",
+        step.hz()
+    );
+    assert_eq!(
+        (step.pitch, step.octave_offset),
+        (Pitch::C, 2),
+        "and is spelled on the new lattice"
+    );
+}
+
+#[test]
+fn a_file_from_this_build_is_not_shifted_again() {
+    // The migration must be a one-time step: a version-3 file loads exactly as it was written.
+    let dir = tempfile::tempdir().unwrap();
+    let mut saved = SavedState::default();
+    let mut steps = [Step::rest(); 16];
+    steps[0] = Step::note(Pitch::C, 3);
+    saved.bank.replace(0, Pattern::from_steps(steps));
+    save(dir.path(), &saved).unwrap();
+
+    let loaded = load(dir.path()).unwrap().unwrap();
+    let step = loaded.bank.get(0).steps[0];
+    assert_eq!((step.pitch, step.octave_offset), (Pitch::C, 3));
+    assert!((step.hz() - 130.81).abs() < 0.5, "C3, untouched");
+}
+
+#[test]
 fn save_is_atomic_and_leaves_no_temp_file() {
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();

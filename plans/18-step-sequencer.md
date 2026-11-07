@@ -365,3 +365,30 @@ plays the note's own frequency: what you hear is what gets written, for every no
 
 **Known limit, now stated in the code:** the panel carries three octaves (MIDI 21..=56). A note above A3 keeps its pitch
 class but folds into the top octave, so C4 reads `C3`. That is the panel's range, not a mapping slip.
+
+---
+
+### Task 14: the stored pair *is* the note that plays
+
+**Files:**
+- Modify: `rust/crates/acid-core/src/pitch.rs` (`ROOT_MIDI` 33 → 12), `rust/crates/acid-core/src/pattern.rs` (`Step`/`Pattern::transposed`), `rust/crates/acid-core/src/bank.rs` (`map_patterns`), `rust/crates/acid-core/src/factory.rs` (literals), `rust/crates/acid-app/src/ui/edit.rs` (`from_midi_note`, `from_keyboard`, `pitch_name`, range), `rust/crates/acid-app/src/ui/keys.rs` (`key_hz`), `rust/crates/acid-app/src/persist.rs` (`SAVE_VERSION` 3 + migration)
+- Test: all of the above plus `rust/crates/acid-app/tests/{persist,step_mode_live}.rs`
+
+**The report:** "It should just store the note that it plays. The noise is correct but it stores the wrong value." Truthful labels were not enough: the *stored* pair was still `(D#, 1)` for a C3, because the lattice rooted `C` at MIDI 33 (A1).
+
+**Fix:** root the lattice at MIDI 12 (C0). A step's `(pitch, octave)` is then literally the note it plays — `(C, 3)` is MIDI 48, C3, 130.8 Hz — so storage, label, audition and MIDI input all agree:
+
+```
+note  keyboard  app writes  app shows  sounds
+  48        C3  C  3         C3    130.8 Hz
+  60        C4  C  4         C4    261.6 Hz
+  72        C5  C  5         C5    523.3 Hz
+```
+
+- [x] **Step 1: Core** — `ROOT_MIDI = 12`; `Step::transposed` and `Pattern::transposed` (the same sound on a shifted lattice); `PatternBank::map_patterns`.
+- [x] **Step 2: Factory** — every literal shifted +21 so the shipped line sounds exactly as it did, and the factory tests compare *frequencies* rather than spellings.
+- [x] **Step 3: Session migration** — `SAVE_VERSION` 3; `upgraded()` shifts every banked pattern (and every song, which loads through the same door). Tested both ways: a version-2 file keeps its frequency and gains the new spelling; a version-3 file is not shifted twice.
+- [x] **Step 4: Mappings** — `from_midi_note(note)` is `note - 12` decomposed; `from_keyboard` keeps the QWERTY's 55 Hz and therefore renames its notes to their true names (the map is rooted at A); `key_hz` follows `from_keyboard`, so auditioning and placing cannot disagree; `pitch_name` is the plain concert name over C-1..B5.
+- [x] **Step 5: Verify** — 51 suites green, clippy `-D warnings`, fmt clean.
+
+**Consequence stated plainly:** existing sessions and songs keep their exact pitch (the file is migrated once), but the *names* on their steps change — a step that read `C0` now reads `A1`, which is what it always sounded.

@@ -87,7 +87,7 @@ fn shift_and_a_note_writes_the_selected_step() {
 
     let step = shared.pattern().steps[4];
     assert!(step.on);
-    assert_eq!(step.pitch, Pitch::E);
+    assert_eq!(step.pitch, Pitch::CSharp);
     assert_eq!(panel.selected, 4, "shift does not walk the steps");
     assert!(
         !shared.midi_gate.load(Ordering::Relaxed),
@@ -113,8 +113,8 @@ fn step_mode_writes_the_note_and_walks_on() {
     run_on(&ctx, &mut panel, &shared, vec![release(Key::W)]);
 
     let steps = shared.pattern().steps;
-    assert_eq!(steps[0].pitch, Pitch::C);
-    assert_eq!(steps[1].pitch, Pitch::CSharp);
+    assert_eq!(steps[0].pitch, Pitch::A);
+    assert_eq!(steps[1].pitch, Pitch::ASharp);
     assert_eq!(
         panel.selected, 2,
         "the selection walked with the released keys"
@@ -134,7 +134,7 @@ fn step_mode_wraps_after_the_last_step() {
     run_on(&ctx, &mut panel, &shared, vec![press(Key::A, false)]);
     run_on(&ctx, &mut panel, &shared, vec![release(Key::A)]);
 
-    assert_eq!(shared.pattern().steps[15].pitch, Pitch::C);
+    assert_eq!(shared.pattern().steps[15].pitch, Pitch::A);
     assert_eq!(panel.selected, 0, "after step 16 comes step 1");
 }
 
@@ -173,7 +173,7 @@ fn a_midi_note_writes_the_step_when_the_panel_is_editing() {
     run_on(&ctx, &mut panel, &shared, vec![]);
 
     let step = shared.pattern().steps[8];
-    assert_eq!(step.pitch, Pitch::DSharp, "MIDI 36 is E flat on this panel");
+    assert_eq!(step.pitch, Pitch::C, "MIDI 36 is C2 on this panel");
     assert_eq!(
         step.velocity, 100,
         "and it landed at the velocity it was struck"
@@ -327,14 +327,10 @@ fn two_notes_inside_one_frame_both_land_with_their_own_pitch_and_velocity() {
     run_on(&ctx, &mut panel, &shared, vec![]);
 
     let steps = shared.pattern().steps;
-    assert_eq!(
-        steps[0].pitch,
-        Pitch::DSharp,
-        "the first note kept its pitch"
-    );
+    assert_eq!(steps[0].pitch, Pitch::C, "the first note kept its pitch");
     assert_eq!(steps[0].velocity, 30, "and its own velocity");
     assert!(!steps[0].accent);
-    assert_eq!(steps[1].pitch, Pitch::G, "the second note landed next");
+    assert_eq!(steps[1].pitch, Pitch::E, "the second note landed next");
     assert_eq!(steps[1].velocity, 120);
     assert!(steps[1].accent, "and brought its own accent");
     assert_eq!(panel.selected, 2, "the walk followed both");
@@ -383,7 +379,7 @@ fn every_key_keeps_its_pitch_at_the_edges_of_the_octave_range() {
     run_on(&ctx, &mut panel, &shared, vec![release(Key::D)]);
     assert_eq!(
         shared.pattern().steps[0].pitch,
-        Pitch::E,
+        Pitch::CSharp,
         "a high octave must not turn every key into C"
     );
 
@@ -392,7 +388,7 @@ fn every_key_keeps_its_pitch_at_the_edges_of_the_octave_range() {
     run_on(&ctx, &mut panel, &shared, vec![release(Key::G)]);
     assert_eq!(
         shared.pattern().steps[1].pitch,
-        Pitch::G,
+        Pitch::E,
         "nor must a low one"
     );
 }

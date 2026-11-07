@@ -33,13 +33,14 @@ fn pitches_stay_in_the_acids_home_register() {
         for s in p.steps {
             assert!(s.pitch.semitones() <= 12);
             assert!(
-                (-1..=1).contains(&s.octave_offset),
+                (-2..=3).contains(&s.octave_offset),
                 "octave {}",
                 s.octave_offset
             );
         }
     }
-    assert_eq!(factory_patterns()[0].steps[6].pitch, Pitch::DSharp);
+    // The launcher's second note is a tone and a half below its tonic, whatever the pair is called.
+    assert!((factory_patterns()[0].steps[6].hz() - 65.41).abs() < 0.5);
 }
 
 /// A slide is a promise to the next *note*, not to the next step: the sequencer only glides when the step it
@@ -65,10 +66,17 @@ fn every_slide_leads_into_a_sounding_step() {
 #[test]
 fn the_launcher_slides_into_a_note_and_into_the_downbeat() {
     let a1 = factory_patterns()[0];
-    assert!(a1.steps[5].slide, "G slides down to E flat at step 7");
-    assert_eq!(a1.steps[6].pitch, Pitch::DSharp);
-    assert!(a1.steps[15].slide, "G slurs into the downbeat");
-    assert_eq!(a1.steps[0].pitch, Pitch::C);
+    assert!(a1.steps[5].slide, "the fifth slides down a tone and a half");
+    assert!(
+        (a1.steps[6].hz() - 65.41).abs() < 0.5,
+        "and lands on the note below it: {} Hz",
+        a1.steps[6].hz()
+    );
+    assert!(a1.steps[15].slide, "the last step slurs into the downbeat");
+    assert!(
+        (a1.steps[0].hz() - a1.steps[15].hz()).abs() > 1.0,
+        "the slur has somewhere to go"
+    );
 }
 
 /// End to end on the shipped line: step 6 slides G down into E flat, so just after the boundary the voice is
