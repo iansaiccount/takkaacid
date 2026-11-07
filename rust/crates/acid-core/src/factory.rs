@@ -1,8 +1,10 @@
 //! The factory line: what plays the first time the app is opened.
 //!
 //! `A1` is the launcher — a real acid phrase, not a scale: a driving 16th rhythm, four accents, and two
-//! slides that slur into the next downbeat. `A2`–`A8` are that phrase displaced within the bar, so they share
-//! its pitch material (C, E♭, G, B♭) exactly; they are starting points to edit, not finished variations.
+//! `A1` is the launcher — a real acid phrase, not a scale: a driving 16th rhythm, four accents, and two
+//! slides that can be heard: G slurring down into E flat at step 7, and G into the accented downbeat. `A2`–`A8`
+//! are that phrase displaced within the bar, so they share its pitch material (C, E♭, G, B♭) exactly; they are
+//! starting points to edit, not finished variations.
 
 use crate::pattern::{Pattern, STEPS_PER_PATTERN, Step};
 use crate::pitch::Pitch;
@@ -15,12 +17,12 @@ pub fn launcher() -> Pattern {
         ..Step::note(Pitch::C, 0)
     };
     steps[1] = Step::note(Pitch::C, 0);
-    steps[3] = Step {
-        slide: true,
-        ..Step::note(Pitch::DSharp, 0)
-    };
+    steps[3] = Step::note(Pitch::DSharp, 0);
+    // The slides sit where they can be heard: a slide glides into the *note* on the next step, so a slide
+    // before a rest closes the gate and does nothing.
     steps[5] = Step {
         accent: true,
+        slide: true,
         ..Step::note(Pitch::G, 0)
     };
     steps[6] = Step::note(Pitch::DSharp, 0);
@@ -28,16 +30,16 @@ pub fn launcher() -> Pattern {
         accent: true,
         ..Step::note(Pitch::C, 0)
     };
-    steps[10] = Step {
-        slide: true,
-        ..Step::note(Pitch::ASharp, 0)
-    };
+    steps[10] = Step::note(Pitch::ASharp, 0);
     steps[12] = Step::note(Pitch::C, 0);
     steps[13] = Step {
         accent: true,
         ..Step::note(Pitch::C, 0)
     };
-    steps[15] = Step::note(Pitch::G, 0);
+    steps[15] = Step {
+        slide: true,
+        ..Step::note(Pitch::G, 0)
+    };
     Pattern::from_steps(steps)
 }
 

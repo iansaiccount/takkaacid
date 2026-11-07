@@ -1,6 +1,7 @@
-//! A step keycap: LED above, white key below, accent bar on top, slide bar underneath.
+//! A step keycap: LED above, white key below, accent bar on top, and — for a slide — an amber block under
+//! the key plus a dark arrow on it, because a note that runs into the next one has to be visible at a glance.
 //!
-//! The five paint inputs live in `StepView` so the geometry-free half of this widget is testable without a
+//! The paint inputs live in `StepView` so the geometry-free half of this widget is testable without a
 //! window; the keycap itself is painted from the cell `layout::step_cells` hands over.
 
 use egui::{Rect, Response};
@@ -77,7 +78,12 @@ pub fn step_key(
         egui::Pos2::new(rect.left(), rect.top() + led_band + gap),
         egui::Pos2::new(rect.right(), rect.bottom() - bar - gap),
     );
-    let slide_bar = Rect::from_min_max(egui::Pos2::new(rect.left(), rect.bottom() - bar), rect.max);
+    // A slide fills the whole strip under the key (the accent bar's height plus the gap), so the cue reads
+    // at 0.65x where a 3 px silk line just looked like panel shading.
+    let slide_bar = Rect::from_min_max(
+        egui::Pos2::new(rect.left(), rect.bottom() - bar - gap),
+        rect.max,
+    );
 
     let painter = ui.painter();
     let led_radius = (led_band * 0.30).max(2.0);
@@ -137,7 +143,14 @@ pub fn step_key(
         painter.rect_filled(accent_bar, 1.5 * s, theme::LED_ACCENT);
     }
     if view.slide {
-        painter.rect_filled(slide_bar, 1.5 * s, theme::SILKSCREEN);
+        // Two cues, because one thin strip was not enough to notice: an amber block filling the strip under
+        // the key, and a dark arrow on the key itself saying "this note runs into the next one".
+        painter.rect_filled(slide_bar, 1.5 * s, theme::LED_ACCENT);
+        let head = 5.0 * s;
+        let tip = egui::Pos2::new(keycap.right() - 9.0 * s, keycap.center().y);
+        let stroke = egui::Stroke::new((1.5 * s).max(1.0), theme::PANEL);
+        painter.line_segment([tip - egui::vec2(head, head), tip], stroke);
+        painter.line_segment([tip, tip - egui::vec2(head, -head)], stroke);
     }
     // The whole cell, not the keycap: the outline has to read on a lit step and on a rest alike.
     if view.selected {
@@ -282,6 +295,48 @@ mod tests {
         );
     }
 
+    /// A slide must be visible at a glance. The panel's only cue used to be a 3 px silk strip under the key,
+    /// which read as panel shading — there was nothing to see.
+    #[test]
+    fn a_slide_key_paints_a_cue_that_a_plain_key_does_not() {
+        let shapes = |slide: bool| {
+            let ctx = egui::Context::default();
+            let mut count = 0;
+            for _ in 0..2 {
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(200.0, 200.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ui| {
+                        let step = Step {
+                            slide,
+                            ..Step::note(Pitch::C, 0)
+                        };
+                        let view = step_view(&step, 0, 0, false, false, false);
+                        let cell = egui::Rect::from_min_size(
+                            egui::Pos2::new(8.0, 8.0),
+                            egui::vec2(48.0, 104.0),
+                        );
+                        step_key(ui, 0, &step, &view, cell);
+                    },
+                );
+                output.textures_delta.clear();
+                count = output.shapes.len();
+            }
+            count
+        };
+        // The strip under the key plus the two strokes of the arrow.
+        assert!(
+            shapes(true) >= shapes(false) + 3,
+            "the slide cue did not paint: {} vs {}",
+            shapes(true),
+            shapes(false)
+        );
+    }
     /// The plan's "look at it" step, in headless form: sixteen keys paint, and the lit/accent/slide ones
     /// paint more than a bare key does.
     #[test]
