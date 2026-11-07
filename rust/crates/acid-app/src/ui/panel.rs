@@ -26,10 +26,20 @@ pub fn frame_lines(panel: Rect) -> [Rect; 2] {
     [outer, outer.shrink(theme::GAP / 2.0)]
 }
 
-/// The wordmark's corner of the top strip.
+/// The volume knob's corner: the top strip's far left, before the wordmark. Size is proportional to the strip,
+/// so the knob scales with the panel like every other measurement here.
+pub fn volume_knob_rect(top: Rect) -> Rect {
+    let size = top.height() * 0.92;
+    Rect::from_min_size(
+        Pos2::new(top.left() + theme::GAP, top.center().y - size * 0.5),
+        egui::vec2(size, size),
+    )
+}
+
+/// The wordmark's corner of the top strip: right of the volume knob, so the two never collide.
 pub fn brand_rect(top: Rect) -> Rect {
     Rect::from_min_max(
-        top.min,
+        Pos2::new(volume_knob_rect(top).right() + theme::GAP, top.top()),
         Pos2::new(top.left() + top.width() * 0.40, top.bottom()),
     )
 }
@@ -145,9 +155,16 @@ mod tests {
     #[test]
     fn top_strip_regions_are_ordered_left_to_right() {
         let l = layout::layout(Rect::from_min_size(Pos2::ZERO, egui::vec2(980.0, 560.0)));
+        let volume = volume_knob_rect(l.top);
         let brand = brand_rect(l.top);
         let pattern = pattern_display_rect(l.top);
         let tempo = tempo_display_rect(l.top);
+        // VOLUME sits before the wordmark, and the two must not overlap.
+        assert!(
+            volume.right() <= brand.left(),
+            "the knob must clear the wordmark"
+        );
+        assert!(volume.left() >= l.top.left(), "and stay on the panel");
         assert!(brand.left() < pattern.left());
         assert!(pattern.right() <= tempo.left());
         assert!(tempo.right() <= l.top.right());

@@ -8,6 +8,7 @@ pub mod help;
 pub mod keys;
 pub mod knob;
 pub mod layout;
+pub mod learn;
 pub mod panel;
 pub mod picker;
 pub mod save;
@@ -87,6 +88,8 @@ pub struct PanelState {
     pub song_request: Option<songs::Request>,
     /// The song this session is working on, once it has a name.
     pub song_name: Option<String>,
+    /// Where the MIDI-learn flow is: idle, waiting for a knob, or waiting for a controller.
+    pub learn: learn::Step,
 }
 
 impl Default for PanelState {
@@ -118,6 +121,7 @@ impl Default for PanelState {
             songs: None,
             song_request: None,
             song_name: None,
+            learn: learn::Step::Idle,
         }
     }
 }
@@ -175,9 +179,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     ui.painter().text(
         status.right_center(),
         egui::Align2::RIGHT_CENTER,
-        &state.midi_status,
+        // While learning, the status line says what the panel is waiting for — it is the only free line on the face.
+        learn::hint(state.learn).unwrap_or(&state.midi_status),
         theme::legend(11.0 * s),
-        if state.midi_given_up {
+        if state.learn != learn::Step::Idle || state.midi_given_up {
             theme::LED_ACCENT
         } else {
             theme::SILKSCREEN_DIM
@@ -205,13 +210,35 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(cell.shrink(2.0 * s)));
         cell_ui.set_clip_rect(*cell);
         let before = state.knobs[i];
+        // While choosing a knob to teach, the knobs stand back: a click picks the knob instead of turning it, and
+        // the turn goes into a scratch value so a stray drag cannot move the patch either.
+        let choosing = state.learn == learn::Step::Choosing;
+        let mut scratch = state.knobs[i];
+        let target = if choosing {
+            &mut scratch
+        } else {
+            &mut state.knobs[i]
+        };
         knob::knob(
             &mut cell_ui,
             egui::Id::unique(("knob", i)),
             theme::KNOB_LABELS[i],
-            &mut state.knobs[i],
+            target,
             diameter,
         );
+        if choosing {
+            let hit = ui.interact(
+                *cell,
+                ui.scope_id().with(("learn-knob", i)),
+                egui::Sense::click(),
+            );
+            if hit.clicked()
+                && let Some(control) = learn::control_for_knob(i)
+            {
+                state.learn = learn::choose(control, shared);
+            }
+            continue;
+        }
         // Publish straight away: the audio thread's next block picks it up, so the move is heard now.
         match i {
             0 => shared.set_waveform(waveform_from_knob(state.knobs[0])),
@@ -226,6 +253,51 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         if state.knobs[i] != before {
             state.dirty = true;
         }
+    }
+
+    // VOLUME has its own corner of the top strip, before the wordmark, so the transport row keeps its five keys.
+    let volume_rect = panel::volume_knob_rect(l.top);
+    let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));
+    volume_ui.set_clip_rect(volume_rect);
+    let volume_before = state.volume;
+    let choosing = state.learn == learn::Step::Choosing;
+    let mut volume_scratch = state.volume;
+    let volume_target = if choosing {
+        &mut volume_scratch
+    } else {
+        &mut state.volume
+    };
+    knob::knob(
+        &mut volume_ui,
+        egui::Id::unique(("knob", 7)),
+        "",
+        volume_target,
+        volume_rect.width(),
+    );
+    if choosing {
+        if ui
+            .interact(
+                volume_rect,
+                ui.scope_id().with("learn-volume"),
+                egui::Sense::click(),
+            )
+            .clicked()
+        {
+            state.learn = learn::choose(midi::cc::CcTarget::Volume, shared);
+        }
+    } else if state.volume != volume_before {
+        shared.volume.set(state.volume);
+        state.dirty = true;
+    }
+
+    // A controller arrived while listening: bind it to the chosen control and stop listening.
+    if let learn::Step::Listening(control) = state.learn
+        && let Some(cc) = learn::heard(shared)
+    {
+        midi::cc::set_cc(shared, control, cc);
+        learn::cancel(shared);
+        state.learn = learn::Step::Idle;
+        state.dirty = true;
     }
 
     let keys = layout::step_cells(l.steps);
@@ -386,33 +458,22 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.dirty = true;
         }
 
-        // VOLUME lives in the last cell, sized to the row rather than to the tone knobs: a two-thirds-scale
-        // knob would punch through the switches row and hide the MODE legend. The caption sits beside it.
-        let diameter = (volume_cell.height() * 0.70).min(volume_cell.width() * 0.3);
-        let knob_rect = egui::Rect::from_min_size(
-            egui::Pos2::new(volume_cell.left() + 4.0 * s, volume_cell.top()),
-            egui::vec2(diameter, volume_cell.height()),
-        );
-        let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(knob_rect));
-        cell_ui.set_clip_rect(knob_rect);
-        let before = state.volume;
-        knob::knob(
-            &mut cell_ui,
-            egui::Id::unique(("knob", 7)),
-            "",
-            &mut state.volume,
-            diameter,
-        );
-        ui.painter().text(
-            egui::Pos2::new(knob_rect.right() + 6.0 * s, volume_cell.center().y),
-            egui::Align2::LEFT_CENTER,
-            "VOLUME",
-            theme::legend(11.0 * s),
-            theme::SILKSCREEN,
-        );
-        if state.volume != before {
-            shared.volume.set(state.volume);
-            state.dirty = true;
+        // The last transport cell is the MIDI LEARN key (see `ui::learn`), so the row keeps its five keys while
+        // the volume knob lives in the top strip's corner.
+        if transport::transport_button(
+            ui,
+            "learn",
+            volume_cell,
+            learn::label(state.learn),
+            state.learn != learn::Step::Idle,
+        )
+        .clicked()
+        {
+            state.learn = match state.learn {
+                learn::Step::Idle => learn::Step::Choosing,
+                _ => learn::Step::Idle,
+            };
+            learn::cancel(shared);
         }
     }
 

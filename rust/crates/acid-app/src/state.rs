@@ -92,6 +92,12 @@ pub struct SharedState {
     pub external_clock: AtomicBool,
     /// The computer keyboard's octave offset, `-2..=2`.
     pub octave: AtomicI32,
+    /// The controller each learnable knob listens to, in `midi::cc::LEARNABLE` order; `-1` means unmapped.
+    pub cc_map: [AtomicI32; 7],
+    /// True while the panel is waiting for a controller to learn.
+    pub learn_active: AtomicBool,
+    /// The controller the MIDI thread saw while learning; `-1` until one arrives.
+    pub learn_cc: AtomicI32,
     pub pattern: ArcSwap<Pattern>,
     pub status: Mutex<AudioStatus>,
 }
@@ -118,6 +124,11 @@ impl SharedState {
             midi_accent: AtomicBool::new(false),
             external_clock: AtomicBool::new(false),
             octave: AtomicI32::new(0),
+            cc_map: std::array::from_fn(|slot| {
+                AtomicI32::new(i32::from(crate::midi::cc::DEFAULT_CC[slot]))
+            }),
+            learn_active: AtomicBool::new(false),
+            learn_cc: AtomicI32::new(-1),
             status: Mutex::new(AudioStatus::Starting),
         })
     }

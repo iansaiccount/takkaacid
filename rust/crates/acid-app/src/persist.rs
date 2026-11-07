@@ -74,6 +74,15 @@ pub struct SavedState {
     /// The named song this session is working on, if any; `None` until it is first saved by name.
     #[serde(default)]
     pub song: Option<String>,
+    /// The controller each learnable knob listens to, in `midi::cc::LEARNABLE` order; learned MIDI mappings, so a
+    /// performance rig survives a restart. Absent means the factory pairing.
+    #[serde(default = "default_cc_map")]
+    pub cc_map: [u8; 7],
+}
+
+/// The factory MIDI mapping, for a file that predates the field.
+pub fn default_cc_map() -> [u8; 7] {
+    crate::midi::cc::DEFAULT_CC
 }
 
 impl Default for SavedState {
@@ -86,6 +95,7 @@ impl Default for SavedState {
             swing: 0.0,
             midi_input: None,
             song: None,
+            cc_map: crate::midi::cc::DEFAULT_CC,
         }
     }
 }
@@ -169,6 +179,10 @@ pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternB
     shared.decay.set(state.knobs.decay);
     shared.accent.set(state.knobs.accent);
     shared.volume.set(state.knobs.volume);
+    // The learned MIDI mapping travels with the song, so a rig saved in one song comes back with it.
+    for (slot, cc) in state.cc_map.iter().enumerate() {
+        shared.cc_map[slot].store(i32::from(*cc), std::sync::atomic::Ordering::Relaxed);
+    }
     shared.set_pattern(Arc::new(*bank.current_pattern()));
 }
 
@@ -201,6 +215,12 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         midi_input: None,
         // Which named song is loaded; `main` fills it in, like the MIDI choice.
         song: None,
+        // The learned MIDI mapping is shared state, so it is read straight from it.
+        cc_map: std::array::from_fn(|slot| {
+            shared.cc_map[slot]
+                .load(std::sync::atomic::Ordering::Relaxed)
+                .clamp(0, 127) as u8
+        }),
     }
 }
 

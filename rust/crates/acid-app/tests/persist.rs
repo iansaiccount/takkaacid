@@ -123,6 +123,35 @@ fn renaming_a_song_moves_its_file_and_refuses_a_taken_name() {
 }
 
 #[test]
+fn the_learned_midi_mapping_round_trips_and_an_old_file_gets_the_factory_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        cc_map: [10, 11, 12, 13, 14, 15, 16],
+        ..Default::default()
+    };
+    save(dir.path(), &saved).unwrap();
+    assert_eq!(
+        load(dir.path()).unwrap().unwrap().cc_map,
+        [10, 11, 12, 13, 14, 15, 16],
+        "a learned rig survives a restart"
+    );
+
+    // A file from before the field: the factory pairing, not silence.
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    legacy.as_object_mut().unwrap().remove("cc_map");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        load(dir.path()).unwrap().unwrap().cc_map,
+        acid_app::midi::cc::DEFAULT_CC
+    );
+}
+
+#[test]
 fn a_missing_file_is_not_an_error() {
     let dir = tempfile::tempdir().unwrap();
     assert!(load(dir.path()).unwrap().is_none());

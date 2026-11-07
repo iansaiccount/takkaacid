@@ -103,6 +103,10 @@ impl eframe::App for TakkaApp {
                 self.panel.help_visible = false;
             } else if self.panel.songs.is_some() {
                 self.panel.songs = None;
+            } else if self.panel.learn != panel_ui::learn::Step::Idle {
+                // Escape gives up on a learn in progress; the shared flag must fall with it.
+                self.panel.learn = panel_ui::learn::Step::Idle;
+                panel_ui::learn::cancel(&self.state);
             } else {
                 self.panel.device_list = None;
             }

@@ -56,7 +56,8 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "one voice: MIDI and the keyboard share it",
                 "SAVED / UNSAVED sits by the wordmark",
                 "saved on exit and 2 s after a change",
-                "SONGS: new, save as, load, delete",
+                "SONGS: new, save as, load, rename, delete",
+                "LEARN: pick a knob, then move a fader",
             ],
         ),
     ]
@@ -161,6 +162,7 @@ mod tests {
             "CLEAR",
             "SONGS",
             "SAVED",
+            "LEARN",
             "MIDI",
             "clock",
             "CC",
