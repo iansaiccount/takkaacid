@@ -218,10 +218,23 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             i % STEPS_PER_PATTERN == state.selected,
         );
         let response = step_key::step_key(ui, i, &step, &view, *cell);
-        let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
-        let gesture =
-            edit::gesture_from_input(response.clicked(), shift, alt, response.double_clicked());
-        if let Some(gesture) = gesture {
+        let (shift, alt, ctrl) =
+            ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.ctrl));
+        // Every click moves the selection, editing or not: the outline must always say where the keyboard
+        // and the next gesture will land.
+        if response.clicked() || response.drag_started() {
+            state.selected = i % STEPS_PER_PATTERN;
+        }
+        let gesture = edit::gesture_from_input(
+            response.clicked(),
+            shift,
+            alt,
+            ctrl,
+            response.double_clicked(),
+        );
+        if let Some(gesture) = gesture
+            && gesture != edit::StepGesture::Select
+        {
             let edited = edit::apply_gesture(step, gesture, state.last_pitch, state.last_octave);
             if edited.on {
                 state.last_pitch = edited.pitch;
@@ -233,7 +246,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
 
         // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
-        // the drag returns to the original note instead of walking further away.
+        // the drag returns to the original note instead of walking further away. Dragging a rest brings it in
+        // at the dragged pitch: with ctrl+click being the only other way to make a note, this is how a fresh
+        // note gets its pitch from the mouse.
         if response.dragged() {
             let (index, start_pitch, start_octave, moved) = match state.drag {
                 Some((dragged, pitch, octave, moved)) if dragged == i => {

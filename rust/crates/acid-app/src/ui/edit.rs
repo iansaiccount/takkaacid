@@ -11,6 +11,7 @@ use acid_core::pitch::Pitch;
 /// One editing gesture on a step key.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum StepGesture {
+    Select,
     Toggle,
     Accent,
     Slide,
@@ -31,6 +32,8 @@ pub fn apply_gesture(step: Step, gesture: StepGesture, last_pitch: Pitch, last_o
         step
     };
     match gesture {
+        // Selecting is the panel's business; the step itself must not move.
+        StepGesture::Select => step,
         StepGesture::Toggle => {
             if step.on {
                 Step { on: false, ..step }
@@ -52,16 +55,25 @@ pub fn apply_gesture(step: Step, gesture: StepGesture, last_pitch: Pitch, last_o
     }
 }
 
-/// Which gesture an input maps to. Double-click clears; otherwise a modifier beats the plain click.
-pub fn gesture_from_input(left: bool, shift: bool, alt: bool, double: bool) -> Option<StepGesture> {
+/// Which gesture an input maps to. Double-click clears; otherwise a modifier beats the plain click, and a
+/// plain click only selects — editing takes ctrl, so a look never changes the music.
+pub fn gesture_from_input(
+    left: bool,
+    shift: bool,
+    alt: bool,
+    ctrl: bool,
+    double: bool,
+) -> Option<StepGesture> {
     if double {
         Some(StepGesture::Clear)
     } else if shift {
         Some(StepGesture::Accent)
     } else if alt {
         Some(StepGesture::Slide)
-    } else if left {
+    } else if ctrl {
         Some(StepGesture::Toggle)
+    } else if left {
+        Some(StepGesture::Select)
     } else {
         None
     }
@@ -178,22 +190,55 @@ mod tests {
     #[test]
     fn modifiers_win_over_a_plain_click() {
         assert_eq!(
-            gesture_from_input(true, false, false, false),
+            gesture_from_input(true, false, false, false, false),
+            Some(StepGesture::Select)
+        );
+        assert_eq!(
+            gesture_from_input(true, false, false, true, false),
             Some(StepGesture::Toggle)
         );
         assert_eq!(
-            gesture_from_input(true, true, false, false),
+            gesture_from_input(true, true, false, false, false),
             Some(StepGesture::Accent)
         );
         assert_eq!(
-            gesture_from_input(true, false, true, false),
+            gesture_from_input(true, false, true, false, false),
             Some(StepGesture::Slide)
         );
         assert_eq!(
-            gesture_from_input(true, true, true, true),
+            gesture_from_input(true, true, true, true, true),
             Some(StepGesture::Clear)
         );
-        assert_eq!(gesture_from_input(false, false, false, false), None);
+        assert_eq!(gesture_from_input(false, false, false, false, false), None);
+    }
+
+    #[test]
+    fn a_plain_click_only_selects_and_ctrl_click_toggles() {
+        assert_eq!(
+            gesture_from_input(true, false, false, false, false),
+            Some(StepGesture::Select)
+        );
+        assert_eq!(
+            gesture_from_input(true, false, false, true, false),
+            Some(StepGesture::Toggle)
+        );
+        assert_eq!(
+            gesture_from_input(true, true, false, true, false),
+            Some(StepGesture::Accent)
+        );
+    }
+
+    #[test]
+    fn selecting_leaves_the_step_untouched() {
+        let step = Step {
+            accent: true,
+            ..Step::note(Pitch::E, 0)
+        };
+        assert_eq!(apply_gesture(step, StepGesture::Select, Pitch::C, 0), step);
+        assert_eq!(
+            apply_gesture(Step::rest(), StepGesture::Select, Pitch::C, 0),
+            Step::rest()
+        );
     }
 
     #[test]

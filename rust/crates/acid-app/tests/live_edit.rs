@@ -69,21 +69,26 @@ fn clicking_a_step_key_toggles_it_in_the_shared_state() {
     );
     let pos = cells[3].center();
 
+    let ctrl = egui::Modifiers {
+        ctrl: true,
+        ..egui::Modifiers::default()
+    };
     let press = egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
         pressed: true,
-        modifiers: egui::Modifiers::default(),
+        modifiers: ctrl,
     };
     let release = egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
         pressed: false,
-        modifiers: egui::Modifiers::default(),
+        modifiers: ctrl,
     };
-    // Warm-up frame, then press, then release: egui routes interaction through the previous frame.
+    // Warm-up frame, then press, then release: egui routes interaction through the previous frame. Editing
+    // takes ctrl now — a plain click only selects (see `tests/selection_live.rs`).
     for events in [
-        vec![],
+        vec![egui::Event::ModifiersChanged(ctrl)],
         vec![egui::Event::PointerMoved(pos), press],
         vec![release],
     ] {
@@ -101,6 +106,7 @@ fn clicking_a_step_key_toggles_it_in_the_shared_state() {
         output.textures_delta.clear();
     }
 
+    assert_eq!(panel.selected, 3, "the click did not land on step 4");
     assert!(
         shared.pattern().steps[3].on,
         "clicking step 4 should have published a note there"
