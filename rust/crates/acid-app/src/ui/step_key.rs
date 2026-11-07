@@ -15,6 +15,8 @@ pub struct StepView {
     pub on: bool,
     pub accent: bool,
     pub slide: bool,
+    /// Whether that slide can actually glide: the sequencer only glides into a step that sounds.
+    pub slide_glides: bool,
     pub current: bool,
     pub beat: bool,
     pub selected: bool,
@@ -22,7 +24,7 @@ pub struct StepView {
     pub dragging: bool,
 }
 
-/// Reduce a `Step` plus the transport state to the inputs the keycap paints.
+/// Reduce a `Step` plus the transport state — and whether the next step sounds — to the inputs the keycap paints.
 pub fn step_view(
     step: &Step,
     index: usize,
@@ -30,11 +32,13 @@ pub fn step_view(
     playing: bool,
     selected: bool,
     dragging: bool,
+    next_on: bool,
 ) -> StepView {
     StepView {
         on: step.on,
         accent: step.accent,
         slide: step.slide,
+        slide_glides: next_on,
         current: playing && index == position,
         beat: index.is_multiple_of(4),
         selected,
@@ -144,13 +148,22 @@ pub fn step_key(
     }
     if view.slide {
         // Two cues, because one thin strip was not enough to notice: an amber block filling the strip under
-        // the key, and a dark arrow on the key itself saying "this note runs into the next one".
-        painter.rect_filled(slide_bar, 1.5 * s, theme::LED_ACCENT);
-        let head = 5.0 * s;
-        let tip = egui::Pos2::new(keycap.right() - 9.0 * s, keycap.center().y);
-        let stroke = egui::Stroke::new((1.5 * s).max(1.0), theme::PANEL);
-        painter.line_segment([tip - egui::vec2(head, head), tip], stroke);
-        painter.line_segment([tip, tip - egui::vec2(head, -head)], stroke);
+        // the key, and a dark arrow on the key itself saying "this note runs into the next one". A slide that
+        // cannot glide — the next step is a rest — keeps a dim strip and no arrow, so the panel never promises
+        // a sound it will not make.
+        let strip = if view.slide_glides {
+            theme::LED_ACCENT
+        } else {
+            theme::SILKSCREEN_DIM
+        };
+        painter.rect_filled(slide_bar, 1.5 * s, strip);
+        if view.slide_glides {
+            let head = 5.0 * s;
+            let tip = egui::Pos2::new(keycap.right() - 9.0 * s, keycap.center().y);
+            let stroke = egui::Stroke::new((1.5 * s).max(1.0), theme::PANEL);
+            painter.line_segment([tip - egui::vec2(head, head), tip], stroke);
+            painter.line_segment([tip, tip - egui::vec2(head, -head)], stroke);
+        }
     }
     // The whole cell, not the keycap: the outline has to read on a lit step and on a rest alike.
     if view.selected {
@@ -188,18 +201,18 @@ mod tests {
     #[test]
     fn the_view_carries_the_selection() {
         let step = Step::note(Pitch::C, 0);
-        assert!(step_view(&step, 0, 0, false, true, false).selected);
-        assert!(!step_view(&step, 0, 0, false, false, false).selected);
+        assert!(step_view(&step, 0, 0, false, true, false, true).selected);
+        assert!(!step_view(&step, 0, 0, false, false, false, true).selected);
     }
 
     #[test]
     fn only_the_playing_position_lights_up() {
         let step = Step::note(Pitch::C, 0);
-        let v = step_view(&step, 3, 3, true, false, false);
+        let v = step_view(&step, 3, 3, true, false, false, true);
         assert!(v.current && !v.beat);
-        let w = step_view(&step, 3, 4, true, false, false);
+        let w = step_view(&step, 3, 4, true, false, false, true);
         assert!(!w.current);
-        let stopped = step_view(&step, 3, 3, false, false, false);
+        let stopped = step_view(&step, 3, 3, false, false, false, true);
         assert!(!stopped.current);
     }
 
@@ -210,15 +223,15 @@ mod tests {
             slide: true,
             ..Step::note(Pitch::E, 0)
         };
-        let v = step_view(&step, 8, 0, false, false, false);
+        let v = step_view(&step, 8, 0, false, false, false, true);
         assert!(v.on && v.beat && v.accent && v.slide && !v.current);
-        assert!(!step_view(&step, 9, 0, false, false, false).beat);
+        assert!(!step_view(&step, 9, 0, false, false, false, true).beat);
     }
 
     #[test]
     fn an_off_step_still_reports_its_pitch_flags_but_is_not_lit() {
         let rest = Step::rest();
-        let v = step_view(&rest, 0, 0, true, false, false);
+        let v = step_view(&rest, 0, 0, true, false, false, true);
         assert!(!v.on && v.current);
     }
     /// The outline the human partner asked for must actually paint, not just be a flag on the view.
@@ -238,7 +251,7 @@ mod tests {
                     },
                     |ui| {
                         let step = Step::note(Pitch::C, 0);
-                        let view = step_view(&step, 0, 0, false, selected, false);
+                        let view = step_view(&step, 0, 0, false, selected, false, true);
                         let cell = egui::Rect::from_min_size(
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
@@ -275,7 +288,7 @@ mod tests {
                     },
                     |ui| {
                         let step = Step::note(Pitch::C, 0);
-                        let view = step_view(&step, 0, 0, false, false, dragging);
+                        let view = step_view(&step, 0, 0, false, false, dragging, true);
                         let cell = egui::Rect::from_min_size(
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
@@ -298,8 +311,8 @@ mod tests {
     /// A slide must be visible at a glance. The panel's only cue used to be a 3 px silk strip under the key,
     /// which read as panel shading — there was nothing to see.
     #[test]
-    fn a_slide_key_paints_a_cue_that_a_plain_key_does_not() {
-        let shapes = |slide: bool| {
+    fn a_slide_key_paints_its_cue_and_dims_it_when_it_cannot_glide() {
+        let shapes = |slide: bool, glides: bool| {
             let ctx = egui::Context::default();
             let mut count = 0;
             for _ in 0..2 {
@@ -316,7 +329,7 @@ mod tests {
                             slide,
                             ..Step::note(Pitch::C, 0)
                         };
-                        let view = step_view(&step, 0, 0, false, false, false);
+                        let view = step_view(&step, 0, 0, false, false, false, glides);
                         let cell = egui::Rect::from_min_size(
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
@@ -329,13 +342,30 @@ mod tests {
             }
             count
         };
+        let plain = shapes(false, true);
+        let gliding = shapes(true, true);
+        let inert = shapes(true, false);
         // The strip under the key plus the two strokes of the arrow.
         assert!(
-            shapes(true) >= shapes(false) + 3,
-            "the slide cue did not paint: {} vs {}",
-            shapes(true),
-            shapes(false)
+            gliding >= plain + 3,
+            "the slide cue did not paint: {gliding} vs {plain}"
         );
+        // A slide into a rest cannot glide, so it keeps the dim strip and drops the arrow.
+        assert_eq!(
+            gliding - inert,
+            2,
+            "an inert slide must drop the arrow and keep the strip: {gliding} vs {inert}"
+        );
+    }
+
+    #[test]
+    fn a_slide_only_glides_when_the_next_step_sounds() {
+        let step = Step {
+            slide: true,
+            ..Step::note(Pitch::C, 0)
+        };
+        assert!(step_view(&step, 0, 0, false, false, false, true).slide_glides);
+        assert!(!step_view(&step, 0, 0, false, false, false, false).slide_glides);
     }
     /// The plan's "look at it" step, in headless form: sixteen keys paint, and the lit/accent/slide ones
     /// paint more than a bare key does.
@@ -372,7 +402,7 @@ mod tests {
                     ));
                     for (i, cell) in cells.iter().enumerate() {
                         let step = pattern[i % pattern.len()];
-                        let view = step_view(&step, i, 1, false, false, false);
+                        let view = step_view(&step, i, 1, false, false, false, true);
                         step_key(ui, i, &step, &view, *cell);
                     }
                 },

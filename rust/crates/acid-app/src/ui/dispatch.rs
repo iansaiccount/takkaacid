@@ -70,7 +70,11 @@ pub fn handle(
     bank: &mut PatternBank,
 ) -> Handled {
     match selection::dispatch(press.key, press.shift, panel, shared) {
-        selection::Press::Applied => return Handled::Selection,
+        selection::Press::Applied => {
+            // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
+            super::clear::disarm(panel);
+            return Handled::Selection;
+        }
         selection::Press::Refused => return Handled::Refused,
         selection::Press::NotOurs => {}
     }
@@ -90,6 +94,7 @@ pub fn handle(
     ) {
         panel.selected = 0;
         panel.pattern_id = PatternBank::id_of(bank.current());
+        super::clear::disarm(panel);
     }
     Handled::Shortcut(shortcut)
 }

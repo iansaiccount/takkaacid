@@ -483,3 +483,25 @@ Found by using the panel, after the reviews above. Three reported, one more in t
 Left alone deliberately: ctrl/alt+**drag** still changes pitch (a ctrl+click that slips into a drag edits the note
 instead of toggling it), and the unshifted arrows and audition letters still act while the help card is up — the
 first is a rounding-off decision, the second is the earlier ruling on the card's modality.
+
+### Hands-on round 2 (2026-11-07)
+
+From using the panel again: the slide had no visible cue and "didn't do a lot".
+
+- **The audible half was the pattern, not the synth.** A slide glides into the next *note*: the sequencer only
+  glides while the note is still sounding, so a slide before a rest closes the gate, and a slide into the same
+  pitch has nowhere to travel. The factory line had its slides on steps 4 and 11, both of which lead into rests
+  (this plan's sibling `plans/08-patterns-persistence.md` said so in its own table). The flags now sit on steps 6
+  and 16; `every_slide_leads_into_a_sounding_step` keeps any phrase honest and `the_launcher_slide_actually_glides`
+  measures the glide on the shipped pattern (near G just after the boundary, at E♭ by the end of the step).
+- **The visual half was a 3 px silk strip** under the key, which read as panel shading. A slide now fills the strip
+  under the key in `LED_ACCENT` and paints a dark arrow on the keycap. A slide that *cannot* glide — the next step
+  is a rest — keeps a dim strip and loses the arrow, so the panel never promises a sound it will not make
+  (`StepView::slide_glides`, `a_slide_key_paints_its_cue_and_dims_it_when_it_cannot_glide`).
+- **CLEAR button added** to the switches row (fourth cell, after BANK/PATTERN/MODE). Emptying the pattern is the
+  only action on the panel with no undo, so it takes two clicks: the first arms it and the button reads "CLEAR?",
+  the second empties the pattern. An arm expires after 3 s and any edit or pattern switch disarms it
+  (`ui::clear`, `tests/clear_live.rs`). Documented on the help card.
+- The saved session's A1 was patched by hand (its slide sat on D♯→D♯). The patch script validated the pattern
+  before writing, kept a `state.json.bak-*` beside it, and touched both copies the app keeps (`state.json`, which
+  is what it loads, and `patterns/A1.json`).

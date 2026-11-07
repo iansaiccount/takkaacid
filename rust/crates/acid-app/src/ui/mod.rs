@@ -1,5 +1,6 @@
 // The palette and layout constants are the panel's vocabulary: they are introduced here and consumed
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
+pub mod clear;
 pub mod dispatch;
 pub mod display;
 pub mod edit;
@@ -68,6 +69,8 @@ pub struct PanelState {
     /// The device the user chose; consumed by `main` on the next frame.
     pub device_choice: Option<String>,
     pub volume: f32,
+    /// When CLEAR was first clicked: a second click inside the window empties the pattern on screen.
+    pub clear_armed_at: Option<std::time::Instant>,
 }
 
 impl Default for PanelState {
@@ -92,6 +95,7 @@ impl Default for PanelState {
             selected: 0,
             device_list: None,
             device_choice: None,
+            clear_armed_at: None,
         }
     }
 }
@@ -218,6 +222,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.playing,
             i % STEPS_PER_PATTERN == state.selected,
             state.drag.is_some_and(|(dragged, ..)| dragged == i),
+            // A slide only glides into a step that sounds, so the keycap needs to know about the next one.
+            state.pattern.steps[(i + 1) % STEPS_PER_PATTERN].on,
         );
         let response = step_key::step_key(ui, i, &step, &view, *cell);
         let (shift, alt, ctrl) =
@@ -245,6 +251,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             shared.set_step(i % STEPS_PER_PATTERN, edited);
             state.pattern = shared.pattern();
             state.dirty = true;
+            // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
+            clear::disarm(state);
         }
 
         // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
@@ -272,6 +280,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             shared.set_step(index, dragged);
             state.pattern = shared.pattern();
             state.dirty = true;
+            clear::disarm(state);
             ui.painter().text(
                 cell.center(),
                 egui::Align2::CENTER_CENTER,
@@ -284,12 +293,28 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
 
-    // Switches are engraved legends for now; Phase 07 (Task 33) turns them into controls.
-    for (label, cell) in ["BANK", "PATTERN", "MODE"]
-        .iter()
-        .zip(layout::knob_cells(l.switches, 3))
-    {
-        paint_switch(ui.painter(), cell, s, label);
+    // BANK, PATTERN and MODE are engraving for now; CLEAR is live — it empties the pattern on screen, which is
+    // the one action here with no undo, so it takes two clicks (see `ui::clear`).
+    let switch_cells = layout::knob_cells(l.switches, 4);
+    for (label, cell) in ["BANK", "PATTERN", "MODE"].iter().zip(switch_cells.iter()) {
+        paint_switch(ui.painter(), *cell, s, label);
+    }
+    if let Some(&clear_cell) = switch_cells.get(3) {
+        let now = std::time::Instant::now();
+        let armed = clear::is_armed(state.clear_armed_at, now);
+        let label = if armed { "CLEAR?" } else { "CLEAR" };
+        if transport::transport_button(ui, "clear-pattern", clear_cell, label, armed).clicked() {
+            match clear::click(state.clear_armed_at, now) {
+                clear::Click::Armed => state.clear_armed_at = Some(now),
+                clear::Click::Cleared => {
+                    clear::disarm(state);
+                    let empty = Arc::new(Pattern::empty());
+                    shared.set_pattern(Arc::clone(&empty));
+                    state.pattern = empty;
+                    state.dirty = true;
+                }
+            }
+        }
     }
     // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);

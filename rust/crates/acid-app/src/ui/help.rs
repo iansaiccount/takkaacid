@@ -19,6 +19,8 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "alt+click: slide into the next note",
                 "drag up or down: change pitch",
                 "double click: clear the step",
+                "CLEAR button: empty the pattern (twice)",
+                "a dim slide leads into a rest, so it cannot glide",
             ],
         ),
         (
@@ -144,6 +146,7 @@ mod tests {
             "shift+left",
             "shift+up",
             "enter",
+            "CLEAR",
             "MIDI",
             "clock",
             "CC",
