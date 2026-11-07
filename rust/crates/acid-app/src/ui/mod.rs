@@ -47,6 +47,12 @@ pub struct PanelState {
     /// The VOLUME knob, kept separate from the seven tone knobs.
     /// True once the knobs have been read from `SharedState` for the first time.
     pub knobs_synced: bool,
+    /// The MIDI status line, right-aligned in the top strip.
+    pub midi_status: String,
+    /// True when the supervisor has given up, which shows the REPROBE target.
+    pub midi_given_up: bool,
+    /// Set by the panel when REPROBE is clicked; the app clears it.
+    pub reprobe_requested: bool,
     pub volume: f32,
 }
 
@@ -65,6 +71,9 @@ impl Default for PanelState {
             dirty: false,
             volume: acid_core::engine::DEFAULT_VOLUME_KNOB,
             knobs_synced: false,
+            midi_status: "MIDI: none (retrying)".to_string(),
+            midi_given_up: false,
+            reprobe_requested: false,
         }
     }
 }
@@ -114,6 +123,43 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         &display::format_tempo(state.tempo),
         s,
     );
+
+    // MIDI status: right-aligned between the wordmark and the pattern display, amber when the app has
+    // stopped probing and a small REPROBE target appears with it.
+    let status = egui::Rect::from_min_max(
+        egui::Pos2::new(l.top.left() + l.top.width() * 0.42, l.top.top()),
+        egui::Pos2::new(
+            panel::pattern_display_rect(l.top).left() - theme::GAP * s,
+            l.top.bottom(),
+        ),
+    );
+    ui.painter().text(
+        status.right_center(),
+        egui::Align2::RIGHT_CENTER,
+        &state.midi_status,
+        theme::legend(11.0 * s),
+        if state.midi_given_up {
+            theme::LED_ACCENT
+        } else {
+            theme::SILKSCREEN_DIM
+        },
+    );
+    if state.midi_given_up {
+        let dot = egui::Rect::from_center_size(
+            egui::Pos2::new(status.left() + 8.0 * s, status.center().y),
+            egui::vec2(14.0 * s, 14.0 * s),
+        );
+        let response = ui.interact(
+            dot,
+            ui.scope_id().with("midi-reprobe"),
+            egui::Sense::click(),
+        );
+        ui.painter()
+            .circle_filled(dot.center(), 4.5 * s, theme::LED_ACCENT);
+        if response.clicked() {
+            state.reprobe_requested = true;
+        }
+    }
 
     for (i, cell) in l.knobs.cells.iter().enumerate() {
         let diameter = cell.width().min(cell.height() * 0.78);

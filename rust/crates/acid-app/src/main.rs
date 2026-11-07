@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use acid_app::audio::{self, Rig};
 use acid_app::state::{self, AudioStatus};
+use acid_app::midi;
 use acid_app::persist;
 use acid_app::ui as panel_ui;
 use acid_core::bank::PatternBank;
@@ -51,6 +52,7 @@ fn main() -> eframe::Result {
                 panel,
                 bank,
                 autosave: persist::Autosave::new(),
+                midi: Midi::new(),
             }))
         }),
     )
@@ -63,6 +65,7 @@ struct TakkaApp {
     /// The bank as loaded from disk; only the playing pattern is kept in `state`.
     bank: PatternBank,
     autosave: persist::Autosave,
+    midi: Midi,
 }
 
 impl eframe::App for TakkaApp {
@@ -87,6 +90,20 @@ impl eframe::App for TakkaApp {
                 other => other.clone(),
             });
         }
+        // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
+        // thread — it runs on a spawned thread and reports through a channel.
+        self.midi.poll();
+        if self.panel.reprobe_requested {
+            self.panel.reprobe_requested = false;
+            self.midi.reprobe();
+        }
+        self.midi.probe_if_due(Arc::clone(&self.state));
+        self.panel.midi_status = midi::supervisor::status_line(
+            self.midi.name.as_deref(),
+            self.midi.supervisor.retries(),
+        );
+        self.panel.midi_given_up = self.midi.name.is_none()
+            && self.midi.supervisor.retries() >= midi::supervisor::MIDI_MAX_RETRIES;
         ctx.request_repaint_after(Duration::from_millis(200));
         // Write the session when something changed and the interval has passed.
         if self
@@ -125,6 +142,94 @@ impl TakkaApp {
             Ok(()) => self.panel.dirty = false,
             Err(error) => eprintln!("takka-acid: could not save: {error}"),
         }
+    }
+}
+
+/// Owns the MIDI connection and the probe machinery.
+///
+/// A probe runs on its own thread and reports through a channel, so a missing or unplugged interface can
+/// never block a frame. The message handler runs on midir's thread and only writes atomics.
+struct Midi {
+    input: Option<midi::ports::MidiIn>,
+    supervisor: midi::supervisor::MidiSupervisor,
+    pending: Option<std::sync::mpsc::Receiver<Result<midi::ports::MidiIn, String>>>,
+    name: Option<String>,
+}
+
+impl Midi {
+    fn new() -> Self {
+        Self {
+            input: None,
+            supervisor: midi::supervisor::MidiSupervisor::new(),
+            pending: None,
+            name: None,
+        }
+    }
+
+    /// Start a probe unless one is already running or the supervisor is waiting.
+    fn probe_if_due(&mut self, state: Arc<state::SharedState>) {
+        if self.pending.is_some() || !self.supervisor.should_probe(std::time::Instant::now()) {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.pending = Some(rx);
+        std::thread::spawn(move || {
+            let mut follower = midi::tempo::TempoFollower::new();
+            let result = midi::ports::MidiIn::open(None, move |_, bytes| {
+                let Some(event) = midi::message::parse(bytes) else {
+                    return;
+                };
+                match event {
+                    midi::message::MidiEvent::Clock => {
+                        if let Some(bpm) = follower.on_clock(std::time::Instant::now()) {
+                            midi::tempo::follow_clock(&state, bpm);
+                        }
+                    }
+                    midi::message::MidiEvent::ControlChange { cc, value } => {
+                        midi::cc::apply_cc(&state, cc, value);
+                    }
+                    other => {
+                        midi::message::handle(other, &state);
+                    }
+                }
+            })
+            .map_err(|error| error.to_string());
+            let _ = tx.send(result);
+        });
+    }
+
+    /// Collect a finished probe, if any, and update the supervisor.
+    fn poll(&mut self) {
+        let Some(rx) = &self.pending else {
+            return;
+        };
+        let Ok(result) = rx.try_recv() else {
+            return;
+        };
+        self.pending = None;
+        match result {
+            Ok(input) => {
+                self.name = Some(input.port_name().to_string());
+                self.input = Some(input);
+                self.supervisor.on_success();
+            }
+            Err(message) => {
+                if self.name.is_some() {
+                    // The port went away: drop the connection so nothing is left holding it.
+                    self.input = None;
+                    self.name = None;
+                }
+                let action = self.supervisor.on_error(std::time::Instant::now());
+                if matches!(action, midi::supervisor::MidiAction::GiveUp) {
+                    eprintln!("takka-acid: {message} — press the amber dot to retry");
+                }
+            }
+        }
+    }
+
+    /// Try again now, whatever the supervisor thinks.
+    fn reprobe(&mut self) {
+        self.supervisor.on_success();
     }
 }
 

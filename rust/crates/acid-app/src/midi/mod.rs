@@ -8,3 +8,4 @@ pub mod ports;
 pub mod message;
 pub mod tempo;
 pub mod cc;
+pub mod supervisor;
