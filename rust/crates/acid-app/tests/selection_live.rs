@@ -71,9 +71,6 @@ fn click_with(
     run_on(ctx, screen(), panel, shared, vec![release(at)]);
 }
 
-
-
-
 fn lit_shared() -> std::sync::Arc<SharedState> {
     let shared = SharedState::new();
     for i in 0..16 {

@@ -6,10 +6,10 @@
 
 use std::sync::Arc;
 
-use crate::oscillator::Waveform;
-use crate::param;
 use crate::drive::Drive;
 use crate::limiter::Limiter;
+use crate::oscillator::Waveform;
+use crate::param;
 use crate::pattern::Pattern;
 use crate::sequencer::Sequencer;
 use crate::voice::{
