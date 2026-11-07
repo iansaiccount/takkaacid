@@ -171,11 +171,7 @@ pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternB
     *bank = state.bank.clone();
     shared.tempo_bpm.set(state.bpm);
     shared.swing.set(state.swing);
-    shared.set_waveform(if state.knobs.waveform == 1 {
-        Waveform::Square
-    } else {
-        Waveform::Saw
-    });
+    shared.set_waveform(Waveform::from_index(usize::from(state.knobs.waveform)));
     shared.tuning.set(state.knobs.tuning);
     shared.cutoff.set(state.knobs.cutoff);
     shared.resonance.set(state.knobs.resonance);
@@ -200,11 +196,7 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         version: SAVE_VERSION,
         bank,
         knobs: Knobs {
-            waveform: if snapshot.waveform == Waveform::Square {
-                1
-            } else {
-                0
-            },
+            waveform: snapshot.waveform.index() as u8,
             tuning: snapshot.tuning,
             cutoff: snapshot.cutoff,
             resonance: snapshot.resonance,

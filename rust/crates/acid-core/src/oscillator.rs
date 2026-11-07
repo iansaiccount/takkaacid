@@ -1,7 +1,7 @@
-//! The oscillator: one phase accumulator, two waveshapes.
+//! The oscillator: one phase accumulator, four waveshapes.
 //!
 //! Deliberately naive — no band-limiting. Anti-aliasing is Phase 12; at bass frequencies through a
-//! 4-pole lowpass the fold-back is largely masked, and the panel needs a working WAVEFORM switch first.
+//! 4-pole lowpass the fold-back is largely masked, and sine and triangle barely alias at all.
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,44 @@ pub enum Waveform {
     #[default]
     Saw,
     Square,
+    Sine,
+    Triangle,
+}
+
+impl Waveform {
+    /// Every wave the panel offers, in the order the control shows them.
+    pub const ALL: [Waveform; 4] = [
+        Waveform::Saw,
+        Waveform::Square,
+        Waveform::Sine,
+        Waveform::Triangle,
+    ];
+
+    /// Where this wave sits in [`Self::ALL`]; the save file stores this number.
+    pub fn index(self) -> usize {
+        match self {
+            Waveform::Saw => 0,
+            Waveform::Square => 1,
+            Waveform::Sine => 2,
+            Waveform::Triangle => 3,
+        }
+    }
+
+    /// The wave at `index`, clamped to the catalogue: a file from a newer build names a wave this one does not have, and
+    /// clipping to the last entry is kinder than refusing to load.
+    pub fn from_index(index: usize) -> Self {
+        Self::ALL[index.min(Self::ALL.len() - 1)]
+    }
+
+    /// The panel's ASCII caption for this wave.
+    pub fn name(self) -> &'static str {
+        match self {
+            Waveform::Saw => "SAW",
+            Waveform::Square => "SQR",
+            Waveform::Sine => "SINE",
+            Waveform::Triangle => "TRI",
+        }
+    }
 }
 
 /// Lowest frequency the oscillator will play.
@@ -70,6 +108,9 @@ impl Oscillator {
                     -1.0
                 }
             }
+            // Phase 0 is the bottom of every wave, so switching between them cannot move the pitch or the level.
+            Waveform::Sine => (core::f64::consts::TAU * self.phase).sin() as f32,
+            Waveform::Triangle => 1.0 - 4.0 * (self.phase as f32 - 0.5).abs(),
         };
         self.phase += self.inc;
         if self.phase >= 1.0 {

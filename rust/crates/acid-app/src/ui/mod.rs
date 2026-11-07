@@ -175,10 +175,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // frame would pin it at the extreme and a drag could never cross the midpoint. It is read once, at the
     // first frame (which also picks up a restored session), and then the hand owns it.
     if !state.knobs_synced {
-        state.knobs[0] = match shared.waveform() {
-            acid_core::oscillator::Waveform::Saw => 0.0,
-            acid_core::oscillator::Waveform::Square => 1.0,
-        };
+        state.knobs[0] = waveform_position(shared.waveform());
         state.knobs_synced = true;
     }
     state.knobs[1] = shared.tuning.get();
@@ -246,18 +243,34 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // the turn goes into a scratch value so a stray drag cannot move the patch either.
         let choosing = state.learn == learn::Step::Choosing;
         let mut scratch = state.knobs[i];
+        // The WAVEFORM knob is a switch, not a dial: its caption names the wave it is on, and its value is snapped to
+        // the nearest detent after the hand lets go, so it can never rest between two waves. The caption is read before
+        // the knob borrows its value.
+        let label = if i == 0 {
+            waveform_from_position(state.knobs[0]).name()
+        } else {
+            theme::KNOB_LABELS[i]
+        };
         let target = if choosing {
             &mut scratch
         } else {
             &mut state.knobs[i]
         };
-        knob::knob(
+        let response = knob::knob(
             &mut cell_ui,
             egui::Id::unique(("knob", i)),
-            theme::KNOB_LABELS[i],
+            label,
             target,
             diameter,
         );
+        if i == 0 && !choosing {
+            // Snap only once the hand has let go: snapping mid-drag would pull the value back onto the detent it started
+            // from, and a slow drag could never cross a midpoint.
+            if !response.dragged() {
+                state.knobs[0] = waveform_position(waveform_from_position(state.knobs[0]));
+            }
+            waveform_detents(cell_ui.painter(), *cell, state.knobs[0], s);
+        }
         if choosing {
             let hit = ui.interact(
                 *cell,
@@ -273,7 +286,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
         // Publish straight away: the audio thread's next block picks it up, so the move is heard now.
         match i {
-            0 => shared.set_waveform(waveform_from_knob(state.knobs[0])),
+            0 => shared.set_waveform(waveform_from_position(state.knobs[0])),
             1 => shared.tuning.set(state.knobs[1]),
             2 => shared.cutoff.set(state.knobs[2]),
             3 => shared.resonance.set(state.knobs[3]),
@@ -773,11 +786,45 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
     }
 }
 
-/// The WAVEFORM knob is a two-position switch drawn as a knob: past the midpoint is the square wave.
-pub fn waveform_from_knob(knob: f32) -> acid_core::oscillator::Waveform {
-    if knob >= 0.5 {
-        acid_core::oscillator::Waveform::Square
-    } else {
-        acid_core::oscillator::Waveform::Saw
+/// The control position of a wave: `0.0` is the first entry of the catalogue, `1.0` the last.
+pub fn waveform_position(wave: acid_core::oscillator::Waveform) -> f32 {
+    wave.index() as f32 / (acid_core::oscillator::Waveform::ALL.len() - 1) as f32
+}
+
+/// The wave nearest a control position. Rounded, not floored, so the detents divide the travel evenly and the knob can
+/// never rest between two waves.
+pub fn waveform_from_position(position: f32) -> acid_core::oscillator::Waveform {
+    let last = (acid_core::oscillator::Waveform::ALL.len() - 1) as f32;
+    acid_core::oscillator::Waveform::from_index((position.clamp(0.0, 1.0) * last).round() as usize)
+}
+
+/// Mark every wave's detent around the WAVEFORM knob, lighting the one the knob is on.
+///
+/// The knob's pointer alone cannot say *where* the other waves are, which is the difference between a dial and a switch;
+/// a tick per wave turns it into one at a glance.
+fn waveform_detents(painter: &egui::Painter, cell: egui::Rect, position: f32, scale: f32) {
+    let diameter = cell.width().min(cell.height() * 0.78);
+    let center = egui::Pos2::new(cell.center().x, cell.top() + diameter / 2.0);
+    let radius = diameter / 2.0;
+    let ticks = acid_core::oscillator::Waveform::ALL.len();
+    let chosen = waveform_from_position(position);
+
+    for (index, wave) in acid_core::oscillator::Waveform::ALL.iter().enumerate() {
+        let angle = knob::angle_for(index as f32 / (ticks - 1) as f32);
+        let lit = *wave == chosen;
+        let inner = radius * 1.06;
+        let outer = radius * if lit { 1.22 } else { 1.16 };
+        let (sin, cos) = (angle.sin(), angle.cos());
+        painter.line_segment(
+            [
+                egui::Pos2::new(center.x + inner * sin, center.y - inner * cos),
+                egui::Pos2::new(center.x + outer * sin, center.y - outer * cos),
+            ],
+            if lit {
+                egui::Stroke::new(2.0 * scale, theme::LED_ACCENT)
+            } else {
+                egui::Stroke::new(1.0 * scale, theme::SILKSCREEN_DIM)
+            },
+        );
     }
 }

@@ -2,7 +2,7 @@
 //! value, `AudioRenderer::render_mono` snapshots it and `apply` pushes it into the engine's knobs.
 
 use acid_app::state::SharedState;
-use acid_app::ui::{PanelState, draw_panel, layout, waveform_from_knob};
+use acid_app::ui::{PanelState, draw_panel, layout};
 use acid_core::oscillator::Waveform;
 
 fn window() -> egui::Rect {
@@ -69,37 +69,49 @@ fn drag_knob_in_steps(
     panel.knobs[index]
 }
 
-/// The WAVEFORM knob is a switch drawn as a knob. A real drag arrives over many frames, so the value has to
-/// accumulate — re-deriving it from the switch state every frame pins it at the extreme.
+/// The WAVEFORM knob is a switch with four detents. A drag arrives over many frames, so the value has to accumulate —
+/// re-deriving it from the switch state every frame would pin it at the extreme.
 #[test]
-fn dragging_the_waveform_knob_across_the_midpoint_selects_the_square_wave() {
+fn dragging_the_waveform_knob_moves_one_wave_per_detent() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     assert_eq!(shared.waveform(), Waveform::Saw, "launch waveform");
-    // Four frames of 30 px = 120 px, two thirds of the travel: comfortably past the midpoint.
-    drag_knob_in_steps(&shared, &mut panel, 0, 30.0, 4);
+
+    // 180 px of travel over four detents: 60 px is one wave, so 4 x 20 px steps reach the square and stop on it.
+    drag_knob_in_steps(&shared, &mut panel, 0, 20.0, 4);
     assert_eq!(
         shared.waveform(),
         Waveform::Square,
-        "dragging past the midpoint must select the square wave"
+        "one detent up is the next wave"
     );
+    // The pointer sits between detents while the hand is down; the value is snapped when it comes up (the arithmetic is
+    // covered by `the_waveform_knob_is_a_switch_with_a_detent_per_wave`).
     assert!(
-        panel.knobs[0] > 0.5,
-        "the knob should stay where the hand left it: {}",
+        panel.knobs[0] > 1.0 / 3.0 && panel.knobs[0] < 2.0 / 3.0,
+        "the drag accumulated: {}",
         panel.knobs[0]
     );
+
+    // Another step's worth carries on to the sine.
+    drag_knob_in_steps(&shared, &mut panel, 0, 20.0, 4);
+    assert_eq!(shared.waveform(), Waveform::Sine);
 }
 
-/// Dragging back below the midpoint returns to the saw.
+/// Dragging back a detent returns to the previous wave, and the ends of the travel are hard stops.
 #[test]
-fn dragging_the_waveform_knob_back_below_the_midpoint_returns_to_saw() {
+fn the_waveform_knob_stops_at_the_ends_of_the_catalogue() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    drag_knob_in_steps(&shared, &mut panel, 0, 30.0, 4);
-    assert_eq!(shared.waveform(), Waveform::Square);
-    // Down 100 px from there, in two frames.
-    drag_knob_in_steps(&shared, &mut panel, 0, -50.0, 2);
+
+    // All the way up: the triangle, and no further.
+    drag_knob_in_steps(&shared, &mut panel, 0, 40.0, 12);
+    assert_eq!(shared.waveform(), Waveform::Triangle);
+    assert!((panel.knobs[0] - 1.0).abs() < 0.01);
+
+    // All the way back down: the saw, and no further.
+    drag_knob_in_steps(&shared, &mut panel, 0, -40.0, 12);
     assert_eq!(shared.waveform(), Waveform::Saw);
+    assert!(panel.knobs[0].abs() < 0.01);
 }
 
 #[test]
@@ -140,9 +152,37 @@ fn every_knob_reaches_its_own_shared_field() {
 }
 
 #[test]
-fn the_waveform_knob_is_a_switch_at_the_midpoint() {
-    assert_eq!(waveform_from_knob(0.0), Waveform::Saw);
-    assert_eq!(waveform_from_knob(0.49), Waveform::Saw);
-    assert_eq!(waveform_from_knob(0.5), Waveform::Square);
-    assert_eq!(waveform_from_knob(1.0), Waveform::Square);
+fn the_waveform_knob_is_a_switch_with_a_detent_per_wave() {
+    use acid_app::ui::{waveform_from_position, waveform_position};
+
+    // Four detents, evenly spread: the knob can rest anywhere, and always means exactly one wave.
+    assert_eq!(waveform_position(Waveform::Saw), 0.0);
+    assert_eq!(waveform_position(Waveform::Square), 1.0 / 3.0);
+    assert_eq!(waveform_position(Waveform::Sine), 2.0 / 3.0);
+    assert_eq!(waveform_position(Waveform::Triangle), 1.0);
+
+    // No gaps and no overlap: either side of each midpoint stays on its own wave.
+    for wave in Waveform::ALL {
+        let position = waveform_position(wave);
+        assert_eq!(
+            waveform_from_position(position),
+            wave,
+            "{wave:?} at its detent"
+        );
+        assert_eq!(
+            waveform_from_position(position - 0.02),
+            wave,
+            "{wave:?} just below"
+        );
+        assert_eq!(
+            waveform_from_position(position + 0.02),
+            wave,
+            "{wave:?} just above"
+        );
+    }
+    assert_eq!(waveform_from_position(0.0), Waveform::Saw);
+    assert_eq!(waveform_from_position(1.0), Waveform::Triangle);
+    // A position out of range still names a wave rather than panicking.
+    assert_eq!(waveform_from_position(-1.0), Waveform::Saw);
+    assert_eq!(waveform_from_position(2.0), Waveform::Triangle);
 }

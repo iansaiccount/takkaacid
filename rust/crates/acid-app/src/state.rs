@@ -170,19 +170,12 @@ impl SharedState {
     }
 
     pub fn set_waveform(&self, waveform: Waveform) {
-        let raw = match waveform {
-            Waveform::Saw => 0,
-            Waveform::Square => 1,
-        };
-        self.waveform.store(raw, Ordering::Relaxed);
+        // The catalogue owns the numbering, so adding a wave cannot leave a stale `match` behind.
+        self.waveform.store(waveform.index(), Ordering::Relaxed);
     }
 
     pub fn waveform(&self) -> Waveform {
-        if self.waveform.load(Ordering::Relaxed) == 1 {
-            Waveform::Square
-        } else {
-            Waveform::Saw
-        }
+        Waveform::from_index(self.waveform.load(Ordering::Relaxed))
     }
 
     /// Publish a whole pattern. The audio thread sees either the old or the new one, never a half-built one.
