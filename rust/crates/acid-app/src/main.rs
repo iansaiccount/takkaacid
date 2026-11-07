@@ -413,7 +413,7 @@ impl Midi {
         self.name = None;
         self.pending = None;
         self.preference = choice;
-        self.supervisor.on_success();
+        self.supervisor.probe_now();
     }
 
     /// The port name the session should remember, `None` for "any".
@@ -423,14 +423,26 @@ impl Midi {
 
     /// Start a probe unless one is already running or the supervisor is waiting.
     fn probe_if_due(&mut self, state: Arc<state::SharedState>) {
-        if self.pending.is_some() || !self.supervisor.should_probe(std::time::Instant::now()) {
+        let now = std::time::Instant::now();
+        if self.pending.is_some() || !self.supervisor.should_probe(now) {
             return;
+        }
+        // While a port is open, only ask whether it is still there. Opening a second connection to find out would make
+        // every note arrive twice, which is exactly the "one press writes two steps" report.
+        if let Some(name) = self.name.clone() {
+            if midi::ports::is_listed(&name) {
+                self.supervisor.on_success(now);
+                return;
+            }
+            self.input = None;
+            self.name = None;
         }
         let (tx, rx) = std::sync::mpsc::channel();
         self.pending = Some(rx);
         let choice = self.preference.clone();
         std::thread::spawn(move || {
             let mut follower = midi::tempo::TempoFollower::new();
+            let mut gate = midi::gate::NoteGate::new();
             let result = midi::ports::MidiIn::open(&choice, move |_, bytes| {
                 let Some(event) = midi::message::parse(bytes) else {
                     return;
@@ -445,7 +457,11 @@ impl Midi {
                         midi::cc::apply_cc(&state, cc, value);
                     }
                     other => {
-                        midi::message::handle(other, &state);
+                        // One note-on per press: a note already down is the same note delivered twice, not a second
+                        // press, and it must not write a second step.
+                        if midi::gate::passes(&mut gate, other) {
+                            midi::message::handle(other, &state);
+                        }
                     }
                 }
             })
@@ -467,7 +483,7 @@ impl Midi {
             Ok(input) => {
                 self.name = Some(input.port_name().to_string());
                 self.input = Some(input);
-                self.supervisor.on_success();
+                self.supervisor.on_success(std::time::Instant::now());
             }
             Err(message) => {
                 if self.name.is_some() {
@@ -485,7 +501,7 @@ impl Midi {
 
     /// Try again now, whatever the supervisor thinks.
     fn reprobe(&mut self) {
-        self.supervisor.on_success();
+        self.supervisor.probe_now();
     }
 }
 

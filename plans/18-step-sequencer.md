@@ -257,3 +257,38 @@ panel places (with the frame time) — so the next report can carry the actual e
 ```
 
 A run of the harness with the flag shows one line per press, which is the behaviour to compare against.
+
+---
+
+### Task 11: one note per press — the doubled connection
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/midi/supervisor.rs` (`on_success(now)`, `probe_now`), `rust/crates/acid-app/src/midi/gate.rs` (new), `rust/crates/acid-app/src/midi/ports.rs` (`is_listed`), `rust/crates/acid-app/src/main.rs` (the probe and the handler)
+- Test: `rust/crates/acid-app/src/midi/{supervisor,gate,ports}.rs`
+
+**The trace said it all:**
+
+```
+[TAKKA_TRACE_INPUT] midi in: note 64 velocity 88
+[TAKKA_TRACE_INPUT] midi in: note 64 velocity 88
+[TAKKA_TRACE_INPUT] place midi: note 64 velocity 88 -> G 1 on step 1
+[TAKKA_TRACE_INPUT] place midi: note 64 velocity 88 -> G 1 on step 2
+```
+
+Two arrivals for one press, so the app was hearing every note twice. `MidiSupervisor::on_success` left `next_probe: None`,
+and `should_probe` reads `None` as "never probed" — so a *connected* app asked to probe again on the very next frame,
+opened a **second** connection, and kept the first until the new one arrived in `poll`. Both delivered every message, and
+both writes walked the border: two steps per press.
+
+- [x] **Step 1: The failing test** — a port that just opened must not be probed again at once, but must be checked again
+  after the interval; asking for a port explicitly probes at once.
+- [x] **Step 2: Run it** (fails: `should_probe` is true immediately after success).
+- [x] **Step 3: Implement** — `on_success(now)` records the interval, and the new `probe_now()` is what choosing a port
+  means. While a port is open the app now asks `ports::is_listed(name)` — enumerating ports costs nothing and delivers no
+  messages — and only reconnects when the name has actually gone.
+- [x] **Step 4: Defence in depth** — `midi::gate::NoteGate` refuses a note-on for a note that is already down: that is the
+  same note delivered twice, never a second press, because a keyboard cannot repeat without a note-off. Clock, transport
+  and controllers pass straight through (the tempo follower needs every clock), and a refusal is traced.
+- [x] **Step 5: Mutation-check** — `if false` in `NoteGate::note_on` fails the duplicate test; the old `next_probe = None`
+  fails the probe test.
+- [x] **Step 6: Verify** — 51 suites green, clippy `-D warnings`, fmt clean.

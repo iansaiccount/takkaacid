@@ -5,6 +5,7 @@
 //! to open and play without one.
 
 pub mod cc;
+pub mod gate;
 pub mod message;
 pub mod ports;
 pub mod supervisor;

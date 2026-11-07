@@ -63,6 +63,18 @@ pub fn pick_port(names: &[String], wanted: Option<&str>) -> Option<usize> {
     PortChoice::from(wanted).resolve(names)
 }
 
+/// Whether a port with this exact name is still on the system.
+///
+/// This is how a live connection is checked without opening a second one: listing ports costs nothing and delivers no
+/// messages, where a probe connection would deliver every note twice. An enumeration that fails counts as "still there",
+/// because the alternative is dropping a working connection over a transient error.
+pub fn is_listed(name: &str) -> bool {
+    match list_ports() {
+        Ok(names) => names.iter().any(|listed| listed == name),
+        Err(_) => true,
+    }
+}
+
 /// Every MIDI input port the system reports, by name.
 pub fn list_ports() -> Result<Vec<String>> {
     let input = MidiInput::new("takka-acid").map_err(|error| anyhow!("opening MIDI: {error}"))?;

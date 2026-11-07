@@ -54,9 +54,14 @@ impl MidiSupervisor {
     }
 
     /// A port opened: forget every failure, so the next unplug starts the count again.
-    pub fn on_success(&mut self) {
+    /// A port opened: forget every failure, and wait a full interval before looking again.
+    ///
+    /// Waiting is the point. `next_probe: None` means "never looked", so leaving it `None` after a success made
+    /// `should_probe` true on the very next frame: the app opened a second connection while the first was still live, and
+    /// both delivered every note — one key press, two steps.
+    pub fn on_success(&mut self, now: Instant) {
         self.retries = 0;
-        self.next_probe = None;
+        self.next_probe = Some(now + MIDI_RETRY);
     }
 
     /// True when a probe is due — immediately before the first attempt, then once per interval.
@@ -65,6 +70,15 @@ impl MidiSupervisor {
             None => self.retries < MIDI_MAX_RETRIES,
             Some(due) => now >= due,
         }
+    }
+
+    /// Forget everything and probe on the next frame: the player picked a port, or asked to retry.
+    ///
+    /// This is the opposite of [`Self::on_success`], which waits: a chosen port should open now, while a port that just
+    /// opened should not be opened again.
+    pub fn probe_now(&mut self) {
+        self.retries = 0;
+        self.next_probe = None;
     }
 
     /// How many consecutive failures have been recorded.
@@ -97,6 +111,38 @@ mod tests {
     }
 
     #[test]
+    fn a_port_that_just_opened_is_not_probed_again_on_the_next_frame() {
+        // The bug behind "one key press, two steps": a success used to leave `next_probe: None`, which reads as "never
+        // probed", so the app opened a second connection the very next frame while the first was still delivering notes.
+        let mut s = MidiSupervisor::new();
+        let t0 = Instant::now();
+        assert!(s.should_probe(t0), "the first probe is due at once");
+
+        s.on_success(t0);
+        assert!(
+            !s.should_probe(t0),
+            "a connected port must not be probed again at once"
+        );
+        assert!(!s.should_probe(t0 + MIDI_RETRY / 2));
+        assert!(
+            s.should_probe(t0 + MIDI_RETRY),
+            "but it is looked at again after the interval, so an unplugged device is noticed"
+        );
+    }
+
+    #[test]
+    fn asking_for_a_port_probes_at_once_instead_of_waiting() {
+        // A chosen port is the opposite case: the player asked for it, so it opens now rather than after the interval.
+        let mut s = MidiSupervisor::new();
+        let t0 = Instant::now();
+        s.on_success(t0);
+        assert!(!s.should_probe(t0), "still inside the interval");
+
+        s.probe_now();
+        assert!(s.should_probe(t0), "a chosen port opens at once");
+    }
+
+    #[test]
     fn it_gives_up_after_fifteen_attempts_and_can_be_reset() {
         let mut s = MidiSupervisor::new();
         let t0 = Instant::now();
@@ -109,7 +155,7 @@ mod tests {
             !s.should_probe(t0 + MIDI_RETRY * 40),
             "given up means quiet"
         );
-        s.on_success();
+        s.on_success(t0 + MIDI_RETRY * 41);
         assert_eq!(s.on_error(t0 + MIDI_RETRY * 40), MidiAction::Wait);
     }
 
