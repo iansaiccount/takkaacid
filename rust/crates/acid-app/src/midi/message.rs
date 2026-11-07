@@ -48,10 +48,13 @@ pub fn is_accent(velocity: u8) -> bool {
     velocity >= ACCENT_VELOCITY
 }
 
-/// The frequency a keyboard note plays, an octave below its concert pitch so the panel's home register and
-/// the keyboard's middle C agree.
+/// The frequency a keyboard note plays.
+///
+/// Exactly the note's own frequency, so the audition and the step it writes agree: the panel stores a note as the pair
+/// whose frequency is the same, so playing a key and hearing it back from the sequencer must not differ by an octave.
+/// (This used to transpose down by one, which made the audition disagree with the step it was about to write.)
 pub fn note_hz(note: u8) -> f32 {
-    midi_to_hz(f32::from(note) - 12.0)
+    midi_to_hz(f32::from(note))
 }
 
 /// The concert name of a MIDI note, `C4` for 60.
@@ -162,7 +165,21 @@ mod tests {
         assert!(!is_accent(99));
         assert!(is_accent(100));
         assert!(is_accent(127));
-        assert!((note_hz(69) - 220.0).abs() < 0.5, "A4 should play as A3");
+        assert!((note_hz(69) - 440.0).abs() < 0.5, "A4 plays A4");
+
+        // What you hear is what gets written: inside the panel's own range, a note auditions at exactly the frequency of
+        // the step it writes (outside it the octave clamps, which is the panel's 3-octave window, not a tone shift).
+        // The panel carries three octaves, MIDI 21..=56; above that the octave folds, so the fold is asserted separately.
+        for note in 21..=56u8 {
+            let (pitch, octave) = crate::ui::edit::from_midi_note(note);
+            let step = acid_core::pitch::step_hz(pitch, octave);
+            assert!(
+                (step - note_hz(note)).abs() < 0.5,
+                "note {note} auditions at {} Hz but writes {} Hz",
+                note_hz(note),
+                step
+            );
+        }
     }
 
     #[test]

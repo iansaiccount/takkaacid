@@ -186,8 +186,10 @@ mod tests {
 
     #[test]
     fn a_keycap_names_its_note_and_a_rest_shows_dashes() {
-        assert_eq!(step_label(&Step::note(Pitch::DSharp, 0)), "D#0");
-        assert_eq!(step_label(&Step::note(Pitch::CHigh, 0)), "C1");
+        // The label names the frequency the step plays: `(D#, 0)` is MIDI 36, C2. The panel's names come from its
+        // register, not from the letters of the pitch enum.
+        assert_eq!(step_label(&Step::note(Pitch::DSharp, 0)), "C2");
+        assert_eq!(step_label(&Step::note(Pitch::CHigh, 0)), "A2");
         assert_eq!(step_label(&Step::rest()), "--");
         // A rest keeps a remembered pitch; the label must still read as a rest.
         assert_eq!(

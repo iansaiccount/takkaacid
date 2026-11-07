@@ -156,16 +156,19 @@ pub fn drag_pitch(start: (Pitch, i8), dy_pixels: f32, fine: bool) -> (Pitch, i8)
     from_absolute(absolute + i32::from(semitones_from_drag(dy_pixels, fine)))
 }
 
-/// The panel's spelling of a pitch: note name plus octave, always canonical.
+/// The panel's spelling of a pitch: the note it actually sounds, always canonical.
+///
+/// The panel's register roots `C` at MIDI 33, which is really A1 — so asking for `(C, 0)` means "55 Hz", and 55 Hz is
+/// A1 in concert pitch. Spelling it `C0` (as this used to) made every label three semitones sharp of the keyboard it was
+/// played from: a C3 arrived as note 48 and was shown as `D#1`. The labels now name the frequency, so what the keycap
+/// says is what the step will sound, and a keyboard's C reads as a C.
 pub fn pitch_name(pitch: Pitch, octave: i8) -> &'static str {
-    /// The whole panel range, `-12..=24` absolute semitones, spelled out: the keycaps ask for one label per
-    /// step per frame, so a `String` each would be sixteen allocations every frame.
+    /// The whole panel range, `-12..=24` absolute semitones, spelled out from the MIDI note it lands on (21..=57, A0 to
+    /// A3): the keycaps ask for one label per step per frame, so a `String` each would be sixteen allocations per frame.
     const LABELS: [&str; 37] = [
-        "C-1", "C#-1", "D-1", "D#-1", "E-1", "F-1", "F#-1", "G-1", "G#-1", "A-1", "A#-1", "B-1",
-        "C0", "C#0", "D0", "D#0", "E0", "F0", "F#0", "G0", "G#0", "A0", "A#0", "B0", "C1", "C#1",
-        "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1",
-        // 24 is two octaves above C, but the panel only carries `-1..=1`, so the top repeats.
-        "C1",
+        "A0", "A#0", "B0", "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1",
+        "B1", "C2", "C#2", "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2", "C3",
+        "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3", "A3",
     ];
     let absolute = (i32::from(pitch.semitones()) + 12 * i32::from(octave)).clamp(-12, 24);
     LABELS[(absolute + 12) as usize]
@@ -406,36 +409,29 @@ mod tests {
     /// The label table is hand-written, so it is checked against the spelling rule it replaced: name plus the
     /// octave `from_absolute` canonicalises to. A wrong entry would print a wrong note on a keycap.
     #[test]
-    fn every_label_in_range_matches_the_canonical_spelling() {
-        const NAMES: [&str; 12] = [
-            "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-        ];
+    fn every_label_in_range_names_the_note_it_sounds() {
+        // The label must be the concert name of the frequency the step plays: the panel's `(C, 0)` is 55 Hz, which is
+        // A1, and a keyboard's C3 (note 48) is stored as `(D#, 1)` — so that step has to read `C3`, not `D#1`.
         for absolute in -12..=24 {
-            let expected = from_absolute(absolute);
-            let name = NAMES[expected.0.semitones() as usize % 12];
-            // `pitch_name` takes the same absolute semitone as `from_absolute` does.
-            let spelled = pitch_name(
-                Pitch::ALL[(absolute + 12).rem_euclid(12) as usize],
-                ((absolute + 12).div_euclid(12) - 1) as i8,
+            let (pitch, octave) = from_absolute(absolute);
+            // The panel's top clamps to `(C, 1)`, so the MIDI number to compare against is the one the *pair* plays.
+            let midi = 33 + i32::from(pitch.semitones()) + 12 * i32::from(octave);
+            let spelled = pitch_name(pitch, octave);
+            assert_eq!(
+                spelled,
+                crate::midi::message::concert_name(midi as u8),
+                "at absolute {absolute} (MIDI {midi}) the label {spelled:?} is not the note it sounds"
             );
-            let octave = expected.1;
-            assert!(
-                spelled.starts_with(name),
-                "at {absolute} the label {spelled:?} should start with {name:?}"
-            );
-            assert!(
-                spelled.ends_with(&octave.to_string()),
-                "at {absolute} the label {spelled:?} should end with the octave {octave}"
-            );
-            assert!(spelled.len() <= 4, "label too long: {spelled:?}");
         }
     }
 
     #[test]
     fn pitch_names_are_canonical() {
-        assert_eq!(pitch_name(Pitch::C, 0), "C0");
-        assert_eq!(pitch_name(Pitch::CSharp, 0), "C#0");
-        assert_eq!(pitch_name(Pitch::CHigh, 0), "C1");
-        assert_eq!(pitch_name(Pitch::B, -1), "B-1");
+        // 55 Hz, 65.4 Hz, 110 Hz, 130.8 Hz: what each of these actually is.
+        assert_eq!(pitch_name(Pitch::C, 0), "A1");
+        assert_eq!(pitch_name(Pitch::CSharp, 0), "A#1");
+        assert_eq!(pitch_name(Pitch::CHigh, 0), "A2");
+        assert_eq!(pitch_name(Pitch::B, -1), "G#1");
+        assert_eq!(pitch_name(Pitch::CHigh, 1), "A3");
     }
 }

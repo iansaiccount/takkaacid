@@ -250,6 +250,31 @@ fn backspace_rests_the_selected_step_and_walks_in_step_mode() {
 }
 
 #[test]
+fn a_keyboards_c_reads_as_a_c() {
+    // The report, end to end: the E-MU Xboard25 sends `90 30 66` for its C key — note 48, C3 — and the app showed
+    // `D#1` because its register roots `C` at MIDI 33. The step now reads what it sounds, and what it sounds is what was
+    // played.
+    let ctx = Context::default();
+    let shared = lit_shared();
+    let mut panel = PanelState {
+        step_mode: true,
+        ..PanelState::default()
+    };
+
+    midi_note(&shared, 48, 102);
+    run_on(&ctx, &mut panel, &shared, vec![]);
+
+    let step = shared.pattern().steps[0];
+    let label = acid_app::ui::edit::pitch_name(step.pitch, step.octave_offset);
+    assert_eq!(label, "C3", "a C on the keyboard must read as a C");
+    let hz = step.hz();
+    assert!(
+        (hz - 130.8).abs() < 0.5,
+        "and sound like the C that was played: {hz} Hz"
+    );
+}
+
+#[test]
 fn shift_and_backspace_rests_the_step_without_walking() {
     let ctx = Context::default();
     let shared = lit_shared();

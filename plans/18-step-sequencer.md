@@ -329,3 +329,39 @@ the keyboard's name: a C4 (60) is stored as `D#1` and sounds 130.8 Hz, which *is
 
 **Open decision (operator's call):** make the labels truthful (no sound change: `D#1` would display as `C3`), or re-root
 the register so the panel's `C0` is a real C (labels and stored data right, every existing pattern 3 semitones higher).
+
+---
+
+### Task 13: labels name the note that sounds
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/ui/edit.rs` (`pitch_name`), `rust/crates/acid-app/src/midi/message.rs` (`note_hz`)
+- Test: `rust/crates/acid-app/src/ui/edit.rs`, `rust/crates/acid-app/src/midi/message.rs`, `rust/crates/acid-app/src/ui/step_key.rs`, `rust/crates/acid-app/tests/step_mode_live.rs`
+
+**The evidence, from the operator's machine:**
+
+```
+midi raw: 90 30 66   → note 0x30 = 48 = C3   (the keyboard is right)
+midi in:  note 48 velocity 102
+             ... app stored D#1 and showed "D#1"
+```
+
+**Cause:** the panel's register roots `C` at MIDI 33 — which is A1, 55 Hz — so every label was three semitones sharp of
+the note that played. `pitch_name` printed the pitch enum's letter and the stored octave; it now names the frequency the
+step actually sounds, computed from the note number it lands on (MIDI 21..=57). So a C3 key reads `C3`, and the app's
+own `(C, 0)` — 55 Hz — correctly reads `A1`.
+
+**Second half:** `note_hz` transposed a MIDI note down an octave, so the audition did not match the step it wrote. It now
+plays the note's own frequency: what you hear is what gets written, for every note inside the panel's three octaves.
+
+- [x] **Step 1: The failing tests** — every label in the panel range must equal `concert_name` of the MIDI note it lands
+  on; a keyboard's note 48 must read `C3` and sound 130.8 Hz; a note's audition frequency must equal its step's, across
+  MIDI 21..=56.
+- [x] **Step 2: Run them** (the label table and the octave in `note_hz` fail).
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Fix the fallout** — the keycap and `pitch_names_are_canonical` tests had the old spelling baked in, and
+  the 37-entry table now runs A0..A3 rather than C-1..C1.
+- [x] **Step 5: Verify** — 51 suites green, clippy `-D warnings`, fmt clean.
+
+**Known limit, now stated in the code:** the panel carries three octaves (MIDI 21..=56). A note above A3 keeps its pitch
+class but folds into the top octave, so C4 reads `C3`. That is the panel's range, not a mapping slip.
