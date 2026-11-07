@@ -45,6 +45,8 @@ pub struct PanelState {
     /// True when something has changed since the last save.
     pub dirty: bool,
     /// The VOLUME knob, kept separate from the seven tone knobs.
+    /// True once the knobs have been read from `SharedState` for the first time.
+    pub knobs_synced: bool,
     pub volume: f32,
 }
 
@@ -62,6 +64,7 @@ impl Default for PanelState {
             drag: None,
             dirty: false,
             volume: acid_core::engine::DEFAULT_VOLUME_KNOB,
+            knobs_synced: false,
         }
     }
 }
@@ -77,12 +80,17 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
     state.pattern = shared.pattern();
     state.playing = shared.is_playing();
-    // Knobs are read from the shared state each frame and written back after the widget runs, so the panel
-    // and the engine can never hold different values for the same control.
-    state.knobs[0] = match shared.waveform() {
-        acid_core::oscillator::Waveform::Saw => 0.0,
-        acid_core::oscillator::Waveform::Square => 1.0,
-    };
+    // Knobs 1..6 round-trip exactly, so reading them back every frame is harmless. The WAVEFORM knob does
+    // not: it maps a continuous position onto a two-state switch, so re-deriving it from the switch every
+    // frame would pin it at the extreme and a drag could never cross the midpoint. It is read once, at the
+    // first frame (which also picks up a restored session), and then the hand owns it.
+    if !state.knobs_synced {
+        state.knobs[0] = match shared.waveform() {
+            acid_core::oscillator::Waveform::Saw => 0.0,
+            acid_core::oscillator::Waveform::Square => 1.0,
+        };
+        state.knobs_synced = true;
+    }
     state.knobs[1] = shared.tuning.get();
     state.knobs[2] = shared.cutoff.get();
     state.knobs[3] = shared.resonance.get();
