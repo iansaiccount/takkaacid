@@ -90,6 +90,26 @@ impl eframe::App for TakkaApp {
                 other => other.clone(),
             });
         }
+        // Keyboard shortcuts. F1 and `?` join this list when the help card lands (Task 54).
+        let presses: Vec<(egui::Key, bool)> = ctx.input(|input| {
+            [
+                egui::Key::Space,
+                egui::Key::ArrowUp,
+                egui::Key::ArrowDown,
+                egui::Key::ArrowRight,
+                egui::Key::ArrowLeft,
+            ]
+            .into_iter()
+            .filter(|key| input.key_pressed(*key))
+            .map(|key| (key, input.modifiers.shift))
+            .collect()
+        });
+        for (key, shift) in presses {
+            if let Some(shortcut) = panel_ui::shortcuts::shortcut_for(key, shift) {
+                panel_ui::shortcuts::apply(shortcut, &self.state, &mut self.bank);
+            }
+        }
+
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
         self.midi.poll();

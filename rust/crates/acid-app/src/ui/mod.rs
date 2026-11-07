@@ -8,6 +8,7 @@ pub mod knob;
 pub mod step_key;
 pub mod display;
 pub mod keys;
+pub mod shortcuts;
 pub mod transport;
 pub mod edit;
 
