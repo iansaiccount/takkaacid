@@ -5,7 +5,7 @@
 
 use egui::{Rect, Response};
 
-use super::theme;
+use super::{edit, theme};
 use acid_core::pattern::Step;
 
 /// The five paint inputs for one key.
@@ -16,16 +16,33 @@ pub struct StepView {
     pub slide: bool,
     pub current: bool,
     pub beat: bool,
+    pub selected: bool,
 }
 
 /// Reduce a `Step` plus the transport state to the five things the keycap paints.
-pub fn step_view(step: &Step, index: usize, position: usize, playing: bool) -> StepView {
+pub fn step_view(
+    step: &Step,
+    index: usize,
+    position: usize,
+    playing: bool,
+    selected: bool,
+) -> StepView {
     StepView {
         on: step.on,
         accent: step.accent,
         slide: step.slide,
         current: playing && index == position,
         beat: index.is_multiple_of(4),
+        selected,
+    }
+}
+
+/// What a keycap prints: the note it holds, or `--` for a rest.
+pub fn step_label(step: &Step) -> String {
+    if step.on {
+        edit::pitch_name(step.pitch, step.octave_offset)
+    } else {
+        "--".to_string()
     }
 }
 
@@ -33,7 +50,13 @@ pub fn step_view(step: &Step, index: usize, position: usize, playing: bool) -> S
 ///
 /// Layout inside the cell, top to bottom: LED well, 2 px gap, keycap, slide bar. The LED is lit while the
 /// step is playing or the step carries a note, and gets an amber ring when accented.
-pub fn step_key(ui: &mut egui::Ui, index: usize, view: &StepView, rect: Rect) -> Response {
+pub fn step_key(
+    ui: &mut egui::Ui,
+    index: usize,
+    step: &Step,
+    view: &StepView,
+    rect: Rect,
+) -> Response {
     let response = ui.interact(
         rect,
         ui.scope_id().with(("step-key", index)),
@@ -85,8 +108,16 @@ pub fn step_key(ui: &mut egui::Ui, index: usize, view: &StepView, rect: Rect) ->
     painter.text(
         keycap.center() + egui::vec2(0.0, -s),
         egui::Align2::CENTER_CENTER,
+        step_label(step),
+        theme::legend(12.0 * s),
+        theme::PANEL,
+    );
+    // The step number keeps a home in the corner: the note is what you read, the number is what you count.
+    painter.text(
+        keycap.right_bottom() - egui::vec2(4.0 * s, 2.0 * s),
+        egui::Align2::RIGHT_BOTTOM,
         format!("{}", index + 1),
-        theme::legend(11.0 * s),
+        theme::legend(8.0 * s),
         theme::PANEL,
     );
 
@@ -100,6 +131,15 @@ pub fn step_key(ui: &mut egui::Ui, index: usize, view: &StepView, rect: Rect) ->
     if view.slide {
         painter.rect_filled(slide_bar, 1.5 * s, theme::SILKSCREEN);
     }
+    // The whole cell, not the keycap: the outline has to read on a lit step and on a rest alike.
+    if view.selected {
+        painter.rect_stroke(
+            rect,
+            3.0 * s,
+            egui::Stroke::new((2.0 * s).max(1.0), theme::LED_ACCENT),
+            egui::StrokeKind::Inside,
+        );
+    }
 
     response
 }
@@ -110,13 +150,35 @@ mod tests {
     use acid_core::pitch::Pitch;
 
     #[test]
+    fn a_keycap_names_its_note_and_a_rest_shows_dashes() {
+        assert_eq!(step_label(&Step::note(Pitch::DSharp, 0)), "D#0");
+        assert_eq!(step_label(&Step::note(Pitch::CHigh, 0)), "C1");
+        assert_eq!(step_label(&Step::rest()), "--");
+        // A rest keeps a remembered pitch; the label must still read as a rest.
+        assert_eq!(
+            step_label(&Step {
+                on: false,
+                ..Step::note(Pitch::G, 0)
+            }),
+            "--"
+        );
+    }
+
+    #[test]
+    fn the_view_carries_the_selection() {
+        let step = Step::note(Pitch::C, 0);
+        assert!(step_view(&step, 0, 0, false, true).selected);
+        assert!(!step_view(&step, 0, 0, false, false).selected);
+    }
+
+    #[test]
     fn only_the_playing_position_lights_up() {
         let step = Step::note(Pitch::C, 0);
-        let v = step_view(&step, 3, 3, true);
+        let v = step_view(&step, 3, 3, true, false);
         assert!(v.current && !v.beat);
-        let w = step_view(&step, 3, 4, true);
+        let w = step_view(&step, 3, 4, true, false);
         assert!(!w.current);
-        let stopped = step_view(&step, 3, 3, false);
+        let stopped = step_view(&step, 3, 3, false, false);
         assert!(!stopped.current);
     }
 
@@ -127,17 +189,53 @@ mod tests {
             slide: true,
             ..Step::note(Pitch::E, 0)
         };
-        let v = step_view(&step, 8, 0, false);
+        let v = step_view(&step, 8, 0, false, false);
         assert!(v.on && v.beat && v.accent && v.slide && !v.current);
-        assert!(!step_view(&step, 9, 0, false).beat);
+        assert!(!step_view(&step, 9, 0, false, false).beat);
     }
 
     #[test]
     fn an_off_step_still_reports_its_pitch_flags_but_is_not_lit() {
         let rest = Step::rest();
-        let v = step_view(&rest, 0, 0, true);
+        let v = step_view(&rest, 0, 0, true, false);
         assert!(!v.on && v.current);
     }
+    /// The outline the human partner asked for must actually paint, not just be a flag on the view.
+    #[test]
+    fn a_selected_key_paints_more_than_an_unselected_one() {
+        let shapes = |selected: bool| {
+            let ctx = egui::Context::default();
+            let mut count = 0;
+            for _ in 0..2 {
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(200.0, 200.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ui| {
+                        let step = Step::note(Pitch::C, 0);
+                        let view = step_view(&step, 0, 0, false, selected);
+                        let cell = egui::Rect::from_min_size(
+                            egui::Pos2::new(8.0, 8.0),
+                            egui::vec2(48.0, 104.0),
+                        );
+                        step_key(ui, 0, &step, &view, cell);
+                    },
+                );
+                output.textures_delta.clear();
+                count = output.shapes.len();
+            }
+            count
+        };
+        assert!(
+            shapes(true) > shapes(false),
+            "the selection outline did not paint"
+        );
+    }
+
     /// The plan's "look at it" step, in headless form: sixteen keys paint, and the lit/accent/slide ones
     /// paint more than a bare key does.
     #[test]
@@ -173,8 +271,8 @@ mod tests {
                     ));
                     for (i, cell) in cells.iter().enumerate() {
                         let step = pattern[i % pattern.len()];
-                        let view = step_view(&step, i, 1, false);
-                        step_key(ui, i, &view, *cell);
+                        let view = step_view(&step, i, 1, false, false);
+                        step_key(ui, i, &step, &view, *cell);
                     }
                 },
             );

@@ -210,8 +210,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     let keys = layout::step_cells(l.steps);
     for (i, cell) in keys.iter().enumerate() {
         let step = state.pattern.steps[i % STEPS_PER_PATTERN];
-        let view = step_key::step_view(&step, i, state.position, state.playing);
-        let response = step_key::step_key(ui, i, &view, *cell);
+        let view = step_key::step_view(
+            &step,
+            i,
+            state.position,
+            state.playing,
+            i % STEPS_PER_PATTERN == state.selected,
+        );
+        let response = step_key::step_key(ui, i, &step, &view, *cell);
         let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
         let gesture =
             edit::gesture_from_input(response.clicked(), shift, alt, response.double_clicked());
