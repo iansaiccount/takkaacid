@@ -104,26 +104,22 @@ fn every_teachable_control_wears_the_pick_colour_while_choosing() {
 }
 
 #[test]
-fn the_highlight_goes_away_once_a_control_is_picked() {
+fn the_picked_control_keeps_its_border_while_listening() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     run(&mut panel, &shared, click(learn_centre()));
 
-    // Pick the pattern key: the flow moves on to listening, and the "which one?" question is answered.
-    let at = acid_app::ui::switches::cell(
-        acid_app::ui::layout::layout(window()).switches,
-        acid_app::ui::switches::Switch::Pattern,
-    )
-    .center();
+    // Pick the BPM readout: the "which one?" question is answered, and that readout alone keeps the border — it is the
+    // control the next message from the controller will bind.
+    let at = panel::tempo_display_rect(acid_app::ui::layout::layout(window()).top).center();
     run(&mut panel, &shared, click(at));
     assert_eq!(
         panel.learn,
-        acid_app::ui::learn::Step::Listening(acid_app::midi::cc::CcTarget::Pattern)
+        acid_app::ui::learn::Step::Listening(acid_app::midi::cc::CcTarget::Tempo)
     );
     let output = run(&mut panel, &shared, vec![vec![]]);
-    assert_eq!(learn_strokes(&output), 0);
+    assert_eq!(learn_strokes(&output), 1, "the target lost its border");
 }
-
 #[test]
 fn the_pick_colour_is_not_one_of_the_panels_own_lights() {
     // It has to read as a different kind of light: far from amber, and never used for a lit key.

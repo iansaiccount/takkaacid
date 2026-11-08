@@ -60,8 +60,10 @@ pub(super) fn draw(
             perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", value)
         };
         tips::hover(&response, state, tips::Control::Shuffle);
-        if choosing {
+        if learn::highlight(state.learn, midi::cc::CcTarget::Swing) {
             panel::learn_highlight(ui.painter(), shuffle_cell, s);
+        }
+        if choosing {
             learn_pick(
                 ui,
                 state,

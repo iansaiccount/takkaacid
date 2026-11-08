@@ -261,15 +261,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         &display::format_tempo(state.tempo),
         s,
     );
-    // Both readouts can be taught while a learn is choosing: click PATTERN and the next controller picks the pattern,
-    // click the BPM and the next controller sets the tempo. While choosing they wear the pick colour like the knobs.
-    if state.learn == learn::Step::Choosing {
+    // Both readouts wear the pick colour: while choosing, they are the answer to "which one?"; while a learn is
+    // listening for one of them, that one keeps its border so the player can see what the controller will bind.
+    if learn::highlight(state.learn, midi::cc::CcTarget::Tempo) {
         panel::learn_highlight(ui.painter(), panel::tempo_display_rect(l.top), s);
-        panel::learn_highlight(
-            ui.painter(),
-            switches::cell(l.switches, switches::Switch::Pattern),
-            s,
-        );
+    }
+    if learn::highlight(state.learn, midi::cc::CcTarget::Pattern) {
+        panel::learn_highlight(ui.painter(), panel::pattern_display_rect(l.top), s);
     }
     learn_pick(
         ui,
@@ -284,7 +282,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         state,
         shared,
         "learn-pattern",
-        switches::cell(l.switches, switches::Switch::Pattern),
+        panel::pattern_display_rect(l.top),
         midi::cc::CcTarget::Pattern,
     );
 
@@ -340,8 +338,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         volume_target,
         volume_rect.width(),
     );
-    if choosing {
+    if learn::highlight(state.learn, midi::cc::CcTarget::Volume) {
         panel::learn_highlight(ui.painter(), volume_rect, s);
+    }
+    if choosing {
         if ui
             .interact(
                 volume_rect,

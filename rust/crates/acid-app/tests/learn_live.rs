@@ -56,9 +56,9 @@ fn tempo_centre() -> Pos2 {
     panel::tempo_display_rect(layout(screen()).top).center()
 }
 
-/// The PATTERN key in the switches row.
+/// The PATTERN readout in the top strip, beside the tempo display, which a learn can teach.
 fn pattern_centre() -> Pos2 {
-    switches::cell(layout(screen()).switches, switches::Switch::Pattern).center()
+    panel::pattern_display_rect(layout(screen()).top).center()
 }
 
 #[test]
@@ -146,10 +146,10 @@ fn every_knob_in_the_row_can_be_taught_by_clicking_it() {
     }
 }
 
-/// The BPM readout and the PATTERN key are learnable too — but only while a learn is choosing, so a stray click on the
-/// top strip never starts a binding that would swallow the next controller the player touches.
+/// The BPM and PATTERN readouts are learnable too — but only while a learn is choosing, so a stray click on the top strip
+/// never starts a binding that would swallow the next controller the player touches.
 #[test]
-fn the_tempo_readout_and_the_pattern_key_can_be_taught() {
+fn the_tempo_and_pattern_readouts_can_be_taught() {
     let ctx = Context::default();
     let shared = SharedState::new();
 
@@ -177,7 +177,7 @@ fn the_tempo_readout_and_the_pattern_key_can_be_taught() {
     assert_eq!(
         panel.learn,
         Step::Listening(CcTarget::Pattern),
-        "the PATTERN key asks for a pattern fader"
+        "the PATTERN readout asks for a pattern fader"
     );
 }
 

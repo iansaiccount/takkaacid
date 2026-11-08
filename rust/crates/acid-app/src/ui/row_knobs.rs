@@ -52,10 +52,12 @@ pub(super) fn draw(
         if knob.kind() == Kind::Switch && !choosing {
             waveform_detents(cell_ui.painter(), *cell, state.knobs[slot], s);
         }
-        if choosing {
-            // Every knob can be taught, so while a learn is choosing each one wears the pick colour: the question is
-            // "which one?", and the answer has to be visible without hunting.
+        if learn::highlight(state.learn, knob.learn_target()) {
+            // Choosing asks "which one?" of every knob; once one is picked only it keeps the border, because the turn of
+            // the controller is about to bind to it.
             panel::learn_highlight(ui.painter(), *cell, s);
+        }
+        if choosing {
             let hit = ui.interact(
                 *cell,
                 ui.scope_id().with(("learn-knob", slot)),

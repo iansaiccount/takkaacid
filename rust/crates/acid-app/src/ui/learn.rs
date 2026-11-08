@@ -37,6 +37,19 @@ pub fn hint(step: Step) -> Option<&'static str> {
     }
 }
 
+/// Whether a teachable control wears the pick colour this frame.
+///
+/// While a learn is choosing, every control that can be taught does — the question is "which one?". Once one has been
+/// picked the border stays on *that* control, because the next thing the player does is move the controller that will
+/// bind to it, and the border is the only thing on the panel saying which control they are about to commit.
+pub fn highlight(step: Step, control: CcTarget) -> bool {
+    match step {
+        Step::Idle => false,
+        Step::Choosing => true,
+        Step::Listening(target) => target == control,
+    }
+}
+
 /// Stop listening. The shared flag must be cleared too, or the MIDI thread keeps swallowing controllers.
 pub fn cancel(shared: &SharedState) {
     shared.learn_active.store(false, Ordering::Relaxed);
@@ -75,6 +88,22 @@ mod tests {
                 .unwrap()
                 .contains("MIDI")
         );
+    }
+
+    #[test]
+    fn a_listening_target_keeps_its_border() {
+        // Choosing asks "which one?" of every teachable control; once one is picked, only it keeps the border — that is
+        // the control the next message from the controller will bind.
+        assert!(highlight(Step::Choosing, CcTarget::Cutoff));
+        assert!(highlight(
+            Step::Listening(CcTarget::Cutoff),
+            CcTarget::Cutoff
+        ));
+        assert!(!highlight(
+            Step::Listening(CcTarget::Cutoff),
+            CcTarget::Resonance
+        ));
+        assert!(!highlight(Step::Idle, CcTarget::Cutoff));
     }
 
     #[test]
