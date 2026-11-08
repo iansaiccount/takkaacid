@@ -1,0 +1,6 @@
+Write a plan in markdown to create a roland tb303 clone written in rust called takka-acid-rust. Break the main plan
+down into logical major steps and for each major step create a separate markdown file detailing the smaller steps
+needed for this part of the plan. I expect we will end up with 10 or more markdown files. The code will be in a
+subfolder called rust. The plans will be in a folder called plans.
+
+Let's make a great user interface for it which is a black and yellow version of the traditional TB303 design.

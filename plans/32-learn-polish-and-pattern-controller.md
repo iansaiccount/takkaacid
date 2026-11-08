@@ -113,11 +113,27 @@ and all four Important are fixed here; the minors that were cheap went with them
   `main` compares the bank around the dispatch loop and clears the pending swap. The "adopt a pattern" block is now
   `pattern_swap::adopt`, called by the keyboard, the controller swap and both song paths — so it also disarms CLEAR and
   resets the step selection, which the controller path used to miss.
-- **Important, partly fixed:** the wiring tests. The engraving test exists and the tips test now pins the real shortcuts.
-  A live "hovering paints the tooltip" test is *not* there: egui renders a tooltip in a floating area whose text is not
-  exposed in `eframe::FullOutput` in a way this suite can read back, and the pure table test already proves the text
-  exists. Recorded as a deferred minor rather than faked.
+- **Important, fixed:** the wiring tests. The engraving test exists, and the hover test does too — after a first attempt gave
+  up on it: the tooltip's galley *is* in `eframe::FullOutput.shapes`, so `tips_live::the_two_readouts_answer_the_pointer`
+  hovers each readout across four frames (egui's tooltip delay needs a still pointer and a moving clock) and reads the
+  painted text back.
 - **Minors taken:** the `_ =>` arm in `apply_cc`'s `written` match is exhaustive; a request naming the pattern already
   playing is dropped (a resting fader used to re-publish the pattern and mark the session unsaved every bar); the PATTERN
   tip no longer claims it has no key (shift+arrows); `pattern_number_of` asks `PatternBank::id_of`; stale comments and the
   plan's test names corrected.
+
+## Leftovers, closed
+
+The round opened with a few things deliberately left, and the review's deferred minors. All are now done:
+
+- **The live hover test exists.** `tips_live::the_two_readouts_answer_the_pointer` walks `FullOutput.shapes` for text
+  galleys, hovers each readout across four frames (a still pointer, a moving clock) and finds the tip's title in the
+  painted text. The earlier note that a tooltip's text could not be read back was wrong.
+- **One predicate behind the pickup's two questions.** `has_a_position(target)` is what `takes_pickup` and
+  `knob_value`'s shape both mean; `cc::a_control_that_takes_pickup_is_exactly_one_with_a_position` walks `LEARNABLE` and
+  pins them together.
+- **`row_transport::draw` dropped its unused `s`**, and the duplicated doc line above `PanelState::reprobe_requested` went
+  with it.
+- **`README.md`** — what the instrument is, its features, how to build and run it, where it keeps its files, how the plans
+  are shaped (and why they are published: they are the record of how an agent built the product), and the original
+  `Prompt.txt` brief that started it.

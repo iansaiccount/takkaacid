@@ -160,6 +160,14 @@ pub const PICKUP_TOLERANCE: f32 = 0.02;
 /// The pattern selector looks like a stepper but is played like a dial: a fader parked on pattern 8 must not jump the
 /// selection the moment it is touched, so it picks up the way the TEMPO readout does.
 pub fn takes_pickup(target: CcTarget) -> bool {
+    has_a_position(target)
+}
+
+/// Whether a control has a position a controller could already be on.
+///
+/// One predicate behind both questions the pickup asks — "does this take pickup?" and "where is it now?" — so a control
+/// cannot be pickable in one place and positionless in the other.
+fn has_a_position(target: CcTarget) -> bool {
     !matches!(target, CcTarget::Waveform)
 }
 
@@ -507,6 +515,20 @@ mod tests {
                 s.take_pattern_request(),
                 Some(selected),
                 "CC {value} must still turn the pattern knob"
+            );
+        }
+    }
+
+    #[test]
+    fn a_control_that_takes_pickup_is_exactly_one_with_a_position() {
+        // The pickup asks two questions of the same control — does it take pickup, and where is it now — so they are one
+        // predicate (`has_a_position`). This pins them together for every learnable target.
+        let s = SharedState::new();
+        for target in LEARNABLE {
+            assert_eq!(
+                takes_pickup(target),
+                knob_value(&s, target).is_some(),
+                "{target:?} disagrees about whether it has a position"
             );
         }
     }

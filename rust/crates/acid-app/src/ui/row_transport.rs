@@ -13,7 +13,6 @@ pub(super) fn draw(
     shared: &SharedState,
     ui: &mut egui::Ui,
     l: &layout::PanelLayout,
-    _s: f32,
 ) {
     // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);

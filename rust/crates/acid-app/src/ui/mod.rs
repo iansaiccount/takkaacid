@@ -85,7 +85,6 @@ pub struct PanelState {
     /// True when the supervisor has given up, which shows the REPROBE target.
     pub midi_given_up: bool,
     /// Set by the panel when REPROBE is clicked; the app clears it.
-    /// Set by the panel when REPROBE is clicked; the app clears it.
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
@@ -589,7 +588,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
     // The transport row comes after the keys above it, in the order it has always been drawn: a later widget wins a
     // hit-test tie, so keeping the order keeps the panel's behaviour.
-    row_transport::draw(state, shared, ui, &l, s);
+    row_transport::draw(state, shared, ui, &l);
     // MIDI input picker: the status line is the handle. Rows paint here, after everything else, so they sit
     // over the panel; the REPROBE dot keeps the left edge of the line while the supervisor has given up.
     let mut handle = status;
