@@ -563,6 +563,117 @@ fn the_shared_state_survives_a_save_and_restore() {
     );
 }
 
+/// The knob row's order is the file's order: `positions()` reads the seven tone knobs in `Knob::ALL` order and
+/// `from_positions()` puts them back, so a knob cannot be saved into another knob's field.
+#[test]
+fn the_knob_order_the_file_saves_is_the_panel_order() {
+    use acid_app::ui::knobs::Knob;
+    use acid_app::ui::waveform_position;
+    use acid_core::oscillator::Waveform;
+
+    // Every knob at a different position, so a swap of two fields cannot go unnoticed. The waveform is a switch, so its
+    // slot has to start on one of its four faces.
+    let positions: [f32; 7] = [
+        waveform_position(Waveform::Sine),
+        0.11,
+        0.22,
+        0.33,
+        0.44,
+        0.55,
+        0.66,
+    ];
+    let knobs = Knobs::from_positions(&positions);
+    assert_eq!(knobs.positions(), positions, "the file reordered the knobs");
+
+    // The catalogue's slot is the only index involved: each knob reads back its own position, not a neighbour's.
+    for (slot, knob) in Knob::ALL.iter().enumerate() {
+        assert_eq!(knobs.positions()[slot], positions[slot], "{knob:?} moved");
+    }
+}
+
+/// The rewrite must not move a byte of the file. The struct on the left is built through the catalogue; the one on the
+/// right is the hand-written literal this build used before, and is what an older file on disk looks like.
+#[test]
+fn a_file_written_by_this_build_is_the_file_the_old_build_wrote() {
+    use acid_app::ui::waveform_position;
+    use acid_core::oscillator::Waveform;
+
+    let old = Knobs {
+        waveform: 2,
+        tuning: 0.1,
+        cutoff: 0.2,
+        resonance: 0.3,
+        env_mod: 0.4,
+        decay: 0.5,
+        accent: 0.6,
+        volume: 0.7,
+    };
+    let new = Knobs {
+        volume: 0.7,
+        ..Knobs::from_positions(&[
+            waveform_position(Waveform::Sine),
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+        ])
+    };
+
+    assert_eq!(new, old, "the catalogue puts a knob in the wrong field");
+    assert_eq!(
+        serde_json::to_vec(&new).unwrap(),
+        serde_json::to_vec(&old).unwrap(),
+        "the field names or their order changed"
+    );
+}
+
+/// The file and the running app agree knob for knob: what the panel reads is what the file stores, and loading it back
+/// moves the same atomics. This is the pair of conversions `main` and a song load both go through.
+#[test]
+fn the_file_and_the_shared_state_agree_knob_for_knob() {
+    use acid_app::state::SharedState;
+    use acid_app::ui::knobs::Knob;
+    use acid_app::ui::waveform_position;
+    use acid_core::oscillator::Waveform;
+
+    let shared = SharedState::new();
+    let positions: [f32; 7] = [
+        waveform_position(Waveform::Triangle),
+        0.15,
+        0.25,
+        0.35,
+        0.45,
+        0.65,
+        0.75,
+    ];
+    for (knob, position) in Knob::ALL.iter().zip(positions) {
+        knob.publish(&shared, position);
+    }
+    assert_eq!(
+        Knob::ALL.map(|knob| knob.read(&shared)),
+        positions,
+        "the shared state did not take the positions"
+    );
+
+    let saved = shared_to_saved(&shared, SavedState::default().bank);
+    assert_eq!(
+        saved.knobs.positions(),
+        positions,
+        "the file lost a knob or moved it"
+    );
+
+    let back = saved_to_shared(&saved);
+    for (knob, position) in Knob::ALL.iter().zip(saved.knobs.positions()) {
+        assert!(
+            (knob.read(&back) - position).abs() < 1e-6,
+            "{knob:?} came back as {}",
+            knob.read(&back)
+        );
+    }
+}
+
 /// Runs in a child process (see the test below) with `TAKKA_ACID_DATA_DIR` set.
 #[test]
 fn data_dir_probe() {

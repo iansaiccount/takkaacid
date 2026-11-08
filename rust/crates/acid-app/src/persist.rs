@@ -19,6 +19,7 @@ use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::state::SharedState;
+use crate::ui::knobs::Knob;
 
 /// Directory name under the data home.
 pub const APP_DIR: &str = "takka-acid";
@@ -52,6 +53,46 @@ impl Default for Knobs {
             accent: DEFAULT_ACCENT_KNOB,
             volume: DEFAULT_VOLUME_KNOB,
         }
+    }
+}
+
+impl Knobs {
+    /// The seven tone knobs, in `Knob::ALL` order — the panel's order. The file's field names are the wire format; this
+    /// pair of methods is the only place that says which field belongs to which knob, so a knob cannot be saved into a
+    /// neighbour's slot, and a knob added to the catalogue fails to compile here instead of landing in a `_` arm.
+    pub fn positions(&self) -> [f32; 7] {
+        Knob::ALL.map(|knob| match knob {
+            Knob::Waveform => {
+                crate::ui::waveform_position(Waveform::from_index(usize::from(self.waveform)))
+            }
+            Knob::Tuning => self.tuning,
+            Knob::Cutoff => self.cutoff,
+            Knob::Resonance => self.resonance,
+            Knob::EnvMod => self.env_mod,
+            Knob::Decay => self.decay,
+            Knob::Accent => self.accent,
+        })
+    }
+
+    /// The file's knobs from seven positions in `Knob::ALL` order. Positions are clamped, and the switch snaps to its
+    /// nearest face, so a hand-edited file still loads as a wave.
+    pub fn from_positions(positions: &[f32; 7]) -> Knobs {
+        let mut knobs = Knobs::default();
+        for (knob, position) in Knob::ALL.iter().zip(positions) {
+            let position = position.clamp(0.0, 1.0);
+            match knob {
+                Knob::Waveform => {
+                    knobs.waveform = crate::ui::waveform_from_position(position).index() as u8;
+                }
+                Knob::Tuning => knobs.tuning = position,
+                Knob::Cutoff => knobs.cutoff = position,
+                Knob::Resonance => knobs.resonance = position,
+                Knob::EnvMod => knobs.env_mod = position,
+                Knob::Decay => knobs.decay = position,
+                Knob::Accent => knobs.accent = position,
+            }
+        }
+        knobs
     }
 }
 
@@ -204,13 +245,10 @@ pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternB
     *bank = state.bank.clone();
     shared.tempo_bpm.set(state.bpm);
     shared.swing.set(state.swing);
-    shared.set_waveform(Waveform::from_index(usize::from(state.knobs.waveform)));
-    shared.tuning.set(state.knobs.tuning);
-    shared.cutoff.set(state.knobs.cutoff);
-    shared.resonance.set(state.knobs.resonance);
-    shared.env_mod.set(state.knobs.env_mod);
-    shared.decay.set(state.knobs.decay);
-    shared.accent.set(state.knobs.accent);
+    // The tone knobs load through the catalogue, so the file's field order cannot disagree with the panel's.
+    for (knob, position) in Knob::ALL.iter().zip(state.knobs.positions()) {
+        knob.publish(shared, position);
+    }
     shared.volume.set(state.knobs.volume);
     // The learned MIDI mapping travels with the song, so a rig saved in one song comes back with it.
     for (slot, cc) in state.cc_map.iter().enumerate().take(shared.cc_map.len()) {
@@ -239,14 +277,8 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         version: SAVE_VERSION,
         bank,
         knobs: Knobs {
-            waveform: snapshot.waveform.index() as u8,
-            tuning: snapshot.tuning,
-            cutoff: snapshot.cutoff,
-            resonance: snapshot.resonance,
-            env_mod: snapshot.env_mod,
-            decay: snapshot.decay,
-            accent: snapshot.accent,
             volume: snapshot.volume,
+            ..Knobs::from_positions(&Knob::ALL.map(|knob| knob.read(shared)))
         },
         bpm: snapshot.tempo_bpm,
         swing: snapshot.swing,

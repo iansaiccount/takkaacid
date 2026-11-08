@@ -110,3 +110,18 @@ knob — i.e. the catalogue, not the call sites, controls order.
       outside this crate loses a helper it never had (the crate is an app, not a library).
       Ruling: `tips`'s knob tests walk `Knob::ALL` and compare against `Control::ALL`'s first seven, so the tip table's
       knob prefix and the drawing order are pinned to each other.
+- [x] **4. The file's order** — `persist::Knobs::positions()` / `from_positions(&[f32; 7])` are the only way in and out of
+      the seven tone knobs, and `apply_saved` / `shared_to_saved` go through them (`Knob::publish` / `Knob::read`), so
+      the hand-written field list is gone from both directions. Three tests: the positions round trip in catalogue order,
+      a struct built through the catalogue is byte-identical to the old hand-written one, and save→load moves the same
+      atomics.
+      Ruling: `positions`/`from_positions` each hold one exhaustive `match` on `Knob` — the file's *field names* are the
+      wire format (serde), so only the order can be derived, not the fields. No `_` arm: a new knob variant fails to
+      compile there. Cost if wrong: none, the format is unchanged and pinned by the byte test.
+      Ruling: `shared_to_saved` reads the tone knobs with `Knob::read(shared)` rather than from the `Parameters` snapshot
+      it already takes — a `Knob` → `Parameters` mapping would be a second field list for the same seven values. Cost if
+      wrong: a save can catch a knob a few instructions after the bpm it was captured beside; nothing reads a save as a
+      sample-accurate frame.
+      Mutation check: swapping `Tuning` and `Cutoff` in `Knob::ALL` fails `every_knob_is_in_all_once_and_in_index_order`
+      and `every_knob_slot_names_its_own_control` (the round trip itself is order-agnostic by construction, which is the
+      property the catalogue buys). Reverted.
