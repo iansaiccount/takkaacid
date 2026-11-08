@@ -567,7 +567,6 @@ fn the_shared_state_survives_a_save_and_restore() {
 /// `from_positions()` puts them back, so a knob cannot be saved into another knob's field.
 #[test]
 fn the_knob_order_the_file_saves_is_the_panel_order() {
-    use acid_app::knobs::Knob;
     use acid_app::ui::waveform_position;
     use acid_core::oscillator::Waveform;
 
@@ -584,11 +583,6 @@ fn the_knob_order_the_file_saves_is_the_panel_order() {
     ];
     let knobs = Knobs::from_positions(&positions);
     assert_eq!(knobs.positions(), positions, "the file reordered the knobs");
-
-    // The catalogue's slot is the only index involved: each knob reads back its own position, not a neighbour's.
-    for (slot, knob) in Knob::ALL.iter().enumerate() {
-        assert_eq!(knobs.positions()[slot], positions[slot], "{knob:?} moved");
-    }
 }
 
 /// The rewrite must not move a byte of the file. The struct on the left is built through the catalogue; the one on the

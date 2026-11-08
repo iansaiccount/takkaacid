@@ -208,3 +208,9 @@ pub fn snap_to_detent<F>(position: f32, face_of: impl Fn(f32) -> F, position_of:
       faces, an exact face, and both ends. The duplicated comment about frame-by-frame snapping lives on the helper.
       Ruling: the helper is in `crate::knobs`, not `ui::panel` as plan 31 sketched — it is about a detent catalogue and
       takes no egui type, and both callers are knobs.
+- [x] **6. `AGENTS.md` describes this repo** — rewritten: what the two crates are, the four gates, where plans live and
+      how their progress section is kept, and the conventions this tree actually follows (one catalogue per kind of
+      control, no `_` arm on a catalogue enum, one mapping per question, panel tests through egui frames, the save file as
+      a contract, the two-thread rule, no font glyphs). The pygame icon rules and the Python scratch-file habits it carried
+      described a different project and are gone.
+      Also trimmed `tests/persist.rs`'s positions loop, which re-asserted the whole-array comparison above it.

@@ -1,69 +1,61 @@
-# lean-ctx — Token Optimization for Pi (COMMENTED OUT — pi-lean-ctx extension uninstalled as an experiment)
+# AGENTS.md — takka-acid
 
-This project uses the **pi-lean-ctx** extension. It exposes `ctx_*` tools backed by **lean-ctx**,
-and runs an embedded MCP bridge (on by default) that holds a **persistent session cache**.
+A TB-303-style acid bass synth: a Rust audio engine and an egui/eframe panel. Two crates in one workspace:
 
-## What to do (as Pi agent)
+- `rust/crates/acid-core` — the engine. Oscillator, filter, VCA, sequencer, pattern and bank types. No UI, no egui.
+- `rust/crates/acid-app` — the panel, the seam between the two threads (`state::SharedState`), MIDI in, and persistence.
+  Panel behaviour is tested by driving `draw_panel` through real egui frames in `rust/crates/acid-app/tests/*_live.rs`.
 
-Prefer the `ctx_*` tools over Pi's built-ins — only the `ctx_*` tools are compressed and cached;
-the native `read`/`bash`/`grep`/`find`/`ls` are **not** routed through lean-ctx in additive mode.
+`plans/` holds one plan per round of work, numbered; `EAR_TESTING.md` is how to judge the sound by ear.
 
-| Prefer | Over (native) | Why |
-|--------|---------------|-----|
-| `ctx_read` | `read`, `cat`/`head`/`tail` | Cached + compressed; unchanged re-reads cost ~13 tokens |
-| `ctx_shell` | `bash` | Shell output compressed via 95+ patterns |
-| `ctx_search` | `grep` | Compact, ranked matches |
-| `ctx_glob` | `find` | Compressed, .gitignore-aware file matching |
-| `ctx_tree` | `ls` | Compact directory maps |
+## Gates
 
-- Use `ctx_shell` for commands with side effects (build/test/git/etc.); set `raw=true` when exact
-  output matters.
-- Use `ctx_read` with `mode=anchored` for files you will edit, then patch by anchor via
-  `ctx_patch` (reachable through `ctx_call` in the default `lean` profile) — no old-text echo.
-  For line ranges pass `offset`/`limit` (aliases of `start_line`) or `mode=lines:N-M` — all cached
-  through the bridge, so repeated reads stay cheap.
+Every change ends here, all four green:
 
-## Advanced lean-ctx commands
+```bash
+cd rust
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --check
+```
 
-Prefer the `lean_ctx` tool (installed by the extension) to run `lean-ctx` directly:
+Run it with `cargo run -p acid-app --bin takka-acid`, and `--midi-map` to print what the app makes of every note
+number without opening an audio device or a window.
 
-- `lean-ctx overview`
-- `lean-ctx session …`
-- `lean-ctx knowledge …`
-- `lean-ctx gain` / `lean-ctx stats`
-- `lean-ctx index …`
+## Planning
 
-## MCP bridge
+Write the plan into `plans/NN-topic.md` before touching code, in the shape plan 30 and plan 31 use: what is wrong today,
+the design, the tests that make it safe, a numbered task list, and non-goals. Progress one task at a time and keep a
+`## Progress` section at the end of the plan current — a task, the test or mutation check that proves it, and any ruling
+you made with what it costs if wrong. A later session resumes from that section and `git log`, not from memory.
 
-The embedded bridge is on by default and shows up in `/lean-ctx` (it reports `connected` plus a
-tool count). To force the one-shot CLI path (no cross-call cache), set `LEAN_CTX_PI_ENABLE_MCP=0`.
+`.superpowers/` is git-ignored scratch for review ledgers; nothing in it is part of the project.
 
-# DEVELOPER NOTES
-When progressing, note that large tool call payloads cause the provider stream to stall, so keep each append small (1 class per call when writing files). When writing the tests, generate and write a single test at a time and save them to the test file.
+## Code conventions
 
-Plans are to be written into a plans subfolder.
+**One catalogue per kind of control.** A control's identity — its slot, caption, tip, learn target and the atomic it
+drives — lives in one module: `crate::knobs::Knob` for the seven tone knobs, `ui::scale::Scale`, `ui::switches::Switch`,
+`ui::tips::Control`, `midi::cc::CcTarget` for what a controller can drive. Derive orders and lengths from those catalogues
+(`Knob::ALL.len()`, `LEARNABLE` built from `Knob::ALL`) instead of writing a second positional list; the two bugs this repo
+has already paid for were both a hand-kept second list.
 
-## Writing files
-When using the file write tool, use small blocks instead of writing the entire file in a single tool execution.
+**No `_` arm on a catalogue enum.** A `match` over one of those enums is written out in full, so adding a variant fails to
+compile where a decision is needed. `_` is for genuinely open input (a `u8` controller number), never for a catalogue.
 
-### For code files
+**One mapping per question.** If two functions answer "which atomic does this knob drive" or "which slot does this control
+teach", one of them is a bug waiting for a reorder. Put the mapping in the module that owns the type it produces.
 
-Provide only the specific functions or lines that need to be changed or added. If you are generating a new file, scaffold the file first with empty definitions, then fill them in one by one to keep the indiviual write size small. Write individual functions to a temporary file first, then append them to the destination file. 
+**Test behaviour through the panel.** A panel feature gets a test in `rust/crates/acid-app/tests/*_live.rs` that pushes
+egui `RawInput` frames through `draw_panel` and asserts on the `SharedState` or the `PanelState` — not on a private helper.
+A widget's `egui::Id` is part of its behaviour: a drag in progress is routed by id, so renaming one silently breaks it.
 
-### For text files / markdown
+**The save file is a contract.** `persist::SavedState` field names and order are what older builds read; a change to them
+is a `SAVE_VERSION` bump, and `tests/persist.rs` pins the bytes. Panel state that `main` owns travels through
+`SavedState`, not through a side channel.
 
-Write one paragraph at a time. Write individual paragraphs to a temporary file first, then append them to the destination file. 
+**Two threads, two rules.** The panel writes atomics on `SharedState`; the audio callback reads them and allocates
+nothing. Never hold a lock across the audio path, and never read the engine's pattern from the UI thread without going
+through the `ArcSwap`.
 
-## UI ICONS
-
-Icon-style buttons (PLAY/STOP, ◀/▶, +/−, ×/✎, chain arrows, loop, …) must **not** use a font glyph as their face — the bundled pygame font is missing several of these (✎ × − ◀ ▶ ↑ ↓ render as boxes/blank on some systems).
-
-To make an icon button:
-1. Create the icon in `scripts/generate_images.py` — add a branch to `icon(shape, …)` (dark disc + `theme.CELL_ON` shape, `m = size // 3` margins), save it in `main()`, and keep the module docstring **Produces:** list and the final `print` loop in sync.
-2. Re-run it headless from the project root — `.venv/bin/python scripts/generate_images.py` — so the PNG lands in `assets/images/`. Generated PNGs are committed there.
-3. Load it with `takkadrums/ui/icons.py::load_icon(name)` and pass `Button(icon=...)`; keep a plain-ASCII text label as the fallback shown when the image file is missing.
-
-Do **not** cross-import a private icon loader between views — everything goes through `takkadrums/ui/icons.py::load_icon`.
-
-## Progressing the plan
-Progress 1 step at a time and update progress and notes in the plan file as you go to facilitate easy resumption if there is a problem.
+**No font glyphs.** Everything on the face is an egui shape or ASCII text from the bundled font. A symbol drawn with a
+character from a system font renders as a box on some machines.
