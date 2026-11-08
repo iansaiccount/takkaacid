@@ -175,8 +175,12 @@ pub fn pitch_name(pitch: Pitch, octave: i8) -> &'static str {
         "G#4", "A4", "A#4", "B4", "C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5", "G#5", "A5",
         "A#5", "B5",
     ];
-    let absolute =
-        (i32::from(pitch.semitones()) + 12 * i32::from(octave)).clamp(PANEL_LOW, PANEL_HIGH);
+    let absolute = i32::from(pitch.semitones()) + 12 * i32::from(octave);
+    // A note transposed past the ends of the range plays as a rest, so it must not be spelled as the nearest note that
+    // would sound: that would be a lie the player could not hear their way out of.
+    if !(PANEL_LOW..=PANEL_HIGH).contains(&absolute) {
+        return "--";
+    }
     LABELS[(absolute - PANEL_LOW) as usize]
 }
 

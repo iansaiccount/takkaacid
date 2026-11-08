@@ -11,6 +11,7 @@ pub mod layout;
 pub mod learn;
 pub mod panel;
 pub mod picker;
+pub mod randomise;
 pub mod save;
 pub mod selection;
 pub mod shortcuts;
@@ -350,6 +351,72 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
 
+    // The performance row: transpose the pattern, shuffle the clock, or reroll the notes.
+    if let [octave_down, octave_up, shuffle_cell, randomise_cell] = l.perform.cells[..] {
+        for (rect, id, label, octaves, control) in [
+            (
+                octave_down,
+                "octave-down",
+                "OCT -",
+                -1,
+                tips::Control::OctaveDown,
+            ),
+            (octave_up, "octave-up", "OCT +", 1, tips::Control::OctaveUp),
+        ] {
+            if switch_key(ui, state, id, rect, label, false, control) {
+                let moved = state.pattern.transposed(12 * octaves);
+                state.pattern = Arc::new(moved);
+                shared.set_pattern(Arc::new(moved));
+                shared.set_pattern(Arc::clone(&state.pattern));
+                state.dirty = true;
+            }
+        }
+
+        // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and CC 73 writes the same
+        // atomic, so the fader and the hand meet in one place.
+        // A knob is a circle, not a column: give it a square in the middle of its cell, or the row-wide cell leaves it
+        // stranded at the left edge where the hand does not reach.
+        let diameter = shuffle_cell.height() * 0.78;
+        let knob_rect = egui::Rect::from_center_size(
+            shuffle_cell.center(),
+            egui::vec2(diameter, shuffle_cell.height()),
+        );
+        let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(knob_rect));
+        cell_ui.set_clip_rect(shuffle_cell);
+        let mut swing = shared.swing.get();
+        let response = knob::knob(
+            &mut cell_ui,
+            egui::Id::unique("shuffle"),
+            "SHUFFLE",
+            &mut swing,
+            diameter,
+        );
+        tips::hover(&response, state, tips::Control::Shuffle);
+        if swing != shared.swing.get() {
+            shared.swing.set(swing.clamp(0.0, 1.0));
+            state.dirty = true;
+        }
+
+        if switch_key(
+            ui,
+            state,
+            "randomise",
+            randomise_cell,
+            "RANDOM",
+            false,
+            tips::Control::Randomise,
+        ) {
+            // Seeded from the clock: a randomiser that repeats is a bug, and the seed is there for the tests.
+            let seed = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos() as u64)
+                .unwrap_or(1);
+            let rolled = randomise::randomised(*state.pattern, seed);
+            shared.set_pattern(Arc::new(rolled));
+            state.pattern = Arc::new(rolled);
+            state.dirty = true;
+        }
+    }
     // VOLUME has its own corner of the top strip, before the wordmark, so the transport row keeps its five keys.
     let volume_rect = panel::volume_knob_rect(l.top);
     let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));

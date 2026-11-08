@@ -74,6 +74,15 @@ impl Step {
         step_hz(self.pitch, self.octave_offset)
     }
 
+    /// The MIDI note this step names, with nothing clamped.
+    pub fn midi(&self) -> i32 {
+        crate::pitch::step_midi(self.pitch, self.octave_offset)
+    }
+
+    /// Whether this step's note is inside the instrument's range. An inaudible step plays as a rest.
+    pub fn audible(&self) -> bool {
+        (crate::pitch::NOTE_LOW..=crate::pitch::NOTE_HIGH).contains(&self.midi())
+    }
     /// This step moved by whole semitones, rolling into the octave: the same sound on a shifted lattice.
     pub fn transposed(self, semitones: i8) -> Self {
         let absolute = i32::from(self.pitch.semitones())

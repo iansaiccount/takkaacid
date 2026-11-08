@@ -57,6 +57,18 @@ impl Pitch {
 /// sound, so a keyboard's C3 was stored as `D#1` while sounding as C3.
 pub const ROOT_MIDI: u8 = 12;
 
+/// The lowest and highest MIDI note the instrument plays: C-1 to B5, the panel's own span.
+///
+/// A step outside it is *silent* rather than clamped into it. That is what makes the octave buttons a true round trip:
+/// transposing up pushes notes past B5 instead of flattening them onto it, and transposing back restores them.
+pub const NOTE_LOW: i32 = 0;
+pub const NOTE_HIGH: i32 = 83;
+
+/// The MIDI note a step's `(pitch, octave)` names, with nothing clamped.
+pub fn step_midi(pitch: Pitch, octave_offset: i8) -> i32 {
+    i32::from(ROOT_MIDI) + i32::from(pitch.semitones()) + 12 * i32::from(octave_offset)
+}
+
 /// Equal-tempered frequency, 12-TET with A4 (MIDI 69) at 440 Hz.
 pub fn midi_to_hz(midi: f32) -> f32 {
     440.0 * 2f32.powf((midi - 69.0) / 12.0)

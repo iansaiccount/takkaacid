@@ -1,7 +1,7 @@
 //! Panel geometry as pure `Rect` arithmetic — no painting, so it is testable without a window.
 //!
-//! Five horizontal regions, in the order the sketch stacks them: title bar, knob row, sixteen step keys,
-//! bank/pattern switches, transport. Every band is a fraction of the panel, so the whole face scales as one
+//! Six horizontal regions, in the order the sketch stacks them: title bar, knob row, performance row, sixteen step
+//! keys, bank/pattern switches, transport. Every band is a fraction of the panel, so the whole face scales as one
 //! piece and nothing is ever positioned in absolute pixels.
 
 use egui::{Pos2, Rect};
@@ -10,6 +10,8 @@ use super::theme;
 
 /// Knobs across the panel.
 pub const KNOB_COUNT: usize = 7;
+/// Controls in the performance row: octave down, octave up, shuffle, randomise.
+pub const PERFORM_COUNT: usize = 4;
 /// Step keys in the row.
 pub const STEP_COUNT: usize = 16;
 
@@ -24,19 +26,24 @@ pub struct PanelLayout {
     pub panel: Rect,
     pub top: Rect,
     pub knobs: Row,
+    /// The performance row under the knobs: octave down/up, shuffle, randomise.
+    pub perform: Row,
     pub steps: Rect,
     pub switches: Rect,
     pub transport: Rect,
 }
 
 /// The five bands as fractions of the panel height, lifted from the design sketch: 16..72, 84..300,
-/// 316..420, 432..490, 500..544 on a 560-tall panel.
-const BANDS: [(f32, f32); 5] = [
-    (16.0 / 560.0, 72.0 / 560.0),
-    (84.0 / 560.0, 300.0 / 560.0),
-    (316.0 / 560.0, 420.0 / 560.0),
-    (432.0 / 560.0, 490.0 / 560.0),
-    (500.0 / 560.0, 544.0 / 560.0),
+/// The six bands as fractions of the panel height: 16..72, 84..300, 312..374, 386..490, 502..560, 570..614 on a
+/// 620-tall panel. The first two keep the pixel heights they had at 560, so growing the panel for the performance row
+/// cost nothing above it; the step keys and the two key rows below are untouched too.
+const BANDS: [(f32, f32); 6] = [
+    (16.0 / 620.0, 72.0 / 620.0),
+    (84.0 / 620.0, 300.0 / 620.0),
+    (312.0 / 620.0, 374.0 / 620.0),
+    (386.0 / 620.0, 490.0 / 620.0),
+    (502.0 / 620.0, 560.0 / 620.0),
+    (570.0 / 620.0, 614.0 / 620.0),
 ];
 
 /// Side inset as a fraction of the panel width (16 of 980).
@@ -75,6 +82,7 @@ pub fn layout(window: Rect) -> PanelLayout {
         )
     };
     let knobs_area = band(1);
+    let perform_area = band(2);
 
     PanelLayout {
         panel,
@@ -83,9 +91,13 @@ pub fn layout(window: Rect) -> PanelLayout {
             area: knobs_area,
             cells: knob_cells(knobs_area, KNOB_COUNT),
         },
-        steps: band(2),
-        switches: band(3),
-        transport: band(4),
+        perform: Row {
+            area: perform_area,
+            cells: knob_cells(perform_area, PERFORM_COUNT),
+        },
+        steps: band(3),
+        switches: band(4),
+        transport: band(5),
     }
 }
 
@@ -133,15 +145,23 @@ mod tests {
     fn regions_are_ordered_and_do_not_overlap() {
         for size in [
             egui::vec2(500.0, 300.0),
-            egui::vec2(980.0, 560.0),
+            theme::DESIGN_SIZE,
             egui::vec2(1600.0, 900.0),
         ] {
             let l = layout(Rect::from_min_size(Pos2::ZERO, size));
             assert!(l.top.bottom() <= l.knobs.area.top() + 0.01);
-            assert!(l.knobs.area.bottom() <= l.steps.top() + 0.01);
+            assert!(l.knobs.area.bottom() <= l.perform.area.top() + 0.01);
+            assert!(l.perform.area.bottom() <= l.steps.top() + 0.01);
             assert!(l.steps.bottom() <= l.switches.top() + 0.01);
             assert!(l.switches.bottom() <= l.transport.top() + 0.01);
-            for r in [l.top, l.knobs.area, l.steps, l.switches, l.transport] {
+            for r in [
+                l.top,
+                l.knobs.area,
+                l.perform.area,
+                l.steps,
+                l.switches,
+                l.transport,
+            ] {
                 assert!(
                     expand_rect(size).contains_rect(r),
                     "region escapes the window: {r:?}"
@@ -151,8 +171,23 @@ mod tests {
     }
 
     #[test]
+    fn the_performance_row_sits_between_the_knobs_and_the_steps() {
+        let l = layout(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE));
+        assert_eq!(l.perform.cells.len(), PERFORM_COUNT);
+        assert!(l.perform.area.top() >= l.knobs.area.bottom());
+        assert!(l.perform.area.bottom() <= l.steps.top());
+        for cell in &l.perform.cells {
+            assert!(l.perform.area.contains_rect(*cell));
+            // Tall enough to hold a knob and its caption at 1x.
+            assert!(cell.height() >= 40.0, "row too shallow: {}", cell.height());
+        }
+        // The step keys keep their height: the row was paid for by growing the panel, not by squeezing the instrument.
+        assert!(step_cells(l.steps)[0].height() > 100.0);
+    }
+
+    #[test]
     fn seven_knobs_are_evenly_spaced_and_sixteen_keys_fit() {
-        let l = layout(Rect::from_min_size(Pos2::ZERO, egui::vec2(980.0, 560.0)));
+        let l = layout(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE));
         assert_eq!(l.knobs.cells.len(), 7);
         let widths: Vec<f32> = l.knobs.cells.iter().map(|r| r.width()).collect();
         let first = widths[0];
@@ -175,12 +210,10 @@ mod tests {
 
     #[test]
     fn the_panel_keeps_its_aspect_and_scales_within_bounds() {
-        assert!(
-            (scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(980.0, 560.0))) - 1.0).abs() < 0.01
-        );
+        assert!((scale(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE)) - 1.0).abs() < 0.01);
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(100.0, 100.0))) >= 0.65);
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(4000.0, 3000.0))) <= 1.6);
         let r = design_rect(Rect::from_min_size(Pos2::ZERO, egui::vec2(1600.0, 900.0)));
-        assert!((r.width() / r.height() - 980.0 / 560.0).abs() < 0.01);
+        assert!((r.width() / r.height() - 980.0 / 620.0).abs() < 0.01);
     }
 }

@@ -92,7 +92,9 @@ impl Sequencer {
     /// Apply the trigger rule for one step and remember whether it slides.
     fn trigger(&mut self, voice: &mut Voice, position: usize) {
         let step = self.pattern.steps[position];
-        if !step.on {
+        // A rest, and a note transposed outside the instrument's range, are the same thing to the voice: silence. The
+        // step keeps its flags and its note, so transposing back brings it in again.
+        if !step.on || !step.audible() {
             voice.note_off();
             // A rest cannot glide out of anything. A rest keeps its flags, so it may carry `slide`; letting
             // that through would retune the next note with the gate still shut and it would never sound.

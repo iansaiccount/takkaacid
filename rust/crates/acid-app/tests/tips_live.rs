@@ -2,10 +2,10 @@
 
 use acid_app::state::SharedState;
 use acid_app::ui::{PanelState, draw_panel, tips_rect};
-use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
+use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect};
 
 fn screen() -> Rect {
-    Rect::from_min_size(Pos2::ZERO, vec2(980.0, 560.0))
+    Rect::from_min_size(Pos2::ZERO, acid_app::ui::theme::DESIGN_SIZE)
 }
 
 fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: Vec<Event>) {
@@ -71,7 +71,7 @@ fn turning_the_help_off_is_a_change_worth_saving() {
 #[test]
 fn the_tips_key_sits_in_the_top_strip_clear_of_the_saved_lamp() {
     let top = acid_app::ui::layout::layout(screen()).top;
-    let lamp = acid_app::ui::panel::save_indicator_rect(top, 1.0);
+    let lamp = acid_app::ui::panel::save_indicator_rect(top, acid_app::ui::layout::scale(screen()));
     let key = tips_rect(screen());
     assert!(!key.intersects(lamp), "the key must not cover the lamp");
     assert!(

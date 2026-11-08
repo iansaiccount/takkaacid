@@ -50,11 +50,15 @@ pub enum Control {
     TempoUp,
     Learn,
     Tooltips,
+    OctaveDown,
+    OctaveUp,
+    Shuffle,
+    Randomise,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 17] = [
+    pub const ALL: [Control; 21] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -72,6 +76,10 @@ impl Control {
         Control::TempoUp,
         Control::Learn,
         Control::Tooltips,
+        Control::OctaveDown,
+        Control::OctaveUp,
+        Control::Shuffle,
+        Control::Randomise,
     ];
 
     /// The knob in `index`'s slot, in the panel's knob order.
@@ -107,12 +115,16 @@ impl Control {
             Control::TempoUp => TIPS[14],
             Control::Learn => TIPS[15],
             Control::Tooltips => TIPS[16],
+            Control::OctaveDown => TIPS[17],
+            Control::OctaveUp => TIPS[18],
+            Control::Shuffle => TIPS[19],
+            Control::Randomise => TIPS[20],
         }
     }
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 17] = [
+const TIPS: [Tip; 21] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -196,6 +208,26 @@ const TIPS: [Tip; 17] = [
     Tip {
         title: "TIPS",
         what: "Turns these hover hints on and off. They are on unless you say otherwise.",
+        shortcut: None,
+    },
+    Tip {
+        title: "OCT -",
+        what: "Moves the whole pattern an octave down. Notes below the range play as rests.",
+        shortcut: None,
+    },
+    Tip {
+        title: "OCT +",
+        what: "Moves the whole pattern an octave up. Notes above the range play as rests.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SHUFFLE",
+        what: "Pushes every second step late: the groove loosens as the knob comes up.",
+        shortcut: None,
+    },
+    Tip {
+        title: "RANDOM",
+        what: "Gives the sounding steps new notes. The rhythm, accents and slides stay as they are.",
         shortcut: None,
     },
 ];
