@@ -1,6 +1,7 @@
 // The palette and layout constants are the panel's vocabulary: they are introduced here and consumed
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
 pub mod clear;
+pub mod controls;
 pub mod dispatch;
 pub mod display;
 pub mod edit;
@@ -12,6 +13,9 @@ pub mod learn;
 pub mod panel;
 pub mod picker;
 pub mod randomise;
+pub mod row_knobs;
+pub mod row_perform;
+pub mod row_transport;
 pub mod save;
 pub mod scale;
 pub mod selection;
@@ -45,6 +49,8 @@ use crate::midi;
 use crate::state::SharedState;
 
 use crate::knobs::{Kind, Knob};
+
+use self::controls::{learn_pick, switch_key};
 
 use acid_core::pitch::Pitch;
 
@@ -313,189 +319,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.reprobe_requested = true;
         }
     }
-
-    // The row is the catalogue, walked in drawing order: a knob's slot, caption, tooltip, learn target and the atomic it
-    // drives all come from `Knob`, so this loop cannot disagree with the saved file or the learn map.
-    for (knob, cell) in Knob::ALL.iter().zip(l.knobs.cells.iter()) {
-        let knob = *knob;
-        let slot = knob.index();
-        let diameter = cell.width().min(cell.height() * 0.78);
-        let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(cell.shrink(2.0 * s)));
-        cell_ui.set_clip_rect(*cell);
-        let before = state.knobs[slot];
-        // While choosing a knob to teach, the knobs stand back: a click picks the knob instead of turning it, and
-        // the turn goes into a scratch value so a stray drag cannot move the patch either.
-        let choosing = state.learn == learn::Step::Choosing;
-        let mut scratch = before;
-        // The caption is read before the knob borrows its value: the switch names the wave it is on.
-        let label = knob.label(shared);
-        let target = if choosing {
-            &mut scratch
-        } else {
-            &mut state.knobs[slot]
-        };
-        let response = knob::knob(
-            &mut cell_ui,
-            egui::Id::unique(("knob", slot)),
-            label,
-            target,
-            diameter,
-        );
-        tips::hover(&response, state, tips::Control::for_knob(knob));
-        // A switch wears its detents, so the faces it may snap to are visible before the hand lets go.
-        if knob.kind() == Kind::Switch && !choosing {
-            waveform_detents(cell_ui.painter(), *cell, state.knobs[slot], s);
-        }
-        if choosing {
-            // Every knob can be taught, so while a learn is choosing each one wears the pick colour: the question is
-            // "which one?", and the answer has to be visible without hunting.
-            panel::learn_highlight(ui.painter(), *cell, s);
-            let hit = ui.interact(
-                *cell,
-                ui.scope_id().with(("learn-knob", slot)),
-                egui::Sense::click(),
-            );
-            if hit.clicked() {
-                state.learn = learn::choose(knob.learn_target(), shared);
-            }
-            continue;
-        }
-        // Publish straight away: the audio thread's next block picks it up, so the move is heard now.
-        //
-        // A switch has two masters: the hand and a learned controller. While the hand is on the knob it wins; when it
-        // is not, the shared value is the truth, so a fader moves the face. Snapping happens on release, never mid-drag —
-        // a frame-by-frame snap pulls the position back onto the detent it started from, and a slow drag could never
-        // cross a midpoint.
-        let moved = state.knobs[slot] != before;
-        match knob.kind() {
-            Kind::Switch => {
-                if response.dragged() {
-                    knob.publish(shared, state.knobs[slot]);
-                } else {
-                    let hand = waveform_from_position(state.knobs[slot]);
-                    // The hand's own move wins: the wheel, or a drag that has just ended. Otherwise the switch is where
-                    // the shared state says, which is where a learned controller put it.
-                    let face = if moved || shared.waveform() == hand {
-                        hand
-                    } else {
-                        shared.waveform()
-                    };
-                    knob.publish(shared, waveform_position(face));
-                    state.knobs[slot] = knob.read(shared);
-                }
-            }
-            Kind::Dial => knob.publish(shared, state.knobs[slot]),
-        }
-        // Only the hand marks the session unsaved: a switch adopting a learned controller's value is the panel
-        // catching up, not an edit the player made.
-        if moved {
-            state.dirty = true;
-        }
-    }
-
-    // The performance row: transpose the pattern, shuffle the clock, and the two dials that decide what RANDOM does.
-    if let [
-        octave_down,
-        octave_up,
-        shuffle_cell,
-        randomise_cell,
-        density_cell,
-        scale_cell,
-    ] = l.perform.cells[..]
-    {
-        for (rect, id, label, octaves, control) in [
-            (
-                octave_down,
-                "octave-down",
-                "OCT -",
-                -1,
-                tips::Control::OctaveDown,
-            ),
-            (octave_up, "octave-up", "OCT +", 1, tips::Control::OctaveUp),
-        ] {
-            if switch_key(ui, state, id, rect, label, false, control) {
-                let moved = state.pattern.transposed(12 * octaves);
-                state.pattern = Arc::new(moved);
-                shared.set_pattern(Arc::clone(&state.pattern));
-                state.dirty = true;
-            }
-        }
-
-        // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and a learned controller
-        // writes the same atomic, so the fader and the hand meet in one place.
-        //
-        // While a learn is choosing, the face stays on the panel — a control that disappears when the player is asked to
-        // click it cannot be clicked — and the hand turns a scratch value instead, exactly as the tone knobs do.
-        let choosing = state.learn == learn::Step::Choosing;
-        let before_swing = shared.swing.get();
-        let mut swing = before_swing;
-        let mut scratch = before_swing;
-        let response = {
-            let value = if choosing { &mut scratch } else { &mut swing };
-            perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", value)
-        };
-        tips::hover(&response, state, tips::Control::Shuffle);
-        if choosing {
-            panel::learn_highlight(ui.painter(), shuffle_cell, s);
-            learn_pick(
-                ui,
-                state,
-                shared,
-                "learn-shuffle",
-                shuffle_cell,
-                midi::cc::CcTarget::Swing,
-            );
-        } else if swing != before_swing {
-            shared.swing.set(swing.clamp(0.0, 1.0));
-            state.dirty = true;
-        }
-
-        // DENSITY is how much of the pattern a roll fills: 0 leaves the one guaranteed step, 1 fills every step.
-        let before_density = state.density;
-        let mut density = state.density;
-        let caption = format!("{:.0}%", density * 100.0);
-        let response = perform_knob(ui, density_cell, "density", &caption, &mut density);
-        tips::hover(&response, state, tips::Control::Density);
-        state.density = density.clamp(0.0, 1.0);
-        if state.density != before_density {
-            state.dirty = true;
-        }
-
-        // SCALE snaps on release, never mid-drag: a frame-by-frame snap pulls the position back onto the detent it
-        // started from, and a slow drag could never cross a midpoint.
-        let mut position = state.scale_knob;
-        let response = perform_knob(ui, scale_cell, "scale", state.scale.name(), &mut position);
-        tips::hover(&response, state, tips::Control::Scale);
-        state.scale_knob = position.clamp(0.0, 1.0);
-        if !response.dragged() {
-            let snapped = scale::scale_from_position(state.scale_knob);
-            state.scale_knob = scale::scale_position(snapped);
-            if snapped != state.scale {
-                state.scale = snapped;
-                state.dirty = true;
-            }
-        }
-
-        if switch_key(
-            ui,
-            state,
-            "randomise",
-            randomise_cell,
-            "RANDOM",
-            false,
-            tips::Control::Randomise,
-        ) {
-            // Seeded from the clock: a randomiser that repeats is a bug, and the seed is there for the tests.
-            let seed = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_nanos() as u64)
-                .unwrap_or(1);
-            let rolled = randomise::randomised(*state.pattern, seed, state.density, state.scale);
-            state.pattern = Arc::new(rolled);
-            shared.set_pattern(Arc::clone(&state.pattern));
-            state.dirty = true;
-        }
-    }
+    row_knobs::draw(state, shared, ui, &l, s);
+    row_perform::draw(state, shared, ui, &l, s);
     // VOLUME has its own corner of the top strip, before the wordmark, so the transport row keeps its five keys.
     let volume_rect = panel::volume_knob_rect(l.top);
     let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));
@@ -743,71 +568,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         state.tooltips = !state.tooltips;
         state.dirty = true;
     }
-    // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
-    let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
-    if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {
-        let playing = shared.is_playing();
-        if switch_key(ui, state, "run", run, "RUN", playing, tips::Control::Run) {
-            shared.set_playing(true);
-            state.dirty = true;
-        }
-        if switch_key(
-            ui,
-            state,
-            "stop",
-            stop,
-            "STOP",
-            !playing,
-            tips::Control::Stop,
-        ) {
-            shared.set_playing(false);
-            state.dirty = true;
-        }
-        let bpm = shared.tempo_bpm.get();
-        if switch_key(
-            ui,
-            state,
-            "tempo-down",
-            tempo_down,
-            "TEMPO -",
-            false,
-            tips::Control::TempoDown,
-        ) {
-            shared.tempo_bpm.set(transport::nudge_tempo(bpm, -1));
-            state.dirty = true;
-        }
-        if switch_key(
-            ui,
-            state,
-            "tempo-up",
-            tempo_up,
-            "TEMPO +",
-            false,
-            tips::Control::TempoUp,
-        ) {
-            shared.tempo_bpm.set(transport::nudge_tempo(bpm, 1));
-            state.dirty = true;
-        }
 
-        // The last transport cell is the MIDI LEARN key (see `ui::learn`), so the row keeps its five keys while
-        // the volume knob lives in the top strip's corner.
-        if switch_key(
-            ui,
-            state,
-            "learn",
-            volume_cell,
-            learn::label(state.learn),
-            state.learn != learn::Step::Idle,
-            tips::Control::Learn,
-        ) {
-            state.learn = match state.learn {
-                learn::Step::Idle => learn::Step::Choosing,
-                _ => learn::Step::Idle,
-            };
-            learn::cancel(shared);
-        }
-    }
-
+    // The transport row comes after the keys above it, in the order it has always been drawn: a later widget wins a
+    // hit-test tie, so keeping the order keeps the panel's behaviour.
+    row_transport::draw(state, shared, ui, &l, s);
     // MIDI input picker: the status line is the handle. Rows paint here, after everything else, so they sit
     // over the panel; the REPROBE dot keeps the left edge of the line while the supervisor has given up.
     let mut handle = status;
@@ -1021,62 +785,6 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
     });
 }
 
-/// A knob in a performance-row cell.
-///
-/// The knob is a circle, not a column: `knob::knob` allocates from its UI's top-left, so a row-wide cell would strand it
-/// at the left edge where the hand does not reach. It gets a square in the middle of its cell instead.
-fn perform_knob(
-    ui: &mut egui::Ui,
-    cell: egui::Rect,
-    id: &str,
-    label: &str,
-    value: &mut f32,
-) -> egui::Response {
-    let diameter = cell.height() * 0.78;
-    let square = egui::Rect::from_center_size(cell.center(), egui::vec2(diameter, cell.height()));
-    let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(square));
-    cell_ui.set_clip_rect(cell);
-    knob::knob(&mut cell_ui, egui::Id::unique(id), label, value, diameter)
-}
-
-/// A click on a control that can be taught, while a learn is choosing.
-///
-/// Guarded on `Choosing` rather than on the click alone: outside a learn these are the player's controls, and a stray
-/// click on the tempo readout must not start a binding that then swallows the next controller they touch.
-fn learn_pick(
-    ui: &mut egui::Ui,
-    state: &mut PanelState,
-    shared: &SharedState,
-    id: &str,
-    rect: egui::Rect,
-    control: midi::cc::CcTarget,
-) {
-    if state.learn != learn::Step::Choosing {
-        return;
-    }
-    let hit = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
-    if hit.clicked() {
-        state.learn = learn::choose(control, shared);
-    }
-}
-/// A panel button with its hover help attached: draw it, explain it, and say whether it was clicked.
-///
-/// One helper for every button, so the tip follows the control that was actually drawn — the CLEAR key reads `CLEAR?`
-/// while it is armed, and its help still describes CLEAR.
-fn switch_key(
-    ui: &mut egui::Ui,
-    state: &PanelState,
-    id: &str,
-    rect: egui::Rect,
-    label: &str,
-    lit: bool,
-    control: tips::Control,
-) -> bool {
-    let response = transport::transport_button(ui, id, rect, label, lit);
-    let clicked = response.clicked();
-    tips::hover(&response, state, control);
-    clicked
-}
 /// A static button face: raised, engraved, with a silkscreen caption when `label` is not empty.
 fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &str) {
     painter.rect_filled(rect, 4.0 * scale, theme::PANEL_RAISED);
@@ -1100,34 +808,3 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
 // The control position of a wave is the switch's business, so it lives with the catalogue; the panel keeps these names
 // because a detent marker and a learned controller both speak in positions.
 pub use crate::knobs::{waveform_from_position, waveform_position};
-
-/// Mark every wave's detent around the WAVEFORM knob, lighting the one the knob is on.
-///
-/// The knob's pointer alone cannot say *where* the other waves are, which is the difference between a dial and a switch;
-/// a tick per wave turns it into one at a glance.
-fn waveform_detents(painter: &egui::Painter, cell: egui::Rect, position: f32, scale: f32) {
-    let diameter = cell.width().min(cell.height() * 0.78);
-    let center = egui::Pos2::new(cell.center().x, cell.top() + diameter / 2.0);
-    let radius = diameter / 2.0;
-    let ticks = acid_core::oscillator::Waveform::ALL.len();
-    let chosen = waveform_from_position(position);
-
-    for (index, wave) in acid_core::oscillator::Waveform::ALL.iter().enumerate() {
-        let angle = knob::angle_for(index as f32 / (ticks - 1) as f32);
-        let lit = *wave == chosen;
-        let inner = radius * 1.06;
-        let outer = radius * if lit { 1.22 } else { 1.16 };
-        let (sin, cos) = (angle.sin(), angle.cos());
-        painter.line_segment(
-            [
-                egui::Pos2::new(center.x + inner * sin, center.y - inner * cos),
-                egui::Pos2::new(center.x + outer * sin, center.y - outer * cos),
-            ],
-            if lit {
-                egui::Stroke::new(2.0 * scale, theme::LED_ACCENT)
-            } else {
-                egui::Stroke::new(1.0 * scale, theme::SILKSCREEN_DIM)
-            },
-        );
-    }
-}

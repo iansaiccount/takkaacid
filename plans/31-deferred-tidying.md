@@ -192,3 +192,13 @@ pub fn snap_to_detent<F>(position: f32, face_of: impl Fn(f32) -> F, position_of:
       Ruling: the rest of the struct stays flat. `selected` alone has 51 references and no invariant to protect, so
       grouping the editor would be churn for nothing; `learn` is already one typed field (`learn::Step`). The plan named
       "the learn, songs and picker state"; two of the three were grab-bags, and this is the two.
+- [x] **4. `ui/mod.rs` splits by row** — `ui/row_knobs.rs` (the knob loop plus the detent markers),
+      `ui/row_perform.rs` (octave, shuffle, density, scale, randomise, and `perform_knob`), `ui/row_transport.rs` (five
+      keys and the tempo), and `ui/controls.rs` for the two helpers two rows share (`learn_pick`, `switch_key`).
+      `mod.rs` is 1,128 → 810 lines and keeps `PanelState`, the top strip, the step row, the switches, the picker, the
+      help and songs cards, and the calls into the rows. All 58 suites green, clippy and fmt clean.
+      Every widget id is unchanged (`("knob", slot)`, `("learn-knob", slot)`, the string ids), because `knob_live`'s
+      drag and `learn_live`'s click both depend on them.
+      Ruling: the three row calls keep their original position in `draw_panel` — the transport row is called after the
+      switches, where its code used to be, not next to the other two rows. A later widget wins a hit-test tie in egui, so
+      moving a call changes behaviour that no layout test would see.
