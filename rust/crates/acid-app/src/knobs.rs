@@ -132,6 +132,19 @@ pub fn waveform_from_position(position: f32) -> acid_core::oscillator::Waveform 
     acid_core::oscillator::Waveform::from_position(position)
 }
 
+/// A control that lands on detents: the position the hand left snaps onto the nearest face.
+///
+/// `face_of` turns a position into the face it is near and `position_of` puts the face back on the strip. Both detent
+/// controls share this rule — the WAVEFORM switch and the SCALE knob — because doing it every frame instead of on release
+/// pulls the position back onto the face the drag started from, and a slow drag could never cross a midpoint.
+pub fn snap_to_detent<F>(
+    position: f32,
+    face_of: impl Fn(f32) -> F,
+    position_of: impl Fn(F) -> f32,
+) -> f32 {
+    position_of(face_of(position))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,6 +238,28 @@ mod tests {
         assert_eq!(shared.waveform(), Waveform::Square);
         Knob::Waveform.publish(&shared, 0.5);
         assert_eq!(shared.waveform(), Waveform::Sine);
+    }
+
+    #[test]
+    fn a_detent_position_snaps_onto_its_face_and_an_exact_face_stays_put() {
+        // The rule both detent controls share: the position the hand left lands on the nearest face. A frame-by-frame
+        // snap instead of a release-time one would pull the position back onto the face it started from.
+        let snap = |position: f32| {
+            crate::knobs::snap_to_detent(position, waveform_from_position, waveform_position)
+        };
+        assert_eq!(snap(0.0), waveform_position(Waveform::Saw));
+        assert_eq!(snap(0.4), waveform_position(Waveform::Square));
+        assert_eq!(snap(0.5), waveform_position(Waveform::Sine));
+        // An exact face is its own answer, and the ends clamp rather than run off the catalogue.
+        for wave in Waveform::ALL {
+            let face = waveform_position(wave);
+            assert!(
+                (snap(face) - face).abs() < 1e-6,
+                "{wave:?} moved off its face"
+            );
+        }
+        assert_eq!(snap(-1.0), 0.0);
+        assert_eq!(snap(2.0), 1.0);
     }
 
     #[test]

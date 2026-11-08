@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use eframe::egui;
 
+use crate::knobs::snap_to_detent;
 use crate::midi;
 use crate::state::SharedState;
 
@@ -93,7 +94,12 @@ pub(super) fn draw(
         state.scale_knob = position.clamp(0.0, 1.0);
         if !response.dragged() {
             let snapped = scale::scale_from_position(state.scale_knob);
-            state.scale_knob = scale::scale_position(snapped);
+            // The knob lands on a scale's detent; the two must move together or the next frame snaps it back.
+            state.scale_knob = snap_to_detent(
+                state.scale_knob,
+                scale::scale_from_position,
+                scale::scale_position,
+            );
             if snapped != state.scale {
                 state.scale = snapped;
                 state.dirty = true;

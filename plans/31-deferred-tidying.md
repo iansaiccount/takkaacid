@@ -202,3 +202,9 @@ pub fn snap_to_detent<F>(position: f32, face_of: impl Fn(f32) -> F, position_of:
       Ruling: the three row calls keep their original position in `draw_panel` — the transport row is called after the
       switches, where its code used to be, not next to the other two rows. A later widget wins a hit-test tie in egui, so
       moving a call changes behaviour that no layout test would see.
+- [x] **5. One snap-on-release rule** — `crate::knobs::snap_to_detent(position, face_of, position_of)` is the rule both
+      detent controls now call: the WAVEFORM switch's release branch and the SCALE knob's. Test
+      `knobs::a_detent_position_snaps_onto_its_face_and_an_exact_face_stays_put` (RED: no such function) pins the four
+      faces, an exact face, and both ends. The duplicated comment about frame-by-frame snapping lives on the helper.
+      Ruling: the helper is in `crate::knobs`, not `ui::panel` as plan 31 sketched — it is about a detent catalogue and
+      takes no egui type, and both callers are knobs.

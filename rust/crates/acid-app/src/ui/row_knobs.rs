@@ -5,7 +5,7 @@
 
 use eframe::egui;
 
-use crate::knobs::{Kind, Knob};
+use crate::knobs::{Kind, Knob, snap_to_detent};
 use crate::state::SharedState;
 
 use super::{
@@ -86,8 +86,13 @@ pub(super) fn draw(
                     } else {
                         shared.waveform()
                     };
-                    knob.publish(shared, waveform_position(face));
-                    state.knobs[slot] = knob.read(shared);
+                    // The face lands on its detent, and the shared value follows the face.
+                    state.knobs[slot] = snap_to_detent(
+                        waveform_position(face),
+                        waveform_from_position,
+                        waveform_position,
+                    );
+                    knob.publish(shared, state.knobs[slot]);
                 }
             }
             Kind::Dial => knob.publish(shared, state.knobs[slot]),
