@@ -1,7 +1,8 @@
 //! The save file: round-trip, atomicity, and the two conversions between disk and running state.
 
 use acid_app::persist::{
-    ENV_DATA_DIR, SAVE_VERSION, SavedState, data_dir, load, save, saved_to_shared, shared_to_saved,
+    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedState, data_dir, load, save, saved_to_shared,
+    shared_to_saved,
 };
 use acid_app::persist::{
     delete_song, list_songs, load_song, new_song, rename_song, save_song, song_name,
@@ -126,13 +127,13 @@ fn renaming_a_song_moves_its_file_and_refuses_a_taken_name() {
 fn the_learned_midi_mapping_round_trips_and_an_old_file_gets_the_factory_one() {
     let dir = tempfile::tempdir().unwrap();
     let saved = SavedState {
-        cc_map: [10, 11, 12, 13, 14, 15, 16],
+        cc_map: vec![10, 11, 12, 13, 14, 15, 16, 17],
         ..Default::default()
     };
     save(dir.path(), &saved).unwrap();
     assert_eq!(
         load(dir.path()).unwrap().unwrap().cc_map,
-        [10, 11, 12, 13, 14, 15, 16],
+        vec![10, 11, 12, 13, 14, 15, 16, 17],
         "a learned rig survives a restart"
     );
 
@@ -147,8 +148,68 @@ fn the_learned_midi_mapping_round_trips_and_an_old_file_gets_the_factory_one() {
     .unwrap();
     assert_eq!(
         load(dir.path()).unwrap().unwrap().cc_map,
-        acid_app::midi::cc::DEFAULT_CC
+        acid_app::midi::cc::DEFAULT_CC.to_vec()
     );
+}
+
+#[test]
+fn a_map_from_before_the_waveform_knob_keeps_every_fader_it_had() {
+    // Seven entries is a map written when the switch could not be taught. The waveform's controller is prefixed and
+    // nothing else moves: a fader that taught CUT OFF must still be CUT OFF after the upgrade.
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let object = legacy.as_object_mut().unwrap();
+    object.insert("version".to_string(), serde_json::json!(4));
+    object.insert(
+        "cc_map".to_string(),
+        serde_json::json!([10, 11, 12, 13, 14, 15, 16]),
+    );
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+
+    // `load_or_default` is what the app runs at startup, and it is where the migration happens.
+    let loaded = acid_app::persist::load_or_default(dir.path());
+    assert_eq!(
+        loaded.cc_map,
+        vec![
+            acid_app::midi::cc::DEFAULT_CC[0],
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16
+        ],
+        "the switch gains its controller; every learned fader keeps its slot"
+    );
+    assert_eq!(loaded.version, SAVE_VERSION);
+}
+
+#[test]
+fn every_wave_survives_a_round_trip() {
+    // The switch used to be clipped to two faces on load, which turned SINE and TRIANGLE into SQUARE.
+    let dir = tempfile::tempdir().unwrap();
+    for wave in acid_core::oscillator::Waveform::ALL {
+        let saved = SavedState {
+            knobs: Knobs {
+                waveform: wave.index() as u8,
+                ..Knobs::default()
+            },
+            ..Default::default()
+        };
+        save(dir.path(), &saved).unwrap();
+        assert_eq!(
+            load(dir.path()).unwrap().unwrap().knobs.waveform,
+            wave.index() as u8,
+            "{wave:?} came back as another wave"
+        );
+    }
 }
 
 #[test]

@@ -58,10 +58,11 @@ pub fn heard(shared: &SharedState) -> Option<u8> {
     }
 }
 
-/// The control a tone knob teaches. Index 0 is the waveform selector, which no controller drives; 1..=6 are the
-/// knobs left to right. Volume is not in the row — it has its own corner of the panel.
+/// The control a tone knob teaches. Index 0 is the waveform selector, whose detents a controller snaps onto; 1..=6 are
+/// the knobs left to right. Volume is not in the row — it has its own corner of the panel.
 pub fn control_for_knob(index: usize) -> Option<CcTarget> {
     match index {
+        0 => Some(CcTarget::Waveform),
         1 => Some(CcTarget::Tuning),
         2 => Some(CcTarget::Cutoff),
         3 => Some(CcTarget::Resonance),
@@ -88,6 +89,15 @@ mod tests {
                 .unwrap()
                 .contains("MIDI")
         );
+    }
+
+    #[test]
+    fn the_waveform_knob_can_be_taught_like_the_others() {
+        // The switch was the one knob LEARN refused; it is a slot like any other now, and the controller's travel snaps
+        // onto its four faces.
+        assert_eq!(control_for_knob(0), Some(CcTarget::Waveform));
+        assert_eq!(control_for_knob(7), None, "the row has seven knobs");
+        assert_eq!(crate::midi::cc::slot(CcTarget::Waveform), Some(0));
     }
 
     #[test]

@@ -56,7 +56,7 @@ impl Default for Knobs {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 4;
+pub const SAVE_VERSION: u32 = 5;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -77,15 +77,15 @@ pub struct SavedState {
     /// The controller each learnable knob listens to, in `midi::cc::LEARNABLE` order; learned MIDI mappings, so a
     /// performance rig survives a restart. Absent means the factory pairing.
     #[serde(default = "default_cc_map")]
-    pub cc_map: [u8; 7],
+    pub cc_map: Vec<u8>,
     /// Whether hovering a control explains it. On for a file that predates the field: help should not have to be found.
     #[serde(default = "default_true")]
     pub tooltips: bool,
 }
 
 /// The factory MIDI mapping, for a file that predates the field.
-pub fn default_cc_map() -> [u8; 7] {
-    crate::midi::cc::DEFAULT_CC
+pub fn default_cc_map() -> Vec<u8> {
+    crate::midi::cc::DEFAULT_CC.to_vec()
 }
 
 /// Hover help defaults on: a player should not have to find the switch to be told what things do.
@@ -103,7 +103,7 @@ impl Default for SavedState {
             swing: 0.0,
             midi_input: None,
             song: None,
-            cc_map: crate::midi::cc::DEFAULT_CC,
+            cc_map: crate::midi::cc::DEFAULT_CC.to_vec(),
             tooltips: true,
         }
     }
@@ -118,8 +118,16 @@ impl SavedState {
     pub fn upgraded(mut self) -> Self {
         if self.version < 3 {
             self.bank.map_patterns(|pattern| pattern.transposed(21));
-            self.version = SAVE_VERSION;
         }
+        // Version 4 and older were written before the waveform knob could be taught, so their map has one entry fewer:
+        // the switch's controller is prepended, and every learned fader keeps the slot — and the knob — it had.
+        if self.cc_map.len() < crate::midi::cc::LEARNABLE.len() {
+            let missing = crate::midi::cc::LEARNABLE.len() - self.cc_map.len();
+            for slot in (0..missing).rev() {
+                self.cc_map.insert(0, crate::midi::cc::DEFAULT_CC[slot]);
+            }
+        }
+        self.version = SAVE_VERSION;
         self
     }
 }
@@ -189,8 +197,16 @@ pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternB
     shared.accent.set(state.knobs.accent);
     shared.volume.set(state.knobs.volume);
     // The learned MIDI mapping travels with the song, so a rig saved in one song comes back with it.
-    for (slot, cc) in state.cc_map.iter().enumerate() {
+    for (slot, cc) in state.cc_map.iter().enumerate().take(shared.cc_map.len()) {
         shared.cc_map[slot].store(i32::from(*cc), std::sync::atomic::Ordering::Relaxed);
+    }
+    // A song written before the waveform knob was teachable has no slot for it; leaving the old controller in place
+    // would make the switch listen to whatever the last session taught it, which is not what the song says.
+    for slot in state.cc_map.len()..shared.cc_map.len() {
+        shared.cc_map[slot].store(
+            i32::from(crate::midi::cc::DEFAULT_CC[slot]),
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
     shared.set_pattern(Arc::new(*bank.current_pattern()));
 }
@@ -221,11 +237,15 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         // Which named song is loaded; `main` fills it in, like the MIDI choice.
         song: None,
         // The learned MIDI mapping is shared state, so it is read straight from it.
-        cc_map: std::array::from_fn(|slot| {
-            shared.cc_map[slot]
-                .load(std::sync::atomic::Ordering::Relaxed)
-                .clamp(0, 127) as u8
-        }),
+        cc_map: shared
+            .cc_map
+            .iter()
+            .map(|mapped| {
+                mapped
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    .clamp(0, 127) as u8
+            })
+            .collect(),
         // The hover-help switch lives with the panel, not the shared state; `main` fills it in like the MIDI choice.
         tooltips: true,
     }
@@ -251,7 +271,12 @@ pub fn load_or_default(dir: &Path) -> SavedState {
 pub fn sanitize(state: &mut SavedState) {
     state.bpm = acid_core::timing::clamp_bpm(state.bpm);
     state.swing = state.swing.clamp(0.0, 1.0);
-    state.knobs.waveform = state.knobs.waveform.min(1);
+    // Four faces, not two: the save file stores the wave catalogue index, so clipping it to 1 would load SINE and TRI as
+    // SQUARE — the bug the two-state switch left behind.
+    state.knobs.waveform = state
+        .knobs
+        .waveform
+        .min((acid_core::oscillator::Waveform::ALL.len() - 1) as u8);
     state.knobs.tuning = state.knobs.tuning.clamp(0.0, 1.0);
     state.knobs.cutoff = state.knobs.cutoff.clamp(0.0, 1.0);
     state.knobs.resonance = state.knobs.resonance.clamp(0.0, 1.0);
@@ -259,6 +284,14 @@ pub fn sanitize(state: &mut SavedState) {
     state.knobs.decay = state.knobs.decay.clamp(0.0, 1.0);
     state.knobs.accent = state.knobs.accent.clamp(0.0, 1.0);
     state.knobs.volume = state.knobs.volume.clamp(0.0, 1.0);
+    // A map written by a build with more learnable knobs than this one cannot be honoured slot for slot, and guessing
+    // which controller belonged to which knob would be worse than the factory pairing.
+    if state.cc_map.len() > crate::midi::cc::LEARNABLE.len() {
+        state.cc_map = crate::midi::cc::DEFAULT_CC.to_vec();
+    }
+    for cc in &mut state.cc_map {
+        *cc = (*cc).min(127);
+    }
     let current = state.bank.current();
     state.bank.select(current);
 }

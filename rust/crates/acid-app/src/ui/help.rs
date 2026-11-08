@@ -46,7 +46,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "MIDI in: notes play over the pattern",
                 "click the MIDI line: choose an input port",
                 "clock: tempo follows a 24 ppqn source",
-                "CC 3 tuning, 5 accent, 7 volume",
+                "CC 20 waveform, 3 tuning, 5 accent, 7 volume",
                 "CC 71 resonance, 72 tempo, 73 swing",
                 "CC 74 cutoff, 75 decay, 76 env mod",
             ],

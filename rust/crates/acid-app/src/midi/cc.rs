@@ -1,4 +1,4 @@
-//! Continuous-controller mapping: nine CCs move the panel's knobs, the tempo and the swing.
+//! Continuous-controller mapping: ten CCs move the panel's knobs, the tempo and the swing.
 //!
 //! Every write lands in the same atomics the mouse writes, so a controller and the panel can never fight
 //! over a value — the last one to arrive wins, and the panel redraws from the atomic.
@@ -12,6 +12,9 @@ use crate::state::SharedState;
 /// What a continuous controller is wired to.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum CcTarget {
+    /// The oscillator's wave. A controller has 128 steps and the switch has four faces, so `apply_cc` snaps the value to
+    /// the nearest detent — the same rule the knob follows when the hand lets go.
+    Waveform,
     Tuning,
     Cutoff,
     Resonance,
@@ -37,7 +40,8 @@ pub const CC_MAP: [(u8, CcTarget); 9] = [
 ];
 
 /// The controls MIDI learn can teach, in `SharedState::cc_map` slot order.
-pub const LEARNABLE: [CcTarget; 7] = [
+pub const LEARNABLE: [CcTarget; 8] = [
+    CcTarget::Waveform,
     CcTarget::Tuning,
     CcTarget::Cutoff,
     CcTarget::Resonance,
@@ -48,7 +52,10 @@ pub const LEARNABLE: [CcTarget; 7] = [
 ];
 
 /// The factory pairing for the learnable knobs: one controller each.
-pub const DEFAULT_CC: [u8; 7] = [3, 74, 71, 76, 75, 5, 7];
+///
+/// The waveform gets CC 20, an undefined controller no common box sends by accident, so a fresh session never has a
+/// fader fighting the mouse for the switch.
+pub const DEFAULT_CC: [u8; 8] = [20, 3, 74, 71, 76, 75, 5, 7];
 
 /// Tempo and swing are not learnable: they keep their fixed controllers, so a performance never loses the clock.
 pub const FIXED_CC: [(u8, CcTarget); 2] = [(72, CcTarget::Tempo), (73, CcTarget::Swing)];
@@ -109,6 +116,11 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
     }
     let knob = cc_value(value);
     match cc_target(state, cc) {
+        // A switch, not a dial: the controller's travel is snapped to the nearest of the four faces, which is the same
+        // rule the knob follows when the hand lets go.
+        Some(CcTarget::Waveform) => {
+            state.set_waveform(acid_core::oscillator::Waveform::from_position(knob))
+        }
         Some(CcTarget::Tuning) => state.tuning.set(knob),
         Some(CcTarget::Cutoff) => state.cutoff.set(knob),
         Some(CcTarget::Resonance) => state.resonance.set(knob),
@@ -200,6 +212,52 @@ mod tests {
     }
 
     #[test]
+    fn a_waveform_controller_snaps_to_the_nearest_detent() {
+        // A controller has 128 steps and the switch has four faces. Floored travel would give the last wave a single
+        // step of its own at the very top; snapped travel divides the range evenly.
+        use acid_core::oscillator::Waveform;
+
+        let s = SharedState::new();
+        let faces = [
+            (0, Waveform::Saw),
+            (42, Waveform::Square),
+            (85, Waveform::Sine),
+            (127, Waveform::Triangle),
+        ];
+        for (value, expected) in faces {
+            assert!(
+                apply_cc(&s, 20, value),
+                "CC 20 is the factory waveform fader"
+            );
+            assert_eq!(
+                s.waveform(),
+                expected,
+                "CC {value} should reach {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_waveform_can_be_taught_and_the_taught_controller_drives_it() {
+        use acid_core::oscillator::Waveform;
+
+        let s = SharedState::new();
+        set_cc(&s, CcTarget::Waveform, 64);
+        assert_eq!(cc_for(&s, CcTarget::Waveform), Some(64));
+        assert_eq!(cc_target(&s, 64), Some(CcTarget::Waveform));
+        assert_eq!(
+            cc_target(&s, 20),
+            None,
+            "the factory controller is free again"
+        );
+
+        assert!(apply_cc(&s, 64, 127));
+        assert_eq!(s.waveform(), Waveform::Triangle);
+        assert!(apply_cc(&s, 64, 0));
+        assert_eq!(s.waveform(), Waveform::Saw);
+    }
+
+    #[test]
     fn listening_records_the_controller_instead_of_moving_a_knob() {
         let s = SharedState::new();
         let before = s.cutoff.get();
@@ -219,7 +277,8 @@ mod tests {
     fn tempo_and_swing_cannot_be_taught() {
         assert_eq!(slot(CcTarget::Tempo), None);
         assert_eq!(slot(CcTarget::Swing), None);
-        assert_eq!(slot(CcTarget::Volume), Some(6));
+        assert_eq!(slot(CcTarget::Waveform), Some(0), "the switch is learnable");
+        assert_eq!(slot(CcTarget::Volume), Some(7), "volume has the last slot");
         // The fixed pair still answers after the learned table is empty.
         let s = SharedState::new();
         for slot in 0..LEARNABLE.len() {

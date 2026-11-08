@@ -94,7 +94,7 @@ pub struct SharedState {
     /// The computer keyboard's octave offset, `-2..=2`.
     pub octave: AtomicI32,
     /// The controller each learnable knob listens to, in `midi::cc::LEARNABLE` order; `-1` means unmapped.
-    pub cc_map: [AtomicI32; 7],
+    pub cc_map: [AtomicI32; 8],
     /// True while the panel is waiting for a controller to learn.
     pub learn_active: AtomicBool,
     /// The controller the MIDI thread saw while learning; `-1` until one arrives.

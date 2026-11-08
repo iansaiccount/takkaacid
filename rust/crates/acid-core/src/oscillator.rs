@@ -51,6 +51,21 @@ impl Waveform {
             Waveform::Triangle => "TRI",
         }
     }
+
+    /// This wave's position on the knob: `0.0` is the first entry of the catalogue, `1.0` the last.
+    ///
+    /// The panel, the wheel and a learned MIDI controller all read the switch through this one number, so they cannot
+    /// disagree about where a wave sits.
+    pub fn position(self) -> f32 {
+        self.index() as f32 / (Self::ALL.len() - 1) as f32
+    }
+
+    /// The wave nearest a knob position. Rounded, not floored, so the detents divide the travel evenly and the knob can
+    /// never rest between two waves; a position past either end clamps to that end.
+    pub fn from_position(position: f32) -> Self {
+        let last = (Self::ALL.len() - 1) as f32;
+        Self::from_index((position.clamp(0.0, 1.0) * last).round() as usize)
+    }
 }
 
 /// Lowest frequency the oscillator will play.

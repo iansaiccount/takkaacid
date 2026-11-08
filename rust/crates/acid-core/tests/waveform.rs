@@ -99,3 +99,38 @@ fn switching_waves_mid_note_keeps_the_pitch() {
         o.frequency()
     );
 }
+
+#[test]
+fn each_wave_has_one_position_on_a_knob_and_one_wave_nearest_each_position() {
+    // The knob is a four-position dial, so travel and catalogue must agree both ways.
+    let last = (Waveform::ALL.len() - 1) as f32;
+    for (index, wave) in Waveform::ALL.iter().enumerate() {
+        let position = wave.position();
+        assert!(
+            (position - index as f32 / last).abs() < 1e-6,
+            "{wave:?} is not evenly spread: {position}"
+        );
+        assert_eq!(Waveform::from_position(position), *wave);
+    }
+    assert_eq!(Waveform::ALL[0].position(), 0.0);
+    assert_eq!(Waveform::ALL[3].position(), 1.0);
+}
+
+#[test]
+fn a_position_between_detents_lands_on_the_nearest_wave_and_never_past_the_ends() {
+    // A controller has 128 steps for four waves, so most of its travel is *between* detents; rounding is what makes a
+    // fader and a drag agree.
+    assert_eq!(Waveform::from_position(0.0), Waveform::Saw);
+    assert_eq!(Waveform::from_position(0.16), Waveform::Saw);
+    assert_eq!(Waveform::from_position(0.17), Waveform::Square);
+    assert_eq!(Waveform::from_position(0.49), Waveform::Square);
+    // Exactly halfway between two detents is the one tie there is; it always goes up, so a fader paused there and the
+    // same fader nudged a step further never disagree.
+    assert_eq!(Waveform::from_position(0.5), Waveform::Sine);
+    assert_eq!(Waveform::from_position(0.51), Waveform::Sine);
+    assert_eq!(Waveform::from_position(1.0), Waveform::Triangle);
+    // Out of range clamps instead of wrapping: a controller that overshoots must not jump from the last wave to the
+    // first.
+    assert_eq!(Waveform::from_position(-3.0), Waveform::Saw);
+    assert_eq!(Waveform::from_position(9.0), Waveform::Triangle);
+}

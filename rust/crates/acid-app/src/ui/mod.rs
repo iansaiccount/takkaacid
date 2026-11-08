@@ -69,9 +69,6 @@ pub struct PanelState {
     pub drag: Option<(usize, Pitch, i8, f32)>,
     /// True when something has changed since the last save.
     pub dirty: bool,
-    /// The VOLUME knob, kept separate from the seven tone knobs.
-    /// True once the knobs have been read from `SharedState` for the first time.
-    pub knobs_synced: bool,
     /// The MIDI status line, right-aligned in the top strip.
     pub midi_status: String,
     /// True when the supervisor has given up, which shows the REPROBE target.
@@ -91,6 +88,7 @@ pub struct PanelState {
     pub device_list: Option<Vec<String>>,
     /// The device the user chose; consumed by `main` on the next frame.
     pub device_choice: Option<String>,
+    /// The VOLUME knob, kept separate from the seven tone knobs.
     pub volume: f32,
     /// When CLEAR was first clicked: a second click inside the window empties the pattern on screen.
     pub clear_armed_at: Option<std::time::Instant>,
@@ -127,7 +125,6 @@ impl Default for PanelState {
             drag: None,
             dirty: false,
             volume: acid_core::engine::DEFAULT_VOLUME_KNOB,
-            knobs_synced: false,
             midi_status: "MIDI: none (retrying)".to_string(),
             midi_given_up: false,
             reprobe_requested: false,
@@ -186,14 +183,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
     state.pattern = shared.pattern();
     state.playing = shared.is_playing();
-    // Knobs 1..6 round-trip exactly, so reading them back every frame is harmless. The WAVEFORM knob does
-    // not: it maps a continuous position onto a two-state switch, so re-deriving it from the switch every
-    // frame would pin it at the extreme and a drag could never cross the midpoint. It is read once, at the
-    // first frame (which also picks up a restored session), and then the hand owns it.
-    if !state.knobs_synced {
-        state.knobs[0] = waveform_position(shared.waveform());
-        state.knobs_synced = true;
-    }
+    // Knobs 1..6 round-trip exactly, so reading them back every frame is harmless. The WAVEFORM knob is a switch: its
+    // position is worked out where the knob is drawn, because only there is it known whether the hand or a learned
+    // controller owns it.
     state.knobs[1] = shared.tuning.get();
     state.knobs[2] = shared.cutoff.get();
     state.knobs[3] = shared.resonance.get();
@@ -281,11 +273,6 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         );
         tips::hover(&response, state, tips::Control::knob(i));
         if i == 0 && !choosing {
-            // Snap only once the hand has let go: snapping mid-drag would pull the value back onto the detent it started
-            // from, and a slow drag could never cross a midpoint.
-            if !response.dragged() {
-                state.knobs[0] = waveform_position(waveform_from_position(state.knobs[0]));
-            }
             waveform_detents(cell_ui.painter(), *cell, state.knobs[0], s);
         }
         if choosing {
@@ -303,7 +290,26 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
         // Publish straight away: the audio thread's next block picks it up, so the move is heard now.
         match i {
-            0 => shared.set_waveform(waveform_from_position(state.knobs[0])),
+            // The switch has two masters: the hand and a learned controller. While the hand is on the knob it wins;
+            // when it is not, the shared value is the truth, so a fader moves the face. Snapping happens on release,
+            // never mid-drag — a frame-by-frame snap pulls the position back onto the detent it started from, and a
+            // slow drag could never cross a midpoint.
+            0 => {
+                if response.dragged() {
+                    shared.set_waveform(waveform_from_position(state.knobs[0]));
+                } else {
+                    let hand = waveform_from_position(state.knobs[0]);
+                    // The hand's own move wins: the wheel, or a drag that has just ended. Otherwise the switch is
+                    // where the shared state says, which is where a learned controller put it.
+                    let face = if state.knobs[0] != before || shared.waveform() == hand {
+                        hand
+                    } else {
+                        shared.waveform()
+                    };
+                    state.knobs[0] = waveform_position(face);
+                    shared.set_waveform(face);
+                }
+            }
             1 => shared.tuning.set(state.knobs[1]),
             2 => shared.cutoff.set(state.knobs[2]),
             3 => shared.resonance.set(state.knobs[3]),
@@ -881,14 +887,15 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
 
 /// The control position of a wave: `0.0` is the first entry of the catalogue, `1.0` the last.
 pub fn waveform_position(wave: acid_core::oscillator::Waveform) -> f32 {
-    wave.index() as f32 / (acid_core::oscillator::Waveform::ALL.len() - 1) as f32
+    // The arithmetic lives in `acid_core`, because a learned controller snaps with the same rule and the MIDI thread
+    // may not borrow the panel's copy.
+    wave.position()
 }
 
 /// The wave nearest a control position. Rounded, not floored, so the detents divide the travel evenly and the knob can
 /// never rest between two waves.
 pub fn waveform_from_position(position: f32) -> acid_core::oscillator::Waveform {
-    let last = (acid_core::oscillator::Waveform::ALL.len() - 1) as f32;
-    acid_core::oscillator::Waveform::from_index((position.clamp(0.0, 1.0) * last).round() as usize)
+    acid_core::oscillator::Waveform::from_position(position)
 }
 
 /// Mark every wave's detent around the WAVEFORM knob, lighting the one the knob is on.

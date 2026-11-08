@@ -26,7 +26,11 @@ fn a_hand_edited_file_is_clamped_into_range() {
     assert_eq!(loaded.bpm, acid_core::timing::MAX_BPM);
     assert_eq!(loaded.swing, 1.0);
     assert!((loaded.knobs.cutoff - 1.0).abs() < 1e-6);
-    assert!(loaded.knobs.waveform <= 1);
+    // Four faces, not two: the switch's index is clipped to the last wave the build has.
+    assert_eq!(
+        loaded.knobs.waveform,
+        (acid_core::oscillator::Waveform::ALL.len() - 1) as u8
+    );
 }
 
 #[test]

@@ -186,3 +186,40 @@ fn the_waveform_knob_is_a_switch_with_a_detent_per_wave() {
     assert_eq!(waveform_from_position(-1.0), Waveform::Saw);
     assert_eq!(waveform_from_position(2.0), Waveform::Triangle);
 }
+
+/// A learned controller is the switch's second master: with the hand off the knob, the face follows the switch — and
+/// the panel must not fight it by publishing its own stale position back.
+#[test]
+fn the_waveform_face_follows_a_learned_controller() {
+    use acid_app::ui::waveform_position;
+
+    let ctx = egui::Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let frame = |panel: &mut PanelState| {
+        let input = egui::RawInput {
+            screen_rect: Some(window()),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| draw_panel(panel, &shared, ui));
+        output.textures_delta.clear();
+    };
+
+    frame(&mut panel);
+    assert_eq!(panel.knobs[0], 0.0, "the launch wave is on the first face");
+
+    // What the MIDI thread does with a learned fader: one atomic write.
+    shared.set_waveform(Waveform::Sine);
+    frame(&mut panel);
+
+    assert_eq!(
+        panel.knobs[0],
+        waveform_position(Waveform::Sine),
+        "the face follows the switch"
+    );
+    assert_eq!(
+        shared.waveform(),
+        Waveform::Sine,
+        "and the panel does not publish its own position back over it"
+    );
+}

@@ -113,9 +113,12 @@ fn pressing_learn_again_gives_up() {
 }
 
 #[test]
-fn the_waveform_selector_is_not_learnable() {
-    // Index 0 has no controller of its own: clicking it while choosing must not start a binding.
-    assert_eq!(acid_app::ui::learn::control_for_knob(0), None);
+fn the_waveform_selector_is_a_learnable_knob_now() {
+    // Index 0 used to be refused; it is a slot like the others, and a controller snaps onto its four faces.
+    assert_eq!(
+        acid_app::ui::learn::control_for_knob(0),
+        Some(acid_app::midi::cc::CcTarget::Waveform)
+    );
     for index in 1..=6 {
         assert!(acid_app::ui::learn::control_for_knob(index).is_some());
     }
