@@ -70,3 +70,14 @@ readouts call `tips::hover` every frame.
       were rewritten and now pin the new behaviour.
       Ruling: tasks 1 and 3 land in one commit — the readout move and the highlight share the same two call sites in
       `ui/mod.rs`, and splitting them would leave a commit whose readout teaches a control it does not outline.
+- [x] **2. Tips for the two readouts** — `tips::Control::Tempo` and `Control::Pattern` appended to the table (indices 23
+      and 24, so nothing existing moves), with the arrows as the tempo's key and none for the pattern; both readouts get a
+      hover sense and `tips::hover` beside their paint. Test `tips::the_two_readouts_have_their_own_help`.
+- [x] **4. Pattern pickup** — `takes_pickup(Pattern)` is true and `knob_value(Pattern)` answers with the middle of the zone
+      the playing pattern occupies (`pattern_zone`), so a fader parked on pattern 8 no longer jumps the selection.
+      Two more changes fell out of making that honest: `pattern_number`/`pattern_zone`/`pattern_number_of` are one mapping
+      each (the request and the pickup read the same zones), and what a controller *writes* for a stepper is its zone
+      middle (`written`), or staying inside the zone after the swap would count as the hand stealing the knob.
+      Tests: `cc::a_pattern_fader_has_to_reach_the_pattern_before_it_moves_it` (RED: the far fader requested pattern 7);
+      the three older pattern tests now model the app (`main` applies the request, which is what moves the knob) and the
+      stepper test no longer claims the pattern is one.

@@ -5,6 +5,7 @@
 
 use std::sync::atomic::Ordering;
 
+use acid_core::bank::PATTERNS_PER_BANK;
 use acid_core::timing::{MAX_BPM, MIN_BPM, clamp_bpm};
 
 use crate::knobs::Knob;
@@ -153,10 +154,13 @@ pub const PICKUP_TOLERANCE: f32 = 0.02;
 /// Whether a control is a dial the controller has to reach first, or a stepper it names outright.
 ///
 /// A dial and a fader are two positions of one value, and they are almost never in the same place: without this, the
-/// first message after a song loads slams the knob to wherever the fader happened to be. A stepper (the waveform, the
-/// pattern) is not a position but a choice — a fader pointed at TRIANGLE means TRIANGLE.
+/// first message after a song loads slams the knob to wherever the fader happened to be. A stepper (the waveform) is not a
+/// position but a choice — a fader pointed at TRIANGLE means TRIANGLE.
+///
+/// The pattern selector looks like a stepper but is played like a dial: a fader parked on pattern 8 must not jump the
+/// selection the moment it is touched, so it picks up the way the TEMPO readout does.
 pub fn takes_pickup(target: CcTarget) -> bool {
-    !matches!(target, CcTarget::Waveform | CcTarget::Pattern)
+    !matches!(target, CcTarget::Waveform)
 }
 
 /// Whether a controller at `sent` may turn a knob at `current`.
@@ -181,6 +185,22 @@ pub fn takeover(last: Option<f32>, engaged: bool, sent: f32, current: f32) -> bo
     }
 }
 
+/// Which pattern of the bank a controller value points at: 128 steps over eight equal zones, sixteen each.
+fn pattern_number(value: u8) -> usize {
+    let zone = f32::from(value) / 128.0 * PATTERNS_PER_BANK as f32;
+    (zone as usize).min(PATTERNS_PER_BANK - 1)
+}
+
+/// Where the pattern selector's knob sits, as a control position: the middle of the zone the playing pattern occupies.
+/// Reading a fader and asking whether it has reached the pattern are the same mapping, so they are one function.
+fn pattern_zone(index: usize) -> f32 {
+    (pattern_number_of(index) as f32 + 0.5) / PATTERNS_PER_BANK as f32
+}
+
+/// The pattern's number inside its bank, from an absolute index in the 64.
+fn pattern_number_of(index: usize) -> usize {
+    index % PATTERNS_PER_BANK
+}
 /// Where a control's knob currently sits, as a position rather than its own units.
 fn knob_value(state: &SharedState, target: CcTarget) -> Option<f32> {
     match target {
@@ -194,8 +214,11 @@ fn knob_value(state: &SharedState, target: CcTarget) -> Option<f32> {
         // The tempo fader spans the whole range, so its "position" is where the current tempo sits in that range.
         CcTarget::Tempo => Some((state.tempo_bpm.get() - MIN_BPM) / (MAX_BPM - MIN_BPM)),
         CcTarget::Swing => Some(state.swing.get()),
+        // The pattern selector's position is the middle of the zone the playing pattern occupies — the same mapping
+        // `apply_cc` reads a fader with, so "has the fader reached it" means one thing on both sides.
+        CcTarget::Pattern => Some(pattern_zone(state.pattern_index())),
         // Not a dial: no pickup, and no position to compare against.
-        CcTarget::Waveform | CcTarget::Pattern => None,
+        CcTarget::Waveform => None,
     }
 }
 
@@ -217,13 +240,20 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
     };
     // A dial has to be reached before it may be turned. The controller and the knob are two positions of one value, so
     // a fader parked elsewhere is not an instruction to jump — it is a fader that has not met the knob yet.
+    //
+    // What a controller "writes" is the position it puts the control at, which is not the raw travel for a stepper: a
+    // pattern fader writes the middle of the zone it landed in, so staying inside the zone keeps it engaged.
+    let written = match target {
+        CcTarget::Pattern => pattern_zone(pattern_number(value)),
+        _ => knob,
+    };
     if takes_pickup(target)
         && let Some(slot) = slot(target)
         && let Some(current) = knob_value(state, target)
     {
         let pickup = &state.pickup[slot];
-        let engaged = takeover(pickup.last(), pickup.engaged(), knob, current);
-        pickup.record(knob, engaged);
+        let engaged = takeover(pickup.last(), pickup.engaged(), written, current);
+        pickup.record(written, engaged);
         if !engaged {
             return true;
         }
@@ -246,19 +276,16 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
                 .tempo_bpm
                 .set(clamp_bpm(MIN_BPM + knob * (MAX_BPM - MIN_BPM)));
         }
-        // The pattern is a stepper as well, but its zones are equal: 128 controller steps over eight patterns is sixteen
-        // each, so a fader rests in the middle of a pattern rather than on a hair-trigger boundary. The MIDI thread may
-        // not move the bank, so it leaves a request and `main` drains it.
+        // The pattern's zones are equal: 128 controller steps over eight patterns is sixteen each, so a fader rests in
+        // the middle of a pattern rather than on a hair-trigger boundary. The MIDI thread may not move the bank, so it
+        // leaves a request and `main` drains it when the bar allows.
         CcTarget::Pattern => {
-            use acid_core::bank::PATTERNS_PER_BANK;
-
-            let zone = f32::from(value) / 128.0 * PATTERNS_PER_BANK as f32;
-            let number = (zone as usize).min(PATTERNS_PER_BANK - 1);
+            let number = pattern_number(value);
             let bank = state.pattern_index() / PATTERNS_PER_BANK;
-            let wanted = bank * PATTERNS_PER_BANK + number;
-            state
-                .pattern_request
-                .store(wanted as i32, Ordering::Relaxed);
+            state.pattern_request.store(
+                (bank * PATTERNS_PER_BANK + number) as i32,
+                Ordering::Relaxed,
+            );
         }
         CcTarget::Swing => state.swing.set(knob.clamp(0.0, 1.0)),
     }
@@ -404,6 +431,10 @@ mod tests {
         let s = SharedState::new();
         s.set_pattern_index(9); // bank 1, pattern 1 (zero-based: bank 1 starts at 8)
         let bank_start = 8;
+        // The fader has to reach the pattern that is playing before it may move it: 24 is inside pattern 1's zone, which
+        // is where this fader is parked, so the first message takes over.
+        assert!(apply_cc(&s, 21, 24));
+        assert_eq!(s.take_pattern_request(), Some(bank_start + 1));
 
         for (value, number) in [(0, 0), (15, 0), (16, 1), (31, 1), (127, 7)] {
             assert!(
@@ -415,8 +446,36 @@ mod tests {
                 Some(bank_start + number),
                 "CC {value} should ask for pattern {number} of the bank"
             );
+            // `main` applies the request, and that is what moves the knob the fader is holding.
+            s.set_pattern_index(bank_start + number);
         }
-        assert_eq!(s.take_pattern_request(), None, "a request is taken once");
+    }
+
+    #[test]
+    fn a_pattern_fader_has_to_reach_the_pattern_before_it_moves_it() {
+        // A fader parked at the far end of its travel is not an instruction to jump to the last pattern: it has to meet
+        // the pattern that is playing first, like every other dial in the instrument.
+        let s = SharedState::new();
+        s.set_pattern_index(0);
+
+        assert!(apply_cc(&s, 21, 127));
+        assert_eq!(
+            s.take_pattern_request(),
+            None,
+            "the fader has not found the playing pattern yet"
+        );
+
+        // Sweeping down across the pattern it is on takes over — the crossing is what counts, not the landing.
+        assert!(apply_cc(&s, 21, 0));
+        assert_eq!(
+            s.take_pattern_request(),
+            Some(0),
+            "the sweep reached the pattern"
+        );
+
+        // From there it follows, so a sweep across the travel asks for each pattern in turn.
+        apply_cc(&s, 21, 127);
+        assert_eq!(s.take_pattern_request(), Some(7));
     }
 
     #[test]
@@ -424,6 +483,9 @@ mod tests {
         // The MIDI thread may not move the bank, so the whole effect is one request; nothing else may budge.
         let s = SharedState::new();
         let before = s.pattern();
+        // Find the pattern that is playing first (A1), then ask for another one.
+        assert!(apply_cc(&s, 21, 0));
+        assert_eq!(s.take_pattern_request(), Some(0), "it found A1");
         assert!(apply_cc(&s, 21, 60));
         assert_eq!(
             *s.pattern(),
@@ -620,9 +682,8 @@ mod tests {
         apply_cc(&s, 20, 127);
         assert_eq!(s.waveform(), Waveform::Triangle);
 
-        s.set_pattern_index(0);
-        apply_cc(&s, 21, 127);
-        assert_eq!(s.take_pattern_request(), Some(7));
+        // The pattern selector is not in this class: it looks like a stepper but is played like a dial, so it has to be
+        // reached first — `a_pattern_fader_has_to_reach_the_pattern_before_it_moves_it` is the test for that.
     }
 
     #[test]

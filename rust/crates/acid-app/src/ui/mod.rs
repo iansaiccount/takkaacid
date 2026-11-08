@@ -261,6 +261,23 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         &display::format_tempo(state.tempo),
         s,
     );
+    // Both readouts answer the pointer, so a player who does not know what "A1" or "128" means can ask: a display is
+    // still a control, and it is teachable besides.
+    for (name, rect, control) in [
+        (
+            "hover-pattern",
+            panel::pattern_display_rect(l.top),
+            tips::Control::Pattern,
+        ),
+        (
+            "hover-tempo",
+            panel::tempo_display_rect(l.top),
+            tips::Control::Tempo,
+        ),
+    ] {
+        let response = ui.interact(rect, ui.scope_id().with(name), egui::Sense::hover());
+        tips::hover(&response, state, control);
+    }
     // Both readouts wear the pick colour: while choosing, they are the answer to "which one?"; while a learn is
     // listening for one of them, that one keeps its border so the player can see what the controller will bind.
     if learn::highlight(state.learn, midi::cc::CcTarget::Tempo) {

@@ -56,11 +56,15 @@ pub enum Control {
     Randomise,
     Density,
     Scale,
+    /// The BPM readout. Appended, so no existing control's position in the table moves.
+    Tempo,
+    /// The pattern readout beside it.
+    Pattern,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 23] = [
+    pub const ALL: [Control; 25] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -84,6 +88,8 @@ impl Control {
         Control::Randomise,
         Control::Density,
         Control::Scale,
+        Control::Tempo,
+        Control::Pattern,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -112,6 +118,8 @@ impl Control {
             Control::Randomise => TIPS[20],
             Control::Density => TIPS[21],
             Control::Scale => TIPS[22],
+            Control::Tempo => TIPS[23],
+            Control::Pattern => TIPS[24],
         }
     }
 
@@ -133,7 +141,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 23] = [
+const TIPS: [Tip; 25] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -249,6 +257,16 @@ const TIPS: [Tip; 23] = [
         what: "Which notes RANDOM may use, rooted on C. Turning it never changes the pattern in front of you.",
         shortcut: None,
     },
+    Tip {
+        title: "TEMPO",
+        what: "How fast the sequencer runs, in BPM. Click it while LEARN is picking to teach a controller.",
+        shortcut: Some("up / down arrow: one BPM faster or slower"),
+    },
+    Tip {
+        title: "PATTERN",
+        what: "Which pattern is playing, bank and slot. Click it while LEARN is picking to teach a controller; the swap waits for the bar.",
+        shortcut: None,
+    },
 ];
 
 /// The help for `control`, or nothing at all when the player has turned the hints off.
@@ -292,6 +310,25 @@ mod tests {
         // The knobs are the front of the panel, and the TIPS key is the last tip.
         assert_eq!(Control::for_knob(Knob::Waveform), Control::ALL[0]);
         assert_eq!(Control::Tooltips, Control::ALL[16]);
+    }
+
+    #[test]
+    fn the_two_readouts_have_their_own_help() {
+        // The pattern and tempo readouts can be hovered and can be taught, so both need a tip. They are appended to the
+        // table so no existing control's position moves.
+        assert_eq!(Control::ALL[23], Control::Tempo);
+        assert_eq!(Control::ALL[24], Control::Pattern);
+        assert_eq!(Control::Tempo.tip().title, "TEMPO");
+        assert_eq!(Control::Pattern.tip().title, "PATTERN");
+        assert!(
+            Control::Tempo.tip().shortcut.is_some(),
+            "the arrows nudge it"
+        );
+        assert_eq!(
+            Control::Pattern.tip().shortcut,
+            None,
+            "a pattern has no key"
+        );
     }
 
     #[test]
