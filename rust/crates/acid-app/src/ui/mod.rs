@@ -520,27 +520,6 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
     {
-        let reset_cell = switches::cell(l.switches, switches::Switch::Reset);
-        // RESET wipes the whole mapped rig, so it is dark unless a learn is in progress — and the click is gated on
-        // the same test, because a dark key still reports clicks.
-        let learning = state.learn != learn::Step::Idle;
-        if switch_key(
-            ui,
-            state,
-            "midi-reset",
-            reset_cell,
-            "RESET",
-            learning,
-            tips::Control::Reset,
-        ) && learning
-        {
-            midi::cc::reset_defaults(shared);
-            learn::cancel(shared);
-            state.learn = learn::Step::Idle;
-            state.dirty = true;
-        }
-    }
-    {
         let step_cell = switches::cell(l.switches, switches::Switch::Step);
         // STEP mode: a note typed on a keyboard writes the selected step, then walks to the next one.
         if switch_key(

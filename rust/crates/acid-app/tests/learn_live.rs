@@ -4,7 +4,7 @@ use acid_app::midi::cc::{self, CcTarget};
 use acid_app::state::SharedState;
 use acid_app::ui::layout::{knob_cells, layout};
 use acid_app::ui::learn::Step;
-use acid_app::ui::switches::{self, Switch};
+use acid_app::ui::switches;
 use acid_app::ui::transport::TRANSPORT_CELLS;
 use acid_app::ui::{PanelState, draw_panel, panel};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
@@ -121,55 +121,12 @@ fn the_waveform_selector_is_not_learnable() {
     }
 }
 
-/// RESET is the seventh switches cell, after BANK..SONGS.
-fn reset_centre() -> Pos2 {
-    switches::cell(layout(screen()).switches, Switch::Reset).center()
-}
-
 #[test]
-fn reset_puts_the_factory_map_back() {
-    let ctx = Context::default();
-    let shared = SharedState::new();
-    let mut panel = PanelState::default();
-
-    // Teach CUT OFF a different controller first.
-    click(&ctx, &mut panel, &shared, learn_centre());
-    click(&ctx, &mut panel, &shared, cutoff_centre());
-    shared.learn_cc.store(22, Ordering::Relaxed);
-    run_on(&ctx, &mut panel, &shared, vec![]);
-    assert_eq!(cc::cc_for(&shared, CcTarget::Cutoff), Some(22));
-
-    // RESET is offered inside a learn: press LEARN, then RESET.
-    click(&ctx, &mut panel, &shared, learn_centre());
-    click(&ctx, &mut panel, &shared, reset_centre());
-
-    assert_eq!(
-        cc::cc_for(&shared, CcTarget::Cutoff),
-        Some(74),
-        "the factory pair is back"
-    );
-    assert_eq!(panel.learn, Step::Idle, "and the learn is over");
-    assert!(panel.dirty, "the reset is worth saving");
-}
-
-#[test]
-fn reset_is_dark_until_a_learn_is_in_progress() {
-    let ctx = Context::default();
-    let shared = SharedState::new();
-    let mut panel = PanelState::default();
-
-    // A rig taught, then a stray click on RESET while idle: it must survive.
-    click(&ctx, &mut panel, &shared, learn_centre());
-    click(&ctx, &mut panel, &shared, cutoff_centre());
-    shared.learn_cc.store(23, Ordering::Relaxed);
-    run_on(&ctx, &mut panel, &shared, vec![]);
-    assert_eq!(cc::cc_for(&shared, CcTarget::Cutoff), Some(23));
-
-    click(&ctx, &mut panel, &shared, reset_centre());
-
-    assert_eq!(
-        cc::cc_for(&shared, CcTarget::Cutoff),
-        Some(23),
-        "a dark RESET must not wipe the map"
-    );
+fn the_switches_row_has_no_reset_key() {
+    // RESET rewrote the whole map from a dark key beside LEARN; it was removed rather than moved, so the row is seven
+    // keys and none of them prints it.
+    assert_eq!(switches::Switch::ALL.len(), 7);
+    for switch in switches::Switch::ALL {
+        assert_ne!(switch.label(), "RESET", "{switch:?} is back");
+    }
 }

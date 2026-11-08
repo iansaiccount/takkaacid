@@ -43,7 +43,6 @@ pub enum Control {
     Clear,
     Save,
     Songs,
-    Reset,
     Step,
     Run,
     Stop,
@@ -55,7 +54,7 @@ pub enum Control {
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 18] = [
+    pub const ALL: [Control; 17] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -66,7 +65,6 @@ impl Control {
         Control::Clear,
         Control::Save,
         Control::Songs,
-        Control::Reset,
         Control::Step,
         Control::Run,
         Control::Stop,
@@ -102,20 +100,19 @@ impl Control {
             Control::Clear => TIPS[7],
             Control::Save => TIPS[8],
             Control::Songs => TIPS[9],
-            Control::Reset => TIPS[10],
-            Control::Step => TIPS[11],
-            Control::Run => TIPS[12],
-            Control::Stop => TIPS[13],
-            Control::TempoDown => TIPS[14],
-            Control::TempoUp => TIPS[15],
-            Control::Learn => TIPS[16],
-            Control::Tooltips => TIPS[17],
+            Control::Step => TIPS[10],
+            Control::Run => TIPS[11],
+            Control::Stop => TIPS[12],
+            Control::TempoDown => TIPS[13],
+            Control::TempoUp => TIPS[14],
+            Control::Learn => TIPS[15],
+            Control::Tooltips => TIPS[16],
         }
     }
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 18] = [
+const TIPS: [Tip; 17] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -164,11 +161,6 @@ const TIPS: [Tip; 18] = [
     Tip {
         title: "SONGS",
         what: "Name, save, load, rename or delete a song.",
-        shortcut: None,
-    },
-    Tip {
-        title: "RESET",
-        what: "Puts the MIDI controller map back to the factory pairing. Lit while learning.",
         shortcut: None,
     },
     Tip {
@@ -247,7 +239,7 @@ mod tests {
         }
         // The knobs are the front of the panel, and the TIPS key is the last tip.
         assert_eq!(Control::knob(0), Control::ALL[0]);
-        assert_eq!(Control::Tooltips, Control::ALL[17]);
+        assert_eq!(Control::Tooltips, Control::ALL[16]);
     }
 
     #[test]

@@ -16,20 +16,18 @@ pub enum Switch {
     Clear,
     Save,
     Songs,
-    Reset,
     Step,
 }
 
 impl Switch {
     /// Every key, in drawing order.
-    pub const ALL: [Switch; 8] = [
+    pub const ALL: [Switch; 7] = [
         Switch::Bank,
         Switch::Pattern,
         Switch::Mode,
         Switch::Clear,
         Switch::Save,
         Switch::Songs,
-        Switch::Reset,
         Switch::Step,
     ];
 
@@ -42,8 +40,7 @@ impl Switch {
             Switch::Clear => 3,
             Switch::Save => 4,
             Switch::Songs => 5,
-            Switch::Reset => 6,
-            Switch::Step => 7,
+            Switch::Step => 6,
         }
     }
 
@@ -56,7 +53,6 @@ impl Switch {
             Switch::Clear => "CLEAR",
             Switch::Save => "SAVE",
             Switch::Songs => "SONGS",
-            Switch::Reset => "RESET",
             Switch::Step => "STEP",
         }
     }
@@ -109,13 +105,7 @@ mod tests {
         assert!(!Switch::Bank.is_live());
         assert!(!Switch::Pattern.is_live());
         assert!(!Switch::Mode.is_live());
-        for switch in [
-            Switch::Clear,
-            Switch::Save,
-            Switch::Songs,
-            Switch::Reset,
-            Switch::Step,
-        ] {
+        for switch in [Switch::Clear, Switch::Save, Switch::Songs, Switch::Step] {
             assert!(switch.is_live(), "{switch:?} should be live");
         }
     }
