@@ -54,11 +54,13 @@ pub enum Control {
     OctaveUp,
     Shuffle,
     Randomise,
+    Density,
+    Scale,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 21] = [
+    pub const ALL: [Control; 23] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -80,6 +82,8 @@ impl Control {
         Control::OctaveUp,
         Control::Shuffle,
         Control::Randomise,
+        Control::Density,
+        Control::Scale,
     ];
 
     /// The knob in `index`'s slot, in the panel's knob order.
@@ -119,12 +123,14 @@ impl Control {
             Control::OctaveUp => TIPS[18],
             Control::Shuffle => TIPS[19],
             Control::Randomise => TIPS[20],
+            Control::Density => TIPS[21],
+            Control::Scale => TIPS[22],
         }
     }
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 21] = [
+const TIPS: [Tip; 23] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -228,6 +234,16 @@ const TIPS: [Tip; 21] = [
     Tip {
         title: "RANDOM",
         what: "Rerolls the whole pattern: which steps sound, and what they play. Accents and slides stay.",
+        shortcut: None,
+    },
+    Tip {
+        title: "DENSITY",
+        what: "How full RANDOM makes a pattern: a handful of steps at the left, nearly all of them at the right.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SCALE",
+        what: "Which notes RANDOM may use, rooted on C. Turning it never changes the pattern in front of you.",
         shortcut: None,
     },
 ];

@@ -13,6 +13,7 @@ pub mod panel;
 pub mod picker;
 pub mod randomise;
 pub mod save;
+pub mod scale;
 pub mod selection;
 pub mod shortcuts;
 pub mod songs;
@@ -110,6 +111,12 @@ pub struct PanelState {
     pub placed: Vec<egui::Key>,
     /// Whether hovering a knob or a button explains it. On unless the player turns it off with the TIPS key.
     pub tooltips: bool,
+    /// How full a randomise fills the pattern, `0.0..=1.0`.
+    pub density: f32,
+    /// The scale a randomise draws from.
+    pub scale: scale::Scale,
+    /// The SCALE knob's own position while the hand is on it; the scale itself snaps on release.
+    pub scale_knob: f32,
 }
 
 impl Default for PanelState {
@@ -144,6 +151,9 @@ impl Default for PanelState {
             step_mode: false,
             placed: Vec::new(),
             tooltips: true,
+            density: randomise::DEFAULT_DENSITY,
+            scale: scale::Scale::default(),
+            scale_knob: scale::scale_position(scale::Scale::default()),
         }
     }
 }
@@ -351,8 +361,16 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
 
-    // The performance row: transpose the pattern, shuffle the clock, or reroll the notes.
-    if let [octave_down, octave_up, shuffle_cell, randomise_cell] = l.perform.cells[..] {
+    // The performance row: transpose the pattern, shuffle the clock, and the two dials that decide what RANDOM does.
+    if let [
+        octave_down,
+        octave_up,
+        shuffle_cell,
+        randomise_cell,
+        density_cell,
+        scale_cell,
+    ] = l.perform.cells[..]
+    {
         for (rect, id, label, octaves, control) in [
             (
                 octave_down,
@@ -366,7 +384,6 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             if switch_key(ui, state, id, rect, label, false, control) {
                 let moved = state.pattern.transposed(12 * octaves);
                 state.pattern = Arc::new(moved);
-                shared.set_pattern(Arc::new(moved));
                 shared.set_pattern(Arc::clone(&state.pattern));
                 state.dirty = true;
             }
@@ -374,27 +391,39 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
         // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and CC 73 writes the same
         // atomic, so the fader and the hand meet in one place.
-        // A knob is a circle, not a column: give it a square in the middle of its cell, or the row-wide cell leaves it
-        // stranded at the left edge where the hand does not reach.
-        let diameter = shuffle_cell.height() * 0.78;
-        let knob_rect = egui::Rect::from_center_size(
-            shuffle_cell.center(),
-            egui::vec2(diameter, shuffle_cell.height()),
-        );
-        let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(knob_rect));
-        cell_ui.set_clip_rect(shuffle_cell);
-        let mut swing = shared.swing.get();
-        let response = knob::knob(
-            &mut cell_ui,
-            egui::Id::unique("shuffle"),
-            "SHUFFLE",
-            &mut swing,
-            diameter,
-        );
+        let before_swing = shared.swing.get();
+        let mut swing = before_swing;
+        let response = perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", &mut swing);
         tips::hover(&response, state, tips::Control::Shuffle);
-        if swing != shared.swing.get() {
-            shared.swing.set(swing.clamp(0.0, 1.0));
+        shared.swing.set(swing.clamp(0.0, 1.0));
+        if shared.swing.get() != before_swing {
             state.dirty = true;
+        }
+
+        // DENSITY is how much of the pattern a roll fills: 0 leaves the one guaranteed step, 1 fills every step.
+        let before_density = state.density;
+        let mut density = state.density;
+        let caption = format!("{:.0}%", density * 100.0);
+        let response = perform_knob(ui, density_cell, "density", &caption, &mut density);
+        tips::hover(&response, state, tips::Control::Density);
+        state.density = density.clamp(0.0, 1.0);
+        if state.density != before_density {
+            state.dirty = true;
+        }
+
+        // SCALE snaps on release, never mid-drag: a frame-by-frame snap pulls the position back onto the detent it
+        // started from, and a slow drag could never cross a midpoint.
+        let mut position = state.scale_knob;
+        let response = perform_knob(ui, scale_cell, "scale", state.scale.name(), &mut position);
+        tips::hover(&response, state, tips::Control::Scale);
+        state.scale_knob = position.clamp(0.0, 1.0);
+        if !response.dragged() {
+            let snapped = scale::scale_from_position(state.scale_knob);
+            state.scale_knob = scale::scale_position(snapped);
+            if snapped != state.scale {
+                state.scale = snapped;
+                state.dirty = true;
+            }
         }
 
         if switch_key(
@@ -411,9 +440,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|elapsed| elapsed.as_nanos() as u64)
                 .unwrap_or(1);
-            let rolled = randomise::randomised(*state.pattern, seed);
-            shared.set_pattern(Arc::new(rolled));
+            let rolled = randomise::randomised(*state.pattern, seed, state.density, state.scale);
             state.pattern = Arc::new(rolled);
+            shared.set_pattern(Arc::clone(&state.pattern));
             state.dirty = true;
         }
     }
@@ -939,6 +968,24 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
             shared.midi_gate.store(false, Ordering::Relaxed);
         }
     });
+}
+
+/// A knob in a performance-row cell.
+///
+/// The knob is a circle, not a column: `knob::knob` allocates from its UI's top-left, so a row-wide cell would strand it
+/// at the left edge where the hand does not reach. It gets a square in the middle of its cell instead.
+fn perform_knob(
+    ui: &mut egui::Ui,
+    cell: egui::Rect,
+    id: &str,
+    label: &str,
+    value: &mut f32,
+) -> egui::Response {
+    let diameter = cell.height() * 0.78;
+    let square = egui::Rect::from_center_size(cell.center(), egui::vec2(diameter, cell.height()));
+    let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(square));
+    cell_ui.set_clip_rect(cell);
+    knob::knob(&mut cell_ui, egui::Id::unique(id), label, value, diameter)
 }
 
 /// A click on a control that can be taught, while a learn is choosing.

@@ -1,26 +1,30 @@
-//! Randomising a pattern's notes while keeping its shape.
+//! Randomising a pattern: which steps sound, and what they play.
 //!
-//! The rhythm is the part a player spends time on, so it survives: a step that is on stays on and keeps its accent, its
-//! slide and its velocity. Only the note changes. A rest keeps its note too, so turning a rest into a note later still
-//! finds a pitch there.
+//! This is a jump start, not a variation of what is already there, so the gates are rerolled with the notes. What a step
+//! keeps is its character — accent, slide, velocity — so a rerolled pattern still has the accent touches and glides the
+//! player put there, now carrying new notes.
+//!
+//! Seeded so a result can be reproduced: the panel seeds it from the clock, a test from a number. The seed, the density
+//! and the scale together decide the result; nothing else does, so a report of "it gave me this" can be replayed.
 
+use super::scale::Scale;
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::{NOTE_HIGH, NOTE_LOW, Pitch, step_midi};
 
+/// How full a pattern a fresh session rolls: one step in two, which is dense enough to be a pattern and open enough to
+/// hear the shuffle.
+pub const DEFAULT_DENSITY: f32 = 0.5;
+
 /// A whole new pattern: which steps sound, and what they play.
-///
-/// This is a jump start, not a variation of what is already there, so the gates are rerolled with the notes. What a step
-/// keeps is its character — accent, slide, velocity — so a rerolled pattern still has the accent touches and glides the
-/// player put there, now carrying new notes.
-///
-/// Seeded so a result can be reproduced: the panel seeds it from the clock, a test from a number.
-pub fn randomised(pattern: Pattern, seed: u64) -> Pattern {
+pub fn randomised(pattern: Pattern, seed: u64, density: f32, scale: Scale) -> Pattern {
     let mut rng = Rng::new(seed);
+    // A thousand ticks give the knob enough resolution that 25% does not quietly become 20%.
+    let chance = (density.clamp(0.0, 1.0) * 1000.0).round() as u64;
+    let pitches = scale.members();
     let mut steps = pattern.steps;
     for step in &mut steps {
-        // One step in two sounds: dense enough to be a pattern, open enough to hear the shuffle.
-        let on = rng.below(2) == 0;
-        let pitch = Pitch::ALL[rng.below(Pitch::ALL.len() as u64) as usize];
+        let on = rng.below(1000) < chance;
+        let pitch = Pitch::ALL[pitches[rng.below(pitches.len() as u64) as usize] as usize];
         *step = Step {
             on,
             pitch,
@@ -28,7 +32,7 @@ pub fn randomised(pattern: Pattern, seed: u64) -> Pattern {
             ..*step
         };
     }
-    // A jump start that lands on silence is not a jump start.
+    // A jump start that lands on silence is not a jump start: one step always sounds, whatever the density says.
     if !steps.iter().any(|step| step.on) {
         steps[0].on = true;
     }
@@ -92,6 +96,7 @@ impl Rng {
 mod tests {
     use super::*;
 
+    /// A pattern with three accents placed on alternating steps, so gate/accent/slide survival has something to prove.
     fn pattern() -> Pattern {
         let mut steps = [Step::rest(); 16];
         for (index, pitch) in [Pitch::C, Pitch::D, Pitch::F].into_iter().enumerate() {
@@ -105,19 +110,20 @@ mod tests {
         Pattern::from_steps(steps)
     }
 
+    /// The factory roll: half full, chromatic.
+    fn roll(seed: u64) -> Pattern {
+        randomised(pattern(), seed, DEFAULT_DENSITY, Scale::Chromatic)
+    }
+
     #[test]
     fn the_gates_and_the_notes_are_both_rerolled() {
         let before = pattern();
-        let after = randomised(before, 7);
+        let after = roll(7);
 
         assert_ne!(after, before, "nothing was randomised");
         assert!(
             (0..16).any(|index| after.steps[index].on != before.steps[index].on),
             "the gates should move too: it is a jump start, not a variation"
-        );
-        assert!(
-            (0..16).any(|index| after.steps[index].pitch != before.steps[index].pitch),
-            "no note changed"
         );
         assert!(
             after.steps.iter().any(|step| step.on),
@@ -129,7 +135,7 @@ mod tests {
     fn a_steps_own_character_survives_the_reroll() {
         // Accent, slide and velocity are the player's touch; only the gate and the note are rerolled.
         let before = pattern();
-        let after = randomised(before, 9);
+        let after = roll(9);
         for index in 0..16 {
             assert_eq!(after.steps[index].accent, before.steps[index].accent);
             assert_eq!(after.steps[index].slide, before.steps[index].slide);
@@ -147,7 +153,7 @@ mod tests {
         }
         for source in [pattern(), Pattern::from_steps(top)] {
             for seed in 0..64 {
-                let after = randomised(source, seed);
+                let after = randomised(source, seed, DEFAULT_DENSITY, Scale::Chromatic);
                 for step in after.steps.iter().filter(|step| step.on) {
                     assert!(step.audible(), "seed {seed} wrote a silent note: {step:?}");
                 }
@@ -156,29 +162,68 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_pattern_comes_back_as_a_pattern() {
-        // A jump start from silence: the whole point is that something comes out.
-        let empty = Pattern::empty();
-        let after = randomised(empty, 11);
-        assert!(after.steps.iter().any(|step| step.on), "still silent");
-        assert!(
-            after
+    fn a_scale_limits_the_notes_it_can_write() {
+        for scale in Scale::ALL {
+            for seed in 0..32 {
+                let after = randomised(pattern(), seed, DEFAULT_DENSITY, scale);
+                for step in after.steps.iter().filter(|step| step.on) {
+                    let semitone = step.pitch.semitones();
+                    assert!(
+                        scale.members().contains(&semitone),
+                        "{scale:?} wrote {semitone} on seed {seed}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn density_sets_how_many_steps_land_on() {
+        let count = |density: f32| {
+            randomised(pattern(), 21, density, Scale::Chromatic)
                 .steps
                 .iter()
                 .filter(|step| step.on)
-                .all(|step| step.audible())
+                .count()
+        };
+        assert_eq!(count(0.0), 1, "the guaranteed step, and nothing else");
+        assert_eq!(count(1.0), 16, "every step sounds");
+        assert!(count(0.25) < count(0.5), "a thinner setting is thinner");
+        assert!(count(0.5) < count(0.75));
+    }
+
+    #[test]
+    fn the_same_seed_and_settings_give_the_same_pattern() {
+        assert_eq!(roll(42), roll(42));
+        assert_ne!(roll(42), roll(43));
+        // Settings are part of the roll, not decoration.
+        assert_ne!(
+            randomised(pattern(), 42, 0.5, Scale::Chromatic),
+            randomised(pattern(), 42, 0.5, Scale::Minor),
+        );
+        assert_ne!(
+            randomised(pattern(), 42, 0.5, Scale::Chromatic),
+            randomised(pattern(), 42, 0.9, Scale::Chromatic),
         );
     }
 
     #[test]
-    fn the_same_seed_gives_the_same_pattern_and_zero_still_randomises() {
-        assert_eq!(randomised(pattern(), 42), randomised(pattern(), 42));
-        assert_ne!(randomised(pattern(), 42), randomised(pattern(), 43));
-        // A zero seed must not collapse xorshift to a constant: it stands in for the clock, which always moves.
-        let zero = randomised(pattern(), 0);
-        assert_ne!(zero, pattern(), "a zero seed randomised nothing");
-        assert_ne!(zero, randomised(pattern(), 1));
-        assert!(randomised(pattern(), 0).steps.iter().any(|step| step.on));
+    fn an_empty_pattern_comes_back_as_a_pattern() {
+        // A jump start from silence: the whole point is that something comes out, even at zero density.
+        for density in [0.0, DEFAULT_DENSITY, 1.0] {
+            let after = randomised(Pattern::empty(), 11, density, Scale::MinorPentatonic);
+            assert!(
+                after.steps.iter().any(|step| step.on),
+                "still silent at {density}"
+            );
+            assert!(
+                after
+                    .steps
+                    .iter()
+                    .filter(|step| step.on)
+                    .all(|step| step.audible())
+            );
+        }
     }
 
     #[test]
@@ -190,10 +235,22 @@ mod tests {
             *step = Step::note(Pitch::B, 5); // the highest note there is
         }
         for seed in 0..64 {
-            let after = randomised(Pattern::from_steps(steps), seed);
+            let after = randomised(
+                Pattern::from_steps(steps),
+                seed,
+                DEFAULT_DENSITY,
+                Scale::Chromatic,
+            );
             for step in after.steps.iter().filter(|step| step.on) {
                 assert!(step.audible(), "seed {seed} left a silent note: {step:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_zero_seed_still_randomises() {
+        // Zero is xorshift's fixed point; the panel seeds from the clock, but a zero must not collapse to a constant.
+        assert_ne!(roll(0), pattern(), "a zero seed randomised nothing");
+        assert_ne!(roll(0), roll(1));
     }
 }

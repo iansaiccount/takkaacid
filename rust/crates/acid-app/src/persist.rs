@@ -56,7 +56,7 @@ impl Default for Knobs {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 6;
+pub const SAVE_VERSION: u32 = 7;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -81,6 +81,12 @@ pub struct SavedState {
     /// Whether hovering a control explains it. On for a file that predates the field: help should not have to be found.
     #[serde(default = "default_true")]
     pub tooltips: bool,
+    /// How full RANDOM fills a pattern, `0.0..=1.0`. Panel-side like the TIPS switch, so `main` carries it.
+    #[serde(default = "default_density")]
+    pub density: f32,
+    /// The scale RANDOM draws from, as a `ui::scale::Scale` index.
+    #[serde(default)]
+    pub scale: u8,
 }
 
 /// The factory MIDI mapping, for a file that predates the field.
@@ -91,6 +97,11 @@ pub fn default_cc_map() -> Vec<u8> {
 /// Hover help defaults on: a player should not have to find the switch to be told what things do.
 fn default_true() -> bool {
     true
+}
+
+/// A file from before the density knob fills patterns half full, which is where the randomiser started.
+fn default_density() -> f32 {
+    crate::ui::randomise::DEFAULT_DENSITY
 }
 
 impl Default for SavedState {
@@ -105,6 +116,8 @@ impl Default for SavedState {
             song: None,
             cc_map: crate::midi::cc::DEFAULT_CC.to_vec(),
             tooltips: true,
+            density: default_density(),
+            scale: 0,
         }
     }
 }
@@ -251,8 +264,11 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
                     .clamp(0, 127) as u8
             })
             .collect(),
-        // The hover-help switch lives with the panel, not the shared state; `main` fills it in like the MIDI choice.
+        // The hover-help switch and the randomise dials live with the panel, not the shared state; `main` fills them in
+        // like the MIDI choice.
         tooltips: true,
+        density: crate::ui::randomise::DEFAULT_DENSITY,
+        scale: 0,
     }
 }
 
@@ -289,6 +305,10 @@ pub fn sanitize(state: &mut SavedState) {
     state.knobs.decay = state.knobs.decay.clamp(0.0, 1.0);
     state.knobs.accent = state.knobs.accent.clamp(0.0, 1.0);
     state.knobs.volume = state.knobs.volume.clamp(0.0, 1.0);
+    state.density = state.density.clamp(0.0, 1.0);
+    state.scale = state
+        .scale
+        .min((crate::ui::scale::Scale::ALL.len() - 1) as u8);
     // A map written by a build with more learnable knobs than this one cannot be honoured slot for slot, and guessing
     // which controller belonged to which knob would be worse than the factory pairing.
     if state.cc_map.len() > crate::midi::cc::LEARNABLE.len() {

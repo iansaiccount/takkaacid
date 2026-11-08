@@ -10,8 +10,8 @@ use super::theme;
 
 /// Knobs across the panel.
 pub const KNOB_COUNT: usize = 7;
-/// Controls in the performance row: octave down, octave up, shuffle, randomise.
-pub const PERFORM_COUNT: usize = 4;
+/// Controls in the performance row: octave down, octave up, shuffle, randomise, density, scale.
+pub const PERFORM_COUNT: usize = 6;
 /// Step keys in the row.
 pub const STEP_COUNT: usize = 16;
 

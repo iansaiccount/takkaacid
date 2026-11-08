@@ -31,6 +31,9 @@ fn main() -> eframe::Result {
     let song_name = saved.song.clone();
     // Copied out before the closure takes its other fields: a `bool` needs no ceremony to travel.
     let saved_tooltips = saved.tooltips;
+    // The randomise dials are panel state too, so they travel the same way.
+    let saved_density = saved.density.clamp(0.0, 1.0);
+    let saved_scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
 
     // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
     let rig = Rig::new({
@@ -60,8 +63,11 @@ fn main() -> eframe::Result {
                 pattern_id: PatternBank::id_of(bank.current()),
                 // The song the last session was working on, if it had a name.
                 song_name: song_name.clone(),
-                // The hover-help switch the last session was left with.
+                // The hover-help switch and the randomise dials the last session was left with.
                 tooltips: saved_tooltips,
+                density: saved_density,
+                scale: saved_scale,
+                scale_knob: panel_ui::scale::scale_position(saved_scale),
                 ..Default::default()
             };
             Ok(Box::new(TakkaApp {
@@ -158,6 +164,9 @@ impl eframe::App for TakkaApp {
                     let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
                     saved.midi_input = self.midi.preference_name();
                     saved.song = Some(name.clone());
+                    saved.tooltips = self.panel.tooltips;
+                    saved.density = self.panel.density;
+                    saved.scale = self.panel.scale.index() as u8;
                     match persist::save_song(&dir, &name, &saved) {
                         Ok(()) => {
                             self.panel.song_name = Some(name.clone());
@@ -251,6 +260,10 @@ impl eframe::App for TakkaApp {
                         self.panel.selected = 0;
                         self.panel.dirty = false;
                         self.panel.song_name = Some(name.clone());
+                        // The randomise dials are a song's own settings, so they come back with it.
+                        self.panel.density = saved.density.clamp(0.0, 1.0);
+                        self.panel.scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
+                        self.panel.scale_knob = panel_ui::scale::scale_position(self.panel.scale);
                         if let Some(port) = saved.midi_input.clone() {
                             self.midi.choose(midi::ports::PortChoice::Named(port));
                         }
@@ -401,6 +414,8 @@ impl TakkaApp {
         saved.song = self.panel.song_name.clone();
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
         saved.tooltips = self.panel.tooltips;
+        saved.density = self.panel.density;
+        saved.scale = self.panel.scale.index() as u8;
         match persist::save(&persist::data_dir(), &saved) {
             Ok(()) => self.panel.dirty = false,
             Err(error) => eprintln!("takka-acid: could not save: {error}"),

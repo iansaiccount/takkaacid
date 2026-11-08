@@ -336,6 +336,62 @@ fn the_hover_help_switch_round_trips_and_an_old_file_gets_it_on() {
 }
 
 #[test]
+fn the_randomise_dials_round_trip_and_an_old_file_gets_the_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    save(
+        dir.path(),
+        &SavedState {
+            density: 0.25,
+            scale: 3,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let loaded = load(dir.path()).unwrap().unwrap();
+    assert!((loaded.density - 0.25).abs() < 1e-6, "density survives");
+    assert_eq!(loaded.scale, 3, "the scale survives");
+
+    // A file from before the dials existed gets a half-full chromatic roll, which is where the button started.
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let object = legacy.as_object_mut().unwrap();
+    object.remove("density");
+    object.remove("scale");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = acid_app::persist::load_or_default(dir.path());
+    assert!((loaded.density - acid_app::ui::randomise::DEFAULT_DENSITY).abs() < 1e-6);
+    assert_eq!(loaded.scale, 0, "chromatic");
+}
+
+#[test]
+fn a_hand_edited_density_and_scale_are_clamped_into_range() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut wild: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let object = wild.as_object_mut().unwrap();
+    object.insert("density".to_string(), serde_json::json!(7.5));
+    object.insert("scale".to_string(), serde_json::json!(200));
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&wild).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = acid_app::persist::load_or_default(dir.path());
+    assert_eq!(loaded.density, 1.0);
+    assert_eq!(
+        loaded.scale as usize,
+        acid_app::ui::scale::Scale::ALL.len() - 1
+    );
+}
+
+#[test]
 fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
