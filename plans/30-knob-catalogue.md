@@ -1,0 +1,89 @@
+# Plan 30 — one knob catalogue, before phase 2
+
+## What is wrong today
+
+The seven tone knobs are identified by a bare `usize` in **six** places that must be kept in step by hand:
+
+| Where | What it encodes |
+|---|---|
+| `PanelState::knobs: [f32; 7]` | slot → position |
+| `ui/mod.rs:357-379` | slot → which `shared.*` atomic to publish |
+| `ui/mod.rs:313` (label) + `waveform_detents` | slot 0 is the waveform switch, specially cased |
+| `tips::Control::knob(index)` | slot → tooltip |
+| `learn::control_for_knob(index)` | slot → MIDI-learn target |
+| `persist::Knobs` (positional struct) + `midi::cc::LEARNABLE` | slot → saved field, slot → controller |
+
+Every one of them is a `match` on `0..=6` with a `_` fallback, so a knob inserted or reordered in one place and not the
+others produces **silence or a wrong knob**, never a compile error. The same shape already bit us twice this month: the
+`cc_map`/`pickup` array length (an index panic) and the duplicated `CC_MAP` list.
+
+## The design
+
+One catalogue, `ui::knobs`, is the only place a tone knob's identity lives:
+
+```rust
+pub enum Knob { Waveform, Tuning, Cutoff, Resonance, EnvMod, Decay, Accent }
+
+impl Knob {
+    pub const ALL: [Knob; 7];            // drawing order, left to right
+    pub fn index(self) -> usize;
+    pub fn from_index(index: usize) -> Knob;      // clamps
+    pub fn label(self) -> &'static str;           // silkscreen caption (WAVEFORM's comes from the wave catalogue)
+    pub fn tip(self) -> tips::Control;
+    pub fn learn_target(self) -> midi::cc::CcTarget;
+    pub fn read(self, shared: &SharedState) -> f32;          // what the knob shows
+    pub fn publish(self, shared: &SharedState, position: f32); // what the knob writes
+    pub fn kind(self) -> KnobKind;                // Dial { snap_on_release } | Switch(Waveform)
+}
+```
+
+Then: the knob loop iterates `Knob::ALL`, so `state.knobs[knob.index()]`, `knob.publish(...)`, `knob.tip()` and
+`knob.learn_target()` replace all five `match`es. `tip::Control` loses `knob(index)`; `learn::control_for_knob` takes a
+`Knob` and becomes a lookup. `persist::Knobs` keeps its feel for old files but gains `from_positions(&[f32; 7])` /
+`positions()` built from `Knob::ALL`, so the saved file's order is the catalogue's order by construction.
+
+The waveform special case moves **into** the catalogue rather than disappearing: it is a switch, so
+`publish`/`read` route through `waveform_from_position`/`waveform_position`, and `snap_on_release` is what the loop asks
+instead of `if i == 0`.
+
+## The tests that make it safe
+
+| Test | Pins |
+|---|---|
+| `knobs::every_knob_is_in_all_once_and_in_index_order` | `index()` matches `ALL` position |
+| `knobs::each_knob_has_an_english_label_and_a_tip` | no `_` fallback can swallow a new knob |
+| `knobs::publishing_a_knob_moves_exactly_that_atomic` | publish/read round trip per knob (7 cases) |
+| `knobs::the_saved_order_is_the_panel_order` | `positions()` ∘ `from_positions()` is the identity, and `persist::Knobs` agrees |
+| `knobs::the_learn_target_of_every_knob_is_distinct` | one controller slot per knob |
+| `panel_layout` (existing) | seven cells still fill the row |
+
+Mutation check: reorder `Knob::ALL` without touching anything else and the round-trip test must fail for at least one
+knob — i.e. the catalogue, not the call sites, controls order.
+
+## Task list
+
+1. Add `ui::knobs` with the catalogue and its unit tests; nothing else uses it yet. **Green commit.**
+2. Point the drawing loop at `Knob::ALL` (labels, tips, publish, the waveform switch via `kind()`); delete the three
+   `match`es in `mod.rs`. Existing `knob_live`/`tip` tests must stay green untouched. **Green commit.**
+3. Point `learn` and `tips` at `Knob` and delete their index mappings; `learn_live`/`tips_live` stay green. **Green commit.**
+4. Derive `persist::Knobs` order from `Knob::ALL`; `persist` tests keep the on-disk field names, so add a test that a
+   file written by this build is byte-identical to one written by the old code. **Green commit.**
+5. Sweep the leftovers: `midi::cc::LEARNABLE` declared as `Knob`-derived for the first seven slots plus the three
+   non-knob targets (volume, tempo, pattern, swing), and any other `match` on a control index.
+
+## Other tidying worth doing in the same phase (found while looking)
+
+- **`ui/mod.rs` is 1,100 lines** and holds the knob row, the performance row, the transport row, the status line, the
+  learn flow and the volume knob. Splitting by row (`ui/row_knobs.rs`, `row_perform.rs`, `row_transport.rs`) gives phase 2
+  somewhere obvious to put new controls.
+- **`PanelState` is a 40-field grab bag**; the learn, songs and picker state could each be a sub-struct with its own
+  invariants (`songs: Option<SongCard>`, `learn: LearnFlow`, …), which is also what makes `Default` and the tests readable.
+- **The "second master" pattern** (hand vs controller) now exists for the waveform and for pickup; phase 2 will add more
+  (density, scale if they become learnable). One `Pickup`-shaped helper reused by both would stop the third copy.
+- **`AGENTS.md` is another project's file** and should be rewritten to describe this repo before phase 2 starts.
+
+## Non-goals
+
+- No behaviour change: this is a rename-and-centralise round. Every existing test must pass untouched, and the new tests
+  exist to prove the catalogue — not to replace the behavioural ones.
+- Not a rewrite of the panel's drawing; `knob::knob` stays as it is.
