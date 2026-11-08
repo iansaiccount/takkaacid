@@ -1,4 +1,4 @@
-//! Continuous-controller mapping: ten CCs move the panel's knobs, the tempo and the swing.
+//! Continuous-controller mapping: eleven CCs move the panel's knobs, the tempo, the pattern and the swing.
 //!
 //! Every write lands in the same atomics the mouse writes, so a controller and the panel can never fight
 //! over a value — the last one to arrive wins, and the panel redraws from the atomic.
@@ -466,27 +466,35 @@ mod tests {
     }
 
     #[test]
-    fn the_learn_slots_are_the_knobs_in_panel_order_then_the_rest() {
-        use crate::ui::knobs::Knob;
-
-        // The first seven learn slots are the seven tone knobs in the order the panel draws them, so the learn map and
-        // the knob row cannot drift apart. The rest follow in the order the file has always used.
-        for (slot, knob) in Knob::ALL.iter().enumerate() {
-            assert_eq!(
-                LEARNABLE[slot],
-                knob.learn_target(),
-                "{knob:?} is not in its own learn slot"
-            );
-        }
+    fn the_learn_map_is_still_the_one_every_saved_rig_is_indexed_by() {
+        // `SharedState::cc_map` is saved by slot, so this order and this pairing are a compatibility contract: a reorder
+        // would silently rebind every existing rig's faders on upgrade. Both are pinned as literals — comparing them to
+        // the catalogue that now builds them would only say the derivation is the derivation.
+        let slots: Vec<String> = LEARNABLE
+            .iter()
+            .map(|target| format!("{target:?}"))
+            .collect();
         assert_eq!(
-            &LEARNABLE[7..],
+            slots,
             [
-                CcTarget::Volume,
-                CcTarget::Tempo,
-                CcTarget::Pattern,
-                CcTarget::Swing
+                "Waveform",
+                "Tuning",
+                "Cutoff",
+                "Resonance",
+                "EnvMod",
+                "Decay",
+                "Accent",
+                "Volume",
+                "Tempo",
+                "Pattern",
+                "Swing"
             ],
-            "the controls outside the knob row follow it"
+            "the learn slots moved: a saved cc_map would arrive pointing at other controls"
+        );
+        assert_eq!(
+            DEFAULT_CC,
+            [20, 3, 74, 71, 76, 75, 5, 7, 72, 21, 73],
+            "the factory controllers moved"
         );
     }
     #[test]

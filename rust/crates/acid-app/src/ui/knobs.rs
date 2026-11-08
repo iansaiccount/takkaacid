@@ -10,7 +10,7 @@ use crate::state::SharedState;
 
 use super::tips;
 
-/// The three knobs in `Knob::ALL` are drawn left to right in this order.
+/// One tone knob of the panel. Drawn left to right in [`Knob::ALL`] order.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Knob {
     /// Not a dial: a four-face switch over the wave catalogue, snapped to its detents.
@@ -64,16 +64,19 @@ impl Knob {
     pub fn kind(self) -> Kind {
         match self {
             Knob::Waveform => Kind::Switch,
-            _ => Kind::Dial,
+            Knob::Tuning
+            | Knob::Cutoff
+            | Knob::Resonance
+            | Knob::EnvMod
+            | Knob::Decay
+            | Knob::Accent => Kind::Dial,
         }
     }
 
     /// The silkscreen caption. The waveform's names itself from the wave catalogue, hence the shared state.
     pub fn label(self, shared: &SharedState) -> &'static str {
         match self {
-            Knob::Waveform => {
-                super::waveform_from_position(super::waveform_position(shared.waveform())).name()
-            }
+            Knob::Waveform => shared.waveform().name(),
             Knob::Tuning => "TUNING",
             Knob::Cutoff => "CUT OFF",
             Knob::Resonance => "RESONANCE",
@@ -158,14 +161,36 @@ mod tests {
     }
 
     #[test]
-    fn each_knob_has_a_caption_a_tip_and_a_name() {
+    fn each_knob_is_named_by_its_own_caption_tip_and_learn_target() {
         let shared = SharedState::new();
+        // The silkscreen says exactly this; a caption typo used to fail nothing, because the tip table holds its own
+        // strings. The switch is captioned by the wave it is on.
+        assert_eq!(
+            Knob::ALL.map(|knob| knob.label(&shared)),
+            [
+                shared.waveform().name(),
+                "TUNING",
+                "CUT OFF",
+                "RESONANCE",
+                "ENV MOD",
+                "DECAY",
+                "ACCENT"
+            ]
+        );
         for knob in Knob::ALL {
-            assert!(!knob.label(&shared).is_empty(), "{knob:?} has no caption");
             assert!(knob.label(&shared).is_ascii(), "{knob:?} is not ASCII");
-            // `tip` and `learn_target` are exhaustive matches, so this is only a smoke test that they answer.
-            let _ = knob.tip();
-            let _ = knob.learn_target();
+            // A permuted arm is the failure no round trip can see — `publish` and `read` would both follow it — so the two
+            // lookups are pinned to the knob's own name. Every knob's tip and learn target are named after it by design.
+            assert_eq!(
+                format!("{:?}", knob.tip()),
+                format!("{knob:?}"),
+                "{knob:?} wears another control's tip"
+            );
+            assert_eq!(
+                format!("{:?}", knob.learn_target()),
+                format!("{knob:?}"),
+                "{knob:?} teaches another control's slot"
+            );
         }
     }
 

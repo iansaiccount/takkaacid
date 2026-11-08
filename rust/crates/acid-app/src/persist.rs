@@ -76,6 +76,9 @@ impl Knobs {
 
     /// The file's knobs from seven positions in `Knob::ALL` order. Positions are clamped, and the switch snaps to its
     /// nearest face, so a hand-edited file still loads as a wave.
+    ///
+    /// `volume` is **not** one of the seven: it keeps [`Knobs::default`], and a caller holding a real volume overwrites it
+    /// (see `shared_to_saved`). Volume is not in the knob row, so it is not in the catalogue.
     pub fn from_positions(positions: &[f32; 7]) -> Knobs {
         let mut knobs = Knobs::default();
         for (knob, position) in Knob::ALL.iter().zip(positions) {

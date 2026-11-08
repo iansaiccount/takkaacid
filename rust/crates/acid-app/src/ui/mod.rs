@@ -215,15 +215,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
     state.pattern = shared.pattern();
     state.playing = shared.is_playing();
-    // Knobs 1..6 round-trip exactly, so reading them back every frame is harmless. The WAVEFORM knob is a switch: its
-    // position is worked out where the knob is drawn, because only there is it known whether the hand or a learned
+    // Every dial follows its own atomic: the audio thread (or a learned controller) is the truth between frames, so the
+    // face is read back from the catalogue rather than from a slot list. The WAVEFORM knob is the exception — a switch,
+    // its position is worked out where the knob is drawn, because only there is it known whether the hand or a learned
     // controller owns it.
-    state.knobs[1] = shared.tuning.get();
-    state.knobs[2] = shared.cutoff.get();
-    state.knobs[3] = shared.resonance.get();
-    state.knobs[4] = shared.env_mod.get();
-    state.knobs[5] = shared.decay.get();
-    state.knobs[6] = shared.accent.get();
+    for knob in Knob::ALL {
+        if knob.kind() == Kind::Dial {
+            state.knobs[knob.index()] = knob.read(shared);
+        }
+    }
     state.tempo = shared.tempo_bpm.get();
     state.position = shared.position.load(std::sync::atomic::Ordering::Relaxed);
     state.volume = shared.volume.get();
