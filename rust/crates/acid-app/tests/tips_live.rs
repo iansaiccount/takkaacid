@@ -129,3 +129,29 @@ fn the_two_readouts_answer_the_pointer() {
         );
     }
 }
+
+#[test]
+fn the_auto_key_saves_the_session_only_when_it_is_on() {
+    let window = screen();
+    let key = acid_app::ui::autosave_rect(window);
+    let tips = tips_rect(window);
+    let lamp = acid_app::ui::panel::save_indicator_rect(
+        acid_app::ui::layout::layout(window).top,
+        acid_app::ui::layout::scale(window),
+    );
+    assert!(!key.intersects(tips), "the two switches must not overlap");
+    assert!(!key.intersects(lamp), "and must not cover the lamp");
+
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    assert!(!panel.autosave, "saving is manual by default");
+
+    let at = key.center();
+    run_on(&ctx, &mut panel, &shared, vec![Event::PointerMoved(at)]);
+    run_on(&ctx, &mut panel, &shared, vec![pointer(at, true)]);
+    run_on(&ctx, &mut panel, &shared, vec![pointer(at, false)]);
+
+    assert!(panel.autosave, "the key turns it on");
+    assert!(panel.dirty, "and the switch is part of what a save keeps");
+}

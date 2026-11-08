@@ -100,7 +100,7 @@ impl Knobs {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 8;
+pub const SAVE_VERSION: u32 = 9;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -131,6 +131,10 @@ pub struct SavedState {
     /// The scale RANDOM draws from, as a `ui::scale::Scale` index.
     #[serde(default)]
     pub scale: u8,
+    /// Whether the session writes itself when it changes. Off unless the player turns it on: saving is a decision, and an
+    /// autosave that silently overwrites the song you were about to discard is exactly the surprise this avoids.
+    #[serde(default)]
+    pub autosave: bool,
 }
 
 /// The factory MIDI mapping, for a file that predates the field.
@@ -162,6 +166,7 @@ impl Default for SavedState {
             tooltips: true,
             density: default_density(),
             scale: 0,
+            autosave: false,
         }
     }
 }
@@ -304,10 +309,29 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         tooltips: true,
         density: crate::ui::randomise::DEFAULT_DENSITY,
         scale: 0,
+        autosave: false,
     }
 }
 
-/// Never fails: a missing or broken save file means "first run", so the app always opens.
+/// Never fails: a wrong save file means "start again", so the app always opens.
+///
+/// The second half of the answer is whether this was a first run — no session file at all — which `main` uses to mark the
+/// session unsaved and to say so: a first run opens on a demo, and nothing about it is on disk yet.
+pub fn open(dir: &Path) -> (SavedState, bool) {
+    match load(dir) {
+        Ok(Some(mut state)) => {
+            sanitize(&mut state);
+            (state.upgraded(), false)
+        }
+        Ok(None) => (crate::demo::seed(), true),
+        Err(error) => {
+            eprintln!("takka-acid: ignoring unreadable save file: {error}");
+            (crate::demo::seed(), true)
+        }
+    }
+}
+
+/// The session with no demo in it: the factory bank. Kept for callers that want a blank machine rather than a first run.
 pub fn load_or_default(dir: &Path) -> SavedState {
     match load(dir) {
         Ok(Some(mut state)) => {
@@ -320,6 +344,11 @@ pub fn load_or_default(dir: &Path) -> SavedState {
             SavedState::default()
         }
     }
+}
+
+/// Whether a song of this name is already on disk: SAVE rewrites it when it is, and leaves the session alone when it is not.
+pub fn song_exists(dir: &Path, name: &str) -> bool {
+    list_songs(dir).iter().any(|listed| listed == name)
 }
 
 /// Clamp everything a hand-edited file could get wrong, so an edited JSON can never build an invalid

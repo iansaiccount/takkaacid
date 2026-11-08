@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use acid_app::audio::{self, Rig};
+use acid_app::demo;
 use acid_app::midi;
 use acid_app::persist;
 use acid_app::state::{self, AudioStatus};
@@ -17,8 +18,9 @@ fn main() -> eframe::Result {
         print_midi_map();
         return Ok(());
     }
-    // Restore the last session; a first run opens on the factory line.
-    let saved = persist::load_or_default(&persist::data_dir());
+    // Restore the last session. A first run opens on a demo, under the name a new song starts with, and nothing about it
+    // is on disk yet — so the first thing the player sees is a line that plays, and a lamp that says "keep me".
+    let (saved, first_run) = persist::open(&persist::data_dir());
     let state = persist::saved_to_shared(&saved);
     let bank = saved.bank.clone();
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
@@ -31,6 +33,8 @@ fn main() -> eframe::Result {
     let song_name = saved.song.clone();
     // Copied out before the closure takes its other fields: a `bool` needs no ceremony to travel.
     let saved_tooltips = saved.tooltips;
+    // Saving is manual unless the player turned autosave on, so the switch is carried like the rest.
+    let saved_autosave = saved.autosave;
     // The randomise dials are panel state too, so they travel the same way.
     let saved_density = saved.density.clamp(0.0, 1.0);
     let saved_scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
@@ -66,8 +70,11 @@ fn main() -> eframe::Result {
                     name: song_name.clone(),
                     ..panel_ui::SongState::default()
                 },
+                // A first run has nothing on disk, so the lamp says "keep me" until the player does.
+                dirty: first_run,
                 // The hover-help switch and the randomise dials the last session was left with.
                 tooltips: saved_tooltips,
+                autosave: saved_autosave,
                 density: saved_density,
                 scale: saved_scale,
                 scale_knob: panel_ui::scale::scale_position(saved_scale),
@@ -205,6 +212,7 @@ impl eframe::App for TakkaApp {
                     saved.midi_input = self.midi.preference_name();
                     saved.song = Some(name.clone());
                     saved.tooltips = self.panel.tooltips;
+                    saved.autosave = self.panel.autosave;
                     saved.density = self.panel.density;
                     saved.scale = self.panel.scale.index() as u8;
                     match persist::save_song(&dir, &name, &saved) {
@@ -217,6 +225,7 @@ impl eframe::App for TakkaApp {
                                 card.names = persist::list_songs(&dir);
                                 card.name = name.clone();
                                 card.open = Some(name.clone());
+                                self.panel.songs.file = Some(name.clone());
                                 card.message = Some(format!("saved {name}"));
                             }
                         }
@@ -239,6 +248,7 @@ impl eframe::App for TakkaApp {
                     if let Some(card) = self.panel.songs.card.as_mut() {
                         card.name.clear();
                         card.open = None;
+                        self.panel.songs.file = None;
                         card.names = persist::list_songs(&dir);
                         card.delete_armed = None;
                         card.message = Some("new song".to_string());
@@ -255,6 +265,7 @@ impl eframe::App for TakkaApp {
                                     card.names = persist::list_songs(&dir);
                                     card.name = to.clone();
                                     card.open = Some(to.clone());
+                                    self.panel.songs.file = Some(to.clone());
                                     card.message = Some(format!("renamed {from} to {to}"));
                                 }
                             }
@@ -279,6 +290,9 @@ impl eframe::App for TakkaApp {
                                 if card.open.as_deref() == Some(name.as_str()) {
                                     card.open = None;
                                 }
+                                if self.panel.songs.file.as_deref() == Some(name.as_str()) {
+                                    self.panel.songs.file = None;
+                                }
                                 card.message = Some(format!("deleted {name}"));
                             }
                         }
@@ -300,6 +314,7 @@ impl eframe::App for TakkaApp {
                         self.panel.songs.name = Some(name.clone());
                         // The panel's own switches are a song's settings, so they come back with it.
                         self.panel.tooltips = saved.tooltips;
+                        self.panel.autosave = saved.autosave;
                         self.panel.set_density(saved.density);
                         self.panel
                             .set_scale(panel_ui::scale::Scale::from_index(saved.scale as usize));
@@ -310,6 +325,7 @@ impl eframe::App for TakkaApp {
                             card.names = persist::list_songs(&dir);
                             card.name = name.clone();
                             card.open = Some(name.clone());
+                            self.panel.songs.file = Some(name.clone());
                             card.message = Some(format!("loaded {name}"));
                         }
                     }
@@ -319,6 +335,26 @@ impl eframe::App for TakkaApp {
                         }
                     }
                 },
+                panel_ui::songs::Request::LoadDemo(index) => {
+                    if let Some(demo) = demo::songs().into_iter().nth(index) {
+                        self.save();
+                        persist::apply_saved(&demo.state, &self.state, &mut self.bank);
+                        panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
+                        self.pending_pattern = None;
+                        // A demo is not a file: it arrives as a new song under a name, and nothing of it is on disk until
+                        // the player renames and saves it.
+                        self.panel.songs.name = Some(demo::NEW_SONG.to_string());
+                        self.panel.songs.file = None;
+                        self.panel.songs.card = None;
+                        self.panel.dirty = true;
+                        self.panel.tooltips = demo.state.tooltips;
+                        self.panel.autosave = demo.state.autosave;
+                        self.panel.set_density(demo.state.density);
+                        self.panel.set_scale(panel_ui::scale::Scale::from_index(
+                            demo.state.scale as usize,
+                        ));
+                    }
+                }
             }
         }
         // A port chosen on the panel: drop the old connection and probe the new one now.
@@ -341,9 +377,11 @@ impl eframe::App for TakkaApp {
             && self.midi.supervisor.retries() >= midi::supervisor::MIDI_MAX_RETRIES;
         ctx.request_repaint_after(Duration::from_millis(200));
         // Write the session when something changed and the interval has passed.
-        if self
-            .autosave
-            .should_save(self.panel.dirty, std::time::Instant::now())
+        // Write the session when the player turned autosave on, something changed, and the interval has passed.
+        if self.panel.autosave
+            && self
+                .autosave
+                .should_save(self.panel.dirty, std::time::Instant::now())
         {
             self.save();
         }
@@ -453,11 +491,19 @@ impl TakkaApp {
         saved.song = self.panel.songs.name.clone();
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
         saved.tooltips = self.panel.tooltips;
+        saved.autosave = self.panel.autosave;
         saved.density = self.panel.density;
         saved.scale = self.panel.scale.index() as u8;
-        match persist::save(&persist::data_dir(), &saved) {
+        let dir = persist::data_dir();
+        match persist::save(&dir, &saved) {
             Ok(()) => self.panel.dirty = false,
             Err(error) => eprintln!("takka-acid: could not save: {error}"),
+        }
+        // A session that came from a song keeps that file current: SAVE means "keep this", not "keep half of it".
+        if let Some(name) = self.panel.songs.file.clone()
+            && let Err(error) = persist::save_song(&dir, &name, &saved)
+        {
+            eprintln!("takka-acid: could not save the song {name}: {error}");
         }
     }
 }

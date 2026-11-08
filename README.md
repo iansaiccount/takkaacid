@@ -138,3 +138,15 @@ docs/                  design notes and review material
 ## Licence
 
 MIT.
+
+## Demo songs and saving
+
+Five demos ship inside the binary — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and **Funk** — each a patch
+and a bank of eight variations of its line. They are read-only: the SONGS card lists them in a `DEMO SONGS` section of
+their own, and picking one loads it as a *new* song called "New song", unsaved, which you rename and save under your own
+name. Your own songs sit below them under `MY SONGS`, and replacing a session you have not saved takes a second click.
+
+Saving is manual by default: the `SAVE` key writes the session (and the song file, when the session came from one), and the
+lamp beside the top strip says `SAVED` or `UNSAVED`. The `AUTO` key beside `TIPS` turns the old autosave back on for those
+who want it; the choice is kept in the session file. A first run opens on the Slow Acid demo, named "New song", with the
+lamp already saying what needs saying.

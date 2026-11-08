@@ -58,13 +58,14 @@ pub enum Control {
     Scale,
     /// The BPM readout. Appended, so no existing control's position in the table moves.
     Tempo,
-    /// The pattern readout beside it.
     Pattern,
+    /// The AUTO key: whether the session saves itself.
+    Autosave,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 25] = [
+    pub const ALL: [Control; 26] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -90,6 +91,7 @@ impl Control {
         Control::Scale,
         Control::Tempo,
         Control::Pattern,
+        Control::Autosave,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -120,6 +122,7 @@ impl Control {
             Control::Scale => TIPS[22],
             Control::Tempo => TIPS[23],
             Control::Pattern => TIPS[24],
+            Control::Autosave => TIPS[25],
         }
     }
 
@@ -141,7 +144,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 25] = [
+const TIPS: [Tip; 26] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -266,6 +269,11 @@ const TIPS: [Tip; 25] = [
         title: "PATTERN",
         what: "Which pattern is playing, bank and slot. Click it while LEARN is picking to teach a controller; the swap waits for the bar.",
         shortcut: Some("shift + left / right arrow: the previous or next pattern, at once"),
+    },
+    Tip {
+        title: "AUTOSAVE",
+        what: "Whether the session writes itself as you work. Off by default: the SAVE key and the lamp are how you know where you stand.",
+        shortcut: None,
     },
 ];
 

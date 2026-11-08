@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod demo;
 pub mod knobs;
 pub mod midi;
 pub mod notes;

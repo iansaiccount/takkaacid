@@ -1,7 +1,7 @@
 //! The save file: round-trip, atomicity, and the two conversions between disk and running state.
 
 use acid_app::persist::{
-    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedState, data_dir, load, save, saved_to_shared,
+    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedState, data_dir, load, open, save, saved_to_shared,
     shared_to_saved,
 };
 use acid_app::persist::{
@@ -688,4 +688,53 @@ fn data_dir_honours_the_environment_override() {
         stdout.contains("probe: /tmp/takka-acid-test"),
         "the override must win: {stdout}"
     );
+}
+
+/// Saving is manual unless the player turned autosave on; that choice has to survive a restart, and a file written before
+/// the switch existed must come back with it off.
+#[test]
+fn the_autosave_switch_round_trips_and_an_old_file_gets_it_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        autosave: true,
+        ..Default::default()
+    };
+    save(dir.path(), &saved).unwrap();
+    assert!(
+        load(dir.path()).unwrap().unwrap().autosave,
+        "the switch was lost"
+    );
+
+    // A file from before the field: take the key out and it must load as manual saving.
+    let mut value: serde_json::Value = serde_json::to_value(&saved).unwrap();
+    value.as_object_mut().unwrap().remove("autosave");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&value).unwrap(),
+    )
+    .unwrap();
+    let old = load(dir.path()).unwrap().expect("an old file still loads");
+    assert!(
+        !old.autosave,
+        "an old file must not arrive with autosave on"
+    );
+}
+
+/// A first run is not an empty machine any more: it opens on a demo, under the name a new song starts with, and marks the
+/// session unsaved because nothing of it is on disk.
+#[test]
+fn a_first_run_opens_on_a_demo_under_a_new_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let (opened, first_run) = open(dir.path());
+    assert!(first_run, "a missing session file is a first run");
+    assert_eq!(opened.song.as_deref(), Some("New song"));
+    assert!(
+        opened.bank.get(0).steps.iter().any(|step| step.on),
+        "the opening demo plays something"
+    );
+
+    save(dir.path(), &opened).unwrap();
+    let (again, first_run) = open(dir.path());
+    assert!(!first_run, "a written session is not a first run");
+    assert_eq!(again.bank.get(0), opened.bank.get(0));
 }

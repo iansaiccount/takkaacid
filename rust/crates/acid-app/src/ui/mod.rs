@@ -37,6 +37,18 @@ pub fn tips_rect(window: egui::Rect) -> egui::Rect {
         egui::vec2(64.0 * scale, 18.0 * scale),
     )
 }
+
+/// Where the AUTO key sits: immediately left of TIPS, so the two switches that change how the session behaves read as one
+/// pair. Named here for the same reason as [`tips_rect`]: the live test clicks it without guessing pixels.
+pub fn autosave_rect(window: egui::Rect) -> egui::Rect {
+    let scale = layout::scale(window);
+    let tips = tips_rect(window);
+    let width = 72.0 * scale;
+    egui::Rect::from_min_size(
+        egui::Pos2::new(tips.left() - (width + theme::GAP * 2.0 * scale), tips.top()),
+        egui::vec2(width, tips.height()),
+    )
+}
 #[allow(dead_code)]
 pub mod theme;
 pub mod transport;
@@ -109,6 +121,9 @@ pub struct PanelState {
     pub placed: Vec<egui::Key>,
     /// Whether hovering a knob or a button explains it. On unless the player turns it off with the TIPS key.
     pub tooltips: bool,
+    /// Whether the session writes itself when it changes. Off unless the player turns it on with the AUTO key: saving is
+    /// manual, and the lamp plus the SAVE key are how a player knows where they stand.
+    pub autosave: bool,
     /// How full a randomise fills the pattern, `0.0..=1.0`.
     pub density: f32,
     /// The scale a randomise draws from.
@@ -131,6 +146,9 @@ pub struct SongState {
     pub request: Option<songs::Request>,
     /// The song this session is working on, once it has a name.
     pub name: Option<String>,
+    /// The song file this session is saved as, if it is one. A demo arrives with `None`: it is a new song under a name, and
+    /// nothing of it is on disk until the player saves it.
+    pub file: Option<String>,
 }
 
 /// The port picker: the two lists `main` hands the panel, and the two choices it takes back.
@@ -176,6 +194,7 @@ impl Default for PanelState {
             step_mode: false,
             placed: Vec::new(),
             tooltips: true,
+            autosave: false,
             density: randomise::DEFAULT_DENSITY,
             scale: scale::Scale::default(),
             scale_knob: scale::scale_position(scale::Scale::default()),
@@ -534,8 +553,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                 Some(_) => None,
                 None => Some(songs::Songs {
                     names: crate::persist::list_songs(&crate::persist::data_dir()),
+                    // The demos are built into the binary, so the card only needs their names to list them.
+                    demos: crate::demo::songs()
+                        .iter()
+                        .map(|demo| demo.name.to_string())
+                        .collect(),
                     name: state.songs.name.clone().unwrap_or_default(),
-                    open: state.songs.name.clone(),
+                    open: state.songs.file.clone(),
                     ..songs::Songs::default()
                 }),
             };
@@ -565,6 +589,26 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         theme::legend(10.0 * s),
         save_colour,
     );
+    // AUTO: whether the session writes itself. Saving is manual unless this is lit, and the SAVED / UNSAVED lamp beside it
+    // is then the only promise about what is on disk.
+    let auto_rect = autosave_rect(window);
+    let auto_label = if state.autosave {
+        "AUTO ON"
+    } else {
+        "AUTO OFF"
+    };
+    if switch_key(
+        ui,
+        state,
+        "autosave",
+        auto_rect,
+        auto_label,
+        state.autosave,
+        tips::Control::Autosave,
+    ) {
+        state.autosave = !state.autosave;
+        state.dirty = true;
+    }
     // TIPS: a small key that turns the hover help on and off. It carries its own help, so a player who turned the help
     // off can always find out what the key does.
     let tips_rect = tips_rect(window);
@@ -712,7 +756,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         );
         let mut request = None;
         if let Some(card) = state.songs.card.as_mut() {
-            request = songs::paint(ui, l.panel, s, card);
+            request = songs::paint(ui, l.panel, s, card, state.dirty);
         }
         if shield.clicked() {
             request = Some(songs::Request::Close);

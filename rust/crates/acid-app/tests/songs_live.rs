@@ -62,9 +62,9 @@ fn save_as_centre() -> Pos2 {
     )
 }
 
-/// Song rows start one row plus a gap below the field.
+/// Song rows start one row plus a gap below the field, past the two section headings (DEMO SONGS, MY SONGS).
 fn song_row_centre(index: usize) -> Pos2 {
-    let y = field_y() + row_height() + padding();
+    let y = field_y() + row_height() + padding() + 30.0 * scale(screen());
     Pos2::new(
         card().left() + padding() + 20.0,
         y + (row_height() + 2.0 * scale(screen())) * index as f32 + row_height() * 0.5,
@@ -297,4 +297,51 @@ fn loading_a_song_clears_a_pending_delete() {
         panel.songs.request,
         Some(Request::Load("Another".to_string()))
     );
+}
+
+/// The first demo row sits just under the DEMO SONGS heading, which follows the name row.
+fn demo_row_centre(index: usize) -> Pos2 {
+    let y = field_y() + row_height() + padding() + 15.0 * scale(screen());
+    Pos2::new(
+        card().left() + padding() + 20.0,
+        y + (row_height() + 2.0 * scale(screen())) * index as f32 + row_height() * 0.5,
+    )
+}
+
+fn open_card_with_demos(names: Vec<&str>, name: &str, dirty: bool) -> PanelState {
+    let mut panel = open_card(names, name);
+    if let Some(card) = panel.songs.card.as_mut() {
+        card.demos = vec!["Slow Acid".to_string(), "Funk".to_string()];
+    }
+    panel.dirty = dirty;
+    panel
+}
+
+#[test]
+fn a_demo_row_asks_to_load_that_demo() {
+    // A demo is not a file: the row asks for its index, and the card never tries to delete or rename it.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card_with_demos(vec![], "", false);
+
+    click(&ctx, &mut panel, &shared, demo_row_centre(1));
+
+    assert_eq!(panel.songs.request, Some(Request::LoadDemo(1)));
+}
+
+#[test]
+fn replacing_an_unsaved_session_takes_two_clicks() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card_with_demos(vec![], "", true);
+
+    click(&ctx, &mut panel, &shared, demo_row_centre(0));
+    assert_eq!(panel.songs.request, None, "one click only arms it");
+    assert!(
+        panel.songs.card.as_ref().unwrap().message.is_some(),
+        "and says why nothing happened"
+    );
+
+    click(&ctx, &mut panel, &shared, demo_row_centre(0));
+    assert_eq!(panel.songs.request, Some(Request::LoadDemo(0)));
 }
