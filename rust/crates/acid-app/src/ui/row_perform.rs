@@ -93,13 +93,13 @@ pub(super) fn draw(
         tips::hover(&response, state, tips::Control::Scale);
         state.scale_knob = position.clamp(0.0, 1.0);
         if !response.dragged() {
-            let snapped = scale::scale_from_position(state.scale_knob);
-            // The knob lands on a scale's detent; the two must move together or the next frame snaps it back.
+            // The knob lands on a scale's detent; read the scale back off the snapped position so the two cannot drift.
             state.scale_knob = snap_to_detent(
                 state.scale_knob,
                 scale::scale_from_position,
                 scale::scale_position,
             );
+            let snapped = scale::scale_from_position(state.scale_knob);
             if snapped != state.scale {
                 state.scale = snapped;
                 state.dirty = true;

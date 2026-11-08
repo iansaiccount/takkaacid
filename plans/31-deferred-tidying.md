@@ -214,3 +214,18 @@ pub fn snap_to_detent<F>(position: f32, face_of: impl Fn(f32) -> F, position_of:
       a contract, the two-thread rule, no font glyphs). The pygame icon rules and the Python scratch-file habits it carried
       described a different project and are gone.
       Also trimmed `tests/persist.rs`'s positions loop, which re-asserted the whole-array comparison above it.
+
+## Review
+
+One fresh-context reviewer read the six commits against this plan. Verdict: ready to merge with fixes; no Critical, one
+Important, two Minor — all three were documentation or duplication the round itself introduced.
+
+- **Fixed (Important):** `AGENTS.md` listed "tip" among the things `Knob` owns, one commit after `Knob::tip` had been
+  deleted. It now says the hover help is `ui::tips::Control::for_knob`, kept with the tip table. Cost of the miss: the
+  next agent would have put the tip back on the catalogue and split the mapping again.
+- **Fixed (Minor):** the Gates heading said "all four green" over three commands; the scale block computed the same face
+  twice (`scale_from_position` for the scale, then inside `snap_to_detent`) — it now snaps first and reads the scale back
+  off the snapped position, so there is one source.
+- Reviewed and confirmed unchanged by direct comparison: draw order and every `egui::Id`, the waveform's two-master
+  branch (both versions write the same face and leave the same position), the scale clamp order, all seven old
+  `PanelState` defaults, and the eleven factory controller numbers.

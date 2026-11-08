@@ -10,7 +10,7 @@ A TB-303-style acid bass synth: a Rust audio engine and an egui/eframe panel. Tw
 
 ## Gates
 
-Every change ends here, all four green:
+Every change ends here, all three green:
 
 ```bash
 cd rust
@@ -33,11 +33,12 @@ you made with what it costs if wrong. A later session resumes from that section 
 
 ## Code conventions
 
-**One catalogue per kind of control.** A control's identity — its slot, caption, tip, learn target and the atomic it
+**One catalogue per kind of control.** A control's identity — its slot, caption, learn target and the atomic it
 drives — lives in one module: `crate::knobs::Knob` for the seven tone knobs, `ui::scale::Scale`, `ui::switches::Switch`,
-`ui::tips::Control`, `midi::cc::CcTarget` for what a controller can drive. Derive orders and lengths from those catalogues
-(`Knob::ALL.len()`, `LEARNABLE` built from `Knob::ALL`) instead of writing a second positional list; the two bugs this repo
-has already paid for were both a hand-kept second list.
+`ui::tips::Control`, `midi::cc::CcTarget` for what a controller can drive. The one mapping that crosses two of them, a
+knob's hover help, is `ui::tips::Control::for_knob`, kept with the tip table so the catalogue names no view type. Derive
+orders and lengths from those catalogues (`Knob::ALL.len()`, `LEARNABLE` built from `Knob::ALL`) instead of writing a second
+positional list; the two bugs this repo has already paid for were both a hand-kept second list.
 
 **No `_` arm on a catalogue enum.** A `match` over one of those enums is written out in full, so adding a variant fails to
 compile where a decision is needed. `_` is for genuinely open input (a `u8` controller number), never for a catalogue.
