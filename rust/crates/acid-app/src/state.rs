@@ -39,6 +39,50 @@ impl AtomicF32 {
     }
 }
 
+/// Controller take-over state for one learnable control: the last value a controller sent, and whether it owns the knob.
+///
+/// Two atomics rather than one packed word: the flag would have to hide inside the value's bits, and that trick costs
+/// more in reading than the four bytes it saves.
+#[derive(Debug)]
+pub struct Pickup {
+    /// The last value the controller sent, as f32 bits; `u32::MAX` until it sends one, because `0.0` is a real value.
+    last: AtomicU32,
+    /// True once the controller has reached the knob and may turn it.
+    engaged: AtomicBool,
+}
+
+impl Pickup {
+    pub const fn new() -> Self {
+        Self {
+            last: AtomicU32::new(u32::MAX),
+            engaged: AtomicBool::new(false),
+        }
+    }
+
+    pub fn last(&self) -> Option<f32> {
+        match self.last.load(Ordering::Relaxed) {
+            u32::MAX => None,
+            bits => Some(f32::from_bits(bits)),
+        }
+    }
+
+    pub fn engaged(&self) -> bool {
+        self.engaged.load(Ordering::Relaxed)
+    }
+
+    /// Remember what the controller just sent, and whether that took the knob.
+    pub fn record(&self, sent: f32, engaged: bool) {
+        self.last.store(sent.to_bits(), Ordering::Relaxed);
+        self.engaged.store(engaged, Ordering::Relaxed);
+    }
+}
+
+impl Default for Pickup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// What the audio stream is doing, for the panel's status line.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum AudioStatus {
@@ -105,6 +149,9 @@ pub struct SharedState {
     /// A pattern a controller asked for, as an absolute number; `-1` when there is nothing to do. The MIDI thread may
     /// not touch the bank, so it leaves this and `main` drains it.
     pub pattern_request: AtomicI32,
+    /// Take-over state, one per learnable control, in `cc_map` slot order: a controller has to reach a knob before it
+    /// may turn it, so a fader parked somewhere else cannot slam the panel when a song loads.
+    pub pickup: [Pickup; 10],
     /// The MIDI notes the panel has not placed yet, oldest first. A queue rather than one slot: two notes can land
     /// inside a single frame, and the later one must not overwrite the earlier one's pitch or velocity.
     pub notes: NoteQueue,
@@ -141,6 +188,7 @@ impl SharedState {
             learn_cc: AtomicI32::new(-1),
             pattern_index: AtomicI32::new(0),
             pattern_request: AtomicI32::new(-1),
+            pickup: std::array::from_fn(|_| Pickup::new()),
             notes: NoteQueue::new(),
             status: Mutex::new(AudioStatus::Starting),
         })

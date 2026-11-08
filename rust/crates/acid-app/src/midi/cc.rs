@@ -111,7 +111,61 @@ pub fn cc_value(value: u8) -> f32 {
     f32::from(value) / 127.0
 }
 
+/// How close a controller has to be to the knob to count as already on it: two and a half of its 128 steps.
+pub const PICKUP_TOLERANCE: f32 = 0.02;
+
+/// Whether a control is a dial the controller has to reach first, or a stepper it names outright.
+///
+/// A dial and a fader are two positions of one value, and they are almost never in the same place: without this, the
+/// first message after a song loads slams the knob to wherever the fader happened to be. A stepper (the waveform, the
+/// pattern) is not a position but a choice — a fader pointed at TRIANGLE means TRIANGLE.
+pub fn takes_pickup(target: CcTarget) -> bool {
+    !matches!(target, CcTarget::Waveform | CcTarget::Pattern)
+}
+
+/// Whether a controller at `sent` may turn a knob at `current`.
+///
+/// `last` is what the controller sent before, `None` until it sends its first value — an `Option` rather than a
+/// sentinel, because `0.0` is a real controller position.
+pub fn takeover(last: Option<f32>, engaged: bool, sent: f32, current: f32) -> bool {
+    if engaged {
+        // The knob still holds what the controller last wrote, so it follows. If the hand (or a loaded song) has moved
+        // it since, the controller has lost the knob and has to come back around to it.
+        return last.is_some_and(|last| (current - last).abs() <= PICKUP_TOLERANCE);
+    }
+    match last {
+        // First touch: only a controller that is already on the knob may turn it.
+        None => (sent - current).abs() <= PICKUP_TOLERANCE,
+        // The travel crossed the knob's value: the two were on opposite sides of it last time.
+        Some(last) => {
+            let before = last - current;
+            let now = sent - current;
+            before * now <= 0.0 && (sent - last).abs() > 0.0
+        }
+    }
+}
+
+/// Where a control's knob currently sits, as a position rather than its own units.
+fn knob_value(state: &SharedState, target: CcTarget) -> Option<f32> {
+    match target {
+        CcTarget::Tuning => Some(state.tuning.get()),
+        CcTarget::Cutoff => Some(state.cutoff.get()),
+        CcTarget::Resonance => Some(state.resonance.get()),
+        CcTarget::EnvMod => Some(state.env_mod.get()),
+        CcTarget::Decay => Some(state.decay.get()),
+        CcTarget::Accent => Some(state.accent.get()),
+        CcTarget::Volume => Some(state.volume.get()),
+        // The tempo fader spans the whole range, so its "position" is where the current tempo sits in that range.
+        CcTarget::Tempo => Some((state.tempo_bpm.get() - MIN_BPM) / (MAX_BPM - MIN_BPM)),
+        // Not a dial: no pickup, and no position to compare against.
+        CcTarget::Waveform | CcTarget::Pattern | CcTarget::Swing => None,
+    }
+}
+
 /// Move whatever `cc` is wired to. Returns false when the controller is unmapped.
+///
+/// A mapped controller that has not yet reached its knob returns true: the message was understood and deliberately
+/// ignored, which is not the same thing as an unmapped controller.
 pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
     // While the panel is listening, the next controller is remembered rather than applied: a knob jumping under
     // the hand that is teaching it would be the wrong answer to "move a control".
@@ -120,20 +174,37 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
         return false;
     }
     let knob = cc_value(value);
-    match cc_target(state, cc) {
+    let target = match cc_target(state, cc) {
+        Some(target) => target,
+        None => return false,
+    };
+    // A dial has to be reached before it may be turned. The controller and the knob are two positions of one value, so
+    // a fader parked elsewhere is not an instruction to jump — it is a fader that has not met the knob yet.
+    if takes_pickup(target)
+        && let Some(slot) = slot(target)
+        && let Some(current) = knob_value(state, target)
+    {
+        let pickup = &state.pickup[slot];
+        let engaged = takeover(pickup.last(), pickup.engaged(), knob, current);
+        pickup.record(knob, engaged);
+        if !engaged {
+            return true;
+        }
+    }
+    match target {
         // A switch, not a dial: the controller's travel is snapped to the nearest of the four faces, which is the same
         // rule the knob follows when the hand lets go.
-        Some(CcTarget::Waveform) => {
+        CcTarget::Waveform => {
             state.set_waveform(acid_core::oscillator::Waveform::from_position(knob))
         }
-        Some(CcTarget::Tuning) => state.tuning.set(knob),
-        Some(CcTarget::Cutoff) => state.cutoff.set(knob),
-        Some(CcTarget::Resonance) => state.resonance.set(knob),
-        Some(CcTarget::EnvMod) => state.env_mod.set(knob),
-        Some(CcTarget::Decay) => state.decay.set(knob),
-        Some(CcTarget::Accent) => state.accent.set(knob),
-        Some(CcTarget::Volume) => state.volume.set(knob),
-        Some(CcTarget::Tempo) => {
+        CcTarget::Tuning => state.tuning.set(knob),
+        CcTarget::Cutoff => state.cutoff.set(knob),
+        CcTarget::Resonance => state.resonance.set(knob),
+        CcTarget::EnvMod => state.env_mod.set(knob),
+        CcTarget::Decay => state.decay.set(knob),
+        CcTarget::Accent => state.accent.set(knob),
+        CcTarget::Volume => state.volume.set(knob),
+        CcTarget::Tempo => {
             state
                 .tempo_bpm
                 .set(clamp_bpm(MIN_BPM + knob * (MAX_BPM - MIN_BPM)));
@@ -141,7 +212,7 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
         // The pattern is a stepper as well, but its zones are equal: 128 controller steps over eight patterns is sixteen
         // each, so a fader rests in the middle of a pattern rather than on a hair-trigger boundary. The MIDI thread may
         // not move the bank, so it leaves a request and `main` drains it.
-        Some(CcTarget::Pattern) => {
+        CcTarget::Pattern => {
             use acid_core::bank::PATTERNS_PER_BANK;
 
             let zone = f32::from(value) / 128.0 * PATTERNS_PER_BANK as f32;
@@ -152,8 +223,7 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
                 .pattern_request
                 .store(wanted as i32, Ordering::Relaxed);
         }
-        Some(CcTarget::Swing) => state.swing.set(knob.clamp(0.0, 1.0)),
-        None => return false,
+        CcTarget::Swing => state.swing.set(knob.clamp(0.0, 1.0)),
     }
     true
 }
@@ -170,15 +240,24 @@ pub fn mapping_lines() -> Vec<String> {
 mod tests {
     use super::*;
 
+    /// Bring a controller onto the knob it drives, the way a hand does: sweep from the bottom past the knob's value.
+    fn reach(state: &SharedState, cc: u8) {
+        assert!(apply_cc(state, cc, 0));
+        assert!(apply_cc(state, cc, 127), "the sweep should reach the knob");
+    }
+
     #[test]
     fn every_mapped_cc_moves_its_own_knob() {
         let s = SharedState::new();
-        assert!(apply_cc(&s, 74, 127));
+        reach(&s, 74);
         assert!((s.cutoff.get() - 1.0).abs() < 1e-6);
+        reach(&s, 71);
         assert!(apply_cc(&s, 71, 0));
         assert_eq!(s.resonance.get(), 0.0);
+        reach(&s, 75);
         assert!(apply_cc(&s, 75, 64));
         assert!((s.decay.get() - 64.0 / 127.0).abs() < 1e-6);
+        reach(&s, 7);
         assert!(apply_cc(&s, 7, 32));
         assert!((s.volume.get() - 32.0 / 127.0).abs() < 1e-6);
     }
@@ -186,10 +265,11 @@ mod tests {
     #[test]
     fn tempo_cc_spans_the_whole_range() {
         let s = SharedState::new();
+        reach(&s, 72);
+        assert_eq!(s.tempo_bpm.get(), MAX_BPM);
+
         apply_cc(&s, 72, 0);
         assert_eq!(s.tempo_bpm.get(), MIN_BPM);
-        apply_cc(&s, 72, 127);
-        assert_eq!(s.tempo_bpm.get(), MAX_BPM);
         apply_cc(&s, 72, 64);
         let mid = s.tempo_bpm.get();
         assert!(mid > 150.0 && mid < 190.0, "midpoint was {mid}");
@@ -220,6 +300,8 @@ mod tests {
         assert_eq!(cc_for(&s, CcTarget::Cutoff), Some(21));
         assert_eq!(cc_target(&s, 21), Some(CcTarget::Cutoff));
         assert_eq!(cc_target(&s, 74), None, "the old controller is free again");
+        reach(&s, 21);
+        assert_eq!(s.cutoff.get(), 1.0);
         assert!(apply_cc(&s, 21, 0));
         assert_eq!(s.cutoff.get(), 0.0);
 
@@ -325,9 +407,13 @@ mod tests {
             "the factory controller is free again"
         );
 
-        apply_cc(&s, 22, 0);
-        assert_eq!(s.tempo_bpm.get(), MIN_BPM);
-        apply_cc(&s, 22, 127);
+        // A low fader must not drag a running tempo down; sweeping up to it takes over.
+        assert!(apply_cc(&s, 22, 0));
+        assert!(
+            s.tempo_bpm.get() > MIN_BPM,
+            "a fader at the bottom has not reached the tempo yet"
+        );
+        reach(&s, 22);
         assert_eq!(s.tempo_bpm.get(), MAX_BPM);
     }
 
@@ -366,6 +452,93 @@ mod tests {
             s.learn_cc.load(std::sync::atomic::Ordering::Relaxed),
             22,
             "the controller is remembered for the panel"
+        );
+    }
+
+    #[test]
+    fn a_far_controller_does_not_move_the_knob() {
+        // The complaint this exists for: a song is loaded with the cutoff open, and a fader parked at the bottom must
+        // not slam it shut just because it twitched.
+        let s = SharedState::new();
+        s.cutoff.set(0.8);
+        assert!(
+            apply_cc(&s, 74, 0),
+            "the controller is mapped, it just is not there yet"
+        );
+        assert_eq!(s.cutoff.get(), 0.8, "the knob stayed where the song put it");
+        assert!(apply_cc(&s, 74, 40));
+        assert_eq!(s.cutoff.get(), 0.8, "still on its way up");
+    }
+
+    #[test]
+    fn a_controller_that_reaches_the_knob_takes_over_and_then_follows() {
+        let s = SharedState::new();
+        s.cutoff.set(0.5);
+        apply_cc(&s, 74, 0);
+        apply_cc(&s, 74, 63); // 0.496: one step short of the knob
+        assert_eq!(s.cutoff.get(), 0.5, "not reached yet");
+        apply_cc(&s, 74, 64); // crossed
+        assert!(
+            (s.cutoff.get() - 64.0 / 127.0).abs() < 1e-6,
+            "the crossing is where it takes over"
+        );
+
+        // From here the knob follows, including small moves back down.
+        apply_cc(&s, 74, 60);
+        assert!((s.cutoff.get() - 60.0 / 127.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_hand_on_the_knob_takes_it_back() {
+        let s = SharedState::new();
+        reach(&s, 74);
+        assert!((s.cutoff.get() - 1.0).abs() < 1e-6);
+
+        // The hand drags the knob somewhere else, or a song load moves it.
+        s.cutoff.set(0.3);
+        apply_cc(&s, 74, 127);
+        assert_eq!(s.cutoff.get(), 0.3, "the controller lost the knob");
+
+        // It has to come back around to it.
+        apply_cc(&s, 74, 0);
+        apply_cc(&s, 74, 64);
+        assert!(
+            (s.cutoff.get() - 64.0 / 127.0).abs() < 1e-6,
+            "and can take it again"
+        );
+    }
+
+    #[test]
+    fn the_switches_take_the_value_they_are_pointed_at() {
+        // A stepper is not a position: a fader pointed at TRIANGLE means TRIANGLE, first message or not.
+        use acid_core::oscillator::Waveform;
+
+        let s = SharedState::new();
+        s.set_waveform(Waveform::Saw);
+        apply_cc(&s, 20, 127);
+        assert_eq!(s.waveform(), Waveform::Triangle);
+
+        s.set_pattern_index(0);
+        apply_cc(&s, 21, 127);
+        assert_eq!(s.take_pattern_request(), Some(7));
+    }
+
+    #[test]
+    fn takeover_wants_a_crossing_or_a_near_miss() {
+        // A first touch has to land on the knob; a sweep has to pass it; an engaged controller follows a knob that has
+        // not moved, and loses one that has.
+        assert!(!takeover(None, false, 1.0, 0.2), "a first touch far away");
+        assert!(
+            takeover(None, false, 0.21, 0.2),
+            "a first touch on the knob"
+        );
+        assert!(!takeover(Some(0.0), false, 0.1, 0.2), "short of the knob");
+        assert!(takeover(Some(0.1), false, 0.3, 0.2), "swept past it");
+        assert!(takeover(Some(0.3), false, 0.1, 0.2), "swept back past it");
+        assert!(takeover(Some(0.2), true, 0.9, 0.2), "engaged and holding");
+        assert!(
+            !takeover(Some(0.2), true, 0.9, 0.5),
+            "engaged, but the hand moved it"
         );
     }
 }
