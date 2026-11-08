@@ -97,3 +97,18 @@ actually draws.
 
 Mutation checks: dropping `!step.audible()` from the sequencer fails the silence test; dropping the octave clamp in
 `randomise` fails the range test.
+
+## Revision — randomise rerolls the gates too
+
+The first build kept the rhythm, on the theory that the rhythm is the work. The player corrected it: RANDOM is a jump
+start, not a variation, so it rerolls **which steps sound** as well as what they play — one step in two, so a roll is
+dense enough to be a pattern and open enough to hear the shuffle.
+
+What a step still keeps is its character: accent, slide and velocity are the player's touch, and a rerolled pattern
+carrying the accent kicks and the glides they placed sounds like them, not like a machine. Two guarantees remain, because
+without them the button looks broken: a roll that lands on all rests turns step 1 back on, and every note is still pulled
+into the playable range.
+
+Tests moved with it: `the_rhythm_survives_and_the_notes_change` became `the_gates_and_the_notes_are_both_rerolled` plus
+`a_steps_own_character_survives_the_reroll`, `an_empty_pattern_stays_empty` became
+`an_empty_pattern_comes_back_as_a_pattern`, and the top-of-range test now walks every seed instead of one.

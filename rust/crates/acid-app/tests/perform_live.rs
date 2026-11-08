@@ -99,7 +99,7 @@ fn the_shuffle_knob_writes_the_swing_the_clock_uses() {
 }
 
 #[test]
-fn randomise_changes_the_notes_but_not_the_rhythm() {
+fn randomise_rerolls_the_whole_pattern() {
     let ctx = Context::default();
     let shared = lit_shared();
     let mut panel = PanelState::default();
@@ -108,15 +108,10 @@ fn randomise_changes_the_notes_but_not_the_rhythm() {
     click(&ctx, &mut panel, &shared, cell(3));
     let after = shared.pattern();
 
-    for index in 0..16 {
-        assert_eq!(
-            after.steps[index].on, before.steps[index].on,
-            "step {index} changed its gate"
-        );
-    }
+    assert_ne!(after, before, "nothing was randomised");
     assert!(
-        (0..16).any(|index| after.steps[index].pitch != before.steps[index].pitch),
-        "no note changed"
+        after.steps.iter().any(|step| step.on),
+        "a jump start must leave something sounding"
     );
     assert!(
         after
@@ -126,6 +121,11 @@ fn randomise_changes_the_notes_but_not_the_rhythm() {
             .all(|step| step.audible()),
         "a randomise must not write a silent step"
     );
+    // The player's touch survives: accents and slides are not the randomiser's to move.
+    for index in 0..16 {
+        assert_eq!(after.steps[index].accent, before.steps[index].accent);
+        assert_eq!(after.steps[index].slide, before.steps[index].slide);
+    }
     assert!(panel.dirty);
 }
 

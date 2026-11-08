@@ -7,22 +7,30 @@
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::{NOTE_HIGH, NOTE_LOW, Pitch, step_midi};
 
-/// A pattern with new notes on the steps that already sound.
+/// A whole new pattern: which steps sound, and what they play.
+///
+/// This is a jump start, not a variation of what is already there, so the gates are rerolled with the notes. What a step
+/// keeps is its character — accent, slide, velocity — so a rerolled pattern still has the accent touches and glides the
+/// player put there, now carrying new notes.
 ///
 /// Seeded so a result can be reproduced: the panel seeds it from the clock, a test from a number.
 pub fn randomised(pattern: Pattern, seed: u64) -> Pattern {
     let mut rng = Rng::new(seed);
     let mut steps = pattern.steps;
     for step in &mut steps {
-        if !step.on {
-            continue;
-        }
+        // One step in two sounds: dense enough to be a pattern, open enough to hear the shuffle.
+        let on = rng.below(2) == 0;
         let pitch = Pitch::ALL[rng.below(Pitch::ALL.len() as u64) as usize];
         *step = Step {
+            on,
             pitch,
             octave_offset: nearest_octave(pitch, step.octave_offset),
             ..*step
         };
+    }
+    // A jump start that lands on silence is not a jump start.
+    if !steps.iter().any(|step| step.on) {
+        steps[0].on = true;
     }
     Pattern::from_steps(steps)
 }
@@ -98,23 +106,35 @@ mod tests {
     }
 
     #[test]
-    fn the_rhythm_survives_and_the_notes_change() {
+    fn the_gates_and_the_notes_are_both_rerolled() {
         let before = pattern();
         let after = randomised(before, 7);
 
+        assert_ne!(after, before, "nothing was randomised");
+        assert!(
+            (0..16).any(|index| after.steps[index].on != before.steps[index].on),
+            "the gates should move too: it is a jump start, not a variation"
+        );
+        assert!(
+            (0..16).any(|index| after.steps[index].pitch != before.steps[index].pitch),
+            "no note changed"
+        );
+        assert!(
+            after.steps.iter().any(|step| step.on),
+            "a jump start that lands on silence is not a jump start"
+        );
+    }
+
+    #[test]
+    fn a_steps_own_character_survives_the_reroll() {
+        // Accent, slide and velocity are the player's touch; only the gate and the note are rerolled.
+        let before = pattern();
+        let after = randomised(before, 9);
         for index in 0..16 {
-            assert_eq!(
-                after.steps[index].on, before.steps[index].on,
-                "step {index} changed its gate"
-            );
             assert_eq!(after.steps[index].accent, before.steps[index].accent);
             assert_eq!(after.steps[index].slide, before.steps[index].slide);
             assert_eq!(after.steps[index].velocity, before.steps[index].velocity);
         }
-        assert!(
-            (0..16).any(|index| after.steps[index].pitch != before.steps[index].pitch),
-            "nothing was randomised"
-        );
     }
 
     #[test]
@@ -136,14 +156,18 @@ mod tests {
     }
 
     #[test]
-    fn rests_keep_their_note_so_turning_one_on_finds_a_pitch() {
-        let before = pattern();
-        let after = randomised(before, 3);
-        for index in 0..16 {
-            if !before.steps[index].on {
-                assert_eq!(after.steps[index].pitch, before.steps[index].pitch);
-            }
-        }
+    fn an_empty_pattern_comes_back_as_a_pattern() {
+        // A jump start from silence: the whole point is that something comes out.
+        let empty = Pattern::empty();
+        let after = randomised(empty, 11);
+        assert!(after.steps.iter().any(|step| step.on), "still silent");
+        assert!(
+            after
+                .steps
+                .iter()
+                .filter(|step| step.on)
+                .all(|step| step.audible())
+        );
     }
 
     #[test]
@@ -158,16 +182,18 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_pattern_stays_empty() {
-        let empty = Pattern::empty();
-        assert_eq!(randomised(empty, 11), empty);
-    }
-
-    #[test]
     fn a_note_at_the_top_of_the_range_is_pulled_down_rather_than_silenced() {
+        // Every step sits at the top of the range, so a pitch class that would overshoot must be moved down an octave —
+        // for every seed, not just the one that happens to be lucky.
         let mut steps = [Step::rest(); 16];
-        steps[0] = Step::note(Pitch::B, 5); // the highest note there is
-        let after = randomised(Pattern::from_steps(steps), 5);
-        assert!(after.steps[0].audible());
+        for step in &mut steps {
+            *step = Step::note(Pitch::B, 5); // the highest note there is
+        }
+        for seed in 0..64 {
+            let after = randomised(Pattern::from_steps(steps), seed);
+            for step in after.steps.iter().filter(|step| step.on) {
+                assert!(step.audible(), "seed {seed} left a silent note: {step:?}");
+            }
+        }
     }
 }

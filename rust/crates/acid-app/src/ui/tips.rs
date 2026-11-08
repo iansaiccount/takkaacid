@@ -227,7 +227,7 @@ const TIPS: [Tip; 21] = [
     },
     Tip {
         title: "RANDOM",
-        what: "Gives the sounding steps new notes. The rhythm, accents and slides stay as they are.",
+        what: "Rerolls the whole pattern: which steps sound, and what they play. Accents and slides stay.",
         shortcut: None,
     },
 ];
