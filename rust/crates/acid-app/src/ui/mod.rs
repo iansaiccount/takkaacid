@@ -17,6 +17,19 @@ pub mod shortcuts;
 pub mod songs;
 pub mod step_key;
 pub mod switches;
+pub mod tips;
+
+/// Where the TIPS key sits: in the top strip, to the left of the SAVED / UNSAVED lamp.
+///
+/// Named here rather than inside `draw_panel` so the live test can click the key without guessing its pixels.
+pub fn tips_rect(window: egui::Rect) -> egui::Rect {
+    let scale = layout::scale(window);
+    let lamp = panel::save_indicator_rect(layout::layout(window).top, scale);
+    egui::Rect::from_center_size(
+        lamp.left_center() - egui::vec2(40.0 * scale, 0.0),
+        egui::vec2(64.0 * scale, 18.0 * scale),
+    )
+}
 #[allow(dead_code)]
 pub mod theme;
 pub mod transport;
@@ -96,6 +109,8 @@ pub struct PanelState {
     /// The keys that have written a step and not been released yet. A press for a key that is already here is a repeat
     /// however egui labelled it, so it writes nothing; the release is what walks the border on.
     pub placed: Vec<egui::Key>,
+    /// Whether hovering a knob or a button explains it. On unless the player turns it off with the TIPS key.
+    pub tooltips: bool,
 }
 
 impl Default for PanelState {
@@ -130,6 +145,7 @@ impl Default for PanelState {
             learn: learn::Step::Idle,
             step_mode: false,
             placed: Vec::new(),
+            tooltips: true,
         }
     }
 }
@@ -263,6 +279,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             target,
             diameter,
         );
+        tips::hover(&response, state, tips::Control::knob(i));
         if i == 0 && !choosing {
             // Snap only once the hand has let go: snapping mid-drag would pull the value back onto the detent it started
             // from, and a slow drag could never cross a midpoint.
@@ -442,7 +459,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let now = std::time::Instant::now();
         let armed = clear::is_armed(state.clear_armed_at, now);
         let label = if armed { "CLEAR?" } else { "CLEAR" };
-        if transport::transport_button(ui, "clear-pattern", clear_cell, label, armed).clicked() {
+        if switch_key(
+            ui,
+            state,
+            "clear-pattern",
+            clear_cell,
+            label,
+            armed,
+            tips::Control::Clear,
+        ) {
             match clear::click(state.clear_armed_at, now) {
                 clear::Click::Armed => state.clear_armed_at = Some(now),
                 clear::Click::Cleared => {
@@ -459,16 +484,30 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let save_cell = switches::cell(l.switches, switches::Switch::Save);
         // Lit while something is unsaved, so the key doubles as the "there is work to keep" lamp.
         let dirty = state.dirty;
-        if transport::transport_button(ui, "save-session", save_cell, "SAVE", dirty).clicked() {
+        if switch_key(
+            ui,
+            state,
+            "save-session",
+            save_cell,
+            "SAVE",
+            dirty,
+            tips::Control::Save,
+        ) {
             state.save_requested = true;
         }
     }
     {
         let songs_cell = switches::cell(l.switches, switches::Switch::Songs);
         // The card lists what is on disk, so opening it reads the songs directory once.
-        if transport::transport_button(ui, "songs", songs_cell, "SONGS", state.songs.is_some())
-            .clicked()
-        {
+        if switch_key(
+            ui,
+            state,
+            "songs",
+            songs_cell,
+            "SONGS",
+            state.songs.is_some(),
+            tips::Control::Songs,
+        ) {
             state.songs = match state.songs {
                 Some(_) => None,
                 None => Some(songs::Songs {
@@ -485,8 +524,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // RESET wipes the whole mapped rig, so it is dark unless a learn is in progress — and the click is gated on
         // the same test, because a dark key still reports clicks.
         let learning = state.learn != learn::Step::Idle;
-        if transport::transport_button(ui, "midi-reset", reset_cell, "RESET", learning).clicked()
-            && learning
+        if switch_key(
+            ui,
+            state,
+            "midi-reset",
+            reset_cell,
+            "RESET",
+            learning,
+            tips::Control::Reset,
+        ) && learning
         {
             midi::cc::reset_defaults(shared);
             learn::cancel(shared);
@@ -497,9 +543,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     {
         let step_cell = switches::cell(l.switches, switches::Switch::Step);
         // STEP mode: a note typed on a keyboard writes the selected step, then walks to the next one.
-        if transport::transport_button(ui, "step-mode", step_cell, "STEP", state.step_mode)
-            .clicked()
-        {
+        if switch_key(
+            ui,
+            state,
+            "step-mode",
+            step_cell,
+            "STEP",
+            state.step_mode,
+            tips::Control::Step,
+        ) {
             state.step_mode = !state.step_mode;
         }
     }
@@ -512,39 +564,83 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         theme::legend(10.0 * s),
         save_colour,
     );
+    // TIPS: a small key that turns the hover help on and off. It carries its own help, so a player who turned the help
+    // off can always find out what the key does.
+    let tips_rect = tips_rect(window);
+    let tips_label = if state.tooltips {
+        "TIPS ON"
+    } else {
+        "TIPS OFF"
+    };
+    if switch_key(
+        ui,
+        state,
+        "tips",
+        tips_rect,
+        tips_label,
+        state.tooltips,
+        tips::Control::Tooltips,
+    ) {
+        state.tooltips = !state.tooltips;
+        state.dirty = true;
+    }
     // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
     if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {
         let playing = shared.is_playing();
-        if transport::transport_button(ui, "run", run, "RUN", playing).clicked() {
+        if switch_key(ui, state, "run", run, "RUN", playing, tips::Control::Run) {
             shared.set_playing(true);
             state.dirty = true;
         }
-        if transport::transport_button(ui, "stop", stop, "STOP", !playing).clicked() {
+        if switch_key(
+            ui,
+            state,
+            "stop",
+            stop,
+            "STOP",
+            !playing,
+            tips::Control::Stop,
+        ) {
             shared.set_playing(false);
             state.dirty = true;
         }
         let bpm = shared.tempo_bpm.get();
-        if transport::transport_button(ui, "tempo-down", tempo_down, "TEMPO -", false).clicked() {
+        if switch_key(
+            ui,
+            state,
+            "tempo-down",
+            tempo_down,
+            "TEMPO -",
+            false,
+            tips::Control::TempoDown,
+        ) {
             shared.tempo_bpm.set(transport::nudge_tempo(bpm, -1));
             state.dirty = true;
         }
-        if transport::transport_button(ui, "tempo-up", tempo_up, "TEMPO +", false).clicked() {
+        if switch_key(
+            ui,
+            state,
+            "tempo-up",
+            tempo_up,
+            "TEMPO +",
+            false,
+            tips::Control::TempoUp,
+        ) {
             shared.tempo_bpm.set(transport::nudge_tempo(bpm, 1));
             state.dirty = true;
         }
 
         // The last transport cell is the MIDI LEARN key (see `ui::learn`), so the row keeps its five keys while
         // the volume knob lives in the top strip's corner.
-        if transport::transport_button(
+        if switch_key(
             ui,
+            state,
             "learn",
             volume_cell,
             learn::label(state.learn),
             state.learn != learn::Step::Idle,
-        )
-        .clicked()
-        {
+            tips::Control::Learn,
+        ) {
             state.learn = match state.learn {
                 learn::Step::Idle => learn::Step::Choosing,
                 _ => learn::Step::Idle,
@@ -766,6 +862,24 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
     });
 }
 
+/// A panel button with its hover help attached: draw it, explain it, and say whether it was clicked.
+///
+/// One helper for every button, so the tip follows the control that was actually drawn — the CLEAR key reads `CLEAR?`
+/// while it is armed, and its help still describes CLEAR.
+fn switch_key(
+    ui: &mut egui::Ui,
+    state: &PanelState,
+    id: &str,
+    rect: egui::Rect,
+    label: &str,
+    lit: bool,
+    control: tips::Control,
+) -> bool {
+    let response = transport::transport_button(ui, id, rect, label, lit);
+    let clicked = response.clicked();
+    tips::hover(&response, state, control);
+    clicked
+}
 /// A static button face: raised, engraved, with a silkscreen caption when `label` is not empty.
 fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &str) {
     painter.rect_filled(rect, 4.0 * scale, theme::PANEL_RAISED);

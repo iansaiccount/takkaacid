@@ -216,6 +216,34 @@ fn the_chosen_midi_port_round_trips_and_an_old_file_still_loads() {
 }
 
 #[test]
+fn the_hover_help_switch_round_trips_and_an_old_file_gets_it_on() {
+    let dir = tempfile::tempdir().unwrap();
+    save(
+        dir.path(),
+        &SavedState {
+            tooltips: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(
+        !load(dir.path()).unwrap().unwrap().tooltips,
+        "off stays off"
+    );
+
+    // A file written before the field existed opens with the hints on, because help should not have to be found.
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    legacy.as_object_mut().unwrap().remove("tooltips");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+    assert!(load(dir.path()).unwrap().unwrap().tooltips);
+}
+
+#[test]
 fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();

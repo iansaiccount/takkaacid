@@ -37,6 +37,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "shift+up / down: note up or down",
                 "enter: note on or off",
                 "F1 or shift+?: this card",
+                "TIPS: hover a knob or key to read it",
             ],
         ),
         (

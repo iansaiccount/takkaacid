@@ -27,6 +27,8 @@ fn main() -> eframe::Result {
         None => midi::ports::PortChoice::Any,
     };
     let song_name = saved.song.clone();
+    // Copied out before the closure takes its other fields: a `bool` needs no ceremony to travel.
+    let saved_tooltips = saved.tooltips;
 
     // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
     let rig = Rig::new({
@@ -56,6 +58,8 @@ fn main() -> eframe::Result {
                 pattern_id: PatternBank::id_of(bank.current()),
                 // The song the last session was working on, if it had a name.
                 song_name: song_name.clone(),
+                // The hover-help switch the last session was left with.
+                tooltips: saved_tooltips,
                 ..Default::default()
             };
             Ok(Box::new(TakkaApp {
@@ -382,6 +386,8 @@ impl TakkaApp {
         let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
         saved.midi_input = self.midi.preference_name();
         saved.song = self.panel.song_name.clone();
+        // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
+        saved.tooltips = self.panel.tooltips;
         match persist::save(&persist::data_dir(), &saved) {
             Ok(()) => self.panel.dirty = false,
             Err(error) => eprintln!("takka-acid: could not save: {error}"),

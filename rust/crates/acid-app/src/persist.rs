@@ -56,7 +56,7 @@ impl Default for Knobs {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 3;
+pub const SAVE_VERSION: u32 = 4;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -78,11 +78,19 @@ pub struct SavedState {
     /// performance rig survives a restart. Absent means the factory pairing.
     #[serde(default = "default_cc_map")]
     pub cc_map: [u8; 7],
+    /// Whether hovering a control explains it. On for a file that predates the field: help should not have to be found.
+    #[serde(default = "default_true")]
+    pub tooltips: bool,
 }
 
 /// The factory MIDI mapping, for a file that predates the field.
 pub fn default_cc_map() -> [u8; 7] {
     crate::midi::cc::DEFAULT_CC
+}
+
+/// Hover help defaults on: a player should not have to find the switch to be told what things do.
+fn default_true() -> bool {
+    true
 }
 
 impl Default for SavedState {
@@ -96,6 +104,7 @@ impl Default for SavedState {
             midi_input: None,
             song: None,
             cc_map: crate::midi::cc::DEFAULT_CC,
+            tooltips: true,
         }
     }
 }
@@ -217,6 +226,8 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
                 .load(std::sync::atomic::Ordering::Relaxed)
                 .clamp(0, 127) as u8
         }),
+        // The hover-help switch lives with the panel, not the shared state; `main` fills it in like the MIDI choice.
+        tooltips: true,
     }
 }
 
