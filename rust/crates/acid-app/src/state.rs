@@ -149,6 +149,9 @@ pub struct SharedState {
     /// Which of the 64 patterns is playing, `0..64`. `main` owns the bank, so it keeps this in step; the MIDI thread
     /// only reads it, to know which bank a pattern message is pointing into.
     pub pattern_index: AtomicI32,
+    /// The pattern a learned controller has selected, `0..64`, or `-1` when the selection follows the sound. A pending
+    /// swap lives here for one bar, so the pickup can measure against what the fader is holding.
+    pub pattern_selected: AtomicI32,
     /// A pattern a controller asked for, as an absolute number; `-1` when there is nothing to do. The MIDI thread may
     /// not touch the bank, so it leaves this and `main` drains it.
     pub pattern_request: AtomicI32,
@@ -191,6 +194,8 @@ impl SharedState {
             learn_active: AtomicBool::new(false),
             learn_cc: AtomicI32::new(-1),
             pattern_index: AtomicI32::new(0),
+            // Nothing is waiting for the bar, so the selection is the sound.
+            pattern_selected: AtomicI32::new(-1),
             pattern_request: AtomicI32::new(-1),
             pickup: std::array::from_fn(|_| Pickup::new()),
             notes: NoteQueue::new(),
@@ -259,6 +264,31 @@ impl SharedState {
     pub fn take_pattern_request(&self) -> Option<usize> {
         let requested = self.pattern_request.swap(-1, Ordering::Relaxed);
         (requested >= 0).then_some(requested as usize)
+    }
+
+    /// The pattern a learned controller has selected but not yet heard.
+    ///
+    /// The swap waits for the bar, so between messages the sounding pattern (`pattern_index`) is still the old one while
+    /// the fader has already moved on. A controller's pickup has to measure against what it is holding — the selection —
+    /// or the second message of a sweep would look like a hand on the knob and be dropped.
+    pub fn pattern_selected(&self) -> usize {
+        let selected = self.pattern_selected.load(Ordering::Relaxed);
+        if selected >= 0 {
+            selected as usize
+        } else {
+            self.pattern_index()
+        }
+    }
+
+    /// Record the pattern a controller has selected. `main` sets this when it takes a request and when it adopts a
+    /// pattern, so the selection and the sound never disagree for longer than a bar.
+    pub fn set_pattern_selected(&self, index: usize) {
+        self.pattern_selected.store(index as i32, Ordering::Relaxed);
+    }
+
+    /// Follow the sounding pattern again: nothing is waiting for the bar.
+    pub fn clear_pattern_selected(&self) {
+        self.pattern_selected.store(-1, Ordering::Relaxed);
     }
 
     /// Clone-on-write one step. Stray indices are ignored: this is reachable from the UI.

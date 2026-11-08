@@ -24,7 +24,8 @@ readout beside it), and it wears the pick colour while choosing and while listen
 
 **The pattern controller, in three parts.**
 - *Pickup*, like every other control: `takes_pickup(Pattern)` becomes true, and `knob_value(Pattern)` answers with the
-  middle of the zone the playing pattern occupies (`(number + 0.5) / 8`). A fader parked elsewhere is not an instruction.
+  middle of the zone the *selection* occupies (`(number + 0.5) / 8`) — `SharedState::pattern_selected`, which is the
+  pending swap while one is waiting. A fader parked elsewhere is not an instruction, and one mid-sweep keeps turning.
 - *A request, not a jump*: `apply_cc` keeps writing the absolute index into `state.pattern_request`, unchanged.
 - *Swap on the pattern's last step*: `main` holds the request as `pending_pattern` and applies it when the transport
   reports step 0, or a wrap, or is stopped — `ui::pattern_swap::swap_now(playing, position, last)` is that rule, a pure
@@ -39,11 +40,11 @@ readouts call `tips::hover` every frame.
 | Test | Pins |
 |---|---|
 | `learn::a_listening_target_keeps_its_border` | `highlight(Choosing, _)` true; `highlight(Listening(Cutoff), Cutoff)` true; a neighbour's false; `Idle` false |
-| `learn_live::the_tempo_and_pattern_readouts_can_be_taught` | clicking each readout while choosing binds that control (the PATTERN key no longer does) |
-| `tips::every_readout_has_its_own_help` | the two new controls have distinct titles and a description, in ASCII |
-| `tips_live` (existing, extended) | hovering the pattern and tempo displays shows their help |
-| `cc::a_pattern_fader_has_to_reach_the_playing_pattern` | a far fader requests nothing; sweeping onto the zone requests that pattern |
-| `pattern_swap::the_swap_waits_for_the_bar` | stopped → now; step 0 → now; a wrap → now; mid-bar → not yet |
+| `tips::the_two_readouts_have_their_own_help` | the two new controls have distinct titles, a description in ASCII, and the shortcuts they really have |
+| `learn_live::the_tempo_and_pattern_readouts_can_be_taught` | clicking each readout while choosing binds that control, and the PATTERN engraving no longer answers |
+| `cc::a_pattern_fader_has_to_reach_the_pattern_before_it_moves_it` | a far fader requests nothing; sweeping onto the zone requests that pattern |
+| `cc::a_sweep_keeps_turning_while_the_swap_waits_for_the_bar` | the fader keeps turning while the sound is held, because the pickup measures the selection |
+| `pattern_swap::the_swap_waits_for_the_bar` | stopped → now; the last step → now (so the next trigger is the new bar); a wrap → now; mid-bar → not yet |
 
 ## Task list
 
@@ -92,3 +93,31 @@ readouts call `tips::hover` every frame.
       the sounding pattern while the display names the next one.
       Ruling: a pending swap is live performance state only — no new save field. Cost if wrong: quitting mid-cycle
       forgets the swap, which a player would expect anyway.
+
+## Review
+
+One fresh-context review of the three commits. Verdict: block — one Critical, four Important, seven Minor. The Critical
+and all four Important are fixed here; the minors that were cheap went with them.
+
+- **Critical, fixed:** the pattern pickup went deaf after the first message. The swap is deferred, so the *sounding*
+  pattern no longer follows the fader, and `takeover`'s "the knob still holds what I wrote" rule compared the fader's last
+  write against a value that had not moved. `SharedState::pattern_selected` now holds the selection (the pending swap),
+  `knob_value(Pattern)` measures against it, and `main` sets it when it takes a request and clears it on adopt. Test first:
+  `cc::a_sweep_keeps_turning_while_the_swap_waits_for_the_bar` failed on the third zone before the fix.
+- **Important, fixed:** the swap landed one step *after* the bar, because the panel only sees a step after the audio
+  thread has triggered it — the new pattern's first step was never heard. `swap_now` is now due on the last step (and on a
+  wrap, and when stopped), so the trigger that follows is the new bar's. The test's mid-bar case moved off step 15.
+- **Important, fixed:** the choosing hint still said "click a knob, PATTERN or the BPM", pointing at an engraving that no
+  longer answers. It says "a knob or a readout" now, and `learn_live` pins that the engraving leaves the panel in PICK.
+- **Important, fixed:** a keyboard pattern move did not drop a held swap, so the bar undid the player's deliberate move.
+  `main` compares the bank around the dispatch loop and clears the pending swap. The "adopt a pattern" block is now
+  `pattern_swap::adopt`, called by the keyboard, the controller swap and both song paths — so it also disarms CLEAR and
+  resets the step selection, which the controller path used to miss.
+- **Important, partly fixed:** the wiring tests. The engraving test exists and the tips test now pins the real shortcuts.
+  A live "hovering paints the tooltip" test is *not* there: egui renders a tooltip in a floating area whose text is not
+  exposed in `eframe::FullOutput` in a way this suite can read back, and the pure table test already proves the text
+  exists. Recorded as a deferred minor rather than faked.
+- **Minors taken:** the `_ =>` arm in `apply_cc`'s `written` match is exhaustive; a request naming the pattern already
+  playing is dropped (a resting fader used to re-publish the pattern and mark the session unsaved every bar); the PATTERN
+  tip no longer claims it has no key (shift+arrows); `pattern_number_of` asks `PatternBank::id_of`; stale comments and the
+  plan's test names corrected.

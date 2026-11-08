@@ -265,7 +265,7 @@ const TIPS: [Tip; 25] = [
     Tip {
         title: "PATTERN",
         what: "Which pattern is playing, bank and slot. Click it while LEARN is picking to teach a controller; the swap waits for the bar.",
-        shortcut: None,
+        shortcut: Some("shift + left / right arrow: the previous or next pattern, at once"),
     },
 ];
 
@@ -324,10 +324,9 @@ mod tests {
             Control::Tempo.tip().shortcut.is_some(),
             "the arrows nudge it"
         );
-        assert_eq!(
-            Control::Pattern.tip().shortcut,
-            None,
-            "a pattern has no key"
+        assert!(
+            Control::Pattern.tip().shortcut.is_some(),
+            "shift + arrows move the pattern"
         );
     }
 

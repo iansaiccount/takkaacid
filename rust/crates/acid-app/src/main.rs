@@ -142,8 +142,13 @@ impl eframe::App for TakkaApp {
         // `ui::dispatch`). A held key repeats only for the tempo nudges.
         let presses =
             ctx.input(|input| panel_ui::dispatch::presses(&input.events, input.modifiers.shift));
+        let pattern_before = self.bank.current();
         for press in presses {
             panel_ui::dispatch::handle(press, &mut self.panel, &self.state, &mut self.bank);
+        }
+        // The keyboard is deliberate and immediate: a move it made wins over a swap that was waiting for the bar.
+        if self.bank.current() != pattern_before {
+            self.pending_pattern = None;
         }
 
         // A learned pattern controller cannot move the bank from the MIDI thread, so it leaves a request and this is
@@ -151,8 +156,18 @@ impl eframe::App for TakkaApp {
         // knob rides the groove instead of restarting it. The readout follows the held selection, so the player can see
         // where they are going before it is heard.
         if let Some(index) = self.state.take_pattern_request() {
-            self.pending_pattern = Some(index);
-            self.panel.pattern_id = PatternBank::id_of(index);
+            if index == self.bank.current() {
+                // A fader resting inside the zone it is already on asks for nothing; treating it as a swap would
+                // re-publish the pattern and mark the session unsaved every bar.
+                self.pending_pattern = None;
+                self.state.clear_pattern_selected();
+            } else {
+                // The selection is what the controller is holding from now on, even though the sound is still the old
+                // pattern: the pickup measures against this, or the next message would look like a hand on the knob.
+                self.state.set_pattern_selected(index);
+                self.pending_pattern = Some(index);
+                self.panel.pattern_id = PatternBank::id_of(index);
+            }
         }
         let position = self
             .state
@@ -166,9 +181,7 @@ impl eframe::App for TakkaApp {
             )
         {
             panel_ui::shortcuts::select_pattern(&self.state, &mut self.bank, index);
-            self.panel.pattern = self.state.pattern();
-            self.panel.pattern_id = PatternBank::id_of(self.bank.current());
-            self.state.set_pattern_index(self.bank.current());
+            panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
             self.panel.dirty = true;
             self.pending_pattern = None;
         }
@@ -218,12 +231,9 @@ impl eframe::App for TakkaApp {
                     self.save();
                     let saved = persist::new_song();
                     persist::apply_saved(&saved, &self.state, &mut self.bank);
-                    self.panel.pattern = self.state.pattern();
-                    self.panel.pattern_id = PatternBank::id_of(self.bank.current());
-                    self.state.set_pattern_index(self.bank.current());
+                    panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
                     // A held swap belongs to the song that was playing, not to this one.
                     self.pending_pattern = None;
-                    self.panel.selected = 0;
                     self.panel.songs.name = None;
                     self.panel.dirty = true;
                     if let Some(card) = self.panel.songs.card.as_mut() {
@@ -283,12 +293,9 @@ impl eframe::App for TakkaApp {
                     Ok(saved) => {
                         self.save();
                         persist::apply_saved(&saved, &self.state, &mut self.bank);
-                        self.panel.pattern = self.state.pattern();
-                        self.panel.pattern_id = PatternBank::id_of(self.bank.current());
-                        self.state.set_pattern_index(self.bank.current());
+                        panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
                         // A held swap belongs to the song that was playing, not to the one just loaded.
                         self.pending_pattern = None;
-                        self.panel.selected = 0;
                         self.panel.dirty = false;
                         self.panel.songs.name = Some(name.clone());
                         // The panel's own switches are a song's settings, so they come back with it.

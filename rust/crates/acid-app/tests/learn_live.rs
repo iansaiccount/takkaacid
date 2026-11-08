@@ -179,6 +179,18 @@ fn the_tempo_and_pattern_readouts_can_be_taught() {
         Step::Listening(CcTarget::Pattern),
         "the PATTERN readout asks for a pattern fader"
     );
+
+    // The engraving that used to be the learn target no longer answers: the readout is the target, and a static silkscreen
+    // that still reports clicks is the bug this codebase keeps meeting.
+    let mut panel = PanelState::default();
+    click(&ctx, &mut panel, &shared, learn_centre());
+    let engraving = switches::cell(layout(screen()).switches, switches::Switch::Pattern).center();
+    click(&ctx, &mut panel, &shared, engraving);
+    assert_eq!(
+        panel.learn,
+        Step::Choosing,
+        "the PATTERN engraving is not a learn target"
+    );
 }
 
 #[test]

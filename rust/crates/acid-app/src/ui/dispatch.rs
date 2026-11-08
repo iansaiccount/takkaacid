@@ -86,15 +86,13 @@ pub fn handle(
     if matches!(shortcut, shortcuts::Shortcut::ToggleHelp) {
         panel.help_visible = !panel.help_visible;
     }
-    // The selection names a position in the pattern on screen and the display names the pattern itself, so a
-    // new pattern starts at its first step and the display follows the bank.
+    // The selection names a position in the pattern on screen and the display names the pattern itself, so a new pattern
+    // starts at its first step: one helper, shared with a learned controller's swap and a song load.
     if matches!(
         shortcut,
         shortcuts::Shortcut::NextPattern | shortcuts::Shortcut::PrevPattern
     ) {
-        panel.selected = 0;
-        panel.pattern_id = PatternBank::id_of(bank.current());
-        super::clear::disarm(panel);
+        super::pattern_swap::adopt(panel, shared, bank);
     }
     Handled::Shortcut(shortcut)
 }

@@ -199,7 +199,7 @@ fn pattern_zone(index: usize) -> f32 {
 
 /// The pattern's number inside its bank, from an absolute index in the 64.
 fn pattern_number_of(index: usize) -> usize {
-    index % PATTERNS_PER_BANK
+    usize::from(acid_core::bank::PatternBank::id_of(index).number)
 }
 /// Where a control's knob currently sits, as a position rather than its own units.
 fn knob_value(state: &SharedState, target: CcTarget) -> Option<f32> {
@@ -216,7 +216,7 @@ fn knob_value(state: &SharedState, target: CcTarget) -> Option<f32> {
         CcTarget::Swing => Some(state.swing.get()),
         // The pattern selector's position is the middle of the zone the playing pattern occupies — the same mapping
         // `apply_cc` reads a fader with, so "has the fader reached it" means one thing on both sides.
-        CcTarget::Pattern => Some(pattern_zone(state.pattern_index())),
+        CcTarget::Pattern => Some(pattern_zone(state.pattern_selected())),
         // Not a dial: no pickup, and no position to compare against.
         CcTarget::Waveform => None,
     }
@@ -245,7 +245,16 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
     // pattern fader writes the middle of the zone it landed in, so staying inside the zone keeps it engaged.
     let written = match target {
         CcTarget::Pattern => pattern_zone(pattern_number(value)),
-        _ => knob,
+        CcTarget::Waveform
+        | CcTarget::Tuning
+        | CcTarget::Cutoff
+        | CcTarget::Resonance
+        | CcTarget::EnvMod
+        | CcTarget::Decay
+        | CcTarget::Accent
+        | CcTarget::Volume
+        | CcTarget::Tempo
+        | CcTarget::Swing => knob,
     };
     if takes_pickup(target)
         && let Some(slot) = slot(target)
@@ -476,6 +485,30 @@ mod tests {
         // From there it follows, so a sweep across the travel asks for each pattern in turn.
         apply_cc(&s, 21, 127);
         assert_eq!(s.take_pattern_request(), Some(7));
+    }
+
+    #[test]
+    fn a_sweep_keeps_turning_while_the_swap_waits_for_the_bar() {
+        // The swap is deferred, so the pattern that is *sounding* does not follow the fader between messages. The fader
+        // must keep turning: what it is holding is the selection, not the sound. Without that, the engaged check reads
+        // the fader's own last write against a value that has not moved and drops the sweep after one pattern.
+        let s = SharedState::new();
+        s.set_pattern_index(0);
+
+        // The fader arrives on the pattern that is playing and takes over.
+        assert!(apply_cc(&s, 21, 8));
+        assert_eq!(s.take_pattern_request(), Some(0));
+
+        // Three more zones: the sound does not move, the selection does.
+        for (value, selected) in [(24, 1), (40, 2), (56, 3)] {
+            s.set_pattern_selected(selected - 1);
+            assert!(apply_cc(&s, 21, value));
+            assert_eq!(
+                s.take_pattern_request(),
+                Some(selected),
+                "CC {value} must still turn the pattern knob"
+            );
+        }
     }
 
     #[test]

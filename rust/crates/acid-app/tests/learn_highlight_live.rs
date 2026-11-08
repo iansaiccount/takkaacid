@@ -95,7 +95,7 @@ fn every_teachable_control_wears_the_pick_colour_while_choosing() {
     assert_eq!(panel.learn, acid_app::ui::learn::Step::Choosing);
 
     let output = run(&mut panel, &shared, vec![vec![]]);
-    // Seven tone knobs, VOLUME, the BPM readout, the PATTERN key and SHUFFLE.
+    // Seven tone knobs, VOLUME, the BPM readout, the PATTERN readout and SHUFFLE.
     assert_eq!(
         learn_strokes(&output),
         11,
