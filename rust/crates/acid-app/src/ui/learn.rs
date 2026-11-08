@@ -58,23 +58,9 @@ pub fn heard(shared: &SharedState) -> Option<u8> {
     }
 }
 
-/// The control a tone knob teaches. Index 0 is the waveform selector, whose detents a controller snaps onto; 1..=6 are
-/// the knobs left to right. Volume is not in the row — it has its own corner of the panel.
-pub fn control_for_knob(index: usize) -> Option<CcTarget> {
-    match index {
-        0 => Some(CcTarget::Waveform),
-        1 => Some(CcTarget::Tuning),
-        2 => Some(CcTarget::Cutoff),
-        3 => Some(CcTarget::Resonance),
-        4 => Some(CcTarget::EnvMod),
-        5 => Some(CcTarget::Decay),
-        6 => Some(CcTarget::Accent),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::knobs::Knob;
     use super::*;
 
     #[test]
@@ -92,11 +78,16 @@ mod tests {
     }
 
     #[test]
-    fn the_waveform_knob_can_be_taught_like_the_others() {
+    fn the_whole_knob_row_can_be_taught_from_the_catalogue() {
         // The switch was the one knob LEARN refused; it is a slot like any other now, and the controller's travel snaps
-        // onto its four faces.
-        assert_eq!(control_for_knob(0), Some(CcTarget::Waveform));
-        assert_eq!(control_for_knob(7), None, "the row has seven knobs");
+        // onto its four faces. Every knob in the row teaches something, and the switch is the first slot.
+        for knob in Knob::ALL {
+            assert!(
+                crate::midi::cc::slot(knob.learn_target()).is_some(),
+                "{knob:?} teaches a controller slot the MIDI side does not know"
+            );
+        }
+        assert_eq!(Knob::Waveform.learn_target(), CcTarget::Waveform);
         assert_eq!(crate::midi::cc::slot(CcTarget::Waveform), Some(0));
     }
 

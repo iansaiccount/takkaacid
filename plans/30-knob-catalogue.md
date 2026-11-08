@@ -102,3 +102,11 @@ knob — i.e. the catalogue, not the call sites, controls order.
       the catalogue's captions are the same seven strings.
       Ruling: `Knob::label` takes `&SharedState` (the plan's signature) because the waveform captions itself from the
       wave catalogue; the other six ignore it, which is cheaper than a second query path.
+- [x] **3. Learn and tips** — `tips::Control::knob(index)` and `learn::control_for_knob(index)` are gone; `Knob::tip()`
+      and `Knob::learn_target()` are the only mappings. `learn_live`'s index test became a click-through over the row, so
+      it now covers the wiring and not just the lookup.
+      Ruling: `control_for_knob` deleted rather than "made a `Knob` lookup" as the plan says — `mod.rs` already calls
+      `knob.learn_target()`, so a wrapper would be a second mapping over the same catalogue. Cost if wrong: a caller
+      outside this crate loses a helper it never had (the crate is an app, not a library).
+      Ruling: `tips`'s knob tests walk `Knob::ALL` and compare against `Control::ALL`'s first seven, so the tip table's
+      knob prefix and the drawing order are pinned to each other.

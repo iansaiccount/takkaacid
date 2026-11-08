@@ -86,19 +86,6 @@ impl Control {
         Control::Scale,
     ];
 
-    /// The knob in `index`'s slot, in the panel's knob order.
-    pub fn knob(index: usize) -> Control {
-        match index {
-            0 => Control::Waveform,
-            1 => Control::Tuning,
-            2 => Control::Cutoff,
-            3 => Control::Resonance,
-            4 => Control::EnvMod,
-            5 => Control::Decay,
-            _ => Control::Accent,
-        }
-    }
-
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
     pub fn tip(self) -> Tip {
         match self {
@@ -268,6 +255,7 @@ pub fn hover(response: &Response, state: &PanelState, control: Control) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::knobs::Knob;
     use super::*;
 
     #[test]
@@ -286,7 +274,7 @@ mod tests {
             assert_eq!(Control::ALL[index].tip(), *tip);
         }
         // The knobs are the front of the panel, and the TIPS key is the last tip.
-        assert_eq!(Control::knob(0), Control::ALL[0]);
+        assert_eq!(Knob::Waveform.tip(), Control::ALL[0]);
         assert_eq!(Control::Tooltips, Control::ALL[16]);
     }
 
@@ -334,8 +322,9 @@ mod tests {
 
     #[test]
     fn every_knob_slot_names_its_own_control() {
-        let knobbed: Vec<&str> = (0..7)
-            .map(|index| Control::knob(index).tip().title)
+        let knobbed: Vec<&str> = Knob::ALL
+            .iter()
+            .map(|knob| knob.tip().tip().title)
             .collect();
         assert_eq!(
             knobbed,
@@ -349,6 +338,14 @@ mod tests {
                 "ACCENT"
             ]
         );
+        // And the catalogue's slots are the table's knob prefix, so the two orders cannot drift apart.
+        for (index, knob) in Knob::ALL.iter().enumerate() {
+            assert_eq!(
+                knob.tip(),
+                Control::ALL[index],
+                "{knob:?} is in the wrong slot"
+            );
+        }
     }
 
     #[test]

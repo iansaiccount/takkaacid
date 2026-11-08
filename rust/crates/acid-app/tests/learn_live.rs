@@ -2,6 +2,7 @@
 
 use acid_app::midi::cc::{self, CcTarget};
 use acid_app::state::SharedState;
+use acid_app::ui::knobs::Knob;
 use acid_app::ui::layout::{knob_cells, layout};
 use acid_app::ui::learn::Step;
 use acid_app::ui::switches;
@@ -123,14 +124,25 @@ fn pressing_learn_again_gives_up() {
 }
 
 #[test]
-fn the_waveform_selector_is_a_learnable_knob_now() {
-    // Index 0 used to be refused; it is a slot like the others, and a controller snaps onto its four faces.
-    assert_eq!(
-        acid_app::ui::learn::control_for_knob(0),
-        Some(acid_app::midi::cc::CcTarget::Waveform)
-    );
-    for index in 1..=6 {
-        assert!(acid_app::ui::learn::control_for_knob(index).is_some());
+fn every_knob_in_the_row_can_be_taught_by_clicking_it() {
+    // Index 0 used to be refused; it is a slot like the others, and a controller snaps onto its four faces. Each cell is
+    // clicked while LEARN is asking, and the panel must start listening for *that* knob: the row and the learn map are
+    // both the catalogue's order, so a reordered catalogue shows up here rather than as a mislearned knob.
+    for (cell, knob) in layout(screen()).knobs.cells.into_iter().zip(Knob::ALL) {
+        let ctx = Context::default();
+        let shared = SharedState::new();
+        let mut panel = PanelState::default();
+        click(&ctx, &mut panel, &shared, learn_centre());
+        click(&ctx, &mut panel, &shared, cell.center());
+        assert_eq!(
+            panel.learn,
+            Step::Listening(knob.learn_target()),
+            "{knob:?} did not answer its own cell"
+        );
+        assert!(
+            cc::slot(knob.learn_target()).is_some(),
+            "{knob:?} teaches a slot the MIDI side does not know"
+        );
     }
 }
 
