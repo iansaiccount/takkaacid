@@ -409,9 +409,19 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
         // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and a learned controller
         // writes the same atomic, so the fader and the hand meet in one place.
-        if state.learn == learn::Step::Choosing {
-            // While a learn is choosing, the knob is a target rather than a dial: a click here says "teach the shuffle",
-            // it does not turn it. A control that looks idle but acts is the bug this panel keeps meeting.
+        //
+        // While a learn is choosing, the face stays on the panel — a control that disappears when the player is asked to
+        // click it cannot be clicked — and the hand turns a scratch value instead, exactly as the tone knobs do.
+        let choosing = state.learn == learn::Step::Choosing;
+        let before_swing = shared.swing.get();
+        let mut swing = before_swing;
+        let mut scratch = before_swing;
+        let response = {
+            let value = if choosing { &mut scratch } else { &mut swing };
+            perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", value)
+        };
+        tips::hover(&response, state, tips::Control::Shuffle);
+        if choosing {
             learn_pick(
                 ui,
                 state,
@@ -420,15 +430,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                 shuffle_cell,
                 midi::cc::CcTarget::Swing,
             );
-        } else {
-            let before_swing = shared.swing.get();
-            let mut swing = before_swing;
-            let response = perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", &mut swing);
-            tips::hover(&response, state, tips::Control::Shuffle);
+        } else if swing != before_swing {
             shared.swing.set(swing.clamp(0.0, 1.0));
-            if shared.swing.get() != before_swing {
-                state.dirty = true;
-            }
+            state.dirty = true;
         }
 
         // DENSITY is how much of the pattern a roll fills: 0 leaves the one guaranteed step, 1 fills every step.

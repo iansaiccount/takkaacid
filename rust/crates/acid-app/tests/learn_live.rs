@@ -198,3 +198,33 @@ fn clicking_the_shuffle_knob_while_choosing_asks_for_a_shuffle_fader() {
     assert_eq!(panel.learn, Step::Listening(CcTarget::Swing));
     assert_eq!(shared.swing.get(), 0.0, "picking a knob does not turn it");
 }
+
+/// The knob must stay on the panel while a learn is choosing.
+///
+/// A control that disappears when the player is asked to click it cannot be found, let alone clicked: the first cut of
+/// the learn pick skipped drawing the knob entirely and left an empty cell. Hovering is the cheapest way to see a widget
+/// from a headless frame — a knob asks for the vertical-drag cursor, an empty cell asks for nothing.
+#[test]
+fn the_shuffle_knob_stays_on_the_panel_while_a_learn_is_choosing() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+
+    click(&ctx, &mut panel, &shared, learn_centre());
+    assert_eq!(panel.learn, Step::Choosing);
+
+    let at = layout(screen()).perform.cells[2].center();
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        events: vec![Event::PointerMoved(at)],
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+    output.textures_delta.clear();
+
+    assert_eq!(
+        output.platform_output.cursor_icon,
+        eframe::egui::CursorIcon::ResizeVertical,
+        "the shuffle knob is not there to click"
+    );
+}
