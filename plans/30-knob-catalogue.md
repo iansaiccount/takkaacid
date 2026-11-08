@@ -87,3 +87,18 @@ knob — i.e. the catalogue, not the call sites, controls order.
 - No behaviour change: this is a rename-and-centralise round. Every existing test must pass untouched, and the new tests
   exist to prove the catalogue — not to replace the behavioural ones.
 - Not a rewrite of the panel's drawing; `knob::knob` stays as it is.
+
+## Progress
+
+- [x] **1. `ui::knobs`** — `Knob`, `Kind`, `ALL`, `index`/`from_index`/`kind`/`label`/`tip`/`learn_target`/`read`/`publish`, with
+      five unit tests (slot order, caption+tip, publish/read round trip, the waveform is the only switch, distinct learn
+      targets). `29a6b7b`.
+- [x] **2. The drawing loop** — `mod.rs` walks `Knob::ALL` zipped with the row's cells: the label, the tooltip, the
+      publish and the learn target all come from the knob, and the two masters of a switch are the `Kind::Switch` arm of
+      one `match knob.kind()`. The three `match`es on the slot are gone (`knob_live`, `panel_layout`, `tips_live` green
+      untouched).
+      Ruling: `theme::KNOB_LABELS` deleted, not kept beside `Knob::label` — it was the seventh copy of the captions and
+      nothing else read it; `knob::the_knob_is_not_a_font_glyph` now walks the catalogue instead. Cost if wrong: none,
+      the catalogue's captions are the same seven strings.
+      Ruling: `Knob::label` takes `&SharedState` (the plan's signature) because the waveform captions itself from the
+      wave catalogue; the other six ignore it, which is cheaper than a second query path.

@@ -45,6 +45,8 @@ use acid_core::timing::DEFAULT_BPM;
 use crate::midi;
 use crate::state::SharedState;
 
+use self::knobs::{Kind, Knob};
+
 use acid_core::pitch::Pitch;
 
 /// Everything the panel needs in order to draw itself.
@@ -298,38 +300,37 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
 
-    for (i, cell) in l.knobs.cells.iter().enumerate() {
+    // The row is the catalogue, walked in drawing order: a knob's slot, caption, tooltip, learn target and the atomic it
+    // drives all come from `Knob`, so this loop cannot disagree with the saved file or the learn map.
+    for (knob, cell) in Knob::ALL.iter().zip(l.knobs.cells.iter()) {
+        let knob = *knob;
+        let slot = knob.index();
         let diameter = cell.width().min(cell.height() * 0.78);
         let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(cell.shrink(2.0 * s)));
         cell_ui.set_clip_rect(*cell);
-        let before = state.knobs[i];
+        let before = state.knobs[slot];
         // While choosing a knob to teach, the knobs stand back: a click picks the knob instead of turning it, and
         // the turn goes into a scratch value so a stray drag cannot move the patch either.
         let choosing = state.learn == learn::Step::Choosing;
-        let mut scratch = state.knobs[i];
-        // The WAVEFORM knob is a switch, not a dial: its caption names the wave it is on, and its value is snapped to
-        // the nearest detent after the hand lets go, so it can never rest between two waves. The caption is read before
-        // the knob borrows its value.
-        let label = if i == 0 {
-            waveform_from_position(state.knobs[0]).name()
-        } else {
-            theme::KNOB_LABELS[i]
-        };
+        let mut scratch = before;
+        // The caption is read before the knob borrows its value: the switch names the wave it is on.
+        let label = knob.label(shared);
         let target = if choosing {
             &mut scratch
         } else {
-            &mut state.knobs[i]
+            &mut state.knobs[slot]
         };
         let response = knob::knob(
             &mut cell_ui,
-            egui::Id::unique(("knob", i)),
+            egui::Id::unique(("knob", slot)),
             label,
             target,
             diameter,
         );
-        tips::hover(&response, state, tips::Control::knob(i));
-        if i == 0 && !choosing {
-            waveform_detents(cell_ui.painter(), *cell, state.knobs[0], s);
+        tips::hover(&response, state, knob.tip());
+        // A switch wears its detents, so the faces it may snap to are visible before the hand lets go.
+        if knob.kind() == Kind::Switch && !choosing {
+            waveform_detents(cell_ui.painter(), *cell, state.knobs[slot], s);
         }
         if choosing {
             // Every knob can be taught, so while a learn is choosing each one wears the pick colour: the question is
@@ -337,55 +338,42 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             panel::learn_highlight(ui.painter(), *cell, s);
             let hit = ui.interact(
                 *cell,
-                ui.scope_id().with(("learn-knob", i)),
+                ui.scope_id().with(("learn-knob", slot)),
                 egui::Sense::click(),
             );
-            if hit.clicked()
-                && let Some(control) = learn::control_for_knob(i)
-            {
-                state.learn = learn::choose(control, shared);
+            if hit.clicked() {
+                state.learn = learn::choose(knob.learn_target(), shared);
             }
             continue;
         }
         // Publish straight away: the audio thread's next block picks it up, so the move is heard now.
         //
-        // The switch has two masters: the hand and a learned controller. While the hand is on the knob it wins; when it
+        // A switch has two masters: the hand and a learned controller. While the hand is on the knob it wins; when it
         // is not, the shared value is the truth, so a fader moves the face. Snapping happens on release, never mid-drag —
         // a frame-by-frame snap pulls the position back onto the detent it started from, and a slow drag could never
         // cross a midpoint.
-        let switch_moved = i == 0 && state.knobs[0] != before;
-        match i {
-            0 => {
+        let moved = state.knobs[slot] != before;
+        match knob.kind() {
+            Kind::Switch => {
                 if response.dragged() {
-                    shared.set_waveform(waveform_from_position(state.knobs[0]));
+                    knob.publish(shared, state.knobs[slot]);
                 } else {
-                    let hand = waveform_from_position(state.knobs[0]);
+                    let hand = waveform_from_position(state.knobs[slot]);
                     // The hand's own move wins: the wheel, or a drag that has just ended. Otherwise the switch is where
                     // the shared state says, which is where a learned controller put it.
-                    let face = if switch_moved || shared.waveform() == hand {
+                    let face = if moved || shared.waveform() == hand {
                         hand
                     } else {
                         shared.waveform()
                     };
-                    state.knobs[0] = waveform_position(face);
-                    shared.set_waveform(face);
+                    knob.publish(shared, waveform_position(face));
+                    state.knobs[slot] = knob.read(shared);
                 }
             }
-            1 => shared.tuning.set(state.knobs[1]),
-            2 => shared.cutoff.set(state.knobs[2]),
-            3 => shared.resonance.set(state.knobs[3]),
-            4 => shared.env_mod.set(state.knobs[4]),
-            5 => shared.decay.set(state.knobs[5]),
-            6 => shared.accent.set(state.knobs[6]),
-            _ => {}
+            Kind::Dial => knob.publish(shared, state.knobs[slot]),
         }
-        // Only the hand marks the session unsaved: the switch adopting a learned controller's value is the panel
+        // Only the hand marks the session unsaved: a switch adopting a learned controller's value is the panel
         // catching up, not an edit the player made.
-        let moved = if i == 0 {
-            switch_moved
-        } else {
-            state.knobs[i] != before
-        };
         if moved {
             state.dirty = true;
         }

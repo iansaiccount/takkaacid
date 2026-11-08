@@ -116,6 +116,7 @@ pub fn knob(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::knobs::Knob;
 
     #[test]
     fn dragging_up_180_pixels_covers_the_whole_range() {
@@ -149,11 +150,14 @@ mod tests {
 
     #[test]
     fn the_knob_is_not_a_font_glyph() {
-        // Guard from AGENTS.md: icons must be drawn or loaded, never a font glyph.
-        for label in theme::KNOB_LABELS {
+        // Guard from AGENTS.md: icons must be drawn or loaded, never a font glyph. The captions live in the catalogue
+        // now, so the guard walks it: a knob cannot ship a legend the bundled font would draw as a box.
+        let shared = crate::state::SharedState::new();
+        for knob in Knob::ALL {
+            let label = knob.label(&shared);
             assert!(label.is_ascii(), "knob label must be ASCII: {label}");
         }
-        assert_eq!(theme::KNOB_LABELS.len(), 7);
+        assert_eq!(Knob::ALL.len(), 7);
     }
 
     /// Drive one knob through a list of frames of raw input, returning the final value.
