@@ -62,6 +62,24 @@ pub fn midi_status_rect(top: Rect, scale: f32) -> Rect {
     )
 }
 
+/// Outline a control that a learn can pick, while a learn is choosing.
+///
+/// Drawn just outside the control's own rect so it never covers the face it is pointing at, in a colour no other light on
+/// the panel uses: the player is being asked "which one?", and the answer has to be visible at a glance.
+pub fn learn_highlight(painter: &Painter, rect: Rect, scale: f32) {
+    painter.rect_stroke(
+        learn_highlight_bounds(rect, scale),
+        6.0 * scale,
+        egui::Stroke::new(2.0 * scale, theme::LEARN_TARGET),
+        egui::StrokeKind::Outside,
+    );
+}
+
+/// The outline's rect: the control's own, grown so the stroke sits outside it and never covers the face it points at.
+pub fn learn_highlight_bounds(rect: Rect, scale: f32) -> Rect {
+    rect.expand(2.5 * scale)
+}
+
 /// The saved-or-unsaved word: right end of the wordmark's corner, clear of the `?` that opens the help card.
 pub fn save_indicator_rect(top: Rect, scale: f32) -> Rect {
     let brand = brand_rect(top);

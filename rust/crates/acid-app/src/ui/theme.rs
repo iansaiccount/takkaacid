@@ -52,6 +52,12 @@ pub const TEXT: Color32 = Color32::from_rgb(0xF5, 0xF0, 0xE0);
 /// Step keycap face.
 pub const WHITE_KEY: Color32 = Color32::from_rgb(0xE8, 0xE2, 0xD0);
 
+/// The "you can pick this" colour while a learn is choosing.
+///
+/// Cyan against amber: nearly complementary, so it reads as a different kind of light rather than a brighter one of the
+/// panel's own. Nothing else on the face is this colour, so it cannot be mistaken for a lit key.
+pub const LEARN_TARGET: Color32 = Color32::from_rgb(0x3D, 0xE8, 0xF0);
+
 /// The silkscreen font at a given size.
 pub fn legend(size: f32) -> FontId {
     FontId::new(size, egui::FontFamily::Proportional)

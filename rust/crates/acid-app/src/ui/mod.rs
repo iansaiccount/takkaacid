@@ -239,7 +239,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         s,
     );
     // Both readouts can be taught while a learn is choosing: click PATTERN and the next controller picks the pattern,
-    // click the BPM and the next controller sets the tempo.
+    // click the BPM and the next controller sets the tempo. While choosing they wear the pick colour like the knobs.
+    if state.learn == learn::Step::Choosing {
+        panel::learn_highlight(ui.painter(), panel::tempo_display_rect(l.top), s);
+        panel::learn_highlight(
+            ui.painter(),
+            switches::cell(l.switches, switches::Switch::Pattern),
+            s,
+        );
+    }
     learn_pick(
         ui,
         state,
@@ -323,6 +331,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             waveform_detents(cell_ui.painter(), *cell, state.knobs[0], s);
         }
         if choosing {
+            // Every knob can be taught, so while a learn is choosing each one wears the pick colour: the question is
+            // "which one?", and the answer has to be visible without hunting.
+            panel::learn_highlight(ui.painter(), *cell, s);
             let hit = ui.interact(
                 *cell,
                 ui.scope_id().with(("learn-knob", i)),
@@ -422,6 +433,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         };
         tips::hover(&response, state, tips::Control::Shuffle);
         if choosing {
+            panel::learn_highlight(ui.painter(), shuffle_cell, s);
             learn_pick(
                 ui,
                 state,
@@ -501,6 +513,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         volume_rect.width(),
     );
     if choosing {
+        panel::learn_highlight(ui.painter(), volume_rect, s);
         if ui
             .interact(
                 volume_rect,
