@@ -101,3 +101,16 @@ The player found the transport row bleeding outside the silkscreen frame, and as
 - **`PanelState::set_scale` / `set_density`.** The SCALE knob's position and the scale itself are one setting in two
   fields — the panel snaps the scale from the knob whenever the hand is off it — so a bare assignment to `scale` was
   undone on the next frame. The setters keep them in step, and the song-load path uses them.
+
+## Revision — clusters, not halves
+
+The first cut split the row into two halves of three evenly spread cells. The player's eye wanted tighter: the three
+randomiser controls together on the right, the shuffle alongside the octave keys, and one clear gap between the groups.
+
+So `perform_cells` no longer divides the row. Each cell is a fixed measure — `PERFORM_CELL_WIDTH` × the row's height,
+about 84 px at 1× — which is a knob and its caption, nothing more. The left cluster starts at the left wall and the right
+cluster hangs from the right wall, so the spare face in the middle *is* the gap: roughly two thirds of the row at 980
+wide. Inside a cluster the cells sit one `theme::GAP` apart, which is what makes them read as one group.
+
+Cells clamp if a narrow window cannot fit six of them plus the gap; the last cell in the right cluster snaps to the wall,
+so float rounding can never leave it a fraction of a pixel outside its band.

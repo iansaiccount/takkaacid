@@ -16,9 +16,9 @@ pub const PERFORM_COUNT: usize = PERFORM_LEFT + PERFORM_RIGHT;
 pub const PERFORM_LEFT: usize = 3;
 /// Its right group: randomise, density, scale — the things that shape the next roll.
 pub const PERFORM_RIGHT: usize = 3;
-/// The gap between the two groups, as a multiple of `theme::GAP`: wider than the gap between cells, because the row holds
-/// two sections rather than one run of six controls.
-const PERFORM_SPLIT: f32 = 4.0;
+/// How wide a performance cell is, as a multiple of the row's height: enough for a knob and the caption under it, tight
+/// enough that the three in a cluster read as one group rather than a third of the panel each.
+const PERFORM_CELL_WIDTH: f32 = 1.35;
 /// Step keys in the row.
 pub const STEP_COUNT: usize = 16;
 
@@ -130,20 +130,42 @@ pub fn knob_cells(area: Rect, count: usize) -> Vec<Rect> {
         .collect()
 }
 
-/// The performance row: two groups with a gap between them, left group first.
+/// The performance row: two clusters, one against each wall, with open face between them.
 ///
-/// Octave and shuffle are played while the pattern runs; randomise, density and scale shape the next roll. One run of six
-/// equal cells would put a play control next to a dice dial, so the row is cut in two and the gap says so.
+/// Octave and shuffle are played while the pattern runs; randomise, density and scale shape the next roll. Spreading six
+/// equal cells across the whole row would put a play control next to a dice dial and make the row read as one run, so
+/// each group is a tight cluster — a knob's width plus its caption — and the space left over *is* the gap.
 pub fn perform_cells(area: Rect) -> Vec<Rect> {
-    let split = theme::GAP * PERFORM_SPLIT;
-    let halves = (area.width() - split) / 2.0;
-    let left = Rect::from_min_max(area.min, Pos2::new(area.left() + halves, area.bottom()));
-    let right = Rect::from_min_max(
-        Pos2::new(left.right() + split, area.top()),
-        Pos2::new(area.right(), area.bottom()),
-    );
-    let mut cells = knob_cells(left, PERFORM_LEFT);
-    cells.extend(knob_cells(right, PERFORM_RIGHT));
+    // A cell wide enough for a knob and its caption, but never so wide that six of them plus the space between the two
+    // clusters would not fit side by side.
+    let roomy = area.height() * PERFORM_CELL_WIDTH;
+    let squeeze = (area.width() - theme::GAP * (PERFORM_COUNT as f32 + 2.0)) / PERFORM_COUNT as f32;
+    let width = roomy.min(squeeze).max(0.0);
+    let stride = width + theme::GAP;
+
+    let cell = |left: f32| {
+        Rect::from_min_max(
+            Pos2::new(left, area.top()),
+            Pos2::new(left + width, area.bottom()),
+        )
+    };
+
+    let mut cells = Vec::with_capacity(PERFORM_COUNT);
+    for index in 0..PERFORM_LEFT {
+        cells.push(cell(area.left() + index as f32 * stride));
+    }
+    // The right cluster hangs from the right wall, so the two groups hug their own ends and the middle stays clear.
+    let right_start =
+        area.right() - (PERFORM_RIGHT as f32 * width + (PERFORM_RIGHT - 1) as f32 * theme::GAP);
+    for index in 0..PERFORM_RIGHT {
+        let mut rect = cell(right_start + index as f32 * stride);
+        // The last cell snaps to the wall: float rounding must never leave a cell a fraction of a pixel outside the band
+        // it belongs to.
+        if index + 1 == PERFORM_RIGHT {
+            rect.max.x = area.right().max(rect.min.x);
+        }
+        cells.push(rect);
+    }
     cells
 }
 
@@ -237,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn the_performance_row_is_two_groups_with_a_gap_between_them() {
+    fn the_performance_row_is_two_clusters_against_each_wall() {
         let l = layout(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE));
         assert_eq!(l.perform.cells.len(), PERFORM_LEFT + PERFORM_RIGHT);
 
@@ -247,11 +269,23 @@ mod tests {
             l.perform.cells[PERFORM_LEFT - 1],
             l.perform.cells[PERFORM_LEFT],
         );
+        // Inside a cluster the cells sit one gap apart; between the clusters there is most of the row.
         assert!(
-            split > inside * 2.0,
-            "the two sections should be visibly apart: {split} vs {inside}"
+            (inside - theme::GAP).abs() < 0.01,
+            "cells in a cluster should be one gap apart: {inside}"
         );
-        // Everything stays inside its band, and each group is an even run.
+        assert!(
+            split > l.perform.area.width() / 3.0,
+            "the clusters should be far apart: {split} of {}",
+            l.perform.area.width()
+        );
+
+        // Each cluster hugs its own wall, so the clear face between them *is* the gap.
+        assert!((l.perform.cells[0].left() - l.perform.area.left()).abs() < 0.01);
+        assert!(
+            (l.perform.cells[PERFORM_COUNT - 1].right() - l.perform.area.right()).abs() < 0.01,
+            "the randomiser cluster should reach the right wall"
+        );
         for cell in &l.perform.cells {
             assert!(l.perform.area.contains_rect(*cell));
         }
@@ -262,6 +296,8 @@ mod tests {
             let width = group[0].width();
             assert!(group.iter().all(|cell| (cell.width() - width).abs() < 0.5));
         }
+        // A cluster is a knob's worth of room, not a third of the panel each.
+        assert!(l.perform.cells[0].width() < l.perform.area.width() / 4.0);
     }
 
     #[test]
