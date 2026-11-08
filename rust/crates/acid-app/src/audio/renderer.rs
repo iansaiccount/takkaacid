@@ -3,6 +3,12 @@
 //! `apply` is the only place a parameter reaches the engine, so the mapping is unit-testable without a
 //! sound card. `AudioRenderer` reads the shared state once per block, swaps the sequencer's pattern only
 //! when the UI actually published a new one, and copies the mono result to every channel.
+//!
+//! **Known exception to "no allocation here":** retiring a pattern drops the previous `Arc<Pattern>` on the audio thread
+//! (`self.pattern = latest`). It normally frees nothing, because the UI's bank holds the same pattern, but it is a freed
+//! `Arc` in principle and the allocator is not async-signal-safe. The clean fix is to hand the retired `Arc` back to the
+//! UI to drop, or to stop holding an `Arc` here at all and copy the sixteen steps; both are larger changes than the risk
+//! warrants today, so the exception is named rather than hidden.
 
 use std::sync::Arc;
 
@@ -78,17 +84,27 @@ impl AudioRenderer {
 
         // MIDI: a rising gate starts a note, a falling one releases it. Only edges act, so a held note is
         // not retriggered every block. The sequencer keeps running underneath — this plays over the pattern.
+        // `Acquire` pairs with the `Release` store on the gate, so the frequency, accent and velocity written before it
+        // are visible here. A `Relaxed` load could start the previous note's pitch for one block.
         let gate = self
             .state
             .midi_gate
-            .load(std::sync::atomic::Ordering::Relaxed);
+            .load(std::sync::atomic::Ordering::Acquire);
         if gate != self.midi_gate_on {
             if gate {
-                self.engine.note_on(
+                // The audition plays at the velocity the key was struck, so what the player hears is what the step will
+                // carry — a soft touch used to sound at full level and then write itself 12 dB quieter.
+                let velocity = self
+                    .state
+                    .midi_velocity
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    .clamp(0, 127) as u8;
+                self.engine.note_at(
                     self.state.midi_hz.get(),
                     self.state
                         .midi_accent
                         .load(std::sync::atomic::Ordering::Relaxed),
+                    velocity,
                 );
             } else {
                 self.engine.note_off();

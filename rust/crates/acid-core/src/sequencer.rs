@@ -60,6 +60,10 @@ impl Sequencer {
     /// Start at step 0. The note sounds on the first sample rendered afterwards.
     pub fn start(&mut self) {
         self.running = true;
+        // The clock kept counting through the stop, so it has to be put back on the downbeat: otherwise the first step
+        // after RUN is whatever fraction of a step the previous run happened to leave, and with swing it can even be the
+        // short half of the pair.
+        self.clock.restart();
         self.position = 0;
         self.prev_slide = false;
         self.trigger_pending = true;

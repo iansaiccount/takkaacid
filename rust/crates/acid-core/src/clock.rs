@@ -58,6 +58,17 @@ impl Clock {
         self.step_index
     }
 
+    /// Put the clock back on step 0 with a whole step in hand.
+    ///
+    /// Stopping the transport does not stop the clock — it only stops the sequencer from rendering, so `remaining` is
+    /// frozen wherever the last run left it. A restart that skipped this would give the downbeat whatever fraction of a
+    /// step was left over: press RUN 100 ms into a 115 ms step and the first note is a 15 ms blip. It also resets the
+    /// index, because swing derives a step's length from the clock's own index and a restart at position 0 on an odd
+    /// index would start the bar off-swing.
+    pub fn restart(&mut self) {
+        self.step_index = 0;
+        self.remaining = step_duration_samples(0, self.bpm, self.sample_rate, self.swing);
+    }
     /// Samples left before the next boundary — how far the caller may render before it must
     /// reconsider the pattern.
     pub fn samples_until_next_step(&self) -> f64 {

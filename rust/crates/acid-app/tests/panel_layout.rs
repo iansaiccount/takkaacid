@@ -19,7 +19,14 @@ fn the_panel_never_overlaps_itself_at_any_reasonable_size() {
         let l = layout(Rect::from_min_size(Pos2::ZERO, egui::vec2(w, h)));
 
         // Bands must stack without touching each other.
-        let bands = [l.top, l.knobs.area, l.steps, l.switches, l.transport];
+        let bands = [
+            l.top,
+            l.knobs.area,
+            l.perform.area,
+            l.steps,
+            l.switches,
+            l.transport,
+        ];
         for (i, a) in bands.iter().enumerate() {
             for b in bands.iter().skip(i + 1) {
                 assert!(!a.intersects(*b), "bands {} overlap at {w}x{h}", i);

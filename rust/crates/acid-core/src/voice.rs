@@ -16,8 +16,8 @@ pub struct VoiceParams {
     pub accent: f32,
 }
 
-/// How much louder an accented step is, at a fully clockwise ACCENT knob: +6 dB, which is the lift a 303's accent
-/// gives. The knob scales it, so at zero an accent is neither louder nor brighter.
+/// How much louder an accented step is, at a fully clockwise ACCENT knob: 1.6x, a little over +4 dB, which is the lift
+/// a 303's accent gives. The knob scales it, so at zero an accent is neither louder nor brighter.
 pub const ACCENT_GAIN: f32 = 1.6;
 /// How far an accent's filter kick opens the cut-off, in octaves, at a fully clockwise ACCENT knob.
 pub const ACCENT_SWEEP_OCTAVES: f32 = 3.0;

@@ -84,9 +84,14 @@ pub fn handle(event: MidiEvent, state: &SharedState) -> bool {
             crate::trace::note("midi in", || format!("note {note} velocity {velocity}"));
             state.midi_hz.set(note_hz(note));
             state
+                .midi_velocity
+                .store(u32::from(velocity), Ordering::Relaxed);
+            state
                 .midi_accent
                 .store(is_accent(velocity), Ordering::Relaxed);
-            state.midi_gate.store(true, Ordering::Relaxed);
+            // `Release` here and `Acquire` on the read: the frequency and velocity written above must be visible before
+            // the gate that says "play this note". Without it the audio thread can start the previous note's pitch.
+            state.midi_gate.store(true, Ordering::Release);
             // The panel decides whether this is an audition or a note for the selected step (step mode, or shift
             // held): the MIDI thread only says that a note arrived, which one, and how hard it was struck.
             state.notes.push(note, velocity);

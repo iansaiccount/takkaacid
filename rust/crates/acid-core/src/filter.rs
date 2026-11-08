@@ -1,8 +1,9 @@
 //! Four-pole resonant lowpass, zero-delay-feedback (TPT) ladder.
 //!
-//! Four one-pole TPT integrators in series with a feedback path from the last stage. Cutoff is
-//! logarithmic in the UI but linear here; the coefficient is rebuilt only when the cutoff changes,
-//! never per sample.
+//! Four one-pole TPT integrators in series with a feedback path from the last stage. Cutoff is logarithmic in the UI but
+//! linear here. The coefficients are rebuilt whenever the cutoff changes — and the voice changes it **every sample**,
+//! because the filter envelope is a per-sample signal; what the filter never does is rebuild them for an unchanged
+//! cutoff.
 
 /// Lowest cutoff the filter will accept.
 pub const MIN_CUTOFF_HZ: f32 = 20.0;

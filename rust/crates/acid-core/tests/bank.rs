@@ -65,3 +65,42 @@ fn selecting_out_of_range_clamps_instead_of_losing_the_bank() {
         "a stray index reads the last pattern"
     );
 }
+
+#[test]
+fn a_truncated_bank_is_repaired_rather_than_panicking() {
+    // A save file is JSON a human may edit, and a shortened `patterns` array used to index out of bounds on the very
+    // first read — taking the app down at startup, before anything could be shown or repaired.
+    let mut short: PatternBank =
+        serde_json::from_value(short_bank_json(1, 5)).expect("a short bank still parses");
+    assert_eq!(short.pattern_count(), 1, "the file really is short");
+
+    // Reading before the repair must not panic either: `get` is on the audio path.
+    assert_eq!(short.get(5).steps.len(), 16);
+
+    short.normalise();
+    assert_eq!(short.pattern_count(), acid_core::bank::TOTAL_PATTERNS);
+    assert_eq!(
+        short.current(),
+        0,
+        "the selection is clamped into what exists"
+    );
+}
+
+#[test]
+fn a_bank_with_no_patterns_at_all_reads_silence_instead_of_panicking() {
+    let empty: PatternBank =
+        serde_json::from_value(short_bank_json(0, 7)).expect("an empty bank parses");
+    assert_eq!(empty.get(7).steps.len(), 16);
+    assert!(!empty.get(7).steps.iter().any(|step| step.on));
+}
+
+/// A real bank as JSON with its `patterns` array cut down to `keep` entries and its selection set to `current` — the shape
+/// a truncated or hand-edited save file arrives in.
+fn short_bank_json(keep: usize, current: usize) -> serde_json::Value {
+    let mut value = serde_json::to_value(PatternBank::new_empty()).expect("a bank serialises");
+    let patterns = value["patterns"].as_array().expect("patterns is an array");
+    let kept = patterns[..keep].to_vec();
+    value["patterns"] = serde_json::Value::Array(kept);
+    value["current"] = serde_json::json!(current);
+    value
+}

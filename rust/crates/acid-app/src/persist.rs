@@ -317,8 +317,9 @@ pub fn sanitize(state: &mut SavedState) {
     for cc in &mut state.cc_map {
         *cc = (*cc).min(127);
     }
-    let current = state.bank.current();
-    state.bank.select(current);
+    // A hand-edited file can hold fewer patterns than the box has. Every accessor assumes the full catalogue, and `get`
+    // is on the audio path, so the bank is repaired before anything reads it.
+    state.bank.normalise();
 }
 
 /// Where named songs live: one file each, under the data directory.
@@ -377,8 +378,10 @@ pub fn save_song(dir: &Path, name: &str, state: &SavedState) -> Result<()> {
 pub fn load_song(dir: &Path, name: &str) -> Result<SavedState> {
     let path = song_path(dir, name);
     let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
-    let state: SavedState =
+    let mut state: SavedState =
         serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+    // A song is a save file like any other, and it may be hand-edited: sanitise before anyone reads its bank.
+    sanitize(&mut state);
     Ok(state.upgraded())
 }
 

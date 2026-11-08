@@ -118,3 +118,36 @@ fn swing_trades_time_between_even_and_odd_steps() {
         c.samples_until_next_step()
     );
 }
+
+#[test]
+fn a_restart_hands_the_downbeat_a_whole_step_however_late_it_was_stopped() {
+    // The transport only stops rendering; the clock was frozen mid-step. A restart that left `remaining` alone made the
+    // first step after RUN a random fraction of a beat — a click instead of a downbeat.
+    let mut c = Clock::new(48_000.0);
+    c.set_bpm(120.0);
+    c.advance_by(4_000); // 2 000 samples into step 0
+    assert!((c.samples_until_next_step() - 2_000.0).abs() < 1e-6);
+
+    c.restart();
+    assert_eq!(c.step_index(), 0, "a restart begins a bar");
+    assert!((c.samples_until_next_step() - 6_000.0).abs() < 1e-6);
+}
+
+#[test]
+fn a_restart_at_full_swing_starts_on_the_long_step() {
+    // Swing takes its factor from the clock's own index, so a restart that kept an odd index would begin the bar
+    // off-swing: the downbeat would be the short half of the pair.
+    let mut c = Clock::new(48_000.0);
+    c.set_bpm(120.0);
+    c.set_swing(1.0);
+    c.advance_by(9_200); // onto step 1, the short one
+    assert_eq!(c.step_index(), 1);
+
+    c.restart();
+    assert_eq!(c.step_index(), 0);
+    assert!(
+        (c.samples_until_next_step() - 9_000.0).abs() < 1e-6,
+        "an even step at full swing is 1.5 steps long: {}",
+        c.samples_until_next_step()
+    );
+}

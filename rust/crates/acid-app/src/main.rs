@@ -260,7 +260,8 @@ impl eframe::App for TakkaApp {
                         self.panel.selected = 0;
                         self.panel.dirty = false;
                         self.panel.song_name = Some(name.clone());
-                        // The randomise dials are a song's own settings, so they come back with it.
+                        // The panel's own switches are a song's settings, so they come back with it.
+                        self.panel.tooltips = saved.tooltips;
                         self.panel.set_density(saved.density);
                         self.panel
                             .set_scale(panel_ui::scale::Scale::from_index(saved.scale as usize));

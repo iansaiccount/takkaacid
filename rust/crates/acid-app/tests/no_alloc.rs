@@ -64,15 +64,16 @@ fn the_audio_path_never_allocates() {
         "a knob sweep allocated {swept} times in the audio path"
     );
 
-    // A pattern switch is the one allowed exception: it publishes a new `Arc` once, not per block.
+    // A pattern switch is the one allowed exception, and even then the cost belongs to the UI. The fixture `Arc` is built
+    // *before* the counter resets, so this window measures only what the audio thread does — otherwise the fixture's own
+    // allocation sat inside it and a real audio-path allocation went unnoticed.
+    let switched = std::sync::Arc::new(Pattern::from_steps([Step::note(Pitch::C, 0); 16]));
     COUNT.store(0, Ordering::Relaxed);
-    s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
-        [Step::note(Pitch::C, 0); 16],
-    )));
+    s.set_pattern(switched);
     r.render_into(&mut out);
     let swap = COUNT.load(Ordering::Relaxed);
     assert!(
-        swap <= 2,
-        "a pattern swap should not be a steady-state cost: {swap}"
+        swap <= 1,
+        "a pattern swap allocated {swap} times in the audio path"
     );
 }

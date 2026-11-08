@@ -10,8 +10,11 @@ use super::layout::PanelLayout;
 use super::theme;
 
 /// The four corner screws, inset `MARGIN` from each corner, clockwise from top-left.
+///
+/// The inset scales with the panel like the frame it decorates: a fixed pixel inset would leave the screws proportionally
+/// further from the corner as the face shrinks.
 pub fn screw_positions(panel: Rect) -> [Pos2; 4] {
-    let inset = theme::MARGIN;
+    let inset = theme::MARGIN * panel.width() / theme::DESIGN_SIZE.x;
     [
         Pos2::new(panel.left() + inset, panel.top() + inset),
         Pos2::new(panel.right() - inset, panel.top() + inset),

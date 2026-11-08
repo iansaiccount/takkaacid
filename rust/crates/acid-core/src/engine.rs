@@ -164,9 +164,15 @@ impl Engine {
         self.sequencer.position()
     }
 
-    /// Play a note directly, outside the sequencer (auditioning and MIDI keys).
+    /// Play a note directly, outside the sequencer, at full velocity (the on-screen keyboard has no velocity to offer).
     pub fn note_on(&mut self, hz: f32, accent: bool) {
-        self.voice.note_on(hz, accent);
+        self.note_at(hz, accent, crate::pattern::DEFAULT_VELOCITY);
+    }
+
+    /// Play a note directly at a given velocity: a MIDI keyboard knows how hard the key was struck, and what the player
+    /// hears has to match the step it writes.
+    pub fn note_at(&mut self, hz: f32, accent: bool, velocity: u8) {
+        self.voice.note_at(hz, accent, velocity);
     }
 
     pub fn note_off(&mut self) {

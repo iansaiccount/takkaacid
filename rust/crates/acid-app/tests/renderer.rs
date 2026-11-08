@@ -104,3 +104,29 @@ fn a_midi_note_sounds_and_releases_over_a_silent_pattern() {
         "the note should have released"
     );
 }
+
+#[test]
+fn a_soft_midi_note_auditions_at_the_velocity_it_will_be_written_with() {
+    // What the player hears has to match the step that gets written. A key struck softly used to audition at full level
+    // and then save itself 12 dB quieter, which is exactly the mismatch the pitch change had already fixed.
+    let level = |velocity: u32| {
+        let s = SharedState::new();
+        s.midi_hz.set(220.0);
+        s.midi_velocity
+            .store(velocity, std::sync::atomic::Ordering::Relaxed);
+        s.midi_gate
+            .store(true, std::sync::atomic::Ordering::Release);
+        let mut r = AudioRenderer::new(48_000.0, 1, s, 2_048);
+        let mut buf = vec![0.0f32; 12_000];
+        r.render_into(&mut buf);
+        peak(&buf[1_000..])
+    };
+
+    let soft = level(30);
+    let hard = level(127);
+    assert!(soft > 0.0, "a soft note still has to sound");
+    assert!(
+        soft < hard * 0.5,
+        "velocity 30 ({soft}) should be clearly quieter than 127 ({hard})"
+    );
+}
