@@ -136,3 +136,35 @@ knob — i.e. the catalogue, not the call sites, controls order.
       wrong: a second place to touch when the control path learns something new about a knob.
       Ruling: the guard test passed before the derivation (the values were already right) — the change is what makes them
       stay right: `LEARNABLE` now follows `Knob::ALL`, and a catalogue of a different length fails to compile.
+
+## Review
+
+One fresh-context reviewer read the five commits against this plan (`67ebbbe` is the fix pass). Verdict: ready to merge
+with fixes; no Critical, two Important, nine Minor.
+
+Fixed (Critical/Important, one pass):
+
+- **The sweep missed the seventh slot list** — `ui/mod.rs` synced the six dials from their atomics line by line before
+  the loop, duplicating `Knob::read`. Now one walk over `Knob::ALL` that skips the switch. Cost of the miss: reordering a
+  knob *with* `index()` updated would have left one knob's face driving another knob's sound, green everywhere.
+- **The learn-slot test was tautological** — `LEARNABLE` is built from `learn_target`, so comparing the two proved
+  nothing; permuting two arms passed. It now pins the slot names and the factory CCs as literals (the contract a saved
+  `cc_map` is indexed by), and `knobs::each_knob_is_named_by_its_own_caption_tip_and_learn_target` pins each lookup to its
+  knob's own name. Mutation-checked: swapping the `Resonance`/`EnvMod` learn arms fails it.
+- Also taken from the Minors because they are compile-time for free: `kind()`'s `_ => Dial` arm is gone,
+  `layout::KNOB_COUNT` is `Knob::ALL.len()` (so the drawing loop's `zip` cannot silently drop a knob), the switch caption
+  reads `shared.waveform().name()` instead of round-tripping a position, `from_positions` documents that `volume` is not
+  one of the seven, and `midi::cc`'s header says eleven CCs.
+
+Deferred minors (recorded, not acted on):
+
+- `DEFAULT_CC` is still a positional literal; its pairing is now pinned by a test rather than derived from a
+  `factory_cc(target)` table.
+- `Knob::from_index` has no caller in `src/` (tests use it). Kept: it is the catalogue's own clamped lookup.
+- `midi::cc` imports `ui::knobs` (compile-time only, `learn_target` is a `const fn`). A top-level `crate::knobs` would
+  break the layer blur; not worth a move in this round.
+- `tests/persist.rs`'s positions loop re-asserts what the whole-array comparison already proved; it names the knob that
+  moved, which is why it stays.
+
+Not in this plan's scope, still stand from "Other tidying": splitting `ui/mod.rs` by row, `PanelState` sub-structs, one
+`Pickup`-shaped helper for the two-master controls, and rewriting `AGENTS.md`, which still describes another project.
