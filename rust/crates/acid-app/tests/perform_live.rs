@@ -8,7 +8,7 @@ use acid_core::pitch::Pitch;
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
 fn window() -> Rect {
-    Rect::from_min_size(Pos2::ZERO, vec2(980.0, 620.0))
+    Rect::from_min_size(Pos2::ZERO, vec2(980.0, 640.0))
 }
 
 fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: Vec<Event>) {
@@ -209,11 +209,10 @@ fn randomise_obeys_the_density_and_scale() {
 
     let ctx = Context::default();
     let shared = lit_shared();
-    let mut panel = PanelState {
-        density: 0.0,
-        scale: Scale::MinorPentatonic,
-        ..PanelState::default()
-    };
+    let mut panel = PanelState::default();
+    // Both setters keep the knob and the setting in step; setting the field alone is undone on the next frame.
+    panel.set_density(0.0);
+    panel.set_scale(Scale::MinorPentatonic);
 
     click(&ctx, &mut panel, &shared, cell(3));
     let after = shared.pattern();

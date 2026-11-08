@@ -84,3 +84,20 @@ density test silently measured the wrong pattern for a round.
 
 Mutation checks: replacing the scale lookup with a chromatic pick fails the scale test and the settings test; replacing
 the density compare with a coin flip fails the density test and the settings test.
+
+## Revision — the frame, and two groups
+
+The player found the transport row bleeding outside the silkscreen frame, and asked for the row to read as two sections.
+
+- **The panel is 640 tall, not 620.** The frame is drawn *inside* the panel edge, so the last band has to leave room for
+  it: at 620 the transport band ended at 614 while the inner rule sat at 609. Growing the panel to 640 keeps every band's
+  design pixels exactly as they were (transport still 570..614) and puts it 15 px inside the rule.
+- **`frame_lines` is scaled with the panel.** It used the raw `MARGIN`/`GAP`, so on a window below design size the frame
+  stayed pixels thick while the face shrank, and the top band could reach past it — a latent bug the new guard found. The
+  guard is `layout::every_band_sits_inside_the_frame_lines`, which walks all six bands against the inner rule at three
+  window sizes.
+- **The row is two groups.** `PERFORM_LEFT` (octave down, octave up, SHUFFLE) and `PERFORM_RIGHT` (RANDOM, DENSITY,
+  SCALE), cut by `perform_cells` with a 24 px gap: a play control and a dice dial are different jobs, and the gap says so.
+- **`PanelState::set_scale` / `set_density`.** The SCALE knob's position and the scale itself are one setting in two
+  fields — the panel snaps the scale from the knob whenever the hand is off it — so a bare assignment to `scale` was
+  undone on the next frame. The setters keep them in step, and the song-load path uses them.

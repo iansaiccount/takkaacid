@@ -11,7 +11,14 @@ use super::theme;
 /// Knobs across the panel.
 pub const KNOB_COUNT: usize = 7;
 /// Controls in the performance row: octave down, octave up, shuffle, randomise, density, scale.
-pub const PERFORM_COUNT: usize = 6;
+pub const PERFORM_COUNT: usize = PERFORM_LEFT + PERFORM_RIGHT;
+/// Its left group: octave down, octave up, shuffle — the things played while the pattern runs.
+pub const PERFORM_LEFT: usize = 3;
+/// Its right group: randomise, density, scale — the things that shape the next roll.
+pub const PERFORM_RIGHT: usize = 3;
+/// The gap between the two groups, as a multiple of `theme::GAP`: wider than the gap between cells, because the row holds
+/// two sections rather than one run of six controls.
+const PERFORM_SPLIT: f32 = 4.0;
 /// Step keys in the row.
 pub const STEP_COUNT: usize = 16;
 
@@ -33,17 +40,16 @@ pub struct PanelLayout {
     pub transport: Rect,
 }
 
-/// The five bands as fractions of the panel height, lifted from the design sketch: 16..72, 84..300,
 /// The six bands as fractions of the panel height: 16..72, 84..300, 312..374, 386..490, 502..560, 570..614 on a
-/// 620-tall panel. The first two keep the pixel heights they had at 560, so growing the panel for the performance row
+/// 640-tall panel. The first two keep the pixel heights they had at 560, so growing the panel for the performance row
 /// cost nothing above it; the step keys and the two key rows below are untouched too.
 const BANDS: [(f32, f32); 6] = [
-    (16.0 / 620.0, 72.0 / 620.0),
-    (84.0 / 620.0, 300.0 / 620.0),
-    (312.0 / 620.0, 374.0 / 620.0),
-    (386.0 / 620.0, 490.0 / 620.0),
-    (502.0 / 620.0, 560.0 / 620.0),
-    (570.0 / 620.0, 614.0 / 620.0),
+    (16.0 / 640.0, 72.0 / 640.0),
+    (84.0 / 640.0, 300.0 / 640.0),
+    (312.0 / 640.0, 374.0 / 640.0),
+    (386.0 / 640.0, 490.0 / 640.0),
+    (502.0 / 640.0, 560.0 / 640.0),
+    (570.0 / 640.0, 614.0 / 640.0),
 ];
 
 /// Side inset as a fraction of the panel width (16 of 980).
@@ -93,7 +99,7 @@ pub fn layout(window: Rect) -> PanelLayout {
         },
         perform: Row {
             area: perform_area,
-            cells: knob_cells(perform_area, PERFORM_COUNT),
+            cells: perform_cells(perform_area),
         },
         steps: band(3),
         switches: band(4),
@@ -122,6 +128,23 @@ pub fn knob_cells(area: Rect, count: usize) -> Vec<Rect> {
             Rect::from_min_max(Pos2::new(left, area.top()), Pos2::new(right, area.bottom()))
         })
         .collect()
+}
+
+/// The performance row: two groups with a gap between them, left group first.
+///
+/// Octave and shuffle are played while the pattern runs; randomise, density and scale shape the next roll. One run of six
+/// equal cells would put a play control next to a dice dial, so the row is cut in two and the gap says so.
+pub fn perform_cells(area: Rect) -> Vec<Rect> {
+    let split = theme::GAP * PERFORM_SPLIT;
+    let halves = (area.width() - split) / 2.0;
+    let left = Rect::from_min_max(area.min, Pos2::new(area.left() + halves, area.bottom()));
+    let right = Rect::from_min_max(
+        Pos2::new(left.right() + split, area.top()),
+        Pos2::new(area.right(), area.bottom()),
+    );
+    let mut cells = knob_cells(left, PERFORM_LEFT);
+    cells.extend(knob_cells(right, PERFORM_RIGHT));
+    cells
 }
 
 /// Sixteen keycap cells across the step band.
@@ -171,6 +194,34 @@ mod tests {
     }
 
     #[test]
+    fn every_band_sits_inside_the_frame_lines() {
+        // The silkscreen frame is inset from the panel, and everything drawn on the face must stay inside it. The
+        // transport row bled past the bottom line for a round because the panel grew for the performance row and the
+        // last band was still measured against the old height; this is the guard that would have caught it.
+        for size in [
+            egui::vec2(500.0, 340.0),
+            theme::DESIGN_SIZE,
+            egui::vec2(1600.0, 1040.0),
+        ] {
+            let l = layout(Rect::from_min_size(Pos2::ZERO, size));
+            let [_, inner] = crate::ui::panel::frame_lines(l.panel);
+            for (name, band) in [
+                ("top", l.top),
+                ("knobs", l.knobs.area),
+                ("perform", l.perform.area),
+                ("steps", l.steps),
+                ("switches", l.switches),
+                ("transport", l.transport),
+            ] {
+                assert!(
+                    inner.contains_rect(band),
+                    "{name} bleeds past the frame: {band:?} vs {inner:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn the_performance_row_sits_between_the_knobs_and_the_steps() {
         let l = layout(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE));
         assert_eq!(l.perform.cells.len(), PERFORM_COUNT);
@@ -183,6 +234,34 @@ mod tests {
         }
         // The step keys keep their height: the row was paid for by growing the panel, not by squeezing the instrument.
         assert!(step_cells(l.steps)[0].height() > 100.0);
+    }
+
+    #[test]
+    fn the_performance_row_is_two_groups_with_a_gap_between_them() {
+        let l = layout(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE));
+        assert_eq!(l.perform.cells.len(), PERFORM_LEFT + PERFORM_RIGHT);
+
+        let between = |a: Rect, b: Rect| b.left() - a.right();
+        let inside = between(l.perform.cells[0], l.perform.cells[1]);
+        let split = between(
+            l.perform.cells[PERFORM_LEFT - 1],
+            l.perform.cells[PERFORM_LEFT],
+        );
+        assert!(
+            split > inside * 2.0,
+            "the two sections should be visibly apart: {split} vs {inside}"
+        );
+        // Everything stays inside its band, and each group is an even run.
+        for cell in &l.perform.cells {
+            assert!(l.perform.area.contains_rect(*cell));
+        }
+        for group in [
+            &l.perform.cells[..PERFORM_LEFT],
+            &l.perform.cells[PERFORM_LEFT..],
+        ] {
+            let width = group[0].width();
+            assert!(group.iter().all(|cell| (cell.width() - width).abs() < 0.5));
+        }
     }
 
     #[test]
@@ -214,6 +293,6 @@ mod tests {
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(100.0, 100.0))) >= 0.65);
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(4000.0, 3000.0))) <= 1.6);
         let r = design_rect(Rect::from_min_size(Pos2::ZERO, egui::vec2(1600.0, 900.0)));
-        assert!((r.width() / r.height() - 980.0 / 620.0).abs() < 0.01);
+        assert!((r.width() / r.height() - 980.0 / 640.0).abs() < 0.01);
     }
 }

@@ -6,10 +6,10 @@
 use egui::{Color32, FontId};
 
 /// The panel's design size in logical pixels; every layout dimension is a fraction of this.
-pub const DESIGN_SIZE: egui::Vec2 = egui::vec2(980.0, 620.0);
+pub const DESIGN_SIZE: egui::Vec2 = egui::vec2(980.0, 640.0);
 
 /// Default window size — the panel at 1× scale.
-pub const WINDOW_SIZE: [f32; 2] = [980.0, 620.0];
+pub const WINDOW_SIZE: [f32; 2] = [980.0, 640.0];
 
 /// Inset from the panel edge to the first drawn element.
 pub const MARGIN: f32 = 16.0;

@@ -115,7 +115,9 @@ pub struct PanelState {
     pub density: f32,
     /// The scale a randomise draws from.
     pub scale: scale::Scale,
-    /// The SCALE knob's own position while the hand is on it; the scale itself snaps on release.
+    /// The SCALE knob's own position: the hand owns it while it is on the knob, and the panel snaps the scale from it
+    /// when the hand lets go. Anything that sets `scale` from outside — a song load, a restart — must set this too, or
+    /// the next frame snaps the scale back to where the knob was; [`PanelState::set_scale`] is the way to do it.
     pub scale_knob: f32,
 }
 
@@ -155,6 +157,22 @@ impl Default for PanelState {
             scale: scale::Scale::default(),
             scale_knob: scale::scale_position(scale::Scale::default()),
         }
+    }
+}
+
+impl PanelState {
+    /// Adopt a scale and put the knob where it belongs.
+    ///
+    /// Two fields, one setting: while the hand is off the SCALE knob the panel snaps the scale from the knob's position,
+    /// so setting one without the other would be undone on the next frame.
+    pub fn set_scale(&mut self, scale: scale::Scale) {
+        self.scale = scale;
+        self.scale_knob = scale::scale_position(scale);
+    }
+
+    /// Adopt a randomise density, clamped to the knob's travel.
+    pub fn set_density(&mut self, density: f32) {
+        self.density = density.clamp(0.0, 1.0);
     }
 }
 

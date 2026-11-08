@@ -21,9 +21,15 @@ pub fn screw_positions(panel: Rect) -> [Pos2; 4] {
 }
 
 /// The engraved frame: an outer rule and an inner rule, both inside the panel edge.
+///
+/// The rules are drawn in design pixels scaled with the panel, like every other measurement here: a fixed inset would
+/// leave the frame the same thickness while the face inside it shrank, and on a small window the bands would reach past
+/// it — which is exactly what happened when the panel grew for the performance row and the last band was still measured
+/// against the old height.
 pub fn frame_lines(panel: Rect) -> [Rect; 2] {
-    let outer = panel.shrink(theme::MARGIN / 2.0);
-    [outer, outer.shrink(theme::GAP / 2.0)]
+    let scale = panel.width() / theme::DESIGN_SIZE.x;
+    let outer = panel.shrink(theme::MARGIN * scale / 2.0);
+    [outer, outer.shrink(theme::GAP * scale / 2.0)]
 }
 
 /// The volume knob's corner: the top strip's far left, before the wordmark. Size is proportional to the strip,

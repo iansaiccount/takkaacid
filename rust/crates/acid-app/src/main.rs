@@ -261,9 +261,9 @@ impl eframe::App for TakkaApp {
                         self.panel.dirty = false;
                         self.panel.song_name = Some(name.clone());
                         // The randomise dials are a song's own settings, so they come back with it.
-                        self.panel.density = saved.density.clamp(0.0, 1.0);
-                        self.panel.scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
-                        self.panel.scale_knob = panel_ui::scale::scale_position(self.panel.scale);
+                        self.panel.set_density(saved.density);
+                        self.panel
+                            .set_scale(panel_ui::scale::Scale::from_index(saved.scale as usize));
                         if let Some(port) = saved.midi_input.clone() {
                             self.midi.choose(midi::ports::PortChoice::Named(port));
                         }
