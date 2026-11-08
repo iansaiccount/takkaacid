@@ -116,7 +116,7 @@ pub fn knob(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::knobs::Knob;
+    use crate::knobs::Knob;
 
     #[test]
     fn dragging_up_180_pixels_covers_the_whole_range() {

@@ -178,3 +178,10 @@ pub fn snap_to_detent<F>(position: f32, face_of: impl Fn(f32) -> F, position_of:
       Ruling: `Knob::from_index` deleted rather than put to use — nothing in `src/` turns a slot back into a knob (the
       drawing loop iterates the catalogue and `persist` zips it), so a clamped lookup was API with no caller. Cost if
       wrong: a future caller writes three lines of `ALL[i]` instead of calling a helper.
+- [x] **2. The catalogue lives at the crate root** — `src/knobs.rs` (was `ui/knobs.rs`); `waveform_position` /
+      `waveform_from_position` moved with it and are re-exported from `ui` so `acid_app::ui::waveform_position` still
+      resolves; `Knob::tip()` became `tips::Control::for_knob(knob)`, an exhaustive match in the module that owns the tip
+      table. `midi::cc` now imports `crate::knobs`, so no MIDI file names a view module.
+      Ruling: `Knob::read`/`publish` still take `SharedState` and `learn_target` still returns `midi::cc::CcTarget`, so the
+      catalogue is not dependency-free — that mutual reference *is* the single mapping plan 30 built. What changed is that
+      nothing under `ui/` owns the catalogue and the MIDI side no longer reaches into the view to build `LEARNABLE`.

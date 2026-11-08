@@ -7,8 +7,8 @@ use std::sync::atomic::Ordering;
 
 use acid_core::timing::{MAX_BPM, MIN_BPM, clamp_bpm};
 
+use crate::knobs::Knob;
 use crate::state::SharedState;
-use crate::ui::knobs::Knob;
 
 /// What a continuous controller is wired to.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

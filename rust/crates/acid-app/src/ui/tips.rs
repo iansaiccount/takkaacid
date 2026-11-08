@@ -114,6 +114,22 @@ impl Control {
             Control::Scale => TIPS[22],
         }
     }
+
+    /// The help for a tone knob. The mapping lives here, not on `Knob`, so the catalogue stays free of the view: it is the
+    /// same one exhaustive `match` plan 30 deleted the index version of.
+    pub fn for_knob(knob: crate::knobs::Knob) -> Control {
+        use crate::knobs::Knob;
+
+        match knob {
+            Knob::Waveform => Control::Waveform,
+            Knob::Tuning => Control::Tuning,
+            Knob::Cutoff => Control::Cutoff,
+            Knob::Resonance => Control::Resonance,
+            Knob::EnvMod => Control::EnvMod,
+            Knob::Decay => Control::Decay,
+            Knob::Accent => Control::Accent,
+        }
+    }
 }
 
 /// The help text, in `Control::ALL` order.
@@ -255,8 +271,8 @@ pub fn hover(response: &Response, state: &PanelState, control: Control) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::knobs::Knob;
     use super::*;
+    use crate::knobs::Knob;
 
     #[test]
     fn the_table_matches_the_panel_order_and_holds_every_control_once() {
@@ -274,7 +290,7 @@ mod tests {
             assert_eq!(Control::ALL[index].tip(), *tip);
         }
         // The knobs are the front of the panel, and the TIPS key is the last tip.
-        assert_eq!(Knob::Waveform.tip(), Control::ALL[0]);
+        assert_eq!(Control::for_knob(Knob::Waveform), Control::ALL[0]);
         assert_eq!(Control::Tooltips, Control::ALL[16]);
     }
 
@@ -324,7 +340,7 @@ mod tests {
     fn every_knob_slot_names_its_own_control() {
         let knobbed: Vec<&str> = Knob::ALL
             .iter()
-            .map(|knob| knob.tip().tip().title)
+            .map(|knob| Control::for_knob(*knob).tip().title)
             .collect();
         assert_eq!(
             knobbed,
@@ -341,7 +357,7 @@ mod tests {
         // And the catalogue's slots are the table's knob prefix, so the two orders cannot drift apart.
         for (index, knob) in Knob::ALL.iter().enumerate() {
             assert_eq!(
-                knob.tip(),
+                Control::for_knob(*knob),
                 Control::ALL[index],
                 "{knob:?} is in the wrong slot"
             );

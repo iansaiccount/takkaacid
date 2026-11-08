@@ -8,8 +8,6 @@
 use crate::midi::cc::CcTarget;
 use crate::state::SharedState;
 
-use super::tips;
-
 /// One tone knob of the panel. Drawn left to right in [`Knob::ALL`] order.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Knob {
@@ -81,19 +79,6 @@ impl Knob {
         }
     }
 
-    /// This knob's hover help.
-    pub fn tip(self) -> tips::Control {
-        match self {
-            Knob::Waveform => tips::Control::Waveform,
-            Knob::Tuning => tips::Control::Tuning,
-            Knob::Cutoff => tips::Control::Cutoff,
-            Knob::Resonance => tips::Control::Resonance,
-            Knob::EnvMod => tips::Control::EnvMod,
-            Knob::Decay => tips::Control::Decay,
-            Knob::Accent => tips::Control::Accent,
-        }
-    }
-
     /// The MIDI-learn target this knob teaches. Every tone knob is learnable, so there is no `None` case to forget.
     pub const fn learn_target(self) -> CcTarget {
         match self {
@@ -110,7 +95,7 @@ impl Knob {
     /// What the knob shows: the shared value, as a control position. The waveform's position comes from the switch.
     pub fn read(self, shared: &SharedState) -> f32 {
         match self {
-            Knob::Waveform => super::waveform_position(shared.waveform()),
+            Knob::Waveform => waveform_position(shared.waveform()),
             Knob::Tuning => shared.tuning.get(),
             Knob::Cutoff => shared.cutoff.get(),
             Knob::Resonance => shared.resonance.get(),
@@ -123,7 +108,7 @@ impl Knob {
     /// Publish a position to the atomic this knob owns. The waveform is a switch, so its position is snapped first.
     pub fn publish(self, shared: &SharedState, position: f32) {
         match self {
-            Knob::Waveform => shared.set_waveform(super::waveform_from_position(position)),
+            Knob::Waveform => shared.set_waveform(waveform_from_position(position)),
             Knob::Tuning => shared.tuning.set(position),
             Knob::Cutoff => shared.cutoff.set(position),
             Knob::Resonance => shared.resonance.set(position),
@@ -132,6 +117,19 @@ impl Knob {
             Knob::Accent => shared.accent.set(position),
         }
     }
+}
+
+/// The control position of a wave: `0.0` is the first entry of the wave catalogue, `1.0` the last. It lives here because
+/// the WAVEFORM knob is the switch that turns a wave into a position and back; the arithmetic itself is `acid_core`'s,
+/// because a learned controller snaps with the same rule and the MIDI thread may not borrow the panel's copy.
+pub fn waveform_position(wave: acid_core::oscillator::Waveform) -> f32 {
+    wave.position()
+}
+
+/// The wave nearest a control position. Rounded, not floored, so the detents divide the travel evenly and the switch can
+/// never rest between two waves.
+pub fn waveform_from_position(position: f32) -> acid_core::oscillator::Waveform {
+    acid_core::oscillator::Waveform::from_position(position)
 }
 
 #[cfg(test)]
@@ -174,7 +172,7 @@ mod tests {
             // A permuted arm is the failure no round trip can see — `publish` and `read` would both follow it — so the two
             // lookups are pinned to the knob's own name. Every knob's tip and learn target are named after it by design.
             assert_eq!(
-                format!("{:?}", knob.tip()),
+                format!("{:?}", crate::ui::tips::Control::for_knob(knob)),
                 format!("{knob:?}"),
                 "{knob:?} wears another control's tip"
             );

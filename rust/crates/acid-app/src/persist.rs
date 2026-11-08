@@ -18,8 +18,8 @@ use acid_core::voice::{
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
+use crate::knobs::Knob;
 use crate::state::SharedState;
-use crate::ui::knobs::Knob;
 
 /// Directory name under the data home.
 pub const APP_DIR: &str = "takka-acid";

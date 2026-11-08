@@ -1,8 +1,8 @@
 //! MIDI learn: press LEARN, click a knob, move a controller — the controller is bound to that knob.
 
+use acid_app::knobs::Knob;
 use acid_app::midi::cc::{self, CcTarget};
 use acid_app::state::SharedState;
-use acid_app::ui::knobs::Knob;
 use acid_app::ui::layout::{knob_cells, layout};
 use acid_app::ui::learn::Step;
 use acid_app::ui::switches;

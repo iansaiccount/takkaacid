@@ -7,7 +7,6 @@ pub mod edit;
 pub mod help;
 pub mod keys;
 pub mod knob;
-pub mod knobs;
 pub mod layout;
 pub mod learn;
 pub mod panel;
@@ -45,7 +44,7 @@ use acid_core::timing::DEFAULT_BPM;
 use crate::midi;
 use crate::state::SharedState;
 
-use self::knobs::{Kind, Knob};
+use crate::knobs::{Kind, Knob};
 
 use acid_core::pitch::Pitch;
 
@@ -327,7 +326,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             target,
             diameter,
         );
-        tips::hover(&response, state, knob.tip());
+        tips::hover(&response, state, tips::Control::for_knob(knob));
         // A switch wears its detents, so the faces it may snap to are visible before the hand lets go.
         if knob.kind() == Kind::Switch && !choosing {
             waveform_detents(cell_ui.painter(), *cell, state.knobs[slot], s);
@@ -1083,18 +1082,9 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
     }
 }
 
-/// The control position of a wave: `0.0` is the first entry of the catalogue, `1.0` the last.
-pub fn waveform_position(wave: acid_core::oscillator::Waveform) -> f32 {
-    // The arithmetic lives in `acid_core`, because a learned controller snaps with the same rule and the MIDI thread
-    // may not borrow the panel's copy.
-    wave.position()
-}
-
-/// The wave nearest a control position. Rounded, not floored, so the detents divide the travel evenly and the knob can
-/// never rest between two waves.
-pub fn waveform_from_position(position: f32) -> acid_core::oscillator::Waveform {
-    acid_core::oscillator::Waveform::from_position(position)
-}
+// The control position of a wave is the switch's business, so it lives with the catalogue; the panel keeps these names
+// because a detent marker and a learned controller both speak in positions.
+pub use crate::knobs::{waveform_from_position, waveform_position};
 
 /// Mark every wave's detent around the WAVEFORM knob, lighting the one the knob is on.
 ///

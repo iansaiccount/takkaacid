@@ -10,7 +10,7 @@ use super::theme;
 
 /// Knobs across the panel: the row is the catalogue, so a knob added there gets a cell instead of being dropped by the
 /// drawing loop's `zip`.
-pub const KNOB_COUNT: usize = super::knobs::Knob::ALL.len();
+pub const KNOB_COUNT: usize = crate::knobs::Knob::ALL.len();
 /// Controls in the performance row: octave down, octave up, shuffle, randomise, density, scale.
 pub const PERFORM_COUNT: usize = PERFORM_LEFT + PERFORM_RIGHT;
 /// Its left group: octave down, octave up, shuffle — the things played while the pattern runs.

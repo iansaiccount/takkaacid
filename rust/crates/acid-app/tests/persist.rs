@@ -567,7 +567,7 @@ fn the_shared_state_survives_a_save_and_restore() {
 /// `from_positions()` puts them back, so a knob cannot be saved into another knob's field.
 #[test]
 fn the_knob_order_the_file_saves_is_the_panel_order() {
-    use acid_app::ui::knobs::Knob;
+    use acid_app::knobs::Knob;
     use acid_app::ui::waveform_position;
     use acid_core::oscillator::Waveform;
 
@@ -633,8 +633,8 @@ fn a_file_written_by_this_build_is_the_file_the_old_build_wrote() {
 /// moves the same atomics. This is the pair of conversions `main` and a song load both go through.
 #[test]
 fn the_file_and_the_shared_state_agree_knob_for_knob() {
+    use acid_app::knobs::Knob;
     use acid_app::state::SharedState;
-    use acid_app::ui::knobs::Knob;
     use acid_app::ui::waveform_position;
     use acid_core::oscillator::Waveform;
 

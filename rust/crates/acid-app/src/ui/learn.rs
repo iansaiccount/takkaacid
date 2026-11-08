@@ -60,8 +60,8 @@ pub fn heard(shared: &SharedState) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::knobs::Knob;
     use super::*;
+    use crate::knobs::Knob;
 
     #[test]
     fn the_key_says_what_it_is_waiting_for() {
