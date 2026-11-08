@@ -80,30 +80,20 @@ pub struct PanelState {
     /// Set by the panel when REPROBE is clicked; the app clears it.
     /// Set by the panel when REPROBE is clicked; the app clears it.
     pub reprobe_requested: bool,
-    /// The MIDI inputs on offer while the picker is open, `None` when it is closed.
-    pub midi_ports: Option<Vec<String>>,
-    /// The port the user chose; consumed by `main` on the next frame.
-    pub midi_port_choice: Option<midi::ports::PortChoice>,
     /// True while the help card is showing.
     pub help_visible: bool,
     /// The step the keyboard edits; always in `0..16`, never saved.
     pub selected: usize,
-    /// The output devices on offer while the picker is open, `None` when it is closed.
-    pub device_list: Option<Vec<String>>,
-    /// The device the user chose; consumed by `main` on the next frame.
-    pub device_choice: Option<String>,
+    /// The port picker: what is on offer and what the player chose.
+    pub picker: PickerState,
     /// The VOLUME knob, kept separate from the seven tone knobs.
     pub volume: f32,
     /// When CLEAR was first clicked: a second click inside the window empties the pattern on screen.
     pub clear_armed_at: Option<std::time::Instant>,
     /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
     pub save_requested: bool,
-    /// The songs card while it is open, `None` when it is closed.
-    pub songs: Option<songs::Songs>,
-    /// What the songs card asked for; consumed by `main`, which owns the files.
-    pub song_request: Option<songs::Request>,
-    /// The song this session is working on, once it has a name.
-    pub song_name: Option<String>,
+    /// The songs card, what it asked for, and the song this session is working on.
+    pub songs: SongState,
     /// Where the MIDI-learn flow is: idle, waiting for a knob, or waiting for a controller.
     pub learn: learn::Step,
     /// Step mode: a note typed on a keyboard writes the selected step and walks to the next one.
@@ -123,6 +113,36 @@ pub struct PanelState {
     pub scale_knob: f32,
 }
 
+/// The songs card and everything it asked for.
+///
+/// One value because a request without a card, or a name for a song nobody opened, is not a state the panel can be in:
+/// the card asks, `main` answers, and the answer is cleared with the card.
+#[derive(Default)]
+pub struct SongState {
+    /// The card while it is open, `None` when it is closed.
+    pub card: Option<songs::Songs>,
+    /// What the card asked for; consumed by `main`, which owns the files.
+    pub request: Option<songs::Request>,
+    /// The song this session is working on, once it has a name.
+    pub name: Option<String>,
+}
+
+/// The port picker: the two lists `main` hands the panel, and the two choices it takes back.
+///
+/// One value for the same reason as [`SongState`]: a choice belongs to the list it was made from, and both are consumed
+/// in the same frame.
+#[derive(Default)]
+pub struct PickerState {
+    /// The MIDI inputs on offer while the picker is open, `None` when it is closed.
+    pub inputs: Option<Vec<String>>,
+    /// The input the user chose; consumed by `main` on the next frame.
+    pub input_choice: Option<midi::ports::PortChoice>,
+    /// The output devices on offer while the picker is open, `None` when it is closed.
+    pub outputs: Option<Vec<String>>,
+    /// The output the user chose; consumed by `main` on the next frame.
+    pub output_choice: Option<String>,
+}
+
 impl Default for PanelState {
     fn default() -> Self {
         Self {
@@ -140,17 +160,12 @@ impl Default for PanelState {
             midi_status: "MIDI: none (retrying)".to_string(),
             midi_given_up: false,
             reprobe_requested: false,
-            midi_ports: None,
-            midi_port_choice: None,
+            picker: PickerState::default(),
             help_visible: false,
             selected: 0,
-            device_list: None,
-            device_choice: None,
             clear_armed_at: None,
             save_requested: false,
-            songs: None,
-            song_request: None,
-            song_name: None,
+            songs: SongState::default(),
             learn: learn::Step::Idle,
             step_mode: false,
             placed: Vec::new(),
@@ -670,15 +685,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             "songs",
             songs_cell,
             "SONGS",
-            state.songs.is_some(),
+            state.songs.card.is_some(),
             tips::Control::Songs,
         ) {
-            state.songs = match state.songs {
+            state.songs.card = match state.songs.card {
                 Some(_) => None,
                 None => Some(songs::Songs {
                     names: crate::persist::list_songs(&crate::persist::data_dir()),
-                    name: state.song_name.clone().unwrap_or_default(),
-                    open: state.song_name.clone(),
+                    name: state.songs.name.clone().unwrap_or_default(),
+                    open: state.songs.name.clone(),
                     ..songs::Songs::default()
                 }),
             };
@@ -807,12 +822,12 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         )
         .clicked()
     {
-        state.midi_ports = match state.midi_ports {
+        state.picker.inputs = match state.picker.inputs {
             Some(_) => None,
             None => Some(midi::ports::list_ports().unwrap_or_default()),
         };
     }
-    if let Some(ports) = state.midi_ports.clone() {
+    if let Some(ports) = state.picker.inputs.clone() {
         let mut entries = vec![("any input".to_string(), midi::ports::PortChoice::Any)];
         entries.extend(
             ports
@@ -848,8 +863,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             }
         }
         if let Some(choice) = chosen {
-            state.midi_port_choice = Some(choice);
-            state.midi_ports = None;
+            state.picker.input_choice = Some(choice);
+            state.picker.inputs = None;
         } else {
             let click = ui.input(|i| {
                 if i.pointer.any_click() {
@@ -859,7 +874,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                 }
             });
             if picker::should_close(click, &rows, handle) {
-                state.midi_ports = None;
+                state.picker.inputs = None;
             }
         }
     }
@@ -908,22 +923,22 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
     // The songs card sits over everything, so its shield is registered before the card's own controls: a click on
     // a row or the text field is theirs, a click anywhere else dismisses.
-    if state.songs.is_some() {
+    if state.songs.card.is_some() {
         let shield = ui.interact(
             window,
             ui.scope_id().with("songs-shield"),
             egui::Sense::click(),
         );
         let mut request = None;
-        if let Some(card) = state.songs.as_mut() {
+        if let Some(card) = state.songs.card.as_mut() {
             request = songs::paint(ui, l.panel, s, card);
         }
         if shield.clicked() {
             request = Some(songs::Request::Close);
         }
         match request {
-            Some(songs::Request::Close) => state.songs = None,
-            Some(other) => state.song_request = Some(other),
+            Some(songs::Request::Close) => state.songs.card = None,
+            Some(other) => state.songs.request = Some(other),
             None => {}
         }
     }

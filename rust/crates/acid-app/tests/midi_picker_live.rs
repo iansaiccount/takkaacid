@@ -3,7 +3,7 @@
 use acid_app::midi::ports::PortChoice;
 use acid_app::state::SharedState;
 use acid_app::ui::layout::layout;
-use acid_app::ui::{PanelState, draw_panel, panel};
+use acid_app::ui::{PanelState, PickerState, draw_panel, panel};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
 fn screen() -> Rect {
@@ -70,7 +70,10 @@ fn a_row_chooses_the_port_it_names() {
     // The list is filled by the picker when it opens; seed it so the test does not depend on this machine's
     // MIDI hardware.
     let mut panel = PanelState {
-        midi_ports: Some(vec!["KeyStep".to_string(), "Launchkey MIDI".to_string()]),
+        picker: PickerState {
+            inputs: Some(vec!["KeyStep".to_string(), "Launchkey MIDI".to_string()]),
+            ..PickerState::default()
+        },
         ..PanelState::default()
     };
 
@@ -78,10 +81,10 @@ fn a_row_chooses_the_port_it_names() {
     click(&ctx, &mut panel, &shared, row_centre(2));
 
     assert_eq!(
-        panel.midi_port_choice,
+        panel.picker.input_choice,
         Some(PortChoice::Named("Launchkey MIDI".to_string()))
     );
-    assert!(panel.midi_ports.is_none(), "choosing closes the list");
+    assert!(panel.picker.inputs.is_none(), "choosing closes the list");
 }
 
 #[test]
@@ -89,13 +92,16 @@ fn the_any_row_asks_for_the_first_port() {
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = PanelState {
-        midi_ports: Some(vec!["KeyStep".to_string()]),
+        picker: PickerState {
+            inputs: Some(vec!["KeyStep".to_string()]),
+            ..PickerState::default()
+        },
         ..PanelState::default()
     };
 
     click(&ctx, &mut panel, &shared, row_centre(0));
 
-    assert_eq!(panel.midi_port_choice, Some(PortChoice::Any));
+    assert_eq!(panel.picker.input_choice, Some(PortChoice::Any));
 }
 
 #[test]
@@ -103,15 +109,18 @@ fn a_click_outside_the_list_closes_it_without_choosing() {
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = PanelState {
-        midi_ports: Some(vec!["KeyStep".to_string()]),
+        picker: PickerState {
+            inputs: Some(vec!["KeyStep".to_string()]),
+            ..PickerState::default()
+        },
         ..PanelState::default()
     };
 
     // Below the rows, well away from the status line.
     click(&ctx, &mut panel, &shared, Pos2::new(700.0, 300.0));
 
-    assert!(panel.midi_ports.is_none(), "the list should close");
-    assert_eq!(panel.midi_port_choice, None, "and choose nothing");
+    assert!(panel.picker.inputs.is_none(), "the list should close");
+    assert_eq!(panel.picker.input_choice, None, "and choose nothing");
 }
 
 #[test]
@@ -123,10 +132,10 @@ fn the_status_line_toggles_the_list() {
 
     click(&ctx, &mut panel, &shared, at);
     assert!(
-        panel.midi_ports.is_some(),
+        panel.picker.inputs.is_some(),
         "clicking the MIDI line opens the list (empty without hardware, but open)"
     );
 
     click(&ctx, &mut panel, &shared, at);
-    assert!(panel.midi_ports.is_none(), "a second click closes it");
+    assert!(panel.picker.inputs.is_none(), "a second click closes it");
 }

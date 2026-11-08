@@ -62,7 +62,10 @@ fn main() -> eframe::Result {
                 // The saved session may have been left on another pattern, so the display starts from the bank.
                 pattern_id: PatternBank::id_of(bank.current()),
                 // The song the last session was working on, if it had a name.
-                song_name: song_name.clone(),
+                songs: panel_ui::SongState {
+                    name: song_name.clone(),
+                    ..panel_ui::SongState::default()
+                },
                 // The hover-help switch and the randomise dials the last session was left with.
                 tooltips: saved_tooltips,
                 density: saved_density,
@@ -119,14 +122,14 @@ impl eframe::App for TakkaApp {
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
             if self.panel.help_visible {
                 self.panel.help_visible = false;
-            } else if self.panel.songs.is_some() {
-                self.panel.songs = None;
+            } else if self.panel.songs.card.is_some() {
+                self.panel.songs.card = None;
             } else if self.panel.learn != panel_ui::learn::Step::Idle {
                 // Escape gives up on a learn in progress; the shared flag must fall with it.
                 self.panel.learn = panel_ui::learn::Step::Idle;
                 panel_ui::learn::cancel(&self.state);
             } else {
-                self.panel.device_list = None;
+                self.panel.picker.outputs = None;
             }
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
@@ -156,7 +159,7 @@ impl eframe::App for TakkaApp {
 
         // The songs card: keep the session under a name, or load one. Loading saves what is on screen first, so a
         // load never throws away work that only lived in memory.
-        if let Some(request) = self.panel.song_request.take() {
+        if let Some(request) = self.panel.songs.request.take() {
             let dir = persist::data_dir();
             match request {
                 panel_ui::songs::Request::Close => {}
@@ -169,11 +172,11 @@ impl eframe::App for TakkaApp {
                     saved.scale = self.panel.scale.index() as u8;
                     match persist::save_song(&dir, &name, &saved) {
                         Ok(()) => {
-                            self.panel.song_name = Some(name.clone());
+                            self.panel.songs.name = Some(name.clone());
                             self.panel.dirty = false;
                             // The session file remembers which song is open.
                             let _ = persist::save(&dir, &saved);
-                            if let Some(card) = self.panel.songs.as_mut() {
+                            if let Some(card) = self.panel.songs.card.as_mut() {
                                 card.names = persist::list_songs(&dir);
                                 card.name = name.clone();
                                 card.open = Some(name.clone());
@@ -181,7 +184,7 @@ impl eframe::App for TakkaApp {
                             }
                         }
                         Err(error) => {
-                            if let Some(card) = self.panel.songs.as_mut() {
+                            if let Some(card) = self.panel.songs.card.as_mut() {
                                 card.message = Some(format!("could not save: {error}"));
                             }
                         }
@@ -195,9 +198,9 @@ impl eframe::App for TakkaApp {
                     self.panel.pattern_id = PatternBank::id_of(self.bank.current());
                     self.state.set_pattern_index(self.bank.current());
                     self.panel.selected = 0;
-                    self.panel.song_name = None;
+                    self.panel.songs.name = None;
                     self.panel.dirty = true;
-                    if let Some(card) = self.panel.songs.as_mut() {
+                    if let Some(card) = self.panel.songs.card.as_mut() {
                         card.name.clear();
                         card.open = None;
                         card.names = persist::list_songs(&dir);
@@ -206,13 +209,13 @@ impl eframe::App for TakkaApp {
                     }
                 }
                 panel_ui::songs::Request::Rename(to) => {
-                    if let Some(from) = self.panel.song_name.clone() {
+                    if let Some(from) = self.panel.songs.name.clone() {
                         match persist::rename_song(&dir, &from, &to) {
                             Ok(()) => {
-                                self.panel.song_name = Some(to.clone());
+                                self.panel.songs.name = Some(to.clone());
                                 // The session file remembers the new name, or the next restart would look for the old one.
                                 self.save();
-                                if let Some(card) = self.panel.songs.as_mut() {
+                                if let Some(card) = self.panel.songs.card.as_mut() {
                                     card.names = persist::list_songs(&dir);
                                     card.name = to.clone();
                                     card.open = Some(to.clone());
@@ -220,7 +223,7 @@ impl eframe::App for TakkaApp {
                                 }
                             }
                             Err(error) => {
-                                if let Some(card) = self.panel.songs.as_mut() {
+                                if let Some(card) = self.panel.songs.card.as_mut() {
                                     card.message = Some(format!("could not rename: {error}"));
                                 }
                             }
@@ -231,10 +234,10 @@ impl eframe::App for TakkaApp {
                     match persist::delete_song(&dir, &name) {
                         Ok(()) => {
                             // The song is gone; the session is not, but it is no longer that song.
-                            if self.panel.song_name.as_deref() == Some(name.as_str()) {
-                                self.panel.song_name = None;
+                            if self.panel.songs.name.as_deref() == Some(name.as_str()) {
+                                self.panel.songs.name = None;
                             }
-                            if let Some(card) = self.panel.songs.as_mut() {
+                            if let Some(card) = self.panel.songs.card.as_mut() {
                                 card.names = persist::list_songs(&dir);
                                 card.delete_armed = None;
                                 if card.open.as_deref() == Some(name.as_str()) {
@@ -244,7 +247,7 @@ impl eframe::App for TakkaApp {
                             }
                         }
                         Err(error) => {
-                            if let Some(card) = self.panel.songs.as_mut() {
+                            if let Some(card) = self.panel.songs.card.as_mut() {
                                 card.message = Some(format!("could not delete: {error}"));
                             }
                         }
@@ -259,7 +262,7 @@ impl eframe::App for TakkaApp {
                         self.state.set_pattern_index(self.bank.current());
                         self.panel.selected = 0;
                         self.panel.dirty = false;
-                        self.panel.song_name = Some(name.clone());
+                        self.panel.songs.name = Some(name.clone());
                         // The panel's own switches are a song's settings, so they come back with it.
                         self.panel.tooltips = saved.tooltips;
                         self.panel.set_density(saved.density);
@@ -268,7 +271,7 @@ impl eframe::App for TakkaApp {
                         if let Some(port) = saved.midi_input.clone() {
                             self.midi.choose(midi::ports::PortChoice::Named(port));
                         }
-                        if let Some(card) = self.panel.songs.as_mut() {
+                        if let Some(card) = self.panel.songs.card.as_mut() {
                             card.names = persist::list_songs(&dir);
                             card.name = name.clone();
                             card.open = Some(name.clone());
@@ -276,7 +279,7 @@ impl eframe::App for TakkaApp {
                         }
                     }
                     Err(error) => {
-                        if let Some(card) = self.panel.songs.as_mut() {
+                        if let Some(card) = self.panel.songs.card.as_mut() {
                             card.message = Some(format!("could not load: {error}"));
                         }
                     }
@@ -284,7 +287,7 @@ impl eframe::App for TakkaApp {
             }
         }
         // A port chosen on the panel: drop the old connection and probe the new one now.
-        if let Some(choice) = self.panel.midi_port_choice.take() {
+        if let Some(choice) = self.panel.picker.input_choice.take() {
             self.midi.choose(choice);
         }
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
@@ -335,7 +338,7 @@ impl eframe::App for TakkaApp {
             )
             .clicked()
         {
-            self.panel.device_list = if self.panel.device_list.is_some() {
+            self.panel.picker.outputs = if self.panel.picker.outputs.is_some() {
                 None
             } else {
                 Some(audio::list_output_devices())
@@ -348,7 +351,7 @@ impl eframe::App for TakkaApp {
             panel_ui::theme::legend(11.0),
             panel_ui::theme::SILKSCREEN_DIM,
         );
-        if let Some(devices) = self.panel.device_list.clone() {
+        if let Some(devices) = self.panel.picker.outputs.clone() {
             let row_height = 20.0;
             let width = 360.0;
             let base = status_rect.top() - 6.0;
@@ -384,8 +387,8 @@ impl eframe::App for TakkaApp {
                 }
             }
             if let Some(name) = chosen {
-                self.panel.device_list = None;
-                self.panel.device_choice = Some(name);
+                self.panel.picker.outputs = None;
+                self.panel.picker.output_choice = Some(name);
             } else {
                 // A click outside the list takes the list away without touching the stream.
                 let click = ui.input(|i| {
@@ -396,12 +399,12 @@ impl eframe::App for TakkaApp {
                     }
                 });
                 if panel_ui::picker::should_close(click, &rows, status_rect) {
-                    self.panel.device_list = None;
+                    self.panel.picker.outputs = None;
                 }
             }
         }
-        if let Some(name) = self.panel.device_choice.take() {
-            self.panel.device_list = None;
+        if let Some(name) = self.panel.picker.output_choice.take() {
+            self.panel.picker.outputs = None;
             self.rig.request_device(Some(name));
         }
     }
@@ -412,7 +415,7 @@ impl TakkaApp {
     fn save(&mut self) {
         let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
         saved.midi_input = self.midi.preference_name();
-        saved.song = self.panel.song_name.clone();
+        saved.song = self.panel.songs.name.clone();
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
         saved.tooltips = self.panel.tooltips;
         saved.density = self.panel.density;

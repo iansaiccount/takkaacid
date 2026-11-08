@@ -4,7 +4,7 @@ use acid_app::state::SharedState;
 use acid_app::ui::layout::{layout, scale};
 use acid_app::ui::songs::{Request, Songs};
 use acid_app::ui::switches::{self, Switch};
-use acid_app::ui::{PanelState, draw_panel, theme};
+use acid_app::ui::{PanelState, SongState, draw_panel, theme};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
 fn screen() -> Rect {
@@ -80,11 +80,14 @@ fn close_centre() -> Pos2 {
 
 fn open_card(names: Vec<&str>, name: &str) -> PanelState {
     PanelState {
-        songs: Some(Songs {
-            names: names.into_iter().map(str::to_string).collect(),
-            name: name.to_string(),
-            ..Songs::default()
-        }),
+        songs: SongState {
+            card: Some(Songs {
+                names: names.into_iter().map(str::to_string).collect(),
+                name: name.to_string(),
+                ..Songs::default()
+            }),
+            ..SongState::default()
+        },
         ..PanelState::default()
     }
 }
@@ -98,7 +101,7 @@ fn a_song_row_asks_to_load_that_song() {
     click(&ctx, &mut panel, &shared, song_row_centre(1));
 
     assert_eq!(
-        panel.song_request,
+        panel.songs.request,
         Some(Request::Load("Another".to_string()))
     );
 }
@@ -112,7 +115,7 @@ fn save_as_asks_for_the_typed_name() {
     click(&ctx, &mut panel, &shared, save_as_centre());
 
     assert_eq!(
-        panel.song_request,
+        panel.songs.request,
         Some(Request::Save("Acid 2".to_string()))
     );
 }
@@ -125,7 +128,7 @@ fn a_name_that_cannot_be_a_file_asks_for_nothing() {
 
     click(&ctx, &mut panel, &shared, save_as_centre());
 
-    assert_eq!(panel.song_request, None, "a path is not a song name");
+    assert_eq!(panel.songs.request, None, "a path is not a song name");
 }
 
 #[test]
@@ -136,8 +139,8 @@ fn close_takes_the_card_away() {
 
     click(&ctx, &mut panel, &shared, close_centre());
 
-    assert!(panel.songs.is_none());
-    assert_eq!(panel.song_request, None);
+    assert!(panel.songs.card.is_none());
+    assert_eq!(panel.songs.request, None);
 }
 
 #[test]
@@ -149,10 +152,37 @@ fn the_songs_key_opens_and_closes_the_card() {
     let songs = switches::cell(layout(screen()).switches, Switch::Songs).center();
 
     click(&ctx, &mut panel, &shared, songs);
-    assert!(panel.songs.is_some(), "the SONGS key opens the card");
+    assert!(panel.songs.card.is_some(), "the SONGS key opens the card");
 
     click(&ctx, &mut panel, &shared, songs);
-    assert!(panel.songs.is_none(), "and closes it again");
+    assert!(panel.songs.card.is_none(), "and closes it again");
+}
+
+#[test]
+fn the_card_the_request_and_the_name_are_one_piece_of_state() {
+    // A request without a card, or a name for a song nobody opened, is not a state the panel can be in: they travel
+    // together, so they are one value. Opening the card must not disturb the port picker, which is its own story.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    assert!(panel.songs.card.is_none());
+    assert!(panel.songs.request.is_none());
+    assert!(panel.songs.name.is_none());
+    assert!(panel.picker.inputs.is_none(), "nothing is being picked");
+    assert!(panel.picker.outputs.is_none());
+
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        switches::cell(layout(screen()).switches, Switch::Songs).center(),
+    );
+    assert!(panel.songs.card.is_some(), "the SONGS key opens the card");
+    assert!(panel.songs.request.is_none(), "opening asks for nothing");
+    assert!(
+        panel.picker.inputs.is_none() && panel.picker.outputs.is_none(),
+        "the picker is untouched"
+    );
 }
 
 /// NEW SONG sits at the bottom left of the card.
@@ -185,7 +215,7 @@ fn rename_centre() -> Pos2 {
 
 fn open_song_card(names: Vec<&str>, name: &str, open: Option<&str>) -> PanelState {
     let mut panel = open_card(names, name);
-    if let Some(card) = panel.songs.as_mut() {
+    if let Some(card) = panel.songs.card.as_mut() {
         card.open = open.map(str::to_string);
     }
     panel
@@ -200,7 +230,7 @@ fn rename_asks_for_the_typed_name_of_the_open_song() {
     click(&ctx, &mut panel, &shared, rename_centre());
 
     assert_eq!(
-        panel.song_request,
+        panel.songs.request,
         Some(Request::Rename("Acid 2".to_string()))
     );
 }
@@ -213,12 +243,12 @@ fn rename_is_dark_with_no_open_song_or_an_unchanged_name() {
     // Nothing open: renaming has no subject.
     let mut nothing_open = open_song_card(vec!["Acid 1"], "Acid 2", None);
     click(&ctx, &mut nothing_open, &shared, rename_centre());
-    assert_eq!(nothing_open.song_request, None);
+    assert_eq!(nothing_open.songs.request, None);
 
     // The typed name is the open song's own name: nothing to do, so nothing is asked for.
     let mut unchanged = open_song_card(vec!["Acid 1"], "Acid 1", Some("Acid 1"));
     click(&ctx, &mut unchanged, &shared, rename_centre());
-    assert_eq!(unchanged.song_request, None);
+    assert_eq!(unchanged.songs.request, None);
 }
 
 #[test]
@@ -229,7 +259,7 @@ fn the_new_song_button_asks_for_a_fresh_song() {
 
     click(&ctx, &mut panel, &shared, new_song_centre());
 
-    assert_eq!(panel.song_request, Some(Request::New));
+    assert_eq!(panel.songs.request, Some(Request::New));
 }
 
 #[test]
@@ -239,15 +269,15 @@ fn deleting_a_song_takes_two_clicks() {
     let mut panel = open_card(vec!["Acid 1", "Another"], "");
 
     click(&ctx, &mut panel, &shared, delete_centre(1));
-    assert_eq!(panel.song_request, None, "one click only arms it");
+    assert_eq!(panel.songs.request, None, "one click only arms it");
     assert_eq!(
-        panel.songs.as_ref().unwrap().delete_armed.as_deref(),
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
         Some("Another")
     );
 
     click(&ctx, &mut panel, &shared, delete_centre(1));
     assert_eq!(
-        panel.song_request,
+        panel.songs.request,
         Some(Request::Delete("Another".to_string()))
     );
 }
@@ -259,12 +289,12 @@ fn loading_a_song_clears_a_pending_delete() {
     let mut panel = open_card(vec!["Acid 1", "Another"], "");
 
     click(&ctx, &mut panel, &shared, delete_centre(0));
-    assert!(panel.songs.as_ref().unwrap().delete_armed.is_some());
+    assert!(panel.songs.card.as_ref().unwrap().delete_armed.is_some());
 
     click(&ctx, &mut panel, &shared, song_row_centre(1));
-    assert_eq!(panel.songs.as_ref().unwrap().delete_armed, None);
+    assert_eq!(panel.songs.card.as_ref().unwrap().delete_armed, None);
     assert_eq!(
-        panel.song_request,
+        panel.songs.request,
         Some(Request::Load("Another".to_string()))
     );
 }

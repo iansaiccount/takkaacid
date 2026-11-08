@@ -185,3 +185,10 @@ pub fn snap_to_detent<F>(position: f32, face_of: impl Fn(f32) -> F, position_of:
       Ruling: `Knob::read`/`publish` still take `SharedState` and `learn_target` still returns `midi::cc::CcTarget`, so the
       catalogue is not dependency-free — that mutual reference *is* the single mapping plan 30 built. What changed is that
       nothing under `ui/` owns the catalogue and the MIDI side no longer reaches into the view to build `LEARNABLE`.
+- [x] **3. The songs card and the port picker own their state** — `PanelState` loses seven loose fields for two structs:
+      `songs: SongState { card, request, name }` and `picker: PickerState { inputs, input_choice, outputs,
+      output_choice }`. New test `songs_live::the_card_the_request_and_the_name_are_one_piece_of_state` (RED: no field
+      `card`); `songs_live`, `midi_picker_live`, `save_live` all green.
+      Ruling: the rest of the struct stays flat. `selected` alone has 51 references and no invariant to protect, so
+      grouping the editor would be churn for nothing; `learn` is already one typed field (`learn::Step`). The plan named
+      "the learn, songs and picker state"; two of the three were grab-bags, and this is the two.
