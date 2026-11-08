@@ -125,3 +125,14 @@ knob — i.e. the catalogue, not the call sites, controls order.
       Mutation check: swapping `Tuning` and `Cutoff` in `Knob::ALL` fails `every_knob_is_in_all_once_and_in_index_order`
       and `every_knob_slot_names_its_own_control` (the round trip itself is order-agnostic by construction, which is the
       property the catalogue buys). Reverted.
+- [x] **5. The sweep** — `midi::cc::LEARNABLE` is now `learnable()`, a `const fn` that walks `Knob::ALL` for slots
+      0..7 and then `OUTSIDE_THE_ROW` (volume, tempo, pattern, swing); `Knob::learn_target` is a `const fn` so the const
+      table can be built at compile time. `DEFAULT_CC`, `SharedState::cc_map` and `SharedState::pickup` take their length
+      from `LEARNABLE`, so the length that panicked once cannot drift. New test
+      `cc::the_learn_slots_are_the_knobs_in_panel_order_then_the_rest`.
+      Ruling: `apply_cc`'s `match target` stays as it is — it is an exhaustive match on targets, not on a slot index, and
+      routing the seven knobs through `Knob::publish` there would need an all-seven dead arm to stay exhaustive. The
+      waveform snapping rule is single-sourced in `waveform_from_position`; only its call site is repeated. Cost if
+      wrong: a second place to touch when the control path learns something new about a knob.
+      Ruling: the guard test passed before the derivation (the values were already right) — the change is what makes them
+      stay right: `LEARNABLE` now follows `Knob::ALL`, and a catalogue of a different length fails to compile.

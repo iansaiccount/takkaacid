@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering;
 use acid_core::timing::{MAX_BPM, MIN_BPM, clamp_bpm};
 
 use crate::state::SharedState;
+use crate::ui::knobs::Knob;
 
 /// What a continuous controller is wired to.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -41,27 +42,43 @@ pub fn mapped() -> Vec<(u8, CcTarget)> {
         .collect()
 }
 
-/// The controls MIDI learn can teach, in `SharedState::cc_map` slot order.
-pub const LEARNABLE: [CcTarget; 11] = [
-    CcTarget::Waveform,
-    CcTarget::Tuning,
-    CcTarget::Cutoff,
-    CcTarget::Resonance,
-    CcTarget::EnvMod,
-    CcTarget::Decay,
-    CcTarget::Accent,
+/// The controls MIDI learn can teach, in `SharedState::cc_map` slot order: the seven tone knobs in the catalogue's own
+/// drawing order, then the four teachable controls that are not in the knob row.
+///
+/// Derived rather than written out a second time, so a knob added to `Knob::ALL` takes the next learn slot instead of
+/// being silently unteachable — the failure this replaces was a list that had to be kept in step by hand.
+pub const LEARNABLE: [CcTarget; 11] = learnable();
+
+/// The four teachable controls outside the knob row, in slot order: the volume knob, the two readouts and the shuffle.
+const OUTSIDE_THE_ROW: [CcTarget; 4] = [
     CcTarget::Volume,
     CcTarget::Tempo,
     CcTarget::Pattern,
     CcTarget::Swing,
 ];
 
+const fn learnable() -> [CcTarget; 11] {
+    let mut slots = [CcTarget::Waveform; 11];
+    let mut slot = 0;
+    while slot < Knob::ALL.len() {
+        slots[slot] = Knob::ALL[slot].learn_target();
+        slot += 1;
+    }
+    let mut outside = 0;
+    while outside < OUTSIDE_THE_ROW.len() {
+        slots[slot] = OUTSIDE_THE_ROW[outside];
+        slot += 1;
+        outside += 1;
+    }
+    slots
+}
+
 /// The factory pairing for the learnable controls: one controller each.
 ///
 /// The waveform gets CC 20 and the pattern selector CC 21, both undefined controllers no common box sends by accident,
 /// so a fresh session never has a fader fighting the mouse. Tempo keeps 72 and swing keeps 73 — the controllers they had
 /// while they were fixed — so a rig that already works keeps working.
-pub const DEFAULT_CC: [u8; 11] = [20, 3, 74, 71, 76, 75, 5, 7, 72, 21, 73];
+pub const DEFAULT_CC: [u8; LEARNABLE.len()] = [20, 3, 74, 71, 76, 75, 5, 7, 72, 21, 73];
 /// Which slot a target occupies in `SharedState::cc_map`, or `None` for the fixed ones.
 pub fn slot(target: CcTarget) -> Option<usize> {
     LEARNABLE.iter().position(|candidate| *candidate == target)
@@ -446,6 +463,31 @@ mod tests {
         assert_eq!(s.swing.get(), 1.0, "the sweep took over");
         apply_cc(&s, 73, 0);
         assert_eq!(s.swing.get(), 0.0, "and then follows");
+    }
+
+    #[test]
+    fn the_learn_slots_are_the_knobs_in_panel_order_then_the_rest() {
+        use crate::ui::knobs::Knob;
+
+        // The first seven learn slots are the seven tone knobs in the order the panel draws them, so the learn map and
+        // the knob row cannot drift apart. The rest follow in the order the file has always used.
+        for (slot, knob) in Knob::ALL.iter().enumerate() {
+            assert_eq!(
+                LEARNABLE[slot],
+                knob.learn_target(),
+                "{knob:?} is not in its own learn slot"
+            );
+        }
+        assert_eq!(
+            &LEARNABLE[7..],
+            [
+                CcTarget::Volume,
+                CcTarget::Tempo,
+                CcTarget::Pattern,
+                CcTarget::Swing
+            ],
+            "the controls outside the knob row follow it"
+        );
     }
     #[test]
     fn listening_records_the_controller_instead_of_moving_a_knob() {

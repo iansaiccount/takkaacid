@@ -97,7 +97,7 @@ impl Knob {
     }
 
     /// The MIDI-learn target this knob teaches. Every tone knob is learnable, so there is no `None` case to forget.
-    pub fn learn_target(self) -> CcTarget {
+    pub const fn learn_target(self) -> CcTarget {
         match self {
             Knob::Waveform => CcTarget::Waveform,
             Knob::Tuning => CcTarget::Tuning,

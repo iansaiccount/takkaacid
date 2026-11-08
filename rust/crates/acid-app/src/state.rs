@@ -141,7 +141,7 @@ pub struct SharedState {
     /// The computer keyboard's octave offset, `-2..=2`.
     pub octave: AtomicI32,
     /// The controller each learnable knob listens to, in `midi::cc::LEARNABLE` order; `-1` means unmapped.
-    pub cc_map: [AtomicI32; 11],
+    pub cc_map: [AtomicI32; crate::midi::cc::LEARNABLE.len()],
     /// True while the panel is waiting for a controller to learn.
     pub learn_active: AtomicBool,
     /// The controller the MIDI thread saw while learning; `-1` until one arrives.
@@ -154,7 +154,7 @@ pub struct SharedState {
     pub pattern_request: AtomicI32,
     /// Take-over state, one per learnable control, in `cc_map` slot order: a controller has to reach a knob before it
     /// may turn it, so a fader parked somewhere else cannot slam the panel when a song loads.
-    pub pickup: [Pickup; 11],
+    pub pickup: [Pickup; crate::midi::cc::LEARNABLE.len()],
     /// The MIDI notes the panel has not placed yet, oldest first. A queue rather than one slot: two notes can land
     /// inside a single frame, and the later one must not overwrite the earlier one's pitch or velocity.
     pub notes: NoteQueue,
