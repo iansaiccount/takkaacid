@@ -81,3 +81,14 @@ readouts call `tips::hover` every frame.
       Tests: `cc::a_pattern_fader_has_to_reach_the_pattern_before_it_moves_it` (RED: the far fader requested pattern 7);
       the three older pattern tests now model the app (`main` applies the request, which is what moves the knob) and the
       stepper test no longer claims the pattern is one.
+- [x] **5. The swap waits for the bar** — `ui::pattern_swap::swap_now(playing, position, last_position)` is the rule
+      (stopped, step 0, or a step that went backwards), unit-tested. `main` now holds the request as `pending_pattern`,
+      shows it in the readout (`panel.pattern_id`) so cycling is visible, applies it through `shortcuts::select_pattern`
+      when the bar allows, and drops it on a song load or a new song. `last_position` is kept so a bar crossed between
+      two frames is still noticed.
+      Ruling: the readout shows the *selection*, not the pattern that is still sounding for the rest of the bar. That is
+      what makes cycling with the knob usable ("see where you are going"); the cost is that for up to one bar the face
+      names a pattern the engine has not switched to yet. Cost if wrong: a player who edits notes in that window edits
+      the sounding pattern while the display names the next one.
+      Ruling: a pending swap is live performance state only — no new save field. Cost if wrong: quitting mid-cycle
+      forgets the swap, which a player would expect anyway.

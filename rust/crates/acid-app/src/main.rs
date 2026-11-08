@@ -80,6 +80,8 @@ fn main() -> eframe::Result {
                 bank,
                 autosave: persist::Autosave::new(),
                 midi: Midi::new(midi_preference),
+                pending_pattern: None,
+                last_position: 0,
             }))
         }),
     )
@@ -93,6 +95,10 @@ struct TakkaApp {
     bank: PatternBank,
     autosave: persist::Autosave,
     midi: Midi,
+    /// A pattern a learned controller asked for, waiting for the bar to come round.
+    pending_pattern: Option<usize>,
+    /// The transport step seen last frame, so a bar crossed between frames is still noticed.
+    last_position: usize,
 }
 
 impl eframe::App for TakkaApp {
@@ -140,15 +146,33 @@ impl eframe::App for TakkaApp {
             panel_ui::dispatch::handle(press, &mut self.panel, &self.state, &mut self.bank);
         }
 
-        // A learned pattern controller cannot move the bank from the MIDI thread, so it leaves a request and the panel
-        // applies it here, through the same path the shift+arrow shortcut uses.
+        // A learned pattern controller cannot move the bank from the MIDI thread, so it leaves a request and this is
+        // where it lands. A pattern is a bar long: the swap waits for the transport to come round, so cycling with the
+        // knob rides the groove instead of restarting it. The readout follows the held selection, so the player can see
+        // where they are going before it is heard.
         if let Some(index) = self.state.take_pattern_request() {
+            self.pending_pattern = Some(index);
+            self.panel.pattern_id = PatternBank::id_of(index);
+        }
+        let position = self
+            .state
+            .position
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if let Some(index) = self.pending_pattern
+            && panel_ui::pattern_swap::swap_now(
+                self.state.is_playing(),
+                position,
+                self.last_position,
+            )
+        {
             panel_ui::shortcuts::select_pattern(&self.state, &mut self.bank, index);
             self.panel.pattern = self.state.pattern();
             self.panel.pattern_id = PatternBank::id_of(self.bank.current());
             self.state.set_pattern_index(self.bank.current());
             self.panel.dirty = true;
+            self.pending_pattern = None;
         }
+        self.last_position = position;
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
         // SAVE asks for a write; `save` clears `dirty` when it succeeds and prints when it does not.
@@ -197,6 +221,8 @@ impl eframe::App for TakkaApp {
                     self.panel.pattern = self.state.pattern();
                     self.panel.pattern_id = PatternBank::id_of(self.bank.current());
                     self.state.set_pattern_index(self.bank.current());
+                    // A held swap belongs to the song that was playing, not to this one.
+                    self.pending_pattern = None;
                     self.panel.selected = 0;
                     self.panel.songs.name = None;
                     self.panel.dirty = true;
@@ -260,6 +286,8 @@ impl eframe::App for TakkaApp {
                         self.panel.pattern = self.state.pattern();
                         self.panel.pattern_id = PatternBank::id_of(self.bank.current());
                         self.state.set_pattern_index(self.bank.current());
+                        // A held swap belongs to the song that was playing, not to the one just loaded.
+                        self.pending_pattern = None;
                         self.panel.selected = 0;
                         self.panel.dirty = false;
                         self.panel.songs.name = Some(name.clone());

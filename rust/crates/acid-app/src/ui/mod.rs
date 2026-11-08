@@ -11,6 +11,7 @@ pub mod knob;
 pub mod layout;
 pub mod learn;
 pub mod panel;
+pub mod pattern_swap;
 pub mod picker;
 pub mod randomise;
 pub mod row_knobs;
