@@ -186,7 +186,8 @@ fn a_map_from_before_the_waveform_knob_keeps_every_fader_it_had() {
             15,
             16,
             acid_app::midi::cc::DEFAULT_CC[8],
-            acid_app::midi::cc::DEFAULT_CC[9]
+            acid_app::midi::cc::DEFAULT_CC[9],
+            acid_app::midi::cc::DEFAULT_CC[10]
         ],
         "the switch gains its controller; every learned fader keeps its slot"
     );
@@ -216,8 +217,37 @@ fn a_map_from_before_the_pattern_selector_keeps_every_learned_fader() {
     let loaded = acid_app::persist::load_or_default(dir.path());
     assert_eq!(
         loaded.cc_map,
-        vec![30, 31, 32, 33, 34, 35, 36, 37, 72, 21],
-        "the eight learned faders stay put; tempo and pattern are appended"
+        vec![30, 31, 32, 33, 34, 35, 36, 37, 72, 21, 73],
+        "the eight learned faders stay put; tempo, pattern and swing are appended"
+    );
+    assert_eq!(loaded.version, SAVE_VERSION);
+}
+
+#[test]
+fn a_map_from_before_the_shuffle_knob_keeps_every_fader_it_had() {
+    // Ten entries is a map from the build before the shuffle could be taught. Swing is appended at slot ten, so every
+    // existing controller keeps its knob and a rig that already drove the shuffle keeps driving it.
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let object = legacy.as_object_mut().unwrap();
+    object.insert("version".to_string(), serde_json::json!(7));
+    object.insert(
+        "cc_map".to_string(),
+        serde_json::json!([40, 41, 42, 43, 44, 45, 46, 47, 48, 49]),
+    );
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = acid_app::persist::load_or_default(dir.path());
+    assert_eq!(
+        loaded.cc_map,
+        vec![40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 73],
+        "the shuffle gains its controller; every learned fader keeps its slot"
     );
     assert_eq!(loaded.version, SAVE_VERSION);
 }

@@ -7,11 +7,11 @@ use acid_app::ui::learn::Step;
 use acid_app::ui::switches;
 use acid_app::ui::transport::TRANSPORT_CELLS;
 use acid_app::ui::{PanelState, draw_panel, panel};
-use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
+use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect};
 use std::sync::atomic::Ordering;
 
 fn screen() -> Rect {
-    Rect::from_min_size(Pos2::ZERO, vec2(980.0, 560.0))
+    Rect::from_min_size(Pos2::ZERO, acid_app::ui::theme::DESIGN_SIZE)
 }
 
 fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: Vec<Event>) {
@@ -177,4 +177,24 @@ fn the_switches_row_has_no_reset_key() {
     for switch in switches::Switch::ALL {
         assert_ne!(switch.label(), "RESET", "{switch:?} is back");
     }
+}
+
+/// The SHUFFLE knob is learnable, and while a learn is choosing a click picks it rather than turning it.
+#[test]
+fn clicking_the_shuffle_knob_while_choosing_asks_for_a_shuffle_fader() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let shuffle = layout(screen()).perform.cells[2].center();
+
+    // Outside a learn the knob is a knob: this click is a press-and-release with no drag, so nothing moves, and no
+    // binding starts.
+    click(&ctx, &mut panel, &shared, shuffle);
+    assert_eq!(panel.learn, Step::Idle);
+
+    click(&ctx, &mut panel, &shared, learn_centre());
+    click(&ctx, &mut panel, &shared, shuffle);
+
+    assert_eq!(panel.learn, Step::Listening(CcTarget::Swing));
+    assert_eq!(shared.swing.get(), 0.0, "picking a knob does not turn it");
 }

@@ -407,15 +407,28 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             }
         }
 
-        // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and CC 73 writes the same
-        // atomic, so the fader and the hand meet in one place.
-        let before_swing = shared.swing.get();
-        let mut swing = before_swing;
-        let response = perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", &mut swing);
-        tips::hover(&response, state, tips::Control::Shuffle);
-        shared.swing.set(swing.clamp(0.0, 1.0));
-        if shared.swing.get() != before_swing {
-            state.dirty = true;
+        // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and a learned controller
+        // writes the same atomic, so the fader and the hand meet in one place.
+        if state.learn == learn::Step::Choosing {
+            // While a learn is choosing, the knob is a target rather than a dial: a click here says "teach the shuffle",
+            // it does not turn it. A control that looks idle but acts is the bug this panel keeps meeting.
+            learn_pick(
+                ui,
+                state,
+                shared,
+                "learn-shuffle",
+                shuffle_cell,
+                midi::cc::CcTarget::Swing,
+            );
+        } else {
+            let before_swing = shared.swing.get();
+            let mut swing = before_swing;
+            let response = perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", &mut swing);
+            tips::hover(&response, state, tips::Control::Shuffle);
+            shared.swing.set(swing.clamp(0.0, 1.0));
+            if shared.swing.get() != before_swing {
+                state.dirty = true;
+            }
         }
 
         // DENSITY is how much of the pattern a roll fills: 0 leaves the one guaranteed step, 1 fills every step.

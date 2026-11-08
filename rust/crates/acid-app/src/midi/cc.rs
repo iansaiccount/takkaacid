@@ -34,15 +34,15 @@ pub enum CcTarget {
 /// Built from the catalogues rather than written out again, so a learned control can never be missing from the help
 /// overlay's list, and the list cannot claim a controller nothing answers to.
 pub fn mapped() -> Vec<(u8, CcTarget)> {
-    let learnable = LEARNABLE
+    LEARNABLE
         .iter()
         .enumerate()
-        .map(|(slot, target)| (DEFAULT_CC[slot], *target));
-    learnable.chain(FIXED_CC).collect()
+        .map(|(slot, target)| (DEFAULT_CC[slot], *target))
+        .collect()
 }
 
 /// The controls MIDI learn can teach, in `SharedState::cc_map` slot order.
-pub const LEARNABLE: [CcTarget; 10] = [
+pub const LEARNABLE: [CcTarget; 11] = [
     CcTarget::Waveform,
     CcTarget::Tuning,
     CcTarget::Cutoff,
@@ -53,35 +53,26 @@ pub const LEARNABLE: [CcTarget; 10] = [
     CcTarget::Volume,
     CcTarget::Tempo,
     CcTarget::Pattern,
+    CcTarget::Swing,
 ];
 
 /// The factory pairing for the learnable controls: one controller each.
 ///
 /// The waveform gets CC 20 and the pattern selector CC 21, both undefined controllers no common box sends by accident,
-/// so a fresh session never has a fader fighting the mouse. Tempo keeps 72 — the controller it had while it was fixed —
-/// so a rig that already works keeps working.
-pub const DEFAULT_CC: [u8; 10] = [20, 3, 74, 71, 76, 75, 5, 7, 72, 21];
-
-/// Swing is not learnable: it keeps its fixed controller, so a performance never loses the shuffle.
-pub const FIXED_CC: [(u8, CcTarget); 1] = [(73, CcTarget::Swing)];
-
+/// so a fresh session never has a fader fighting the mouse. Tempo keeps 72 and swing keeps 73 — the controllers they had
+/// while they were fixed — so a rig that already works keeps working.
+pub const DEFAULT_CC: [u8; 11] = [20, 3, 74, 71, 76, 75, 5, 7, 72, 21, 73];
 /// Which slot a target occupies in `SharedState::cc_map`, or `None` for the fixed ones.
 pub fn slot(target: CcTarget) -> Option<usize> {
     LEARNABLE.iter().position(|candidate| *candidate == target)
 }
 
-/// The target a controller is wired to: the learned table first, the fixed pair after it. One controller drives
-/// one control, because `set_cc` clears it from every other slot.
+/// The target a controller is wired to, from the one learned table. One controller drives one control, because `set_cc`
+/// clears it from every other slot.
 pub fn cc_target(state: &SharedState, cc: u8) -> Option<CcTarget> {
-    let learned = (0..LEARNABLE.len())
-        .find(|slot| state.cc_map[*slot].load(Ordering::Relaxed) == i32::from(cc));
-    if let Some(slot) = learned {
-        return Some(LEARNABLE[slot]);
-    }
-    FIXED_CC
-        .iter()
-        .find(|(number, _)| *number == cc)
-        .map(|(_, target)| *target)
+    (0..LEARNABLE.len())
+        .find(|slot| state.cc_map[*slot].load(Ordering::Relaxed) == i32::from(cc))
+        .map(|slot| LEARNABLE[slot])
 }
 
 /// The controller a control currently listens to.
@@ -157,8 +148,9 @@ fn knob_value(state: &SharedState, target: CcTarget) -> Option<f32> {
         CcTarget::Volume => Some(state.volume.get()),
         // The tempo fader spans the whole range, so its "position" is where the current tempo sits in that range.
         CcTarget::Tempo => Some((state.tempo_bpm.get() - MIN_BPM) / (MAX_BPM - MIN_BPM)),
+        CcTarget::Swing => Some(state.swing.get()),
         // Not a dial: no pickup, and no position to compare against.
-        CcTarget::Waveform | CcTarget::Pattern | CcTarget::Swing => None,
+        CcTarget::Waveform | CcTarget::Pattern => None,
     }
 }
 
@@ -281,14 +273,16 @@ mod tests {
         assert!(!apply_cc(&s, 1, 100));
         assert_eq!(cc_target(&s, 1), None);
         assert_eq!(cc_target(&s, 74), Some(CcTarget::Cutoff));
-        assert_eq!(mapped().len(), LEARNABLE.len() + FIXED_CC.len());
+        assert_eq!(mapped().len(), LEARNABLE.len());
     }
 
     #[test]
     fn swing_cc_is_clamped_to_the_shuffle_range() {
         let s = SharedState::new();
-        apply_cc(&s, 73, 127);
+        reach(&s, 73);
         assert!((s.swing.get() - 1.0).abs() < 1e-6);
+        apply_cc(&s, 73, 0);
+        assert_eq!(s.swing.get(), 0.0);
     }
 
     #[test]
@@ -418,26 +412,40 @@ mod tests {
     }
 
     #[test]
-    fn swing_keeps_its_fixed_controller() {
-        assert_eq!(slot(CcTarget::Swing), None, "swing stays out of the map");
-        assert_eq!(slot(CcTarget::Waveform), Some(0), "the switch is learnable");
-        assert_eq!(slot(CcTarget::Volume), Some(7));
-        assert_eq!(
-            slot(CcTarget::Pattern),
-            Some(9),
-            "the pattern selector has the last slot"
-        );
-        // The fixed controller still answers after every learned slot is emptied.
+    fn the_shuffle_is_a_learnable_slot_now() {
+        assert_eq!(slot(CcTarget::Swing), Some(10), "the shuffle has a slot");
+        assert_eq!(slot(CcTarget::Pattern), Some(9));
+        assert_eq!(slot(CcTarget::Waveform), Some(0));
+
+        // The factory pairing keeps 73, so a rig that already drives the shuffle keeps driving it.
         let s = SharedState::new();
-        for slot in 0..LEARNABLE.len() {
-            s.cc_map[slot].store(-1, std::sync::atomic::Ordering::Relaxed);
-        }
+        assert_eq!(cc_for(&s, CcTarget::Swing), Some(73));
         assert_eq!(cc_target(&s, 73), Some(CcTarget::Swing));
+
+        // And it can be taught elsewhere, which frees 73 like any other controller.
+        set_cc(&s, CcTarget::Swing, 40);
+        assert_eq!(cc_for(&s, CcTarget::Swing), Some(40));
+        assert_eq!(cc_target(&s, 73), None);
         assert_eq!(
-            cc_target(&s, 72),
-            None,
-            "tempo was learnable, so its empty slot frees 72"
+            cc_target(&s, 40),
+            Some(CcTarget::Swing),
+            "one controller drives one control"
         );
+    }
+
+    #[test]
+    fn a_shuffle_fader_has_to_reach_the_knob() {
+        // Swing is a dial now, so it gets the same pickup rule as the rest: a fader parked at the bottom must not flatten
+        // a groove that is already pushing.
+        let s = SharedState::new();
+        s.swing.set(0.6);
+        assert!(apply_cc(&s, 73, 0));
+        assert_eq!(s.swing.get(), 0.6, "the fader has not found the knob yet");
+
+        apply_cc(&s, 73, 127);
+        assert_eq!(s.swing.get(), 1.0, "the sweep took over");
+        apply_cc(&s, 73, 0);
+        assert_eq!(s.swing.get(), 0.0, "and then follows");
     }
     #[test]
     fn listening_records_the_controller_instead_of_moving_a_knob() {

@@ -228,7 +228,7 @@ const TIPS: [Tip; 23] = [
     },
     Tip {
         title: "SHUFFLE",
-        what: "Pushes every second step late: the groove loosens as the knob comes up.",
+        what: "Pushes every second step late as the knob comes up. LEARN can give it a controller.",
         shortcut: None,
     },
     Tip {
