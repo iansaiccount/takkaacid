@@ -73,12 +73,40 @@ const fn learnable() -> [CcTarget; 11] {
     slots
 }
 
-/// The factory pairing for the learnable controls: one controller each.
+/// The controller a control ships with: one each, keyed on the control rather than on the slot it sits in, so a catalogue
+/// that moves cannot hand one control's fader to its neighbour.
 ///
-/// The waveform gets CC 20 and the pattern selector CC 21, both undefined controllers no common box sends by accident,
-/// so a fresh session never has a fader fighting the mouse. Tempo keeps 72 and swing keeps 73 — the controllers they had
-/// while they were fixed — so a rig that already works keeps working.
-pub const DEFAULT_CC: [u8; LEARNABLE.len()] = [20, 3, 74, 71, 76, 75, 5, 7, 72, 21, 73];
+/// The waveform gets CC 20 and the pattern selector CC 21, both undefined controllers no common box sends by accident, so
+/// a fresh session never has a fader fighting the mouse. Tempo keeps 72 and swing keeps 73 — the controllers they had while
+/// they were fixed — so a rig that already works keeps working.
+pub const fn factory_cc(target: CcTarget) -> u8 {
+    match target {
+        CcTarget::Waveform => 20,
+        CcTarget::Tuning => 3,
+        CcTarget::Cutoff => 74,
+        CcTarget::Resonance => 71,
+        CcTarget::EnvMod => 76,
+        CcTarget::Decay => 75,
+        CcTarget::Accent => 5,
+        CcTarget::Volume => 7,
+        CcTarget::Tempo => 72,
+        CcTarget::Pattern => 21,
+        CcTarget::Swing => 73,
+    }
+}
+
+/// The factory pairing for the learnable controls: one controller each.
+pub const DEFAULT_CC: [u8; LEARNABLE.len()] = factory_pairing();
+
+const fn factory_pairing() -> [u8; LEARNABLE.len()] {
+    let mut ccs = [0u8; LEARNABLE.len()];
+    let mut slot = 0;
+    while slot < LEARNABLE.len() {
+        ccs[slot] = factory_cc(LEARNABLE[slot]);
+        slot += 1;
+    }
+    ccs
+}
 /// Which slot a target occupies in `SharedState::cc_map`, or `None` for the fixed ones.
 pub fn slot(target: CcTarget) -> Option<usize> {
     LEARNABLE.iter().position(|candidate| *candidate == target)
@@ -496,6 +524,22 @@ mod tests {
             [20, 3, 74, 71, 76, 75, 5, 7, 72, 21, 73],
             "the factory controllers moved"
         );
+    }
+
+    #[test]
+    fn a_control_keeps_its_factory_controller_when_the_learn_map_moves() {
+        // The pairing is keyed on the control, not on the position it happens to sit in: 74 is CUT OFF whoever is third.
+        // A catalogue that moves must move the controller with the control, not hand CUT OFF's fader to its neighbour.
+        assert_eq!(factory_cc(CcTarget::Cutoff), 74);
+        assert_eq!(factory_cc(CcTarget::Waveform), 20, "a rig's wave fader");
+        assert_eq!(factory_cc(CcTarget::Swing), 73, "the shuffle keeps 73");
+        for (slot, target) in LEARNABLE.iter().enumerate() {
+            assert_eq!(
+                DEFAULT_CC[slot],
+                factory_cc(*target),
+                "{target:?} lost its controller"
+            );
+        }
     }
     #[test]
     fn listening_records_the_controller_instead_of_moving_a_knob() {

@@ -56,11 +56,6 @@ impl Knob {
         }
     }
 
-    /// The knob at `index`, clamped: the panel and its tests may ask for a slot the catalogue no longer has.
-    pub fn from_index(index: usize) -> Knob {
-        Self::ALL[index.min(Self::ALL.len() - 1)]
-    }
-
     pub fn kind(self) -> Kind {
         match self {
             Knob::Waveform => Kind::Switch,
@@ -149,15 +144,12 @@ mod tests {
         assert_eq!(Knob::ALL.len(), 7);
         for (position, knob) in Knob::ALL.iter().enumerate() {
             assert_eq!(knob.index(), position, "{knob:?} has the wrong slot");
-            assert_eq!(Knob::from_index(position), *knob);
             assert_eq!(
                 Knob::ALL.iter().filter(|other| *other == knob).count(),
                 1,
                 "{knob:?} is listed twice"
             );
         }
-        // A slot the catalogue does not have clamps instead of panicking.
-        assert_eq!(Knob::from_index(99), Knob::ALL[6]);
     }
 
     #[test]
