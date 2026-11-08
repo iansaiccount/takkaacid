@@ -48,6 +48,17 @@ fn stash_current(state: &SharedState, bank: &mut PatternBank) {
 ///
 /// Pattern moves push the new pattern into `SharedState`, exactly as the panel's pattern switch does.
 /// `ToggleHelp` changes no shared state — the panel owns whether the card is showing — so it reports false.
+/// Move the bank to `index` and hand the engine that pattern.
+///
+/// One path for the keyboard, the panel and a learned controller: the slot being edited is copied back into the bank
+/// first, so a controller cannot leave the bank and the engine disagreeing about what is playing.
+pub fn select_pattern(state: &SharedState, bank: &mut PatternBank, index: usize) {
+    stash_current(state, bank);
+    bank.select(index % TOTAL_PATTERNS);
+    state.set_pattern(Arc::new(*bank.current_pattern()));
+    state.set_pattern_index(bank.current());
+}
+
 pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) -> bool {
     match shortcut {
         Shortcut::PlayStop => {
@@ -63,15 +74,15 @@ pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) ->
             true
         }
         Shortcut::NextPattern => {
-            stash_current(state, bank);
-            bank.select((bank.current() + 1) % TOTAL_PATTERNS);
-            state.set_pattern(Arc::new(*bank.current_pattern()));
+            select_pattern(state, bank, (bank.current() + 1) % TOTAL_PATTERNS);
             true
         }
         Shortcut::PrevPattern => {
-            stash_current(state, bank);
-            bank.select((bank.current() + TOTAL_PATTERNS - 1) % TOTAL_PATTERNS);
-            state.set_pattern(Arc::new(*bank.current_pattern()));
+            select_pattern(
+                state,
+                bank,
+                (bank.current() + TOTAL_PATTERNS - 1) % TOTAL_PATTERNS,
+            );
             true
         }
         Shortcut::ToggleHelp => false,

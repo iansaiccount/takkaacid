@@ -21,6 +21,8 @@ fn main() -> eframe::Result {
     let saved = persist::load_or_default(&persist::data_dir());
     let state = persist::saved_to_shared(&saved);
     let bank = saved.bank.clone();
+    // The MIDI thread reads this to know which bank a pattern controller is pointing into.
+    state.set_pattern_index(bank.current());
     // The MIDI input the last session used, if any: a missing port is reported, never swapped for another.
     let midi_preference = match saved.midi_input.as_deref() {
         Some(name) => midi::ports::PortChoice::Named(name.to_string()),
@@ -129,6 +131,15 @@ impl eframe::App for TakkaApp {
             panel_ui::dispatch::handle(press, &mut self.panel, &self.state, &mut self.bank);
         }
 
+        // A learned pattern controller cannot move the bank from the MIDI thread, so it leaves a request and the panel
+        // applies it here, through the same path the shift+arrow shortcut uses.
+        if let Some(index) = self.state.take_pattern_request() {
+            panel_ui::shortcuts::select_pattern(&self.state, &mut self.bank, index);
+            self.panel.pattern = self.state.pattern();
+            self.panel.pattern_id = PatternBank::id_of(self.bank.current());
+            self.state.set_pattern_index(self.bank.current());
+            self.panel.dirty = true;
+        }
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
         // SAVE asks for a write; `save` clears `dirty` when it succeeds and prints when it does not.
@@ -173,6 +184,7 @@ impl eframe::App for TakkaApp {
                     persist::apply_saved(&saved, &self.state, &mut self.bank);
                     self.panel.pattern = self.state.pattern();
                     self.panel.pattern_id = PatternBank::id_of(self.bank.current());
+                    self.state.set_pattern_index(self.bank.current());
                     self.panel.selected = 0;
                     self.panel.song_name = None;
                     self.panel.dirty = true;
@@ -235,6 +247,7 @@ impl eframe::App for TakkaApp {
                         persist::apply_saved(&saved, &self.state, &mut self.bank);
                         self.panel.pattern = self.state.pattern();
                         self.panel.pattern_id = PatternBank::id_of(self.bank.current());
+                        self.state.set_pattern_index(self.bank.current());
                         self.panel.selected = 0;
                         self.panel.dirty = false;
                         self.panel.song_name = Some(name.clone());

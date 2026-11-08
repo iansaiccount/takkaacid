@@ -47,7 +47,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "click the MIDI line: choose an input port",
                 "clock: tempo follows a 24 ppqn source",
                 "CC 20 waveform, 3 tuning, 5 accent, 7 volume",
-                "CC 71 resonance, 72 tempo, 73 swing",
+                "CC 21 pattern, 71 resonance, 72 tempo, 73 swing",
                 "CC 74 cutoff, 75 decay, 76 env mod",
             ],
         ),
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn every_cc_mapping_is_documented() {
         let midi: String = help_sections()[2].1.join("\n");
-        for (cc, _) in crate::midi::cc::CC_MAP {
+        for (cc, _) in crate::midi::cc::mapped() {
             assert!(midi.contains(&cc.to_string()), "CC {cc} is undocumented");
         }
     }

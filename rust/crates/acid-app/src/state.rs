@@ -94,11 +94,17 @@ pub struct SharedState {
     /// The computer keyboard's octave offset, `-2..=2`.
     pub octave: AtomicI32,
     /// The controller each learnable knob listens to, in `midi::cc::LEARNABLE` order; `-1` means unmapped.
-    pub cc_map: [AtomicI32; 8],
+    pub cc_map: [AtomicI32; 10],
     /// True while the panel is waiting for a controller to learn.
     pub learn_active: AtomicBool,
     /// The controller the MIDI thread saw while learning; `-1` until one arrives.
     pub learn_cc: AtomicI32,
+    /// Which of the 64 patterns is playing, `0..64`. `main` owns the bank, so it keeps this in step; the MIDI thread
+    /// only reads it, to know which bank a pattern message is pointing into.
+    pub pattern_index: AtomicI32,
+    /// A pattern a controller asked for, as an absolute number; `-1` when there is nothing to do. The MIDI thread may
+    /// not touch the bank, so it leaves this and `main` drains it.
+    pub pattern_request: AtomicI32,
     /// The MIDI notes the panel has not placed yet, oldest first. A queue rather than one slot: two notes can land
     /// inside a single frame, and the later one must not overwrite the earlier one's pitch or velocity.
     pub notes: NoteQueue,
@@ -133,6 +139,8 @@ impl SharedState {
             }),
             learn_active: AtomicBool::new(false),
             learn_cc: AtomicI32::new(-1),
+            pattern_index: AtomicI32::new(0),
+            pattern_request: AtomicI32::new(-1),
             notes: NoteQueue::new(),
             status: Mutex::new(AudioStatus::Starting),
         })
@@ -182,9 +190,23 @@ impl SharedState {
     pub fn set_pattern(&self, pattern: Arc<Pattern>) {
         self.pattern.store(pattern);
     }
-
     pub fn pattern(&self) -> Arc<Pattern> {
         self.pattern.load_full()
+    }
+
+    /// Which pattern is playing, `0..64`; `main` keeps this in step with the bank.
+    pub fn pattern_index(&self) -> usize {
+        self.pattern_index.load(Ordering::Relaxed).max(0) as usize
+    }
+
+    pub fn set_pattern_index(&self, index: usize) {
+        self.pattern_index.store(index as i32, Ordering::Relaxed);
+    }
+
+    /// Take the pattern a controller asked for, if any. Drained by `main`, which owns the bank.
+    pub fn take_pattern_request(&self) -> Option<usize> {
+        let requested = self.pattern_request.swap(-1, Ordering::Relaxed);
+        (requested >= 0).then_some(requested as usize)
     }
 
     /// Clone-on-write one step. Stray indices are ignored: this is reachable from the UI.

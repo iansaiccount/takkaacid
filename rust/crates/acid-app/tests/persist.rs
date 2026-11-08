@@ -184,9 +184,40 @@ fn a_map_from_before_the_waveform_knob_keeps_every_fader_it_had() {
             13,
             14,
             15,
-            16
+            16,
+            acid_app::midi::cc::DEFAULT_CC[8],
+            acid_app::midi::cc::DEFAULT_CC[9]
         ],
         "the switch gains its controller; every learned fader keeps its slot"
+    );
+    assert_eq!(loaded.version, SAVE_VERSION);
+}
+
+#[test]
+fn a_map_from_before_the_pattern_selector_keeps_every_learned_fader() {
+    // Eight entries is a map from the build before the pattern selector and the learnable tempo: both are appended, so
+    // nothing that already had a slot may move.
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let object = legacy.as_object_mut().unwrap();
+    object.insert("version".to_string(), serde_json::json!(5));
+    object.insert(
+        "cc_map".to_string(),
+        serde_json::json!([30, 31, 32, 33, 34, 35, 36, 37]),
+    );
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = acid_app::persist::load_or_default(dir.path());
+    assert_eq!(
+        loaded.cc_map,
+        vec![30, 31, 32, 33, 34, 35, 36, 37, 72, 21],
+        "the eight learned faders stay put; tempo and pattern are appended"
     );
     assert_eq!(loaded.version, SAVE_VERSION);
 }

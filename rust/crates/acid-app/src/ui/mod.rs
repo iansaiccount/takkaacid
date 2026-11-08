@@ -209,6 +209,24 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         &display::format_tempo(state.tempo),
         s,
     );
+    // Both readouts can be taught while a learn is choosing: click PATTERN and the next controller picks the pattern,
+    // click the BPM and the next controller sets the tempo.
+    learn_pick(
+        ui,
+        state,
+        shared,
+        "learn-tempo",
+        panel::tempo_display_rect(l.top),
+        midi::cc::CcTarget::Tempo,
+    );
+    learn_pick(
+        ui,
+        state,
+        shared,
+        "learn-pattern",
+        switches::cell(l.switches, switches::Switch::Pattern),
+        midi::cc::CcTarget::Pattern,
+    );
 
     // MIDI status: right-aligned between the wordmark and the pattern display, amber when the app has
     // stopped probing and a small REPROBE target appears with it.
@@ -289,19 +307,21 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             continue;
         }
         // Publish straight away: the audio thread's next block picks it up, so the move is heard now.
+        //
+        // The switch has two masters: the hand and a learned controller. While the hand is on the knob it wins; when it
+        // is not, the shared value is the truth, so a fader moves the face. Snapping happens on release, never mid-drag —
+        // a frame-by-frame snap pulls the position back onto the detent it started from, and a slow drag could never
+        // cross a midpoint.
+        let switch_moved = i == 0 && state.knobs[0] != before;
         match i {
-            // The switch has two masters: the hand and a learned controller. While the hand is on the knob it wins;
-            // when it is not, the shared value is the truth, so a fader moves the face. Snapping happens on release,
-            // never mid-drag — a frame-by-frame snap pulls the position back onto the detent it started from, and a
-            // slow drag could never cross a midpoint.
             0 => {
                 if response.dragged() {
                     shared.set_waveform(waveform_from_position(state.knobs[0]));
                 } else {
                     let hand = waveform_from_position(state.knobs[0]);
-                    // The hand's own move wins: the wheel, or a drag that has just ended. Otherwise the switch is
-                    // where the shared state says, which is where a learned controller put it.
-                    let face = if state.knobs[0] != before || shared.waveform() == hand {
+                    // The hand's own move wins: the wheel, or a drag that has just ended. Otherwise the switch is where
+                    // the shared state says, which is where a learned controller put it.
+                    let face = if switch_moved || shared.waveform() == hand {
                         hand
                     } else {
                         shared.waveform()
@@ -318,7 +338,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             6 => shared.accent.set(state.knobs[6]),
             _ => {}
         }
-        if state.knobs[i] != before {
+        // Only the hand marks the session unsaved: the switch adopting a learned controller's value is the panel
+        // catching up, not an edit the player made.
+        let moved = if i == 0 {
+            switch_moved
+        } else {
+            state.knobs[i] != before
+        };
+        if moved {
             state.dirty = true;
         }
     }
@@ -847,6 +874,26 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
     });
 }
 
+/// A click on a control that can be taught, while a learn is choosing.
+///
+/// Guarded on `Choosing` rather than on the click alone: outside a learn these are the player's controls, and a stray
+/// click on the tempo readout must not start a binding that then swallows the next controller they touch.
+fn learn_pick(
+    ui: &mut egui::Ui,
+    state: &mut PanelState,
+    shared: &SharedState,
+    id: &str,
+    rect: egui::Rect,
+    control: midi::cc::CcTarget,
+) {
+    if state.learn != learn::Step::Choosing {
+        return;
+    }
+    let hit = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
+    if hit.clicked() {
+        state.learn = learn::choose(control, shared);
+    }
+}
 /// A panel button with its hover help attached: draw it, explain it, and say whether it was clicked.
 ///
 /// One helper for every button, so the tip follows the control that was actually drawn — the CLEAR key reads `CLEAR?`

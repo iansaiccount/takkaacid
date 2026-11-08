@@ -50,6 +50,16 @@ fn volume_centre() -> Pos2 {
     panel::volume_knob_rect(layout(screen()).top).center()
 }
 
+/// The BPM readout in the top strip, which a learn can teach.
+fn tempo_centre() -> Pos2 {
+    panel::tempo_display_rect(layout(screen()).top).center()
+}
+
+/// The PATTERN key in the switches row.
+fn pattern_centre() -> Pos2 {
+    switches::cell(layout(screen()).switches, switches::Switch::Pattern).center()
+}
+
 #[test]
 fn learn_then_a_knob_then_a_controller_binds_it() {
     let ctx = Context::default();
@@ -122,6 +132,41 @@ fn the_waveform_selector_is_a_learnable_knob_now() {
     for index in 1..=6 {
         assert!(acid_app::ui::learn::control_for_knob(index).is_some());
     }
+}
+
+/// The BPM readout and the PATTERN key are learnable too — but only while a learn is choosing, so a stray click on the
+/// top strip never starts a binding that would swallow the next controller the player touches.
+#[test]
+fn the_tempo_readout_and_the_pattern_key_can_be_taught() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+
+    let mut idle = PanelState::default();
+    click(&ctx, &mut idle, &shared, tempo_centre());
+    click(&ctx, &mut idle, &shared, pattern_centre());
+    assert_eq!(
+        idle.learn,
+        Step::Idle,
+        "outside a learn the readouts are inert"
+    );
+
+    let mut panel = PanelState::default();
+    click(&ctx, &mut panel, &shared, learn_centre());
+    click(&ctx, &mut panel, &shared, tempo_centre());
+    assert_eq!(
+        panel.learn,
+        Step::Listening(CcTarget::Tempo),
+        "the BPM readout asks for a tempo fader"
+    );
+
+    let mut panel = PanelState::default();
+    click(&ctx, &mut panel, &shared, learn_centre());
+    click(&ctx, &mut panel, &shared, pattern_centre());
+    assert_eq!(
+        panel.learn,
+        Step::Listening(CcTarget::Pattern),
+        "the PATTERN key asks for a pattern fader"
+    );
 }
 
 #[test]

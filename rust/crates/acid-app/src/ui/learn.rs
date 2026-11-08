@@ -32,7 +32,7 @@ pub fn label(step: Step) -> &'static str {
 pub fn hint(step: Step) -> Option<&'static str> {
     match step {
         Step::Idle => None,
-        Step::Choosing => Some("LEARN: click a knob"),
+        Step::Choosing => Some("LEARN: click a knob, PATTERN or the BPM"),
         Step::Listening(_) => Some("LEARN: move a MIDI control"),
     }
 }

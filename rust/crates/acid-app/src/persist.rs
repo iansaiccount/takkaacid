@@ -56,7 +56,7 @@ impl Default for Knobs {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 5;
+pub const SAVE_VERSION: u32 = 6;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -119,13 +119,16 @@ impl SavedState {
         if self.version < 3 {
             self.bank.map_patterns(|pattern| pattern.transposed(21));
         }
-        // Version 4 and older were written before the waveform knob could be taught, so their map has one entry fewer:
-        // the switch's controller is prepended, and every learned fader keeps the slot — and the knob — it had.
-        if self.cc_map.len() < crate::midi::cc::LEARNABLE.len() {
-            let missing = crate::midi::cc::LEARNABLE.len() - self.cc_map.len();
-            for slot in (0..missing).rev() {
-                self.cc_map.insert(0, crate::midi::cc::DEFAULT_CC[slot]);
-            }
+        // Version 4 and older were written before the waveform knob could be taught: its controller goes at the front of
+        // the map, and every learned fader keeps the slot — and the knob — it had.
+        if self.version < 5 {
+            self.cc_map.insert(0, crate::midi::cc::DEFAULT_CC[0]);
+        }
+        // Version 5 and older predate the pattern selector and the learnable tempo. Both are appended, in slot order, so
+        // again nothing that already had a slot moves.
+        while self.cc_map.len() < crate::midi::cc::LEARNABLE.len() {
+            let slot = self.cc_map.len();
+            self.cc_map.push(crate::midi::cc::DEFAULT_CC[slot]);
         }
         self.version = SAVE_VERSION;
         self
@@ -200,8 +203,8 @@ pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternB
     for (slot, cc) in state.cc_map.iter().enumerate().take(shared.cc_map.len()) {
         shared.cc_map[slot].store(i32::from(*cc), std::sync::atomic::Ordering::Relaxed);
     }
-    // A song written before the waveform knob was teachable has no slot for it; leaving the old controller in place
-    // would make the switch listen to whatever the last session taught it, which is not what the song says.
+    // A song written by an older build may have fewer slots than this one: fill the rest from the factory pairing, so a
+    // control the song never knew about cannot inherit whatever the last session taught it.
     for slot in state.cc_map.len()..shared.cc_map.len() {
         shared.cc_map[slot].store(
             i32::from(crate::midi::cc::DEFAULT_CC[slot]),
@@ -209,6 +212,8 @@ pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternB
         );
     }
     shared.set_pattern(Arc::new(*bank.current_pattern()));
+    // A pattern controller reads this to know which bank it is pointing into, and a loaded song moves the bank.
+    shared.set_pattern_index(bank.current());
 }
 
 /// Capture the running state for saving. The bank comes from `bank`, so callers keep the other 63 patterns.
