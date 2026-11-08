@@ -7,6 +7,7 @@ pub mod edit;
 pub mod help;
 pub mod keys;
 pub mod knob;
+pub mod knobs;
 pub mod layout;
 pub mod learn;
 pub mod panel;
