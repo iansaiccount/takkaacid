@@ -475,6 +475,75 @@ pub fn rename_song(dir: &Path, from: &str, to: &str) -> Result<()> {
         .with_context(|| format!("renaming {} to {}", source.display(), target.display()))
 }
 
+/// Where a save should land: the file the session is on, or a new one under a typed name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SaveTarget {
+    /// Overwrite the song the session came from.
+    InPlace(String),
+    /// Write a new song under this name, leaving the old file where it is.
+    NewFile(String),
+}
+
+/// Decide where a save goes. A typed name equal to the session's song means "keep it current"; anything else is a new
+/// file, so a save never silently moves a song. A blank name keeps the current one; blank with nothing open saves nothing.
+pub fn save_target(current: Option<&str>, typed: &str) -> Option<SaveTarget> {
+    let typed = song_name(typed);
+    match (current, typed) {
+        (Some(current), Some(typed)) if current == typed => Some(SaveTarget::InPlace(typed)),
+        (_, Some(typed)) => Some(SaveTarget::NewFile(typed)),
+        (Some(current), None) => Some(SaveTarget::InPlace(current.to_string())),
+        (None, None) => None,
+    }
+}
+
+/// Write the session to a path the player chose. The bytes are the library's own format, so an export can be dropped
+/// straight into `songs/` and will load there.
+pub fn export_song(to: &Path, state: &SavedState) -> Result<()> {
+    if let Some(parent) = to.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        return Err(anyhow!("there is no folder at {}", parent.display()));
+    }
+    write_atomic(to, &serde_json::to_vec_pretty(state)?)
+        .with_context(|| format!("writing {}", to.display()))
+}
+
+/// Copy a song from a path the player chose into the library, and answer the name it landed under.
+///
+/// A song is a save file like any other and may be hand-edited, so it is sanitised and upgraded before it is written; a
+/// file that is not a song is refused before anything touches the library.
+pub fn import_song(from: &Path, dir: &Path) -> Result<String> {
+    let bytes = std::fs::read(from).with_context(|| format!("reading {}", from.display()))?;
+    let mut state: SavedState =
+        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", from.display()))?;
+    sanitize(&mut state);
+    let state = state.upgraded();
+
+    let stem = from
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let wanted = song_name(&stem).unwrap_or_else(|| "Imported song".to_string());
+    let name = unique_name(dir, &wanted);
+    save_song(dir, &name, &state)?;
+    Ok(name)
+}
+
+/// The name, or the first `X (2)`, `X (3)`, and so on that is free: an import never overwrites a song.
+fn unique_name(dir: &Path, wanted: &str) -> String {
+    if !song_path(dir, wanted).exists() {
+        return wanted.to_string();
+    }
+    for copy in 2..1000 {
+        let candidate = format!("{wanted} ({copy})");
+        if !song_path(dir, &candidate).exists() {
+            return candidate;
+        }
+    }
+    format!("{wanted} (copy)")
+}
+
 /// A brand-new song: the starter phrase in the first pattern, every other pattern empty, knobs and tempo at their
 /// defaults — so a new song sounds like the panel intends before a hand touches it.
 pub fn new_song() -> SavedState {

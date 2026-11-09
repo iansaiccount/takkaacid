@@ -5,7 +5,8 @@ use acid_app::persist::{
     shared_to_saved,
 };
 use acid_app::persist::{
-    delete_song, list_songs, load_song, new_song, rename_song, save_song, song_name,
+    SaveTarget, delete_song, export_song, import_song, list_songs, load_song, new_song,
+    rename_song, save_song, save_target, song_name,
 };
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
@@ -737,4 +738,85 @@ fn a_first_run_opens_on_a_demo_under_a_new_name() {
     let (again, first_run) = open(dir.path());
     assert!(!first_run, "a written session is not a first run");
     assert_eq!(again.bank.get(0), opened.bank.get(0));
+}
+
+/// A song can leave the library and come back: the export is the library format, so the import is a plain copy in.
+#[test]
+fn a_song_can_leave_the_library_and_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        bpm: 137.0,
+        ..SavedState::default()
+    };
+    save_song(dir.path(), "Acid 1", &saved).unwrap();
+
+    let exported = out.path().join("Acid 1.json");
+    export_song(&exported, &saved).unwrap();
+    assert!(exported.exists(), "the export is a file on disk");
+
+    let other = tempfile::tempdir().unwrap();
+    let landed = import_song(&exported, other.path()).unwrap();
+    assert_eq!(landed, "Acid 1");
+    assert_eq!(list_songs(other.path()), vec!["Acid 1".to_string()]);
+    assert_eq!(load_song(other.path(), "Acid 1").unwrap().bpm, 137.0);
+}
+
+/// The library is not overwritten by an import: a taken name lands beside its namesake.
+#[test]
+fn an_import_with_a_taken_name_lands_beside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        bpm: 120.0,
+        ..SavedState::default()
+    };
+    save_song(dir.path(), "Acid 1", &saved).unwrap();
+    let exported = out.path().join("Acid 1.json");
+    let louder = SavedState {
+        bpm: 90.0,
+        ..SavedState::default()
+    };
+    export_song(&exported, &louder).unwrap();
+
+    let landed = import_song(&exported, dir.path()).unwrap();
+    assert_eq!(landed, "Acid 1 (2)");
+    assert_eq!(
+        list_songs(dir.path()),
+        vec!["Acid 1".to_string(), "Acid 1 (2)".to_string()]
+    );
+    assert_eq!(
+        load_song(dir.path(), "Acid 1").unwrap().bpm,
+        120.0,
+        "the song that was there keeps its tempo"
+    );
+    assert_eq!(load_song(dir.path(), "Acid 1 (2)").unwrap().bpm, 90.0);
+}
+
+/// A file that is not a song is refused before anything touches the library.
+#[test]
+fn importing_something_that_is_not_a_song_writes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let junk = out.path().join("notes.json");
+    std::fs::write(&junk, b"not a song at all").unwrap();
+    assert!(import_song(&junk, dir.path()).is_err());
+    assert!(list_songs(dir.path()).is_empty());
+    assert!(!dir.path().join("songs").exists());
+}
+
+/// The save button writes in place only when the name has not changed; any other name is a new file, so a save never
+/// moves a song out from under its own name.
+#[test]
+fn a_save_writes_in_place_only_when_the_name_has_not_changed() {
+    let same = |name: &str| Some(SaveTarget::InPlace(name.to_string()));
+    let new = |name: &str| Some(SaveTarget::NewFile(name.to_string()));
+    assert_eq!(save_target(Some("Acid 1"), "Acid 1"), same("Acid 1"));
+    assert_eq!(save_target(Some("Acid 1"), "  Acid 1  "), same("Acid 1"));
+    assert_eq!(save_target(Some("Acid 1"), "Acid 2"), new("Acid 2"));
+    assert_eq!(save_target(None, "Acid 1"), new("Acid 1"));
+    // A blank field means "keep the song I am on"; with nothing open there is nothing to keep.
+    assert_eq!(save_target(Some("Acid 1"), ""), same("Acid 1"));
+    assert_eq!(save_target(None, ""), None);
+    assert_eq!(save_target(Some("Acid 1"), "a/b"), same("Acid 1"));
 }
