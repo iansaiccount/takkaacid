@@ -22,7 +22,7 @@ keys closes the gate, which also ends a MIDI note that was sounding.
 
 ## `LEARN`: teaching a control
 
-Eleven controls come factory-mapped (`20-reference` has the list), and any of them — and every knob — can be re-taught:
+Eleven controls come factory-mapped ([`20-reference`](20-reference.md) has the list), and any of them — and every knob — can be re-taught:
 
 1. Press **`LEARN`**. Its face changes to **`PICK`**, and the hint line says `LEARN: click a knob or a readout`.
 2. Click the knob, switch or readout you want the controller to drive. The face changes to **`MOVE`** and the hint says
@@ -40,7 +40,7 @@ you can see which one is about to be bound.
 ## The pattern selector
 
 The pattern selector is a separate case, and the one that behaves most like playing: its knob moves the selection
-immediately, the **readout shows where you are going**, and the sound follows at the end of the bar. `11-the-bank` explains
+immediately, the **readout shows where you are going**, and the sound follows at the end of the bar. [`11-the-bank`](11-the-bank.md) explains
 why it waits. It also takes pickup, so the fader has to be in the zone of the pattern the selection holds before it may move
 the selection — otherwise the first message would jump the bank.
 
@@ -50,4 +50,4 @@ If your controller or interface sends MIDI clock (24 pulses per quarter note), t
 the tempo the clock implies and the transport runs to it. While clock is arriving, a tempo you set by hand holds until the
 next tick replaces it — the clock is the master.
 
-`15-keyboard` is the computer keyboard doing most of the same job.
+[`15-keyboard`](15-keyboard.md) is the computer keyboard doing most of the same job.

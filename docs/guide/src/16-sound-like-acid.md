@@ -1,6 +1,6 @@
 # How to sound acid
 
-This page is not about settings — `06-the-knobs` has those, and `07-a-starting-patch` has a patch to start from. This is
+This page is not about settings — [`06-the-knobs`](06-the-knobs.md) has those, and [`07-a-starting-patch`](07-a-starting-patch.md) has a patch to start from. This is
 about the handful of phrases that make a bass line sound like *this* instrument rather than like a generic synth playing
 low notes. They are habits, not values.
 
@@ -62,4 +62,4 @@ writing the whole thing on a limping grid and hoping it settles.
 - **It sounds flat, all one note.** Env mod or decay is doing nothing: one of them is at zero, and the accent isn't
   reaching the line.
 
-`17-trouble` is the other kind of problem.
+[`17-trouble`](17-trouble.md) is the other kind of problem.

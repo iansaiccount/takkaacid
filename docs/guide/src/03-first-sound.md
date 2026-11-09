@@ -1,6 +1,6 @@
 # Your first sound
 
-Start it as `02-install` says. The window opens on a line that already plays: the **Slow Acid** demo, loaded under the
+Start it as [`02-install`](02-install.md) says. The window opens on a line that already plays: the **Slow Acid** demo, loaded under the
 name a new song starts with, `SONG New song`.
 
 Nothing about that line is on disk yet. The strip says so in one word, **`UNSAVED`**, sitting just right of the wordmark
@@ -34,4 +34,4 @@ things ask twice:
 Everything else — the knobs, the step keys, the transport, the pattern selector — is safe to touch. Turn a knob and see
 what happens; the line is still playing.
 
-Next: `04-the-face` names every part of what you are looking at.
+Next: [`04-the-face`](04-the-face.md) names every part of what you are looking at.

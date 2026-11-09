@@ -53,7 +53,7 @@ row for the number that arrives:
 - **The row does not match** — the keyboard is transposed, on a different octave, or sending a note number the mapping
   does not reach. That is a controller setting, not an app setting.
 
-`14-midi` explains what each note does once it arrives.
+[`14-midi`](14-midi.md) explains what each note does once it arrives.
 
 ## Your work is not there
 
@@ -68,7 +68,7 @@ different `TAKKA_ACID_DATA_DIR` sees none of the work from a run with the defaul
 
 **And the warning worth repeating:** saving is manual by default. The help card's notes say the session is saved on exit
 and again two seconds after a change; only the exit save always happens — the two-second one needs `AUTOSAVE` on, and it
-is off unless you turned it on. If you lost work, that is the most likely reason, and `13-settings` is where the switch
+is off unless you turned it on. If you lost work, that is the most likely reason, and [`13-settings`](13-settings.md) is where the switch
 lives.
 
 ## Reporting a bug
@@ -84,4 +84,4 @@ Include, in this order:
 5. **How you built it** — the commit you are on, or the release binary.
 6. **What `takka-acid --midi-map` prints**, when the trouble is MIDI.
 
-`20-reference` has every word the panel uses, so you can be sure of the exact spelling when you quote it.
+[`20-reference`](20-reference.md) has every word the panel uses, so you can be sure of the exact spelling when you quote it.

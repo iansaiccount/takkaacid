@@ -9,11 +9,11 @@ up, so the transport always says what is happening rather than what happened las
 
 ## Tempo
 
-The tempo readout sits in the top strip, in BPM, from **40 to 300**. Three things move it, all by a single BPM:
+The tempo readout sits in the top strip, in BPM, from **40–300**. Three things move it, all by a single BPM:
 
 - `TEMPO -` and `TEMPO +`, one press each way.
 - `up` and `down` on the computer keyboard, one BPM each.
-- A learned controller fader, which covers the whole range in one sweep (`14-midi`).
+- A learned controller fader, which covers the whole range in one sweep ([`14-midi`](14-midi.md)).
 
 Holding `up` or `down` sweeps the tempo; those two are the only keys in the panel that repeat while held.
 
@@ -24,7 +24,7 @@ Swing pushes the even-numbered steps late and pulls the odd ones early, by the s
 lasts exactly two steps and the bar length never changes however far you turn it. At zero the line is straight; pushed up
 it becomes a shuffle.
 
-The knob is **`SHUFFLE`**, in the performance row, and it is `10-performance-row`'s subject.
+The knob is **`SHUFFLE`**, in the performance row, and it is [`10-performance-row`](10-performance-row.md)'s subject.
 
 ## Why the step LED chases the sound
 
@@ -41,4 +41,4 @@ runs and the light follows at once, and a stopped line leaves the light wherever
 It does not restart the line on a stop, and it does not quantise your presses. Stop in the middle and the line resumes
 from the step the engine was on; the pattern is where you left it.
 
-`10-performance-row` is what to reach for while the line is playing.
+[`10-performance-row`](10-performance-row.md) is what to reach for while the line is playing.

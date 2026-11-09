@@ -34,7 +34,7 @@ The rest of the editing keys, in the order you will meet them:
 | Key | What it does |
 |---|---|
 | `left` / `right` | move the selection one step |
-| `shift+left` / `shift+right` | previous / next pattern (`11-the-bank`) |
+| `shift+left` / `shift+right` | previous / next pattern ([`11-the-bank`](11-the-bank.md)) |
 | `shift+up` / `shift+down` | note up or down a step |
 | `enter` | note on or off |
 | `backspace` | empty the step to a rest (while editing) |

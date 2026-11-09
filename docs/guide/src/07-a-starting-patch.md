@@ -3,7 +3,7 @@
 The **Slow Acid** demo — the line a first run opens on — is a patch worth knowing by heart, because it is the sound the
 rest of this book assumes: a saw, a filter that is open enough to hear the slides, and resonance doing the talking.
 
-Here it is, as positions. The picture above them is the target: `06-the-knobs` names every knob, and the panel obeys its
+Here it is, as positions. The picture above them is the target: [`06-the-knobs`](06-the-knobs.md) names every knob, and the panel obeys its
 own picture.
 
 ![The knob row, Slow Acid](img/knob-row.png)
@@ -40,10 +40,10 @@ note.
 ## What it is not
 
 There is **no numeric readout on the panel and nothing to type**. The knobs are positions: "a third" and "three quarters"
-are as exact as the instrument gets, and they are exact enough — the picture in `04-the-face`, taken from this very demo,
+are as exact as the instrument gets, and they are exact enough — the picture in [`04-the-face`](04-the-face.md), taken from this very demo,
 is the reference you dial against.
 
 If your version of it sounds a little different to the demo, that is expected: how far a drag travels depends on the
 window, and how it sounds depends on your ears. Dial until the line speaks, then leave it alone and write the next one.
 
-From here: `08-writing-steps` puts notes where there are none.
+From here: [`08-writing-steps`](08-writing-steps.md) puts notes where there are none.

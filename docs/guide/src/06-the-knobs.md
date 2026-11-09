@@ -4,7 +4,7 @@
 
 Seven knobs change the sound, and an eighth — in the top-left corner of the panel, out of this row — changes how loud it
 is. Every one of them is a **position**, not a number: there is nothing to type and nothing to read, because the machine
-is an instrument and not a plug-in with a form to fill in. `07-a-starting-patch` gives you positions that make a sound.
+is an instrument and not a plug-in with a form to fill in. [`07-a-starting-patch`](07-a-starting-patch.md) gives you positions that make a sound.
 
 How they answer the hand is the same for all of them:
 
@@ -14,7 +14,7 @@ How they answer the hand is the same for all of them:
 - **Double-click** puts a knob back to the centre of its sweep.
 - **Hover** and it tells you its name (with tooltips on, which is the default).
 
-Every one of them can also be taught to a MIDI controller — `14-midi` shows how — and every one of them is read back from
+Every one of them can also be taught to a MIDI controller — [`14-midi`](14-midi.md) shows how — and every one of them is read back from
 the engine each frame, so a controller's fader and the painted knob never disagree.
 
 ## SAW — the wave
@@ -79,4 +79,4 @@ headroom left for the kick to use.
 The level out of the machine — not part of the sound. It sits in the corner of the top strip rather than in this row
 because it is not something you shape a line with; it is the knob you turn when the neighbours knock.
 
-`07-a-starting-patch` puts all eight in one place.
+[`07-a-starting-patch`](07-a-starting-patch.md) puts all eight in one place.

@@ -53,6 +53,6 @@ the key **up** walks the selection on by one. Type a phrase left to right and th
 fingers. Press `STEP` again to stop walking.
 
 `CLEAR` empties the whole pattern, and it takes two clicks: the key reads `CLEAR?` for a few seconds in between, and any
-edit drops the arm. (`03-first-sound` has the same note.)
+edit drops the arm. ([`03-first-sound`](03-first-sound.md) has the same note.)
 
 The next page is about the clock the line runs on.

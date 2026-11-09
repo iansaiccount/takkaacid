@@ -3,7 +3,7 @@
 takka-acid is a bass synthesizer built to do one thing: play a single acid line, very well.
 
 It has **one voice** and **sixteen steps**. That is the whole machine. You write a line of up to sixteen notes, you shape
-one sound with seven knobs, and the same voice plays both. Sixty-four patterns sit in **eight banks of eight** — `A1`
+one sound with seven knobs, and the same voice plays both. 64 patterns sit in **eight banks of eight** — `A1`
 through `H8` — so a whole night of lines fits in one session.
 
 ## The four things that make the sound

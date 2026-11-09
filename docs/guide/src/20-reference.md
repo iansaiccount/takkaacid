@@ -46,7 +46,7 @@ the switch row (`BANK` `PATTERN` `MODE` are engraved and do nothing yet); `OCT -
 
 ## The factory controller map
 
-Eleven controls ship taught to a controller. Any of them can be re-taught with `LEARN` (`14-midi`).
+Eleven controls ship taught to a controller. Any of them can be re-taught with `LEARN` ([`14-midi`](14-midi.md)).
 
 | Control | CC |
 |---|---|

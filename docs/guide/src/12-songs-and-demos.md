@@ -7,7 +7,7 @@ keys along the bottom.
 
 **`DEMO SONGS`** are the five that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and
 **Funk**. They are read-only — there is no way to overwrite one — and each is a patch plus eight patterns in `A1` to `A8`
-(`11-the-bank`). Clicking one loads it as a **new** song: named `New song`, not yet on disk, `UNSAVED`.
+([`11-the-bank`](11-the-bank.md)). Clicking one loads it as a **new** song: named `New song`, not yet on disk, `UNSAVED`.
 
 **`MY SONGS`** are the songs you have named. Click a row to load one. If what is on screen has unsaved changes, the first
 click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
@@ -45,7 +45,7 @@ with a dot — they become file names in `songs/`.
 
 `IMPORT` and `EXPORT` are the only two file dialogs in the app, and they are drawn by the system's portal rather than by
 takka-acid. On a machine without `xdg-desktop-portal` and a backend behind it, those two buttons have no dialog to open
-(`02-install` lists it as a prerequisite). Everything else on the card works regardless.
+([`02-install`](02-install.md) lists it as a prerequisite). Everything else on the card works regardless.
 
 ## Messages and the strip
 
@@ -54,4 +54,4 @@ notice takes that space for a few seconds and then the name comes back: `saved a
 needs dismissing, and nothing is lost when the card closes, because the notice lives on the strip rather than in the card
 that caused it.
 
-`13-settings` is the other card.
+[`13-settings`](13-settings.md) is the other card.

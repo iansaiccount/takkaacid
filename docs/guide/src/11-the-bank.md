@@ -1,6 +1,6 @@
 # The bank
 
-There are **sixty-four patterns** in the machine: **eight banks of eight**. The readout at the right of the top strip
+There are **64 patterns** in the machine: **eight banks of eight**. The readout at the right of the top strip
 names the one you are on, from `A1` through `H8` — bank letter first, then the pattern's number inside the bank.
 
 A **song** is all sixty-four plus the patch, the tempo, the swing and the switches in settings. So switching patterns and
@@ -14,7 +14,7 @@ sparser reading of it to build a break on, and the same four for the fill. `B1` 
 
 - **`shift+left`** and **`shift+right`**: previous and next pattern. It happens at once, and the selection goes back to
   step 1, because a new pattern starts at its first step.
-- **A learned controller** (CC 21 unless you have taught it somewhere else — `14-midi`). This one is made for playing:
+- **A learned controller** (CC 21 unless you have taught it somewhere else — [`14-midi`](14-midi.md)). This one is made for playing:
   see below.
 
 The **`BANK`**, **`PATTERN`** and **`MODE`** keys in the switch row are engraved but silent — there is no bank browser
@@ -32,8 +32,8 @@ sixteenths of each; it plays out the bar and starts the one you stopped on.
 Stopped, there is no bar to wait for, so the swap happens immediately.
 
 If your controller's knob is not where the pattern is, nothing happens until the knob reaches the pattern you are on — the
-pickup rule in `14-midi`, there to stop a message from the controller jumping the bank somewhere you did not ask for.
+pickup rule in [`14-midi`](14-midi.md), there to stop a message from the controller jumping the bank somewhere you did not ask for.
 
 Moving with the keys is immediate: the keyboard is a decision, and the readout follows it at once.
 
-`12-songs-and-demos` is what happens when you want to keep all this.
+[`12-songs-and-demos`](12-songs-and-demos.md) is what happens when you want to keep all this.

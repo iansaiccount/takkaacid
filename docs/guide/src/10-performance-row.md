@@ -40,4 +40,4 @@ Every roll is a brand-new line, so there is no undo. Save first if what you have
 All three groups work with the transport running, and that is how they are meant to be used: octave the second bar, roll
 a new line for the break, nudge the shuffle until the sixteenths sit where you want them.
 
-`11-the-bank` is where the patterns live.
+[`11-the-bank`](11-the-bank.md) is where the patterns live.

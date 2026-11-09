@@ -22,6 +22,13 @@ done
 { grep -rhoE 'img/[A-Za-z0-9._-]+\.png' src --include='*.md' || true; } | sort -u | while read -r img; do
   [ -f "src/$img" ] || { echo "missing image: src/$img"; exit 1; }
 done
+# 3b. every page a page links to exists
+#     (a cross-reference is written as [`01-what-it-is`](01-what-it-is.md); a typo there is a dead link no reader can
+#     follow, and check 2 only guards the table of contents)
+{ grep -rhoE '\]\([A-Za-z0-9._-]+\.md\)' src --include='*.md' || true; } | sed 's/^](//; s/)$//' | sort -u |
+  while read -r page; do
+    [ -f "src/$page" ] || { echo "missing page: src/$page"; exit 1; }
+  done
 
 # 4. the facts that must not drift (spec Review Focus 1, 2, 3, 5)
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }

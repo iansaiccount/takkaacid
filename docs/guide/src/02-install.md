@@ -54,7 +54,7 @@ TAKKA_ACID_DATA_DIR=/tmp/acid-test cargo run --release -p acid-app --bin takka-a
 ```
 
 Saving is **manual by default**: nothing is written until you press `SAVE`. Autosave is a switch in the settings card
-for players who want it, and `12-songs-and-demos` explains exactly what a save does to a name.
+for players who want it, and [`12-songs-and-demos`](12-songs-and-demos.md) explains exactly what a save does to a name.
 
 ## One flag worth knowing
 
@@ -64,4 +64,4 @@ takka-acid --midi-map
 
 `--midi-map` prints a table of every MIDI note number, the note the app makes of it, and the frequency it plays, then
 exits — no window, no audio device. When a controller plays the wrong octave, or a key seems dead, this is the fastest
-way to find out whether the app or the keyboard is wrong. `17-trouble` comes back to it.
+way to find out whether the app or the keyboard is wrong. [`17-trouble`](17-trouble.md) comes back to it.
