@@ -32,6 +32,9 @@ pub const SILKSCREEN: Color32 = Color32::from_rgb(0xFF, 0xC3, 0x00);
 pub const SILKSCREEN_DIM: Color32 = Color32::from_rgb(0x7A, 0x5C, 0x00);
 /// A lit LED's core.
 pub const LED_ON: Color32 = Color32::from_rgb(0xFF, 0xE0, 0x66);
+/// The scrim under a card: the face behind it darkens, never disappears, so the panel still reads as the instrument
+/// rather than as a picture of one.
+pub const SHADE: Color32 = Color32::from_black_alpha(90);
 /// Accent indicator.
 pub const LED_ACCENT: Color32 = Color32::from_rgb(0xFF, 0x95, 0x00);
 /// An unlit LED.

@@ -10,6 +10,7 @@ pub mod keys;
 pub mod knob;
 pub mod layout;
 pub mod learn;
+pub mod modal;
 pub mod panel;
 pub mod pattern_swap;
 pub mod picker;
@@ -636,14 +637,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         state.help_visible = true;
     }
     if help_was_visible {
+        // The card is modal while it is up: a click anywhere closes it, and the shield keeps that click from also
+        // pressing whatever sits underneath.
+        let shield = modal::shield(ui, window, "help-shield");
         help::paint_help(ui.painter(), l.panel, s);
-        // The card is modal while it is up: a click anywhere closes it, and the shield keeps that click
-        // from also pressing whatever sits underneath.
-        let shield = ui.interact(
-            window,
-            ui.scope_id().with("help-shield"),
-            egui::Sense::click(),
-        );
         if shield.clicked() {
             state.help_visible = false;
         }
@@ -654,11 +651,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The songs card sits over everything, so its shield is registered before the card's own controls: a click on
     // a row or the text field is theirs, a click anywhere else dismisses.
     if state.songs.card.is_some() {
-        let shield = ui.interact(
-            window,
-            ui.scope_id().with("songs-shield"),
-            egui::Sense::click(),
-        );
+        let shield = modal::shield(ui, window, "songs-shield");
         let mut request = None;
         // The card names the session by what the session is on, not by what the library file happens to be: a first run
         // and a demo have a name and no file, and the header must not call them untitled while the field says otherwise.
@@ -822,15 +815,9 @@ fn draw_settings(
     if !state.settings_open || state.help_visible || state.songs.card.is_some() {
         return;
     }
-    ui.painter()
-        .rect_filled(window, 0.0, egui::Color32::from_black_alpha(90));
-    // The shield covers the window, so it is registered before the card's own controls: a later widget wins a hit-test tie,
+    // The shield dims the window, so it is registered before the card's own controls: a later widget wins a hit-test tie,
     // and a click on a fold header or a device row is the card's, not a dismissal. Only a click outside them closes.
-    let shield = ui.interact(
-        window,
-        ui.scope_id().with("settings-shield"),
-        egui::Sense::click(),
-    );
+    let shield = modal::shield(ui, window, "settings-shield");
     let mut request = settings::paint(
         ui,
         l.panel,
