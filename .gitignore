@@ -1,2 +1,5 @@
 # scratch workspaces for superpowers execution ledgers — never committed
 .superpowers/
+
+# mdBook's built site — never committed
+docs/guide/book/
