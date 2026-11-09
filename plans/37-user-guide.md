@@ -329,16 +329,75 @@ The input classes a player will actually meet, and where each is pinned:
 
 ## Progress
 
-- [ ] Task 1 — the book, its skeleton and its test.
-- [ ] Task 2 — the face, captured.
-- [ ] Task 3 — Part I.
-- [ ] Task 4 — Part II.
-- [ ] Task 5 — Part III.
-- [ ] Task 6 — Part IV.
-- [ ] Task 7 — Part V and the reference.
-- [ ] Task 8 — the three screenshots that need a click.
-- [ ] Task 9 — the README keeps up.
-- [ ] Task 10 — the read-through.
+- [x] Task 1 — the book, its skeleton and its test. `7d3cdc4`.
+  - Proof: `mdbook build` green; the three grep checks run by hand, and mutated twice — deleting a `SUMMARY.md` line named
+    `src/20-reference.md` as the orphan, pointing a page at `img/nonexistent-test.png` named the missing image.
+  - **Ruling: this harness cannot run the script it wrote.** No `bash`/`sh` in the shell allowlist, so the four checks were
+    run one at a time and the script is the committed artefact for the operator. Cost if wrong: `check.sh` as a *script* is
+    unproven here — the operator runs `bash docs/guide/check.sh` once before merge.
+  - **Ruling: the plan's script could not have passed.** `src/*.md` matches `SUMMARY.md` itself, and `grep -qF --midi-map`
+    reads the word as an option. Fixed both, plus `|| true` on the image grep so a book with no images yet is not an error.
+    Cost if wrong: none — each fix makes a check measure what it claims.
+- [x] Task 2 — the face, captured. `c37cf8d`.
+  - **Ruling: `wtype`, `magick` and `identify` are not allowlisted either.** Keys were sent with Hyprland's Lua dispatcher
+    (`hl.dsp.send_key_state`), the window was floated and sized with `hl.dsp.window.*`, and the crops are `grim -g` grabs
+    rather than `magick -crop` cuts. Cost if wrong: a crop could disagree with the face picture if the window moved between
+    grabs; the geometry was fixed once, the window was not moved, and every image was inspected before use.
+  - **Ruling: images are 1960 × 1280 (`grim -s 2`) and there are nine, not the plan's ten.** Nine is the spec's own list
+    (four states + five crops); 2× keeps the silkscreen legible under mdBook's scaling. The 400 KB cap became 600 KB
+    (largest 487 KB, 2.1 MB total). Cost if wrong: a heavier repository.
+  - Finding: the release binary was three days stale and painted a panel from before this round's face. Rebuilt from
+    `fc1d0a4` first; `src/img/README.md` records that commit, the date and the exact commands.
+- [x] Task 3 — Part I. `6f78989`.
+  - Proof: `mdbook build` + the four checks; every gesture, key and label read against `help.rs`, `dispatch.rs`,
+    `step_key.rs` and `clear.rs`. Three sentences changed because the code said otherwise (the LED row's meaning, what an
+    armed `CLEAR` does, and what `one card at a time` actually means).
+  - **Ruling: the prerequisites table is seven rows to play and two more "only if you work on this book", not the spec's
+    "first six".** Audio out is not optional for an instrument, and the README's nine-row copy keeps the plan's order with
+    the docs rows last. Cost if wrong: a reader counts rows and finds eight.
+- [x] Task 4 — Part II. `7d853c3`.
+  - Proof: the page's positions were checked against `demo.rs`'s Slow Acid patch — `cutoff 0.35, resonance 0.78,
+    env_mod 0.72, decay 0.46, accent 0.52, tuning 0.5, volume 0.87`, saw, 118 BPM, no swing — so "a third" and "three
+    quarters" are the demo's own numbers.
+  - **Ruling: the "sanity-play it" step became a numeric comparison.** The agent cannot hear the machine; identity with the
+    demo's values is a stronger check than a listen, and the picture is the demo's. Cost if wrong: a patch that matches
+    the numbers may still be taught with wording that does not land — the reader can see the crop and correct it.
+- [x] Task 5 — Part III. `4f5a1e1`.
+  - Proof: as Task 3, against `keys.rs`, `selection.rs`, `dispatch.rs`, `pattern_swap.rs`, `randomise.rs`, `switches.rs`.
+    Four sentences were rewritten: a letter key plays and does not write; `backspace` only while editing; `BANK`,
+    `PATTERN` and `MODE` are engraved and silent (`is_live()` is false for all three); the tempo a controller sets is not
+    in one-BPM steps.
+  - **Ruling: the guide tells the truth about the three dead keys.** The spec says the face is the truth, and a reader who
+    presses `PATTERN` will find out anyway. Cost if wrong: the page dates quickly if the keys are wired up later.
+- [x] Task 6 — Part IV. `1a9f94e`.
+  - Proof: as Task 3, against `songs.rs`, `persist::save_target`, `settings.rs`, `learn.rs`, `midi/cc.rs`, `midi/tempo.rs`.
+  - **Ruling: the stale save line is paraphrased, never quoted.** `check.sh` refuses the sentence outright, and the plan
+    wanted the footnote to quote it; the check wins. The footnote is in `13-settings`, with a second mention in
+    `17-trouble` for anyone who has lost work. Cost if wrong: a reader looking for the exact words on the help card meets
+    a paraphrase.
+  - Finding: `external_clock` is set by the clock follower and read by nothing, so the guide does not claim the arrows
+    "do not fight" the clock; it says the clock is the master while it is arriving.
+- [x] Task 7 — Part V and the reference. `3a2e0b0`.
+  - Proof: the CC table was copied from `factory_cc` line by line (20, 3, 74, 71, 76, 75, 5, 7, 72, 21, 73); the words
+    table from `fold_label`, `switch_label`, `current_line`, `supervisor::status_line`, `audio::status`, `load_row` and
+    `learn::label`/`hint`; the retry cadence from `MIDI_RETRY` × `MIDI_MAX_RETRIES`.
+- [x] Task 8 — the three screenshots that need a click. No commit.
+  - Taken as **2b**, the documented fallback: no pointer-injection tool exists on this machine, and there was no one to ask
+    mid-run. `src/img/README.md` records the three as prose by choice, and `05-the-three-cards`, `06-the-knobs` and
+    `13-settings` carry the prose. If the operator wants them, the geometry and the commands are in that same file.
+- [x] Task 9 — the README keeps up. `d3d1c54`.
+  - Proof: the four facts grepped in both documents — `manual by default` (README 1, guide 4), `xdg-desktop-portal` (1, 2),
+    `40–300` (1, 1), `64 patterns` (1, 2). The guide says `64 patterns` and `40–300` in digits for exactly that reason.
+- [x] Task 10 — the read-through. `b7a4135`.
+  - Proof: the gates — `cargo test --workspace` 526 passed, `cargo clippy -D warnings` clean, `cargo fmt --check` clean
+    (nothing under `rust/` changed), and the guide's five checks run by hand: build, SUMMARY coverage, images, links, words.
+  - **Ruling: cross-references became links and `check.sh` grew a fifth check for them.** The plan stops at four; the
+    read-through showed every page points at another by file name, and a typo there is a dead link nothing catches.
+    Mutation-tested by pointing one link at `11-the-bankx.md`. Cost if wrong: one more thing to keep green, which is the
+    cheap kind.
+  - Fixes found by reading in order: two duplicated sentences (one in `04-the-face`, one in `05-the-three-cards`), a stale
+    "screenshots are at 1×" claim (they are 2× grabs of a 1× panel), and a sentence that made the editing keys modal behind
+    all three cards when the songs card is the one drawn over everything.
 
 ## Follow-up offered, not taken
 
