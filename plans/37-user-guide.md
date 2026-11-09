@@ -30,9 +30,15 @@ the guide, and the three gates were green there (`cargo test --workspace` 526 te
 - **Shell-policy gotchas in this harness:** an inline `PATH=` prefix is rejected (use the tool's `env` parameter);
   `python3` with a heredoc is rejected (write a file and run it); `perl -0pi` is rejected; `hyprctl` and `pacman` are
   blocked unless the operator runs `lean-ctx allow`. `ctx_read`/`read` for files, never `cat`.
-- **`wtype` types into the window that has focus**, so the app must be in front before a key is sent: launch it in the
-  foreground-ish way the plan says, then confirm one `grim` capture shows the panel before sending keys. The app window is
-  980 × 640 at 1× and its position is the compositor's, so derive the crop from the first capture (Task 2, step 2).
+- **Two monitors, and the app will be moved to one of them before any capture.** Ask the operator which output (or run
+  `lean-ctx allow hyprctl` and read `hyprctl monitors -j` for names, positions and scale). Then always name the output
+  explicitly — `grim -o <OUTPUT> -s 1 /tmp/shot.png` — because grim's default with several outputs is not the one the panel
+  is on. `-s 1` makes the capture logical pixels, so the panel is **980 px wide whatever the monitor's scale** (use `-s 2`
+  for a sharper 1960 px image if the reader is on a HiDPI screen; downscale with `magick -resize 980x` in that case).
+  Derive the crop geometry from the first capture of *that* output and do not move the window afterwards.
+- **`wtype` types into the window that has focus**, and a window on the second monitor may not have it: after a key, capture
+  and check the card actually opened — the capture is the verification. If it did not, ask the operator to click the app
+  once and send the key again. Do not send a burst of keys and assume.
 - **Defaults in force, chosen by the operator's silence:** no edit under `rust/` (the stale save sentence stays, the guide
   carries a footnote); no edit to `AGENTS.md`; the three pointer-only screenshots are asked for once and fall back to prose.
 
