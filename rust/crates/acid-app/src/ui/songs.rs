@@ -33,11 +33,16 @@ pub struct Songs {
 pub enum Request {
     /// Start a new song from the starter phrase.
     New,
+    /// Save: in place when the name has not changed, as a new file when it has.
     Save(String),
+    /// Save a copy under this name, always as a new file: the song on disk is left where it is.
+    SaveCopy(String),
     Load(String),
     Delete(String),
-    /// Rename the open song to this name.
-    Rename(String),
+    /// Copy a song file the player picks into the library, and load it.
+    Import,
+    /// Write the session to a path the player picks.
+    Export,
     /// Adopt the demo at this index as a new song: it is not a file, so it arrives unsaved, under a new name.
     LoadDemo(usize),
     Close,
@@ -75,12 +80,27 @@ pub fn paint(
         theme::legend(13.0 * scale),
         theme::SILKSCREEN,
     );
+    // What the card is about, on the card: the song the session is on and whether it is on disk. A player who opened the
+    // card to save should not have to work out which song they are saving.
+    let now = match (&songs.open, session_dirty) {
+        (Some(name), true) => format!("NOW: {name} · UNSAVED"),
+        (Some(name), false) => format!("NOW: {name} · SAVED"),
+        (None, _) => "NOW: untitled · UNSAVED".to_string(),
+    };
+    painter.text(
+        egui::Pos2::new(card.right() - padding, y + 2.0 * scale),
+        egui::Align2::RIGHT_TOP,
+        now,
+        theme::legend(10.0 * scale),
+        theme::SILKSCREEN_DIM,
+    );
+    // The field holds the song's name, so SAVE keeps the song current, or writes it under a name that is not taken; SAVE A
+    // COPY always makes a new file. There is no third button: renaming is saving under another name.
     y += 18.0 * scale;
 
-    // The name field, then SAVE AS beside it.
     let field = Rect::from_min_size(
         egui::Pos2::new(left, y),
-        egui::vec2(width * 0.46, row_height),
+        egui::vec2(width * 0.40, row_height),
     );
     ui.put(
         field,
@@ -90,26 +110,29 @@ pub fn paint(
     );
     let save_rect = Rect::from_min_size(
         egui::Pos2::new(field.right() + padding, y),
-        egui::vec2(width * 0.26 - padding, row_height),
+        egui::vec2(width * 0.20 - padding, row_height),
     );
-    let rename_rect = Rect::from_min_size(
+    let copy_rect = Rect::from_min_size(
         egui::Pos2::new(save_rect.right() + padding, y),
-        egui::vec2(width * 0.28 - padding, row_height),
+        egui::vec2(width * 0.22 - padding, row_height),
     );
     let typed = crate::persist::song_name(&songs.name);
-    if transport::transport_button(ui, "song-save-as", save_rect, "SAVE AS", typed.is_some())
-        .clicked()
-    {
-        request = typed.clone().map(Request::Save);
+    // A blank field still saves the song the session is on; with nothing open there is nothing to save.
+    let can_save = typed.is_some() || songs.open.is_some();
+    if transport::transport_button(ui, "song-save", save_rect, "SAVE", can_save).clicked() {
+        request = save_name(songs).map(Request::Save);
     }
-    // RENAME renames the song the session is on, so it is dark until there is one and the name really differs.
-    let can_rename = matches!((&typed, &songs.open), (Some(new), Some(open)) if new != open);
-    if can_rename
-        && transport::transport_button(ui, "song-rename", rename_rect, "RENAME", can_rename)
-            .clicked()
-        && let Some(new) = typed.clone()
+    if transport::transport_button(
+        ui,
+        "song-save-copy",
+        copy_rect,
+        "SAVE A COPY",
+        typed.is_some(),
+    )
+    .clicked()
+        && let Some(name) = typed.clone()
     {
-        request = Some(Request::Rename(new));
+        request = Some(Request::SaveCopy(name));
     }
     y += row_height + padding;
 
@@ -185,14 +208,32 @@ pub fn paint(
         }
         y += row_height + 2.0 * scale;
     }
-    // The bottom row: start a new song on the left, close on the right.
+    // The footer: a new song, the two doors to the file system, and close. NEW replaces the session, so it asks twice while
+    // the session is unsaved, like every other action that would throw work away.
     let bottom = card.bottom() - padding - row_height;
     let new_rect = Rect::from_min_size(
         egui::Pos2::new(left, bottom),
-        egui::vec2(120.0 * scale, row_height),
+        egui::vec2(80.0 * scale, row_height),
     );
-    if transport::transport_button(ui, "song-new", new_rect, "NEW SONG", false).clicked() {
-        request = Some(Request::New);
+    let new_armed = songs.load_armed.as_deref() == Some(NEW_KEY);
+    let new_label = if new_armed { "SURE?" } else { "NEW" };
+    if transport::transport_button(ui, "song-new", new_rect, new_label, new_armed).clicked() {
+        request = guarded_load(songs, NEW_KEY.to_string(), Request::New, session_dirty);
+    }
+    let import_rect = Rect::from_min_size(
+        egui::Pos2::new(new_rect.right() + padding, bottom),
+        egui::vec2(96.0 * scale, row_height),
+    );
+    if transport::transport_button(ui, "song-import", import_rect, "IMPORT", false).clicked() {
+        request = Some(Request::Import);
+    }
+    let export_rect = Rect::from_min_size(
+        egui::Pos2::new(import_rect.right() + padding, bottom),
+        egui::vec2(96.0 * scale, row_height),
+    );
+    let can_export = songs.open.is_some() || typed.is_some();
+    if transport::transport_button(ui, "song-export", export_rect, "EXPORT", can_export).clicked() {
+        request = Some(Request::Export);
     }
     let close = Rect::from_min_size(
         egui::Pos2::new(card.right() - padding - 90.0 * scale, bottom),
@@ -204,7 +245,7 @@ pub fn paint(
 
     if let Some(message) = &songs.message {
         ui.painter().text(
-            egui::Pos2::new(left + new_rect.width() + padding, bottom + row_height * 0.5),
+            egui::Pos2::new(export_rect.right() + padding, bottom + row_height * 0.5),
             egui::Align2::LEFT_CENTER,
             message,
             theme::legend(10.0 * scale),
@@ -258,4 +299,12 @@ fn guarded_load(
     songs.load_armed = Some(key);
     songs.message = Some("unsaved session: click again to replace it".to_string());
     None
+}
+
+/// The two-click guard's key for NEW: it is not a song, so it needs a name of its own in the armed slot.
+const NEW_KEY: &str = "new";
+
+/// The name a SAVE should use: what the player typed, or the song the session is already on when the field is blank.
+fn save_name(songs: &Songs) -> Option<String> {
+    crate::persist::song_name(&songs.name).or_else(|| songs.open.clone())
 }

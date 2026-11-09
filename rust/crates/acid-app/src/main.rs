@@ -207,33 +207,17 @@ impl eframe::App for TakkaApp {
             let dir = persist::data_dir();
             match request {
                 panel_ui::songs::Request::Close => {}
-                panel_ui::songs::Request::Save(name) => {
-                    let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
-                    saved.midi_input = self.midi.preference_name();
-                    saved.song = Some(name.clone());
-                    saved.tooltips = self.panel.tooltips;
-                    saved.autosave = self.panel.autosave;
-                    saved.density = self.panel.density;
-                    saved.scale = self.panel.scale.index() as u8;
-                    match persist::save_song(&dir, &name, &saved) {
-                        Ok(()) => {
-                            self.panel.songs.name = Some(name.clone());
-                            self.panel.dirty = false;
-                            // The session file remembers which song is open.
-                            let _ = persist::save(&dir, &saved);
-                            if let Some(card) = self.panel.songs.card.as_mut() {
-                                card.names = persist::list_songs(&dir);
-                                card.name = name.clone();
-                                card.open = Some(name.clone());
-                                self.panel.songs.file = Some(name.clone());
-                                card.message = Some(format!("saved {name}"));
-                            }
+                panel_ui::songs::Request::Save(typed) => {
+                    // One button: an unchanged name keeps the song, a new name writes a new file and leaves the old one
+                    // where it is, so a save can never move a song out from under its own name.
+                    match persist::save_target(self.panel.songs.file.as_deref(), &typed) {
+                        Some(persist::SaveTarget::InPlace(name)) => {
+                            self.write_song(&dir, &name, false);
                         }
-                        Err(error) => {
-                            if let Some(card) = self.panel.songs.card.as_mut() {
-                                card.message = Some(format!("could not save: {error}"));
-                            }
+                        Some(persist::SaveTarget::NewFile(name)) => {
+                            self.write_song(&dir, &name, true);
                         }
+                        None => {}
                     }
                 }
                 panel_ui::songs::Request::New => {
@@ -254,26 +238,43 @@ impl eframe::App for TakkaApp {
                         card.message = Some("new song".to_string());
                     }
                 }
-                panel_ui::songs::Request::Rename(to) => {
-                    if let Some(from) = self.panel.songs.name.clone() {
-                        match persist::rename_song(&dir, &from, &to) {
-                            Ok(()) => {
-                                self.panel.songs.name = Some(to.clone());
-                                // The session file remembers the new name, or the next restart would look for the old one.
-                                self.save();
-                                if let Some(card) = self.panel.songs.card.as_mut() {
-                                    card.names = persist::list_songs(&dir);
-                                    card.name = to.clone();
-                                    card.open = Some(to.clone());
-                                    self.panel.songs.file = Some(to.clone());
-                                    card.message = Some(format!("renamed {from} to {to}"));
-                                }
+                panel_ui::songs::Request::SaveCopy(typed) => {
+                    let name = self.free_copy_name(&dir, &typed);
+                    self.write_song(&dir, &name, true);
+                }
+                panel_ui::songs::Request::Import => {
+                    let picked = rfd::FileDialog::new()
+                        .add_filter("takka-acid song", &["json"])
+                        .set_title("Import a song")
+                        .pick_file();
+                    if let Some(path) = picked {
+                        match persist::import_song(&path, &dir) {
+                            Ok(name) => {
+                                // An import is a load with a copy step in front of it, so it lands the same way a click on
+                                // the row would: the library is refreshed and the song becomes the session's own.
+                                self.load_song_now(&dir, &name);
                             }
-                            Err(error) => {
-                                if let Some(card) = self.panel.songs.card.as_mut() {
-                                    card.message = Some(format!("could not rename: {error}"));
-                                }
-                            }
+                            Err(error) => self.notice(format!("could not import: {error}")),
+                        }
+                    }
+                }
+                panel_ui::songs::Request::Export => {
+                    let suggested = self
+                        .panel
+                        .songs
+                        .name
+                        .clone()
+                        .filter(|name| !name.trim().is_empty())
+                        .unwrap_or_else(|| "takka-acid song".to_string());
+                    let picked = rfd::FileDialog::new()
+                        .add_filter("takka-acid song", &["json"])
+                        .set_title("Export the session")
+                        .set_file_name(format!("{suggested}.json"))
+                        .save_file();
+                    if let Some(path) = picked {
+                        match persist::export_song(&path, &self.session_for_disk(&suggested)) {
+                            Ok(()) => self.notice(format!("exported to {}", path.display())),
+                            Err(error) => self.notice(format!("could not export: {error}")),
                         }
                     }
                 }
@@ -303,38 +304,7 @@ impl eframe::App for TakkaApp {
                         }
                     }
                 }
-                panel_ui::songs::Request::Load(name) => match persist::load_song(&dir, &name) {
-                    Ok(saved) => {
-                        self.save();
-                        persist::apply_saved(&saved, &self.state, &mut self.bank);
-                        panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
-                        // A held swap belongs to the song that was playing, not to the one just loaded.
-                        self.pending_pattern = None;
-                        self.panel.dirty = false;
-                        self.panel.songs.name = Some(name.clone());
-                        // The panel's own switches are a song's settings, so they come back with it.
-                        self.panel.tooltips = saved.tooltips;
-                        self.panel.autosave = saved.autosave;
-                        self.panel.set_density(saved.density);
-                        self.panel
-                            .set_scale(panel_ui::scale::Scale::from_index(saved.scale as usize));
-                        if let Some(port) = saved.midi_input.clone() {
-                            self.midi.choose(midi::ports::PortChoice::Named(port));
-                        }
-                        if let Some(card) = self.panel.songs.card.as_mut() {
-                            card.names = persist::list_songs(&dir);
-                            card.name = name.clone();
-                            card.open = Some(name.clone());
-                            self.panel.songs.file = Some(name.clone());
-                            card.message = Some(format!("loaded {name}"));
-                        }
-                    }
-                    Err(error) => {
-                        if let Some(card) = self.panel.songs.card.as_mut() {
-                            card.message = Some(format!("could not load: {error}"));
-                        }
-                    }
-                },
+                panel_ui::songs::Request::Load(name) => self.load_song_now(&dir, &name),
                 panel_ui::songs::Request::LoadDemo(index) => {
                     if let Some(demo) = demo::songs().into_iter().nth(index) {
                         self.save();
@@ -504,6 +474,99 @@ impl TakkaApp {
             && let Err(error) = persist::save_song(&dir, &name, &saved)
         {
             eprintln!("takka-acid: could not save the song {name}: {error}");
+        }
+    }
+
+    /// Load a song from the library and make it the session's own: the panel's switches are a song's settings, so they
+    /// come back with it. Anything unsaved is written first, so a load never throws work away.
+    fn load_song_now(&mut self, dir: &std::path::Path, name: &str) {
+        let Ok(saved) = persist::load_song(dir, name) else {
+            let error = persist::load_song(dir, name).unwrap_err();
+            self.notice(format!("could not load: {error}"));
+            return;
+        };
+        self.save();
+        persist::apply_saved(&saved, &self.state, &mut self.bank);
+        panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
+        // A held swap belongs to the song that was playing, not to the one just loaded.
+        self.pending_pattern = None;
+        self.panel.dirty = false;
+        self.panel.songs.name = Some(name.to_string());
+        self.panel.songs.file = Some(name.to_string());
+        self.panel.tooltips = saved.tooltips;
+        self.panel.autosave = saved.autosave;
+        self.panel.set_density(saved.density);
+        self.panel
+            .set_scale(panel_ui::scale::Scale::from_index(saved.scale as usize));
+        if let Some(port) = saved.midi_input.clone() {
+            self.midi.choose(midi::ports::PortChoice::Named(port));
+        }
+        if let Some(card) = self.panel.songs.card.as_mut() {
+            card.names = persist::list_songs(dir);
+            card.name = name.to_string();
+            card.open = Some(name.to_string());
+            card.message = Some(format!("loaded {name}"));
+        }
+    }
+
+    /// Write the session into the library under `name`, and make that song the session's own. `as_copy` only changes the
+    /// words: a copy lands under a name that is free, so saving one never overwrites the song it came from.
+    fn write_song(&mut self, dir: &std::path::Path, name: &str, as_copy: bool) {
+        let saved = self.session_for_disk(name);
+        match persist::save_song(dir, name, &saved) {
+            Ok(()) => {
+                self.panel.songs.name = Some(name.to_string());
+                self.panel.songs.file = Some(name.to_string());
+                self.panel.dirty = false;
+                // The session file remembers which song is open, or the next restart would open nothing.
+                let _ = persist::save(dir, &self.session_for_disk(name));
+                if let Some(card) = self.panel.songs.card.as_mut() {
+                    card.names = persist::list_songs(dir);
+                    card.name = name.to_string();
+                    card.open = Some(name.to_string());
+                    card.message = Some(if as_copy {
+                        format!("saved a copy as {name}")
+                    } else {
+                        format!("saved {name}")
+                    });
+                }
+            }
+            Err(error) => self.notice(format!("could not save: {error}")),
+        }
+    }
+
+    /// The session as it should be written to disk, under `name` when the save is landing in a file.
+    fn session_for_disk(&self, name: &str) -> persist::SavedState {
+        let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
+        saved.midi_input = self.midi.preference_name();
+        saved.song = Some(name.to_string());
+        // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
+        saved.tooltips = self.panel.tooltips;
+        saved.autosave = self.panel.autosave;
+        saved.density = self.panel.density;
+        saved.scale = self.panel.scale.index() as u8;
+        saved
+    }
+
+    /// A name for SAVE A COPY that is free: the typed one, or `X (2)`, so a copy never overwrites the song it copies.
+    fn free_copy_name(&self, dir: &std::path::Path, typed: &str) -> String {
+        let wanted = persist::song_name(typed).unwrap_or_else(|| "Untitled".to_string());
+        if !persist::song_exists(dir, &wanted) {
+            return wanted;
+        }
+        for copy in 2..1000 {
+            let candidate = format!("{wanted} ({copy})");
+            if !persist::song_exists(dir, &candidate) {
+                return candidate;
+            }
+        }
+        format!("{wanted} (copy)")
+    }
+
+    /// Say something on the card, if one is open. The status line takes this over in plan 34's third step.
+    fn notice(&mut self, message: String) {
+        if let Some(card) = self.panel.songs.card.as_mut() {
+            card.message = Some(message);
         }
     }
 }

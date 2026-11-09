@@ -52,13 +52,43 @@ fn field_y() -> f32 {
     card().top() + padding() + 18.0 * scale(screen())
 }
 
-/// The name field and SAVE AS share the first row of the card.
-fn save_as_centre() -> Pos2 {
+/// The name field and SAVE share the first row of the card.
+fn save_centre() -> Pos2 {
     let width = card().width() - padding() * 2.0;
-    let left = card().left() + padding() + width * 0.46 + padding();
+    let left = card().left() + padding() + width * 0.40 + padding();
     Pos2::new(
-        left + (width * 0.26 - padding()) * 0.5,
+        left + (width * 0.20 - padding()) * 0.5,
         field_y() + row_height() * 0.5,
+    )
+}
+
+/// SAVE A COPY sits after SAVE on the same row.
+fn save_copy_centre() -> Pos2 {
+    let width = card().width() - padding() * 2.0;
+    let save_left = card().left() + padding() + width * 0.40 + padding();
+    let copy_left = save_left + width * 0.20 - padding() + padding();
+    Pos2::new(
+        copy_left + (width * 0.22 - padding()) * 0.5,
+        field_y() + row_height() * 0.5,
+    )
+}
+
+/// IMPORT and EXPORT sit in the footer, after NEW.
+fn import_centre() -> Pos2 {
+    Pos2::new(
+        card().left() + padding() + 80.0 * scale(screen()) + padding() + 48.0 * scale(screen()),
+        card().bottom() - padding() - row_height() * 0.5,
+    )
+}
+
+fn export_centre() -> Pos2 {
+    Pos2::new(
+        card().left()
+            + padding()
+            + (80.0 + 96.0) * scale(screen())
+            + padding() * 2.0
+            + 48.0 * scale(screen()),
+        card().bottom() - padding() - row_height() * 0.5,
     )
 }
 
@@ -107,17 +137,60 @@ fn a_song_row_asks_to_load_that_song() {
 }
 
 #[test]
-fn save_as_asks_for_the_typed_name() {
+fn save_asks_for_the_typed_name() {
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = open_card(vec![], "Acid 2");
 
-    click(&ctx, &mut panel, &shared, save_as_centre());
+    click(&ctx, &mut panel, &shared, save_centre());
 
     assert_eq!(
         panel.songs.request,
         Some(Request::Save("Acid 2".to_string()))
     );
+}
+
+/// A blank field is not a dead button: it saves the song the session is already on.
+#[test]
+fn a_blank_field_still_saves_the_open_song() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_song_card(vec!["Acid 1"], "", Some("Acid 1"));
+
+    click(&ctx, &mut panel, &shared, save_centre());
+
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::Save("Acid 1".to_string()))
+    );
+}
+
+#[test]
+fn save_a_copy_asks_for_a_copy_of_the_typed_name() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_song_card(vec!["Acid 1"], "Acid 1", Some("Acid 1"));
+
+    click(&ctx, &mut panel, &shared, save_copy_centre());
+
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveCopy("Acid 1".to_string()))
+    );
+}
+
+#[test]
+fn import_and_export_ask_for_their_requests() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+
+    let mut importing = open_card(vec![], "");
+    click(&ctx, &mut importing, &shared, import_centre());
+    assert_eq!(importing.songs.request, Some(Request::Import));
+
+    let mut exporting = open_card(vec![], "Acid 1");
+    click(&ctx, &mut exporting, &shared, export_centre());
+    assert_eq!(exporting.songs.request, Some(Request::Export));
 }
 
 #[test]
@@ -126,7 +199,7 @@ fn a_name_that_cannot_be_a_file_asks_for_nothing() {
     let shared = SharedState::new();
     let mut panel = open_card(vec![], "a/b");
 
-    click(&ctx, &mut panel, &shared, save_as_centre());
+    click(&ctx, &mut panel, &shared, save_centre());
 
     assert_eq!(panel.songs.request, None, "a path is not a song name");
 }
@@ -202,17 +275,6 @@ fn delete_centre(index: usize) -> Pos2 {
     )
 }
 
-/// RENAME sits after SAVE AS on the name row.
-fn rename_centre() -> Pos2 {
-    let width = card().width() - padding() * 2.0;
-    let save_left = card().left() + padding() + width * 0.46 + padding();
-    let rename_left = save_left + width * 0.26 - padding() + padding();
-    Pos2::new(
-        rename_left + (width * 0.28 - padding()) * 0.5,
-        field_y() + row_height() * 0.5,
-    )
-}
-
 fn open_song_card(names: Vec<&str>, name: &str, open: Option<&str>) -> PanelState {
     let mut panel = open_card(names, name);
     if let Some(card) = panel.songs.card.as_mut() {
@@ -221,34 +283,25 @@ fn open_song_card(names: Vec<&str>, name: &str, open: Option<&str>) -> PanelStat
     panel
 }
 
+/// NEW replaces the session, so while the session is unsaved it asks twice. One click arms it and says so; the second
+/// fires. A saved session does not need the ceremony.
 #[test]
-fn rename_asks_for_the_typed_name_of_the_open_song() {
+fn new_asks_twice_while_the_session_is_unsaved() {
     let ctx = Context::default();
     let shared = SharedState::new();
-    let mut panel = open_song_card(vec!["Acid 1"], "Acid 2", Some("Acid 1"));
+    let mut panel = open_card(vec!["Acid 1"], "");
+    panel.dirty = true;
 
-    click(&ctx, &mut panel, &shared, rename_centre());
-
+    click(&ctx, &mut panel, &shared, new_song_centre());
+    assert_eq!(panel.songs.request, None, "one click only arms it");
     assert_eq!(
-        panel.songs.request,
-        Some(Request::Rename("Acid 2".to_string()))
+        panel.songs.card.as_ref().unwrap().load_armed.as_deref(),
+        Some("new"),
+        "the footer says SURE? and the next click fires"
     );
-}
 
-#[test]
-fn rename_is_dark_with_no_open_song_or_an_unchanged_name() {
-    let ctx = Context::default();
-    let shared = SharedState::new();
-
-    // Nothing open: renaming has no subject.
-    let mut nothing_open = open_song_card(vec!["Acid 1"], "Acid 2", None);
-    click(&ctx, &mut nothing_open, &shared, rename_centre());
-    assert_eq!(nothing_open.songs.request, None);
-
-    // The typed name is the open song's own name: nothing to do, so nothing is asked for.
-    let mut unchanged = open_song_card(vec!["Acid 1"], "Acid 1", Some("Acid 1"));
-    click(&ctx, &mut unchanged, &shared, rename_centre());
-    assert_eq!(unchanged.songs.request, None);
+    click(&ctx, &mut panel, &shared, new_song_centre());
+    assert_eq!(panel.songs.request, Some(Request::New));
 }
 
 #[test]

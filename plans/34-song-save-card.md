@@ -48,3 +48,11 @@ header, two save buttons and two file buttons. Notices move from the card to `Pa
 - [ ] **Task 4 — `main` wires the four actions.**
 - **Build feasibility checked:** `rfd` 0.18 with `default-features = false, features = ["xdg-portal"]` compiles on this
   machine with no GTK development package. The dependency is added in Task 4, where it is first used.
+- [x] **Tasks 2 and 4 — the card, and `main` wiring them.** Header `NOW: <name> · SAVED/UNSAVED`; one `SAVE` and one
+      `SAVE A COPY` in place of `SAVE AS`/`RENAME`; `IMPORT`/`EXPORT` in the footer beside a `NEW` that now asks twice while
+      the session is unsaved. `Request::{Save, SaveCopy, Import, Export}`; `Rename` is gone. `main` saves through
+      `persist::save_target` (unchanged name writes in place, a new name is a new file), copies through `free_copy_name`
+      (never over its source), imports by copying in and then loading, exports through the dialog. The `Load` arm became
+      `load_song_now`, and the session-on-disk snapshot became `session_for_disk`, so a load and an import land the same
+      way. `rfd` 0.18 (XDG-portal) added. Tests: `songs_live` 16 pass, including SAVE on a typed name, SAVE on a blank
+      field keeping the open song, SAVE A COPY, IMPORT/EXPORT, and NEW arming then firing.
