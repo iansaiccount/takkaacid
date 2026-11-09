@@ -187,3 +187,14 @@ egui shapes in `ui/panel.rs`, next to a `?` that loses its accidental clip rect.
       Tests: `tests/settings_live.rs` (6) — folding a panel open and shut keeps the card standing, a click outside still
       dismisses, the two switches ask for their flips, the sections fold independently, and an open panel never grows past
       four rows however long the list is.
+- [x] **Task 3 — the old furniture is gone.** Deleted: the `AUTO` and `TIPS` keys (and `ui::tips_rect`,
+      `ui::autosave_rect`), the top MIDI status readout with its click-to-pick list and REPROBE dot, the bottom audio line
+      with its output list, and `PickerState::{inputs, outputs}` — what is left of it is the two choices `main` consumes.
+      The middle of the strip now says one thing at a time: the song's name, or a notice for its four seconds. A failed
+      audio stream or a MIDI supervisor that has given up reports in the settings card, where both devices live.
+      Tests: `tests/midi_picker_live.rs` deleted with its subject (its coverage moved to `settings_live`), `tests/tips_live.rs`
+      keeps the help-on-by-default and the readouts-answer-the-pointer tests, and `songs_live` now asserts on the picker's
+      choice fields rather than its lists. 59 suites green.
+- [ ] **Task 4 — the documents follow.** `help.rs` and `README.md` still need `F2` and the settings card in the key lists,
+      and `settings_live` should gain the two device-row tests (a click writes `picker.input_choice` / `output_choice`),
+      which `midi_picker_live` used to prove against the status line.

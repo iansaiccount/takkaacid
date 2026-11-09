@@ -27,30 +27,6 @@ pub mod step_key;
 pub mod switches;
 pub mod tips;
 
-/// Where the TIPS key sits: in the top strip, to the left of the SAVED / UNSAVED lamp.
-///
-/// Named here rather than inside `draw_panel` so the live test can click the key without guessing its pixels.
-pub fn tips_rect(window: egui::Rect) -> egui::Rect {
-    let scale = layout::scale(window);
-    let lamp = panel::save_indicator_rect(layout::layout(window).top, scale);
-    egui::Rect::from_center_size(
-        lamp.left_center() - egui::vec2(40.0 * scale, 0.0),
-        egui::vec2(64.0 * scale, 18.0 * scale),
-    )
-}
-
-/// Where the AUTO key sits: immediately left of TIPS, so the two switches that change how the session behaves read as one
-/// pair. Named here for the same reason as [`tips_rect`]: the live test clicks it without guessing pixels.
-pub fn autosave_rect(window: egui::Rect) -> egui::Rect {
-    let scale = layout::scale(window);
-    let tips = tips_rect(window);
-    let width = 72.0 * scale;
-    egui::Rect::from_min_size(
-        egui::Pos2::new(tips.left() - (width + theme::GAP * 2.0 * scale), tips.top()),
-        egui::vec2(width, tips.height()),
-    )
-}
-#[allow(dead_code)]
 pub mod theme;
 pub mod transport;
 
@@ -161,20 +137,14 @@ pub struct SongState {
     /// nothing of it is on disk until the player saves it.
     pub file: Option<String>,
 }
+/// What the player chose on the panel, consumed by `main` on the next frame. The lists themselves live in the settings card,
+/// which asks for a choice the same way the old status-line pickers did, so the stream handling is unchanged.
 
-/// The port picker: the two lists `main` hands the panel, and the two choices it takes back.
-///
-/// One value for the same reason as [`SongState`]: a choice belongs to the list it was made from, and both are consumed
-/// in the same frame.
 #[derive(Default)]
 pub struct PickerState {
-    /// The MIDI inputs on offer while the picker is open, `None` when it is closed.
-    pub inputs: Option<Vec<String>>,
-    /// The input the user chose; consumed by `main` on the next frame.
+    /// The MIDI input the player chose.
     pub input_choice: Option<midi::ports::PortChoice>,
-    /// The output devices on offer while the picker is open, `None` when it is closed.
-    pub outputs: Option<Vec<String>>,
-    /// The output the user chose; consumed by `main` on the next frame.
+    /// The audio output the player chose.
     pub output_choice: Option<String>,
 }
 
@@ -353,22 +323,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         midi::cc::CcTarget::Pattern,
     );
 
-    // The song the session is working on, in the middle of the strip: a player should never have to open the card to find
-    // out what they are working on. The status, or a notice that outlives the card, takes the right half of the band.
-    let label = panel::song_label_rect(l.top, s);
-    ui.painter().with_clip_rect(label).text(
-        label.center(),
-        egui::Align2::CENTER_CENTER,
-        song_label(state.songs.name.as_deref()),
-        theme::legend(10.0 * s),
-        if state.songs.file.is_some() {
-            theme::SILKSCREEN_DIM
-        } else {
-            theme::SILKSCREEN_DIM.gamma_multiply(0.55)
-        },
-    );
-
-    // A notice is said once and clears itself; the status line underneath comes back when it has.
+    // The middle of the strip says one thing at a time: the song the session is working on, or — for a few seconds — what
+    // just happened. Notices used to share the line with a MIDI status readout; that readout now lives in the settings card,
+    // so the line is the notice's or the song's, never a fight between them.
     let now = std::time::Instant::now();
     if state
         .notice
@@ -378,42 +335,25 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         state.notice = None;
     }
     let notice = state.notice_now(now);
-    let status = panel::midi_status_rect(l.top, s);
-    let line = notice.map(str::to_string).unwrap_or_else(|| {
-        learn::hint(state.learn)
-            .unwrap_or(&state.midi_status)
-            .to_string()
-    });
-    // Clipped to the band: a notice carries a path when it is a failure, and it must not paint over the song label it
-    // shares the line with.
-    ui.painter().with_clip_rect(status).text(
-        status.right_center(),
-        egui::Align2::RIGHT_CENTER,
-        // While learning, the status line says what the panel is waiting for — it is the only free line on the face.
+    let label = panel::song_label_rect(l.top, s);
+    let (line, colour) = match notice {
+        Some(message) => (message.to_string(), theme::LED_ACCENT),
+        None => (
+            song_label(state.songs.name.as_deref()),
+            if state.songs.file.is_some() {
+                theme::SILKSCREEN_DIM
+            } else {
+                theme::SILKSCREEN_DIM.gamma_multiply(0.55)
+            },
+        ),
+    };
+    ui.painter().with_clip_rect(label).text(
+        label.center(),
+        egui::Align2::CENTER_CENTER,
         line,
-        theme::legend(11.0 * s),
-        if notice.is_some() || state.learn != learn::Step::Idle || state.midi_given_up {
-            theme::LED_ACCENT
-        } else {
-            theme::SILKSCREEN_DIM
-        },
+        theme::legend(10.0 * s),
+        colour,
     );
-    if state.midi_given_up {
-        let dot = egui::Rect::from_center_size(
-            egui::Pos2::new(status.left() + 8.0 * s, status.center().y),
-            egui::vec2(14.0 * s, 14.0 * s),
-        );
-        let response = ui.interact(
-            dot,
-            ui.scope_id().with("midi-reprobe"),
-            egui::Sense::click(),
-        );
-        ui.painter()
-            .circle_filled(dot.center(), 4.5 * s, theme::LED_ACCENT);
-        if response.clicked() {
-            state.reprobe_requested = true;
-        }
-    }
     row_knobs::draw(state, shared, ui, &l, s);
     row_perform::draw(state, shared, ui, &l, s);
     // VOLUME has its own corner of the top strip, before the wordmark, so the transport row keeps its five keys.
@@ -643,129 +583,19 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.
     let (save_label, save_colour) = save::state_label(state.dirty);
-    // Clipped to the band: a notice carries a path when it is a failure, and it must not paint over the song label it
-    // shares the line with.
-    ui.painter().with_clip_rect(status).text(
-        panel::save_indicator_rect(l.top, s).right_center(),
-        egui::Align2::RIGHT_CENTER,
-        save_label,
-        theme::legend(10.0 * s),
-        save_colour,
-    );
-    // AUTO: whether the session writes itself. Saving is manual unless this is lit, and the SAVED / UNSAVED lamp beside it
-    // is then the only promise about what is on disk.
-    let auto_rect = autosave_rect(window);
-    let auto_label = if state.autosave {
-        "AUTO ON"
-    } else {
-        "AUTO OFF"
-    };
-    if switch_key(
-        ui,
-        state,
-        "autosave",
-        auto_rect,
-        auto_label,
-        state.autosave,
-        tips::Control::Autosave,
-    ) {
-        state.autosave = !state.autosave;
-        state.dirty = true;
-    }
-    // TIPS: a small key that turns the hover help on and off. It carries its own help, so a player who turned the help
-    // off can always find out what the key does.
-    let tips_rect = tips_rect(window);
-    let tips_label = if state.tooltips {
-        "TIPS ON"
-    } else {
-        "TIPS OFF"
-    };
-    if switch_key(
-        ui,
-        state,
-        "tips",
-        tips_rect,
-        tips_label,
-        state.tooltips,
-        tips::Control::Tooltips,
-    ) {
-        state.tooltips = !state.tooltips;
-        state.dirty = true;
-    }
-
-    // The transport row comes after the keys above it, in the order it has always been drawn: a later widget wins a
-    // hit-test tie, so keeping the order keeps the panel's behaviour.
-    row_transport::draw(state, shared, ui, &l);
-    // MIDI input picker: the status line is the handle. Rows paint here, after everything else, so they sit
-    // over the panel; the REPROBE dot keeps the left edge of the line while the supervisor has given up.
-    let mut handle = status;
-    if state.midi_given_up {
-        handle.min.x += 24.0 * s;
-    }
-    if ui
-        .interact(
-            handle,
-            ui.scope_id().with("midi-status"),
-            egui::Sense::click(),
-        )
-        .clicked()
-    {
-        state.picker.inputs = match state.picker.inputs {
-            Some(_) => None,
-            None => Some(midi::ports::list_ports().unwrap_or_default()),
-        };
-    }
-    if let Some(ports) = state.picker.inputs.clone() {
-        let mut entries = vec![("any input".to_string(), midi::ports::PortChoice::Any)];
-        entries.extend(
-            ports
-                .iter()
-                .map(|name| (name.clone(), midi::ports::PortChoice::Named(name.clone()))),
+    // The lamp says one word: SAVED in dim silk, UNSAVED in amber, inside its own corner of the strip.
+    ui.painter()
+        .with_clip_rect(panel::save_indicator_rect(l.top, s))
+        .text(
+            panel::save_indicator_rect(l.top, s).right_center(),
+            egui::Align2::RIGHT_CENTER,
+            save_label,
+            theme::legend(10.0 * s),
+            save_colour,
         );
-        let row_height = 20.0 * s;
-        let mut rows = Vec::new();
-        let mut chosen = None;
-        for (index, (label, choice)) in entries.iter().enumerate() {
-            let row = egui::Rect::from_min_size(
-                egui::Pos2::new(handle.left(), handle.bottom() + row_height * index as f32),
-                egui::vec2(handle.width(), row_height),
-            );
-            rows.push(row);
-            ui.painter().rect_filled(row, 2.0 * s, theme::PANEL_RAISED);
-            ui.painter().text(
-                row.left_center() + egui::vec2(6.0 * s, 0.0),
-                egui::Align2::LEFT_CENTER,
-                label,
-                theme::legend(10.0 * s),
-                theme::SILKSCREEN,
-            );
-            if ui
-                .interact(
-                    row,
-                    ui.scope_id().with(("midi-port", index)),
-                    egui::Sense::click(),
-                )
-                .clicked()
-            {
-                chosen = Some(choice.clone());
-            }
-        }
-        if let Some(choice) = chosen {
-            state.picker.input_choice = Some(choice);
-            state.picker.inputs = None;
-        } else {
-            let click = ui.input(|i| {
-                if i.pointer.any_click() {
-                    i.pointer.interact_pos()
-                } else {
-                    None
-                }
-            });
-            if picker::should_close(click, &rows, handle) {
-                state.picker.inputs = None;
-            }
-        }
-    }
+    // The transport row: the five keys under the switches, drawn after everything above them, so a later widget wins a
+    // hit-test tie and the panel behaves in the order it always has.
+    row_transport::draw(state, shared, ui, &l);
 
     // A small `?` at the end of the wordmark opens the help card, and the card covers the panel while it is
     // showing — it is the only thing that needs no explanation of its own.

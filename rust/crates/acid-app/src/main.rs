@@ -146,8 +146,6 @@ impl eframe::App for TakkaApp {
                 // Escape gives up on a learn in progress; the shared flag must fall with it.
                 self.panel.learn = panel_ui::learn::Step::Idle;
                 panel_ui::learn::cancel(&self.state);
-            } else {
-                self.panel.picker.outputs = None;
             }
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
@@ -418,91 +416,10 @@ impl eframe::App for TakkaApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let rect = ui.max_rect();
+        // The panel is the whole surface. Device names used to be written at the bottom of the window and doubled as the
+        // output picker; both live in the settings card now, so nothing is painted outside the panel.
         panel_ui::draw_panel(&mut self.panel, &self.state, ui);
-
-        // The audio status doubles as the device picker: click the line to list the outputs, click a name
-        // to move the stream there.
-        let status_rect = egui::Rect::from_center_size(
-            rect.center_bottom() - egui::vec2(0.0, 8.0),
-            egui::vec2(rect.width().min(420.0), 18.0),
-        );
-        // The status line toggles the list, so a second click on it is a dismissal and not a reopen.
-        if ui
-            .interact(
-                status_rect,
-                ui.scope_id().with("audio-status"),
-                egui::Sense::click(),
-            )
-            .clicked()
-        {
-            self.panel.picker.outputs = if self.panel.picker.outputs.is_some() {
-                None
-            } else {
-                Some(audio::list_output_devices())
-            };
-        }
-        ui.painter().text(
-            status_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            self.rig.status(),
-            panel_ui::theme::legend(11.0),
-            panel_ui::theme::SILKSCREEN_DIM,
-        );
-        if let Some(devices) = self.panel.picker.outputs.clone() {
-            let row_height = 20.0;
-            let width = 360.0;
-            let base = status_rect.top() - 6.0;
-            let mut chosen = None;
-            let mut rows = Vec::with_capacity(devices.len());
-            for (index, name) in devices.iter().enumerate() {
-                let row = egui::Rect::from_min_size(
-                    egui::Pos2::new(
-                        rect.center().x - width / 2.0,
-                        base - (index as f32 + 1.0) * row_height,
-                    ),
-                    egui::vec2(width, row_height),
-                );
-                rows.push(row);
-                ui.painter()
-                    .rect_filled(row, 2.0, panel_ui::theme::PANEL_RAISED);
-                ui.painter().text(
-                    row.center(),
-                    egui::Align2::CENTER_CENTER,
-                    audio::status::device_label(name, 44),
-                    panel_ui::theme::legend(11.0),
-                    panel_ui::theme::SILKSCREEN,
-                );
-                if ui
-                    .interact(
-                        row,
-                        ui.scope_id().with(("device", index)),
-                        egui::Sense::click(),
-                    )
-                    .clicked()
-                {
-                    chosen = Some(name.clone());
-                }
-            }
-            if let Some(name) = chosen {
-                self.panel.picker.outputs = None;
-                self.panel.picker.output_choice = Some(name);
-            } else {
-                // A click outside the list takes the list away without touching the stream.
-                let click = ui.input(|i| {
-                    if i.pointer.any_click() {
-                        i.pointer.interact_pos()
-                    } else {
-                        None
-                    }
-                });
-                if panel_ui::picker::should_close(click, &rows, status_rect) {
-                    self.panel.picker.outputs = None;
-                }
-            }
-        }
         if let Some(name) = self.panel.picker.output_choice.take() {
-            self.panel.picker.outputs = None;
             self.rig.request_device(Some(name));
         }
     }

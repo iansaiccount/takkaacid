@@ -241,8 +241,6 @@ fn the_card_the_request_and_the_name_are_one_piece_of_state() {
     assert!(panel.songs.card.is_none());
     assert!(panel.songs.request.is_none());
     assert!(panel.songs.name.is_none());
-    assert!(panel.picker.inputs.is_none(), "nothing is being picked");
-    assert!(panel.picker.outputs.is_none());
 
     click(
         &ctx,
@@ -253,7 +251,7 @@ fn the_card_the_request_and_the_name_are_one_piece_of_state() {
     assert!(panel.songs.card.is_some(), "the SONGS key opens the card");
     assert!(panel.songs.request.is_none(), "opening asks for nothing");
     assert!(
-        panel.picker.inputs.is_none() && panel.picker.outputs.is_none(),
+        panel.picker.input_choice.is_none() && panel.picker.output_choice.is_none(),
         "the picker is untouched"
     );
 }
