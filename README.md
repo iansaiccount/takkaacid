@@ -150,3 +150,16 @@ Saving is manual by default: the `SAVE` key writes the session (and the song fil
 lamp beside the top strip says `SAVED` or `UNSAVED`. The `AUTO` key beside `TIPS` turns the old autosave back on for those
 who want it; the choice is kept in the session file. A first run opens on the Slow Acid demo, named "New song", with the
 lamp already saying what needs saying.
+
+Inside the card, one `SAVE` does the whole job, and the top strip tells you what you are working on: `SONG <name>` sits
+beside the pattern display, and the card's header repeats it as `NOW: <name> · SAVED/UNSAVED`.
+
+- The name field holds the song's name. Saving with the name unchanged writes in place; a name that has changed writes a
+  **new** file and leaves the old one where it is, so a save can never move a song out from under its own name. A blank
+  field still saves the song the session is on.
+- `SAVE A COPY` always makes a second song, under a free name (`Acid 1 (2)`), and never touches the original.
+- `IMPORT` and `EXPORT` are the only file dialogs in the app. Import copies a song into your library and loads it;
+  export writes the session out in the library's own format, so an exported file can be dropped straight into `songs/`.
+- `NEW` starts from the starter phrase. While the session is unsaved it asks twice, like loading or deleting does.
+- Messages ("saved as Acid 2", "could not import: …") appear on the status line and fade by themselves, so they are still
+  readable after the card closes.

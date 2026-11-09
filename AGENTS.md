@@ -54,6 +54,16 @@ A widget's `egui::Id` is part of its behaviour: a drag in progress is routed by 
 is a `SAVE_VERSION` bump, and `tests/persist.rs` pins the bytes. Panel state that `main` owns travels through
 `SavedState`, not through a side channel.
 
+**Dialogs live in `main`; paths live in `persist`.** A file dialog is `rfd` and belongs in the `main` binary, where it is
+allowed to block; the work it leads to is a plain path function in `persist` (`export_song`, `import_song`, `save_song`),
+so it can be tested without a display. `import_song` never overwrites: it lands beside a taken name. `save_target` is the
+only place that decides whether a save writes in place or makes a new file, so the rule cannot drift between the button and
+the handler.
+
+**A message is a notice, not a dialog.** `PanelState::notice` says something on the status line for a few seconds and
+clears itself; nothing the panel says should ever need dismissing, and nothing it says should die with the card that
+caused it.
+
 **Two threads, two rules.** The panel writes atomics on `SharedState`; the audio callback reads them and allocates
 nothing. Never hold a lock across the audio path, and never read the engine's pattern from the UI thread without going
 through the `ArcSwap`.

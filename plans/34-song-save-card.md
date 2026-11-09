@@ -63,3 +63,15 @@ header, two save buttons and two file buttons. Notices move from the card to `Pa
       save a copy, load, delete, import, export) now go through it. The card keeps its own "click again" hint, which belongs
       to the card and nowhere else. Tests: `tests/notice_live.rs` (4) — the label clears the displays and the wordmark, a
       notice shows and expires, survives a frame with no card, and drawing one changes nothing.
+- [x] **Task 4, the words.** `README.md` gains the save model (one SAVE, in place vs new file, SAVE A COPY, IMPORT/EXPORT,
+      NEW asking twice, notices that fade) and `AGENTS.md` gains the two rules the code now depends on: dialogs only in
+      `main` with the work in `persist`, and a message is a self-clearing notice rather than a dialog.
+
+## Done
+
+All four tasks landed on `Deepseek-Version` in four commits (`7cd1ed4`, `24a35bb`, `93df5dd`, plus the docs commit).
+Gates are green: `cargo test --workspace` (59 suites), `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo fmt --check`. `SavedState` is unchanged, so no `SAVE_VERSION` bump.
+
+One deviation from the plan, recorded on purpose: tasks 2 and 4 landed together, because the `Request` enum and its handler
+in `main` are one change and splitting them would have left a commit that does not compile.
