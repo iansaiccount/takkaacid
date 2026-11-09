@@ -82,6 +82,14 @@ pub fn handle(
         return Handled::Nothing;
     };
     shortcuts::apply(shortcut, shared, bank);
+    // The settings card is panel state too, and there is room for one card: opening it clears help and songs.
+    if matches!(shortcut, shortcuts::Shortcut::ToggleSettings) {
+        panel.settings_open = !panel.settings_open;
+        if panel.settings_open {
+            panel.help_visible = false;
+            panel.songs.card = None;
+        }
+    }
     // The help card is panel state, so it is toggled here rather than in `apply`.
     if matches!(shortcut, shortcuts::Shortcut::ToggleHelp) {
         panel.help_visible = !panel.help_visible;
@@ -133,7 +141,6 @@ mod tests {
         let mut bank = PatternBank::factory();
         let current = bank.current();
         let mut panel = PanelState::default();
-
         let handled = handle(
             KeyPress {
                 key: Key::ArrowRight,

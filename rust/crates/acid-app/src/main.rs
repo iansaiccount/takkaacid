@@ -86,6 +86,7 @@ fn main() -> eframe::Result {
                 panel,
                 bank,
                 autosave: persist::Autosave::new(),
+                settings_was_open: false,
                 midi: Midi::new(midi_preference),
                 pending_pattern: None,
                 last_position: 0,
@@ -101,6 +102,8 @@ struct TakkaApp {
     /// The bank as loaded from disk; only the playing pattern is kept in `state`.
     bank: PatternBank,
     autosave: persist::Autosave,
+    /// Whether the settings card was open last frame, so its device lists are filled on the rising edge and not per frame.
+    settings_was_open: bool,
     midi: Midi,
     /// A pattern a learned controller asked for, waiting for the bar to come round.
     pending_pattern: Option<usize>,
@@ -133,7 +136,9 @@ impl eframe::App for TakkaApp {
         // Keyboard shortcuts. F1 and `?` join this list when the help card lands (Task 54).
         // Escape closes whatever is open, help first: it is the thing covering the panel.
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
-            if self.panel.help_visible {
+            if self.panel.settings_open {
+                self.panel.settings_open = false;
+            } else if self.panel.help_visible {
                 self.panel.help_visible = false;
             } else if self.panel.songs.card.is_some() {
                 self.panel.songs.card = None;
@@ -334,6 +339,47 @@ impl eframe::App for TakkaApp {
             }
         }
         // A port chosen on the panel: drop the old connection and probe the new one now.
+
+        // The settings card's lists come from the machine, so they are filled the frame the card opens rather than every
+        // frame: enumerating ports and outputs costs a round trip each, and a hot-plugged device shows on the next open.
+        if self.panel.settings_open && !self.settings_was_open {
+            self.panel.settings.midi_ports = midi::ports::list_ports().unwrap_or_default();
+            self.panel.settings.outputs = audio::list_output_devices();
+            self.panel.settings.midi_current = self.midi.preference_name();
+            self.panel.settings.output_current = match self.state.status() {
+                AudioStatus::Running { device, .. } => Some(device.clone()),
+                _ => None,
+            };
+            self.panel.settings.midi_given_up = self.panel.midi_given_up;
+            self.panel.settings.midi_status = self.panel.midi_status.clone();
+        }
+        self.settings_was_open = self.panel.settings_open;
+        if let Some(request) = self.panel.settings_request.take() {
+            match request {
+                panel_ui::settings::Request::Close => self.panel.settings_open = false,
+                panel_ui::settings::Request::Tooltips => {
+                    self.panel.tooltips = !self.panel.tooltips;
+                    self.panel.dirty = true;
+                }
+                panel_ui::settings::Request::Autosave => {
+                    self.panel.autosave = !self.panel.autosave;
+                    self.panel.dirty = true;
+                }
+                panel_ui::settings::Request::MidiIn(port) => {
+                    self.panel.picker.input_choice = Some(match port {
+                        Some(name) => midi::ports::PortChoice::Named(name),
+                        None => midi::ports::PortChoice::Any,
+                    });
+                }
+                panel_ui::settings::Request::SoundOut(name) => {
+                    self.panel.picker.output_choice = Some(name);
+                }
+                panel_ui::settings::Request::Retry => {
+                    self.panel.reprobe_requested = true;
+                    self.panel.settings.midi_given_up = false;
+                }
+            }
+        }
         if let Some(choice) = self.panel.picker.input_choice.take() {
             self.midi.choose(choice);
         }

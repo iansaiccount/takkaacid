@@ -19,6 +19,7 @@ pub enum Shortcut {
     TempoDown,
     NextPattern,
     PrevPattern,
+    ToggleSettings,
     ToggleHelp,
 }
 
@@ -32,6 +33,7 @@ pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
         (Key::ArrowRight, true) => Some(Shortcut::NextPattern),
         (Key::ArrowLeft, true) => Some(Shortcut::PrevPattern),
         (Key::F1, _) => Some(Shortcut::ToggleHelp),
+        (Key::F2, _) => Some(Shortcut::ToggleSettings),
         (Key::Questionmark, true) => Some(Shortcut::ToggleHelp),
         _ => None,
     }
@@ -85,7 +87,8 @@ pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) ->
             );
             true
         }
-        Shortcut::ToggleHelp => false,
+        // Both cards are panel state, so `handle` toggles them; nothing here touches the shared state.
+        Shortcut::ToggleHelp | Shortcut::ToggleSettings => false,
     }
 }
 

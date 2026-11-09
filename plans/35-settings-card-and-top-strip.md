@@ -160,3 +160,16 @@ egui shapes in `ui/panel.rs`, next to a `?` that loses its accidental clip rect.
 - [ ] **Task 2 — the settings card and `F2`.**
 - [ ] **Task 3 — `main` fills the card; the two old pickers go.**
 - [ ] **Task 4 — the bottom line goes, and the documents follow.**
+- [x] **Task 2 — the settings card and `F2` (code landing; tests still to write).** `ui/settings.rs`: `Settings` (port
+      lists, current devices, supervisor words), `Request::{Tooltips, Autosave, MidiIn(Option<String>), SoundOut, Retry,
+      Close}`, `card_rect`/`rows` as the single layout a test can click, and `paint`. Wired: `PanelState::{settings_open,
+      settings, settings_request}`, `Shortcut::ToggleSettings` on **F2** (dispatch toggles it and clears help and songs),
+      the gear opens it, `draw_settings` paints it over the panel with its own shield, Escape closes it before anything
+      else, and `main` fills the lists on the rising edge (never per frame) and applies every request through the same
+      `picker.input_choice` / `output_choice` the status lines used.
+      **Not yet written:** `tests/settings_live.rs` (F2, gear, each row's request, retry visibility, an empty machine).
+- [ ] **Task 3 — `main` fills the card; the two old pickers go.** Remaining: the top MIDI status text and its handle, the
+      `AUTO`/`TIPS` keys, `ui::tips_rect`/`autosave_rect`, the `Control::{Autosave, Tooltips}` tips rows, and the bottom
+      audio line with its output list. `tips_live`, `save_live` and `midi_picker_live` each lose the tests that clicked
+      the removals.
+- [ ] **Task 4 — the documents follow.**

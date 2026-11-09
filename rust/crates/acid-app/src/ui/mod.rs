@@ -20,6 +20,7 @@ pub mod row_transport;
 pub mod save;
 pub mod scale;
 pub mod selection;
+pub mod settings;
 pub mod shortcuts;
 pub mod songs;
 pub mod step_key;
@@ -127,6 +128,13 @@ pub struct PanelState {
     /// Something the panel wants to say — "saved as Acid 2", "could not import: …" — with the moment it was said. It
     /// outlives the card that asked for it, and it clears itself, so a message is never something to dismiss.
     pub notice: Option<(String, std::time::Instant)>,
+    /// True while the settings card is showing.
+    pub settings_open: bool,
+    /// What that card shows: the device lists, which ones are in use, and the supervisor's words. `main` fills it when
+    /// the card opens, because it owns the ports and the streams.
+    pub settings: settings::Settings,
+    /// Set by the card, consumed by `main` on the next frame.
+    pub settings_request: Option<settings::Request>,
     /// How full a randomise fills the pattern, `0.0..=1.0`.
     pub density: f32,
     /// The scale a randomise draws from.
@@ -199,6 +207,9 @@ impl Default for PanelState {
             tooltips: true,
             autosave: false,
             notice: None,
+            settings_open: false,
+            settings: settings::Settings::default(),
+            settings_request: None,
             density: randomise::DEFAULT_DENSITY,
             scale: scale::Scale::default(),
             scale_knob: scale::scale_position(scale::Scale::default()),
@@ -767,7 +778,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         ui.scope_id().with("help-toggle"),
         egui::Sense::click(),
     );
-    let _gear_response = ui.interact(
+    let gear_response = ui.interact(
         gear_dot,
         ui.scope_id().with("settings-toggle"),
         egui::Sense::click(),
@@ -784,7 +795,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     paint_gear(painter, gear_dot.center(), s);
     // The card must not re-close on the click that opened it, so dismissal reads the frame-start value.
     let help_was_visible = state.help_visible;
+    if gear_response.clicked() {
+        // One card at a time: the gear asks for settings and puts the other two away.
+        state.settings_open = true;
+        state.help_visible = false;
+        state.songs.card = None;
+    }
     if help_response.clicked() && !help_was_visible {
+        state.settings_open = false;
         state.help_visible = true;
     }
     if help_was_visible {
@@ -800,6 +818,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.help_visible = false;
         }
     }
+
+    draw_settings(ui, state, &l, s, window);
 
     // The songs card sits over everything, so its shield is registered before the card's own controls: a click on
     // a row or the text field is theirs, a click anywhere else dismisses.
@@ -958,4 +978,41 @@ fn paint_gear(painter: &egui::Painter, centre: egui::Pos2, scale: f32) {
         );
     }
     painter.circle_filled(centre, 2.0 * scale, theme::SILKSCREEN_DIM);
+}
+
+/// The settings card, drawn after everything else so it covers the panel like help and songs do. One card at a time: help
+/// and the songs card take precedence, and this closes itself rather than fight them for the shield.
+fn draw_settings(
+    ui: &mut egui::Ui,
+    state: &mut PanelState,
+    l: &layout::PanelLayout,
+    s: f32,
+    window: egui::Rect,
+) {
+    if !state.settings_open || state.help_visible || state.songs.card.is_some() {
+        return;
+    }
+    ui.painter()
+        .rect_filled(window, 0.0, egui::Color32::from_black_alpha(90));
+    let mut request = settings::paint(
+        ui,
+        l.panel,
+        s,
+        &state.settings,
+        state.tooltips,
+        state.autosave,
+    );
+    let shield = ui.interact(
+        window,
+        ui.scope_id().with("settings-shield"),
+        egui::Sense::click(),
+    );
+    if shield.clicked() {
+        request = Some(settings::Request::Close);
+    }
+    match request {
+        Some(settings::Request::Close) => state.settings_open = false,
+        Some(other) => state.settings_request = Some(other),
+        None => {}
+    }
 }
