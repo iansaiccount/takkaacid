@@ -157,8 +157,8 @@ egui shapes in `ui/panel.rs`, next to a `?` that loses its accidental clip rect.
       regression fix: my earlier clip-to-the-status-band edit had clipped the help dot out of existence.
       Tests: `notice_live` 6 pass (`the_gear_sits_beside_the_help_dot_and_clear_of_the_lamp`,
       `the_song_label_is_centred_in_the_strip`, and the label-clearance test rewritten for the new position).
-- [ ] **Task 2 — the settings card and `F2`.**
-- [ ] **Task 3 — `main` fills the card; the two old pickers go.**
+- [x] **Task 2 — the settings card and `F2`.** See the entry above.
+- [x] **Task 3 — the two old pickers went.** See the entry above.
 - [ ] **Task 4 — the bottom line goes, and the documents follow.**
 - [x] **Task 2 — the settings card and `F2` (code landing; tests still to write).** `ui/settings.rs`: `Settings` (port
       lists, current devices, supervisor words), `Request::{Tooltips, Autosave, MidiIn(Option<String>), SoundOut, Retry,
@@ -172,7 +172,9 @@ egui shapes in `ui/panel.rs`, next to a `?` that loses its accidental clip rect.
       `AUTO`/`TIPS` keys, `ui::tips_rect`/`autosave_rect`, the `Control::{Autosave, Tooltips}` tips rows, and the bottom
       audio line with its output list. `tips_live`, `save_live` and `midi_picker_live` each lose the tests that clicked
       the removals.
-- [ ] **Task 4 — the documents follow.**
+- [x] **Task 4 — the documents follow.** `help.rs` names F2 and the settings card in its key list and NOTES; `README.md`
+      says where autosave and tooltips live and that the lamp sits beside the gear and the `?`; `settings_live` gained the two
+      device-row tests (`settings_request` carries the choice the card used to get from the status line).
 - [x] **Task 2b — the device lists fold and scroll.** `Settings::{midi_open, sound_open}` (both start collapsed),
       `Request::{ToggleMidi, ToggleSound}`, `rows()` now returns the fold headers and the two panel rects, and an open panel
       is at most `VISIBLE_ROWS` (4) rows tall: whatever does not fit scrolls in an `egui::ScrollArea` clipped to the panel.
@@ -195,6 +197,64 @@ egui shapes in `ui/panel.rs`, next to a `?` that loses its accidental clip rect.
       Tests: `tests/midi_picker_live.rs` deleted with its subject (its coverage moved to `settings_live`), `tests/tips_live.rs`
       keeps the help-on-by-default and the readouts-answer-the-pointer tests, and `songs_live` now asserts on the picker's
       choice fields rather than its lists. 59 suites green.
-- [ ] **Task 4 — the documents follow.** `help.rs` and `README.md` still need `F2` and the settings card in the key lists,
+- [x] **Task 4 — the documents follow.** `help.rs` names F2 and the settings card in its key list and NOTES; `README.md`
+      says where autosave and tooltips live and that the lamp sits beside the gear and the `?`; `settings_live` gained the two
+      device-row tests (`settings_request` carries the choice the card used to get from the status line).
       and `settings_live` should gain the two device-row tests (a click writes `picker.input_choice` / `output_choice`),
       which `midi_picker_live` used to prove against the status line.
+
+## Review, and what it changed
+
+A fresh-context review of `f40cfb8..d34fc08` returned **Critical 1, Important 6, Minor 9**, verdict **with fixes**. Its
+strengths: `settings::rows` as the single layout source, the shield ordering fix with its regression test, the folds owned by
+the card, enumeration only on the rising edge, `SavedState` untouched.
+
+### Critical — not yet fixed
+
+**A failed audio stream is invisible.** The bottom line was the only reader of the audio status, and it is gone. `main` still
+computes the words and `audio` still produces `"failed: …"` / `"reconnecting (attempt n/m)"`, but nothing in `ui/` reads them:
+`Settings` has `midi_status` and no audio field, and the card paints none. On a device-busy or hot-unplugged machine the app
+looks healthy and is silent. Fix is small: `Settings::audio_status`, filled every frame from `self.rig.status()`, painted
+under the SOUND OUT heading (amber when it starts with `failed:`), plus the plan's `an_audio_failure_is_visible_in_the_settings_card`.
+
+### Important — not yet fixed
+
+1. **The two switches always print "ON"** — only the face colour changes, so a dim "TOOLTIPS ON" misreports the state that
+   the deleted `TIPS ON`/`AUTO OFF` keys used to show.
+2. **F1 / shift+? while settings is open leaves two cards open** — `ToggleHelp` does not clear `settings_open`, so help paints
+   over a still-open settings card and Escape then closes the invisible one first, inverting the order the spec asks for.
+3. **The card's state is a snapshot from when it opened.** Lists *and* the current devices, supervisor words and
+   `midi_given_up` are copied on the rising edge, so choosing `HDMI` leaves the card still saying `IN USE: Speakers` (no
+   feedback at all), and a supervisor that gives up 30 s after opening never shows `RETRY`. Only `list_ports()` /
+   `list_output_devices()` need the edge.
+4. **`midi_current` is the preference, not the connection** — `preference_name()` on a first run says `IN USE: none` with the
+   `none` row lit while a controller is playing. Use `self.midi.name`.
+5. **The settings card is not modal for the editing keys** — `selection.rs` refuses them only for `help_visible`, so Enter and
+   the arrows still edit the step behind the card and mark the session dirty.
+6. **The plan's entry-point tests were never written**: `f2_opens_and_closes_the_settings_card`, `the_gear_opens_settings`,
+   `opening_settings_closes_help_and_the_songs_card`, `f2_with_help_open_replaces_help`,
+   `retry_appears_only_while_the_supervisor_has_given_up`. Finding 2 is exactly what the symmetric F2 test would have caught.
+   Also `tips_live::the_help_switch_is_part_of_what_a_save_keeps` is vacuous — it asserts the two fields it just set.
+   Ruling needed on one plan defect: a live test cannot assert `picker.input_choice`, because `main` (a binary) applies the
+   request; the delivered tests stop at `settings_request`, and either request application moves into the lib or the ruling is
+   recorded here.
+
+### Minor — recorded, not fixed
+
+Dead code where the removals passed through (`ui::picker` has no caller left, `panel::midi_status_rect`, and the two
+`tips::Control` entries whose keys are gone); stale words (`supervisor.rs` "press REPROBE" vs the card's RETRY, `main.rs`
+"press the amber dot", `help.rs` "click the MIDI line", `mod.rs` doc comments about REPROBE and TIPS/AUTO); the song label's
+centre is the midpoint of the free interval, not the strip's centre (the test's 12 % tolerance hides the difference); long
+notices are clipped at both ends in the narrower centred rect; `README` says the lamp sits between the gear and the `?` when
+it is left of both; `Request::Close` is unreachable in `main`; the settings card dims the window while help and songs do not;
+rows run under the scrollbar (`area.width()` inside the scroll area).
+
+## Done
+
+Four commits landed on `Deepseek-Version`: the top strip (`3f4bea1`), the card and F2 (`a0d6e69`), the fold/scroll rework
+(`a6a1a5f`), the shield fix and `settings_live` (`e694274`), the removals (`b287ef4`), and the documents (`d34fc08`).
+Gates are green at `d34fc08`: 59 workspace suites, clippy `-D warnings`, fmt.
+
+The plan's product work is complete; the review's Critical and Important findings are the next session's first commit, and are
+written out above with their fixes so nothing has to be rediscovered. This session stopped at its context budget mid-way
+through implementing them — the code is green and unmodified, not half-patched.
