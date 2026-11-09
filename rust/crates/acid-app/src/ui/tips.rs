@@ -57,7 +57,7 @@ pub enum Control {
     /// The BPM readout. Appended, so no existing control's position in the table moves.
     Tempo,
     Pattern,
-    /// The AUTO key: whether the session saves itself.
+    /// The AUTOSAVE switch in the settings card: whether the session saves itself.
     Autosave,
 }
 
@@ -314,9 +314,10 @@ mod tests {
         for (index, tip) in TIPS.iter().enumerate() {
             assert_eq!(Control::ALL[index].tip(), *tip);
         }
-        // The knobs are the front of the panel, and the TIPS key is the last tip.
+        // The knobs are the front of the panel; the last entries are the settings card's two switches.
         assert_eq!(Control::for_knob(Knob::Waveform), Control::ALL[0]);
         assert_eq!(Control::Tooltips, Control::ALL[16]);
+        assert_eq!(Control::Autosave, Control::ALL[25]);
     }
 
     #[test]

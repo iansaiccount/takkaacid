@@ -53,17 +53,6 @@ pub fn brand_rect(top: Rect) -> Rect {
     )
 }
 
-/// The MIDI status line: between the wordmark and the pattern display, right-aligned. It is also the picker's
-/// handle, so it is the same rect the status text is painted in.
-pub fn midi_status_rect(top: Rect, scale: f32) -> Rect {
-    Rect::from_min_max(
-        Pos2::new(top.left() + top.width() * 0.42, top.top()),
-        Pos2::new(
-            pattern_display_rect(top).left() - theme::GAP * scale,
-            top.bottom(),
-        ),
-    )
-}
 /// The help dot: at the right end of the wordmark's corner, clear of the saves lamp beside it.
 pub fn help_rect(top: Rect, scale: f32) -> Rect {
     Rect::from_center_size(

@@ -17,7 +17,7 @@ pub enum MidiAction {
     Open,
     /// Wait for the retry interval.
     Wait,
-    /// Stop probing; only a REPROBE click will try again.
+    /// Stop probing; only the settings card's RETRY row will try again.
     GiveUp,
 }
 
@@ -91,7 +91,7 @@ impl MidiSupervisor {
 pub fn status_line(connected: Option<&str>, retries: u32) -> String {
     match connected {
         Some(name) => format!("MIDI: {name}"),
-        None if retries >= MIDI_MAX_RETRIES => "MIDI: none (press REPROBE)".to_string(),
+        None if retries >= MIDI_MAX_RETRIES => "MIDI: none (gave up)".to_string(),
         None => "MIDI: none (retrying)".to_string(),
     }
 }

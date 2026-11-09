@@ -13,7 +13,6 @@ pub mod learn;
 pub mod modal;
 pub mod panel;
 pub mod pattern_swap;
-pub mod picker;
 pub mod randomise;
 pub mod row_knobs;
 pub mod row_perform;
@@ -73,9 +72,9 @@ pub struct PanelState {
     pub dirty: bool,
     /// The MIDI status line, right-aligned in the top strip.
     pub midi_status: String,
-    /// True when the supervisor has given up, which shows the REPROBE target.
+    /// True when the supervisor has given up, which is what makes the settings card show its RETRY row.
     pub midi_given_up: bool,
-    /// Set by the panel when REPROBE is clicked; the app clears it.
+    /// Set by the settings card's RETRY row; the app clears it and probes again.
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
@@ -98,10 +97,11 @@ pub struct PanelState {
     /// The keys that have written a step and not been released yet. A press for a key that is already here is a repeat
     /// however egui labelled it, so it writes nothing; the release is what walks the border on.
     pub placed: Vec<egui::Key>,
-    /// Whether hovering a knob or a button explains it. On unless the player turns it off with the TIPS key.
+    /// Whether hovering a knob or a button explains it. On unless the player turns it off with the TOOLTIPS switch in
+    /// the settings card.
     pub tooltips: bool,
-    /// Whether the session writes itself when it changes. Off unless the player turns it on with the AUTO key: saving is
-    /// manual, and the lamp plus the SAVE key are how a player knows where they stand.
+    /// Whether the session writes itself when it changes. Off unless the player turns it on with the AUTOSAVE switch:
+    /// saving is manual, and the lamp plus the SAVE key are how a player knows where they stand.
     pub autosave: bool,
     /// Something the panel wants to say — "saved as Acid 2", "could not import: …" — with the moment it was said. It
     /// outlives the card that asked for it, and it clears itself, so a message is never something to dismiss.

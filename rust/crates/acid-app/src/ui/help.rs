@@ -37,14 +37,14 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "shift+up / down: note up or down",
                 "enter: note on or off",
                 "F1 or shift+?: this card, F2: settings",
-                "hover a knob or key to read it; TIPS and AUTO live in settings",
+                "hover a knob or key to read it; both switches sit in settings",
             ],
         ),
         (
             "MIDI",
             &[
                 "MIDI in: notes play over the pattern",
-                "click the MIDI line: choose an input port",
+                "F2: MIDI IN in the settings card chooses the input port",
                 "clock: tempo follows a 24 ppqn source",
                 "CC 20 waveform, 3 tuning, 5 accent, 7 volume",
                 "CC 21 pattern, 71 resonance, 72 tempo, 73 swing",

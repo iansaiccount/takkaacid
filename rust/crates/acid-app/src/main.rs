@@ -638,7 +638,9 @@ impl Midi {
                 }
                 let action = self.supervisor.on_error(std::time::Instant::now());
                 if matches!(action, midi::supervisor::MidiAction::GiveUp) {
-                    eprintln!("takka-acid: {message} — press the amber dot to retry");
+                    eprintln!(
+                        "takka-acid: {message} — giving up on the MIDI input (RETRY in settings, F2)"
+                    );
                 }
             }
         }

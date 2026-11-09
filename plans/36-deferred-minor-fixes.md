@@ -252,4 +252,10 @@ the gear and the help `?`" for a lamp that is left of both.
       a click test passed while every face ran under the bar; (b) the bar's width is read from the *child's* style, because
       `ui`'s still says the bar floats and a floating bar allocates nothing. — Cost if wrong: a non-floating bar is drawn
       in egui's stock colours at the gutter, which is a look the panel does not otherwise use.
-- [ ] Task 7 — dead code and stale words.
+- [x] Task 7 — dead code and stale words. Deleted `ui::picker` (its subject was the shield, which `ui::modal` now owns) and
+      `panel::midi_status_rect`; `cargo check --all-targets` proved nothing referenced either. Words caught up:
+      `supervisor.rs` gives up as `MIDI: none (gave up)` and `main`'s log line names RETRY and F2 instead of an amber dot;
+      `help.rs` points at `F2` for the input port and at the switches by their real names; `mod.rs`'s field docs talk about
+      the settings card's RETRY row and switches; `tips.rs`'s `Autosave` doc and its catalogue test; `README` puts the lamp
+      left of the gear and the `?`. The 64-character help-line budget caught the first attempt at the help wording, which
+      is the constraint doing its job. 527 tests over 61 suites.

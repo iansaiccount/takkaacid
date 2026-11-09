@@ -147,7 +147,7 @@ their own, and picking one loads it as a *new* song called "New song", unsaved, 
 name. Your own songs sit below them under `MY SONGS`, and replacing a session you have not saved takes a second click.
 
 Saving is manual by default: the `SAVE` key writes the session (and the song file, when the session came from one), and the
-wordmark says `SAVED` or `UNSAVED`, between the gear and the help `?`. Autosave is a switch in the settings card for those
+wordmark says `SAVED` or `UNSAVED`, left of the gear and the help `?`. Autosave is a switch in the settings card for those
 who want it, along with tooltips and the two device lists; the choices are kept in the session file.
 A first run opens on the Slow Acid demo, named "New song", with the lamp already saying what needs saying.
 
