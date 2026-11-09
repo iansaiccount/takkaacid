@@ -179,3 +179,11 @@ egui shapes in `ui/panel.rs`, next to a `?` that loses its accidental clip rect.
       Each section names the device in use above it — `IN USE: <name>` — so the answer is readable while the list is shut,
       and the fold mark is ASCII (`[+]` / `[-]`) because the face may not use font glyphs. This is the fix for a machine
       whose SOUND OUT list was taller than the card.
+- [x] **The fold click closed the card (bug, fixed).** The dismissal shield was registered *after* the card's controls, and a
+      later widget wins a hit-test tie — so every click inside the card was read as a click outside it. The shield is now
+      registered first, and the card's own rows win. The two folds are also applied by the card itself rather than sent to
+      `main` and back, because the folded/shut state is panel state and a round trip only made the click look like nothing
+      happened.
+      Tests: `tests/settings_live.rs` (6) — folding a panel open and shut keeps the card standing, a click outside still
+      dismisses, the two switches ask for their flips, the sections fold independently, and an open panel never grows past
+      four rows however long the list is.

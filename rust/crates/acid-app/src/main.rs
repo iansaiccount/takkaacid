@@ -378,12 +378,9 @@ impl eframe::App for TakkaApp {
                     self.panel.reprobe_requested = true;
                     self.panel.settings.midi_given_up = false;
                 }
-                panel_ui::settings::Request::ToggleMidi => {
-                    self.panel.settings.midi_open = !self.panel.settings.midi_open;
-                }
-                panel_ui::settings::Request::ToggleSound => {
-                    self.panel.settings.sound_open = !self.panel.settings.sound_open;
-                }
+                // The card applies its own folds, so these two never reach this match.
+                panel_ui::settings::Request::ToggleMidi
+                | panel_ui::settings::Request::ToggleSound => {}
             }
         }
         if let Some(choice) = self.panel.picker.input_choice.take() {

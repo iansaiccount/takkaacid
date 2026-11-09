@@ -994,6 +994,13 @@ fn draw_settings(
     }
     ui.painter()
         .rect_filled(window, 0.0, egui::Color32::from_black_alpha(90));
+    // The shield covers the window, so it is registered before the card's own controls: a later widget wins a hit-test tie,
+    // and a click on a fold header or a device row is the card's, not a dismissal. Only a click outside them closes.
+    let shield = ui.interact(
+        window,
+        ui.scope_id().with("settings-shield"),
+        egui::Sense::click(),
+    );
     let mut request = settings::paint(
         ui,
         l.panel,
@@ -1002,15 +1009,15 @@ fn draw_settings(
         state.tooltips,
         state.autosave,
     );
-    let shield = ui.interact(
-        window,
-        ui.scope_id().with("settings-shield"),
-        egui::Sense::click(),
-    );
     if shield.clicked() {
         request = Some(settings::Request::Close);
     }
     match request {
+        // The two folds belong to the card, so they are applied here instead of going through main.
+        Some(settings::Request::ToggleMidi) => state.settings.midi_open = !state.settings.midi_open,
+        Some(settings::Request::ToggleSound) => {
+            state.settings.sound_open = !state.settings.sound_open
+        }
         Some(settings::Request::Close) => state.settings_open = false,
         Some(other) => state.settings_request = Some(other),
         None => {}
