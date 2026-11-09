@@ -211,7 +211,11 @@ the gear and the help `?`" for a lamp that is left of both.
       and documents the register-it-first rule), and all three cards call it. `tests/modal_live.rs` (3): every card dims
       the window and closes on a click outside it, and nothing dims when no card is up. RED seen: the help card painted no
       scrim. 517 tests over 60 suites.
-- [ ] Task 2 — a line of text fits.
+- [x] Task 2 — a line of text fits. `ui::text::{fit_with, fit}`: measured by the painter, cut at the end, an ellipsis that
+      counts against the width, and nothing at all rather than a lone ellipsis when there is no room. The label line uses
+      it, and `song_label`'s private 18-character cap is gone — one truncation rule now, not two.
+      Tests: `tests/text_fit.rs` (5, pure arithmetic) and `notice_live` (8; RED seen: the notice was painted whole and the
+      clip rect ate both ends). 524 tests over 61 suites.
 - [ ] Task 3 — the name centred on the strip.
 - [ ] Task 4 — the two tips entries talk again.
 - [ ] Task 5 — no unreachable arm in `main`.

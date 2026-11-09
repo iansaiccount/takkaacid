@@ -11,12 +11,37 @@ fn screen() -> Rect {
 }
 
 fn run_frame(ctx: &Context, panel: &mut PanelState, shared: &SharedState) {
+    let _ = frame(ctx, panel, shared);
+}
+
+/// Paint one frame and answer every line it drew, with the width that line really took.
+fn frame(ctx: &Context, panel: &mut PanelState, shared: &SharedState) -> Vec<(String, f32)> {
     let input = RawInput {
         screen_rect: Some(screen()),
         ..Default::default()
     };
     let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
     output.textures_delta.clear();
+    painted_lines(&output)
+}
+
+/// Every string egui drew this frame and how wide it was, so a test can assert on what the face says and on whether it
+/// fits the room it was given.
+fn painted_lines(output: &eframe::egui::FullOutput) -> Vec<(String, f32)> {
+    fn walk(shape: &eframe::egui::Shape, out: &mut Vec<(String, f32)>) {
+        match shape {
+            eframe::egui::Shape::Text(text) => {
+                out.push((text.galley.text().to_string(), text.galley.rect.width()));
+            }
+            eframe::egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
 }
 
 /// The label sits in the middle of the strip and nowhere near the things it could cover.
@@ -132,4 +157,50 @@ fn the_song_label_is_centred_in_the_strip() {
     ] {
         assert!(!label.intersects(rect), "the name must not cover {what}");
     }
+}
+
+/// A notice longer than the label keeps its beginning. The clip rect used to cut the message at both ends, so the player
+/// read neither the verb at the front nor the detail at the back.
+#[test]
+fn a_long_notice_keeps_its_beginning() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let long = "could not import: No such file or directory (os error 2), and the file it names is not here either";
+    panel.notify(long);
+
+    let lines = frame(&ctx, &mut panel, &shared);
+    let (line, width) = lines
+        .iter()
+        .find(|(text, _)| text.starts_with("could not import"))
+        .expect("the notice must be on the line");
+
+    let l = layout(screen());
+    let rect = panel::song_label_rect(l.top, scale(screen()));
+    assert!(
+        line.ends_with('…'),
+        "a line that was cut has to say it was cut: {line}"
+    );
+    assert!(
+        *width <= rect.width() + 0.5,
+        "the notice has to fit the line it is given: {width} in {}",
+        rect.width()
+    );
+    assert!(
+        line.len() > 8,
+        "the beginning is the part worth keeping: {line}"
+    );
+}
+
+/// A notice that fits is left exactly as it was written: no ellipsis, no cut.
+#[test]
+fn a_notice_that_fits_is_untouched() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    panel.notify("saved Acid 1");
+
+    let lines = frame(&ctx, &mut panel, &shared);
+    let found = lines.iter().any(|(text, _)| text == "saved Acid 1");
+    assert!(found, "a short notice is painted as written: {lines:?}");
 }

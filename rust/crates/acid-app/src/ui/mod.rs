@@ -26,6 +26,7 @@ pub mod shortcuts;
 pub mod songs;
 pub mod step_key;
 pub mod switches;
+pub mod text;
 pub mod tips;
 
 pub mod theme;
@@ -348,6 +349,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             },
         ),
     };
+    // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
+    // of the face. Cutting it with the clip rect alone lost both ends; this keeps the beginning and says it was cut.
+    let line = text::fit(ui.painter(), &line, theme::legend(10.0 * s), label.width());
     ui.painter().with_clip_rect(label).text(
         label.center(),
         egui::Align2::CENTER_CENTER,
@@ -771,17 +775,13 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
 // because a detent marker and a learned controller both speak in positions.
 pub use crate::knobs::{waveform_from_position, waveform_position};
 
-/// What the song label says: the name the session is on, or that it has none. Truncated so a long name cannot run into
-/// the status line beside it.
+/// What the song label says: the name the session is on, or that it has none. How much of it fits is not decided here —
+/// `text::fit` measures the line against the rect it is painted in, so there is one truncation rule rather than two.
 fn song_label(name: Option<&str>) -> String {
-    let Some(name) = name else {
-        return "SONG untitled".to_string();
-    };
-    let mut short: String = name.chars().take(18).collect();
-    if name.chars().count() > 18 {
-        short.push('…');
+    match name {
+        Some(name) => format!("SONG {name}"),
+        None => "SONG untitled".to_string(),
     }
-    format!("SONG {short}")
 }
 
 /// A gear, drawn rather than typed: a ring, eight teeth and a hub. The face may not use font glyphs, so the shape is the
