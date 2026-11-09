@@ -245,7 +245,6 @@ fn the_two_sections_fold_independently() {
         0.0,
         "a shut panel takes no space"
     );
-    let _ = screen_rows.retry;
 }
 
 /// An open panel never grows past four rows, however long the machine's list is: what does not fit scrolls.
@@ -629,7 +628,15 @@ fn the_card_keeps_its_own_folds_and_its_close() {
     let shared = SharedState::new();
     let mut panel = open_settings(&["KeyStep"], &[]);
 
+    // The CLOSE key has to be there to be the one that closed it: the shield would also close the card, so the caption
+    // inside the row's rect is what tells the two apart.
     let at = rows(&panel).close.center();
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(
+        texts.iter().any(|text| text == "CLOSE"),
+        "the card must paint its CLOSE key: {texts:?}"
+    );
+
     click(&ctx, &mut panel, &shared, at);
 
     assert!(!panel.settings_open, "CLOSE closes the card");

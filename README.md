@@ -40,7 +40,7 @@ acid line (density decides how many steps, scale decides which notes), and pick 
 **Transport.** Run/stop (with the step LED chasing the audio, not the wall clock), tempo in 40–300 BPM, swing, and the
 MIDI LEARN key.
 
-**MIDI.** Pick an input port from the panel; notes with velocity play the voice and — in step mode or with shift held —
+**MIDI.** Choose the input port in settings (**F2**); notes with velocity play the voice and — in step mode or with shift held —
 write into the pattern. Every control can be taught a continuous controller: the seven knobs, volume, tempo, the pattern
 selector and the shuffle. Dial-like controls use **pickup** — a fader parked somewhere else has to reach the knob before
 it may turn it, so a song load never slams the patch. The pattern selector additionally waits for the bar: cycling through
@@ -76,7 +76,7 @@ when `XDG_DATA_HOME` is unset. Point `TAKKA_ACID_DATA_DIR` somewhere else to kee
 
 **Two flags worth knowing.** `takka-acid --midi-map` prints what the app makes of every MIDI note number without opening a
 window or an audio device — the fastest way to answer "is it my keyboard or the app?". And the app picks its MIDI input
-from the panel's port picker, remembering the choice.
+from the settings card, remembering the choice.
 
 **Working on it.** Every change is gated by:
 

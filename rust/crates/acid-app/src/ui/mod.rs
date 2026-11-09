@@ -70,8 +70,6 @@ pub struct PanelState {
     pub drag: Option<(usize, Pitch, i8, f32)>,
     /// True when something has changed since the last save.
     pub dirty: bool,
-    /// The MIDI status line, right-aligned in the top strip.
-    pub midi_status: String,
     /// True when the supervisor has given up, which is what makes the settings card show its RETRY row.
     pub midi_given_up: bool,
     /// Set by the settings card's RETRY row; the app clears it and probes again.
@@ -108,8 +106,9 @@ pub struct PanelState {
     pub notice: Option<(String, std::time::Instant)>,
     /// True while the settings card is showing.
     pub settings_open: bool,
-    /// What that card shows: the device lists, which ones are in use, and the supervisor's words. `main` fills it when
-    /// the card opens, because it owns the ports and the streams.
+    /// What that card shows: the two device lists (read on the rising edge of `settings_open`, because enumerating them
+    /// costs a round trip each) and, copied every frame while the card is up, which devices are in use and what the two
+    /// supervisors say. `main` fills it because it owns the ports and the streams.
     pub settings: settings::Settings,
     /// Set by the card, consumed by `main` on the next frame.
     pub settings_request: Option<settings::Request>,
@@ -164,7 +163,6 @@ impl Default for PanelState {
             drag: None,
             dirty: false,
             volume: acid_core::engine::DEFAULT_VOLUME_KNOB,
-            midi_status: "MIDI: none (retrying)".to_string(),
             midi_given_up: false,
             reprobe_requested: false,
             picker: PickerState::default(),
@@ -351,12 +349,16 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     };
     // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
     // of the face. Cutting it with the clip rect alone lost both ends; this keeps the beginning and says it was cut.
-    let line = text::fit(ui.painter(), &line, theme::legend(10.0 * s), label.width());
+    // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
+    // of the face. Cutting it with the clip rect alone lost both ends; this keeps the beginning and says it was cut.
+    // One font for the measurement and the paint, or the fit would be honest only while two expressions stayed equal.
+    let font = theme::legend(10.0 * s);
+    let line = text::fit(ui.painter(), &line, font.clone(), label.width());
     ui.painter().with_clip_rect(label).text(
         label.center(),
         egui::Align2::CENTER_CENTER,
         line,
-        theme::legend(10.0 * s),
+        font,
         colour,
     );
     row_knobs::draw(state, shared, ui, &l, s);

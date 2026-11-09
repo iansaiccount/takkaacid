@@ -170,9 +170,9 @@ fn the_song_label_is_centred_in_the_strip() {
     );
 }
 
-/// Centred *and* symmetric: the window is as far from the left cluster as from the right, so a cut line loses the same
-/// The window spends the room evenly and wastes none: it is centred on the strip and reaches the *nearer* neighbour's
-/// edge, so no width is thrown away and a cut line loses the same amount from each side.
+/// The window spends the room evenly and wastes none: half its width is exactly the room the tighter side allows, counted
+/// from the *strip's* centre. Both numbers come from outside the rect, so the pre-fix rect — the whole gap, centred on the
+/// gap's own midpoint — fails this (132.75 against 77.7 at 980 × 560).
 #[test]
 fn the_song_label_window_uses_all_the_room_the_tighter_side_allows() {
     let l = layout(screen());
@@ -180,24 +180,33 @@ fn the_song_label_window_uses_all_the_room_the_tighter_side_allows() {
     let label = panel::song_label_rect(l.top, s);
     let bound_left = panel::brand_rect(l.top).right() + acid_app::ui::theme::GAP * s;
     let bound_right = panel::pattern_display_rect(l.top).left() - acid_app::ui::theme::GAP * s;
-    let half = label.width() * 0.5;
-    let centre = label.center().x;
+    let centre = l.top.center().x;
+    let room = (centre - bound_left).min(bound_right - centre);
 
+    assert!(
+        (label.width() * 0.5 - room).abs() <= 1.0,
+        "the window should be as wide as the tighter side allows: {} of {room}",
+        label.width() * 0.5
+    );
     // The left cluster is the tighter side at these proportions, so that is the edge the window must reach.
     assert!(
         (label.left() - bound_left).abs() <= 1.0,
         "the window should reach the tighter neighbour: {} vs {bound_left}",
         label.left()
     );
-    // And it must never reach past either neighbour, counting from the centre it is built on.
-    assert!(half <= centre - bound_left + 1.0, "past the left bound");
-    assert!(half <= bound_right - centre + 1.0, "past the right bound");
 }
 
 /// A window small enough to squeeze the strip must still yield a usable rect rather than an inverted one.
 #[test]
-fn the_song_label_window_survives_a_tiny_window() {
-    for size in [vec2(320.0, 200.0), vec2(240.0, 160.0)] {
+fn the_song_label_window_survives_a_squeezed_strip() {
+    // 320 × 200 and 240 × 160 squeeze the strip but still leave the two clusters apart; 40 × 30 is narrow enough that
+    // the wordmark and the pattern display cross, which is the branch where the window has to collapse rather than invert.
+    for size in [
+        vec2(320.0, 200.0),
+        vec2(240.0, 160.0),
+        vec2(40.0, 30.0),
+        vec2(20.0, 16.0),
+    ] {
         let l = layout(Rect::from_min_size(Pos2::ZERO, size));
         let label = panel::song_label_rect(l.top, scale(Rect::from_min_size(Pos2::ZERO, size)));
         assert!(

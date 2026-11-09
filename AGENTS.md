@@ -70,3 +70,7 @@ through the `ArcSwap`.
 
 **No font glyphs.** Everything on the face is an egui shape or ASCII text from the bundled font. A symbol drawn with a
 character from a system font renders as a box on some machines.
+
+One exception, and one only: `…` (U+2026) marks a line or a device name that was cut, because `...` costs three characters
+of a label that has none to spare. It comes from the bundled font, and `ui::text::fit` plus `settings::shorten` are its only
+users.

@@ -185,7 +185,6 @@ impl eframe::App for TakkaApp {
             self.pending_pattern = None;
         }
         self.last_position = position;
-        // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
         // SAVE asks for a write; `save` clears `dirty` when it succeeds and prints when it does not.
         if self.panel.save_requested {
@@ -350,7 +349,8 @@ impl eframe::App for TakkaApp {
             self.midi.reprobe();
         }
         self.midi.probe_if_due(Arc::clone(&self.state));
-        self.panel.midi_status = midi::supervisor::status_line(
+        // The supervisor's own words, and whether it has given up: the settings card shows both, and nowhere else does.
+        let midi_status = midi::supervisor::status_line(
             self.midi.name.as_deref(),
             self.midi.supervisor.retries(),
         );
@@ -368,14 +368,13 @@ impl eframe::App for TakkaApp {
                     AudioStatus::Running { device, .. } => Some(device.as_str()),
                     _ => None,
                 },
-                midi_status: &self.panel.midi_status,
+                midi_status: &midi_status,
                 midi_given_up: self.panel.midi_given_up,
                 audio_status: self.rig.status(),
             };
             self.panel.settings.follow(live);
         }
         ctx.request_repaint_after(Duration::from_millis(200));
-        // Write the session when something changed and the interval has passed.
         // Write the session when the player turned autosave on, something changed, and the interval has passed.
         if self.panel.autosave
             && self

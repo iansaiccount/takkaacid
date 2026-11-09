@@ -84,9 +84,12 @@ pub fn song_label_rect(top: Rect, scale: f32) -> Rect {
     let centre = top.center().x;
     let half = (centre - left).min(right - centre);
     if half <= 0.0 {
-        // A window narrow enough that the two clusters meet or cross: the gap itself is the best there is, and a rect
-        // centred on a midpoint outside it would be worse than one that merely fits.
-        return Rect::from_min_max(Pos2::new(left, top.top()), Pos2::new(right, top.bottom()));
+        // A window narrow enough that the two clusters meet or cross. The gap itself is the best there is — but it may be
+        // crossed, so it is clamped rather than inverted: a negative-width rect would paint mirrored and reads as a bug.
+        return Rect::from_min_max(
+            Pos2::new(left, top.top()),
+            Pos2::new(right.max(left), top.bottom()),
+        );
     }
     Rect::from_min_max(
         Pos2::new(centre - half, top.top()),

@@ -245,7 +245,8 @@ pub fn rows(
     }
 }
 
-/// Paint the card and say what was clicked, if anything. The first request of the frame wins.
+/// Paint the card and say what was clicked, if anything. Only one control can be clicked in a frame, so the last request
+/// set is the one that answers; every other control leaves it alone.
 pub fn paint(
     ui: &mut Ui,
     panel: Rect,
@@ -466,7 +467,6 @@ fn scrollable(
     // back from the layout, because egui animates the bar's appearance in over a few frames and a row would grow its
     // first pixel under the bar on the opening frame.
     child.style_mut().spacing.scroll.floating = false;
-    // Only a list too long for the panel scrolls; a short one keeps the full width.
     // Only a list too long for the panel scrolls; a short one keeps the full width. The bar's width comes from the
     // child's style: `ui`'s still says the bar floats, and a floating bar allocates nothing.
     let bar = if count > VISIBLE_ROWS {

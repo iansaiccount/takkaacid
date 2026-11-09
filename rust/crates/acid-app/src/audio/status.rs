@@ -20,20 +20,6 @@ pub fn is_failed(text: &str) -> bool {
     text.starts_with("failed")
 }
 
-/// A device name cut to `max` characters with the middle replaced, so both ends stay recognisable.
-pub fn device_label(name: &str, max: usize) -> String {
-    if name.chars().count() <= max || max < 7 {
-        return name.to_string();
-    }
-    let keep = max - 3; // the "..."
-    let head_len = keep - keep / 2 - 1;
-    let tail_len = keep - head_len;
-    let chars: Vec<char> = name.chars().collect();
-    let head: String = chars[..head_len].iter().collect();
-    let tail: String = chars[chars.len() - tail_len..].iter().collect();
-    format!("{head}...{tail}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,17 +52,6 @@ mod tests {
     }
 
     #[test]
-    fn long_device_names_are_ellipsised_in_the_middle() {
-        let label = device_label("Built-in Audio Analog Stereo Digital Surround", 24);
-        assert!(label.len() <= 24, "{label}");
-        assert!(
-            label.contains('…') || label.contains("..."),
-            "no ellipsis: {label}"
-        );
-        assert_eq!(device_label("PipeWire", 24), "PipeWire");
-    }
-
-    #[test]
     fn the_status_line_is_ascii_for_every_state() {
         for status in [
             AudioStatus::Starting,
@@ -99,8 +74,10 @@ mod tests {
         // A machine with no devices at all must give an empty list, not a panic or an unwrap.
         let devices = crate::audio::list_output_devices();
         for name in &devices {
-            let label = device_label(name, 24);
-            assert!(label.chars().count() <= 24, "{label}");
+            assert!(
+                !name.is_empty(),
+                "a device with no name is no use on a panel"
+            );
         }
     }
 }

@@ -53,7 +53,6 @@ impl MidiSupervisor {
         MidiAction::Wait
     }
 
-    /// A port opened: forget every failure, so the next unplug starts the count again.
     /// A port opened: forget every failure, and wait a full interval before looking again.
     ///
     /// Waiting is the point. `next_probe: None` means "never looked", so leaving it `None` after a success made

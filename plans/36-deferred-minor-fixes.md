@@ -259,3 +259,60 @@ the gear and the help `?`" for a lamp that is left of both.
       the settings card's RETRY row and switches; `tips.rs`'s `Autosave` doc and its catalogue test; `README` puts the lamp
       left of the gear and the `?`. The 64-character help-line budget caught the first attempt at the help wording, which
       is the constraint doing its job. 527 tests over 61 suites.
+
+## Review of this round, and what it changed
+
+A fresh-context reviewer read `d34fc08..HEAD` against both plans and the spec: **Critical 0, Important 0, Minor 12**,
+verdict **with fixes** — "nothing I found changes what a player sees or hears; the fixes worth making are two tests that do
+not test what they say, plus a small pile of stale words". All twelve are fixed in `fix(review)`; the two test-honesty ones
+were re-derived and watched failing first.
+
+1. **`the_song_label_window_uses_all_the_room_the_tighter_side_allows` passed on the pre-fix rect** (it measured both sides
+   from the rect itself, so the inequalities were arithmetic consequences). Now both numbers come from the strip's centre
+   and the neighbours: 132.75 against 77.7 at 980 × 560 for the old rect.
+2. **The tiny-window fallback was neither reached nor correct**: at 320 × 200 the branch is not entered, and when it is it
+   returned an inverted rect. `right.max(left)` now clamps it, and the test drives windows down to 20 × 16. Mutation check:
+   with the clamp removed the test fails on `[[20.0 2.6] - [19.4 4.9]]`.
+3. **`PanelState::midi_status` was a pass-through** (written by `main`, read straight back into `Settings::Live`), and its doc
+   still described the deleted status line. The field is gone; `main` binds the supervisor's words where it builds `Live`.
+4. **Two `README` sentences still pointed at the removed port picker**; both now say settings / F2.
+5. **`help.rs` lost the subject** of "both switches sit in settings" — now "hover to read a control; tooltips and autosave
+   are in settings" (61 characters, inside the 64 the test allows).
+6. **`audio::status::device_label` had no caller left** (the bottom line it served went in plan 35) and was a third
+   truncation rule. Deleted with its test.
+7. **One font for the label's measurement and its paint**, hoisted, so the fit cannot drift from the drawing.
+8. **Editing debris removed**: two duplicated comment lines in `settings.rs`, two stale copies in `main.rs`, one in
+   `supervisor.rs`, a half-written doc sentence in `notice_live.rs`.
+9. **`the_card_keeps_its_own_folds_and_its_close` could not tell CLOSE from the scrim** (both set `settings_open = false`).
+   It now asserts the `CLOSE` caption is painted before the click.
+10. A no-op `let _ = rows.retry;` in a fold test went.
+11. `paint`'s doc said "the first request of the frame wins"; the code keeps the last. Corrected.
+12. `…` is the first non-ASCII character the face paints, against the "no font glyphs / ASCII" rule. **Ruled: keep it**,
+    and `AGENTS.md` now records it as the one exception with its reason (three characters of a label that has none to
+    spare) and its only users (`ui::text::fit`, `settings::shorten`). — Cost if wrong: the rule and the code diverge again,
+    which is exactly what this ruling exists to prevent.
+
+**Declined to judge — ruled, one line each:**
+
+- *A click on a card's own blank face dismisses it* (the shield spans the window): the modal idiom all three cards share.
+  Kept — the alternative is a card that some clicks land in and others do not. Cost if wrong: a player who clicks the card
+  body loses the card and reopens it.
+- *Two clicks to reach the gear or the `?` while a card is up*: intended modality; the keyboard is one press, and Escape
+  and a click outside are the documented ways out.
+- *The centred window is 155 px where the gap is 266 px*, because `brand_rect` reserves 40 % of the strip for a wordmark
+  that draws about a third: accepted for this round — centring was the request and the notice keeps its beginning. A future
+  round could size `brand_rect` to its contents. Cost if wrong: notices lose ~25 characters.
+- *The spec sketch puts the gear right of the `?`; the implementation is lamp · gear · `?`*: ruled in plan 35, documented
+  in `README`. The sketch's order would put the gear against the pattern display.
+- *`dismiss_live.rs` hand-computes the help dot* (`brand_rect.right() - 10.0`, which is 8.75 at 980 × 560): predates this
+  range; the click still lands inside the dot. Left as is — it is a pre-existing second copy of a mapping.
+- *A device list that shrinks while the card is open keeps the unplugged port*: deliberate and documented — only the
+  lit/current state follows; the lists are re-read on the next opening.
+- *SPACE still runs the transport behind the card, and an audition key still sounds*: only the editing keys are refused,
+  which is what plan 35's fix pass chose and `dispatch.rs` pins.
+- *`text::fit` re-measures up to `chars.len()` candidates per frame*: bounded, UI thread, at the app's 5 fps repaint
+  cadence. Cost if wrong: a few microseconds per frame while a long notice is up.
+- *The plan's `every_card_dims_the_face_and_dismisses_on_a_click_outside` landed as three tests in `modal_live`*: same
+  coverage, stated above.
+- *The reviewer had no shell and could not run the gates*: they are run here at HEAD — 526 tests over 61 suites (one fewer
+  than 527 because `device_label`'s test went with it), clippy `-D warnings`, `fmt --check`.
