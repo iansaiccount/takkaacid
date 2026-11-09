@@ -105,3 +105,16 @@ claiming to be that record.
       unnamed song (no file, dirty, the demo's own patch switches), and `save()` now rewrites the song file the session came
       from as well as the session. `SongState::file` is that file, so a demo has none and a loaded song has one. Tests:
       `persist::a_first_run_opens_on_a_demo_under_a_new_name`, plus the existing round-trip and save tests.
+- [x] **7. The saved-row guard is tested too** — `songs_live::replacing_an_unsaved_session_with_a_saved_song_takes_two_clicks`:
+      a dirty session loading a *saved* row arms on the first click and loads on the second, which is the same
+      `guarded_load` path the demo rows use.
+- [x] **8. The demos have been rendered, and the levels fixed** — new example `acid-app/examples/earcheck-demos.rs` renders
+      one take per demo (eight bars, one per pattern) to `rust/earcheck/demos/`, printing peak, RMS and brightness per demo
+      and per pattern. It found a **~11 dB level spread**: the two square-wave demos measured RMS 0.20–0.23 against the
+      acid demos' 0.05–0.06, which is the ladder's known passband loss at high resonance. Each demo's master volume now
+      trims its patch (0.87 / 0.95 / 0.47 / 0.44 / 0.88), bringing all five inside 0.2 dB of each other; peaks still differ
+      as the accents dictate. The numbers and what to listen for are in `plans/notes/33-demos-listening.md`; the verdict
+      line there is for a human ear — nothing in this round claims the demos *sound* right, only that they render, are
+      audible, and sit at a sane level relative to each other.
+      Ruling: the master volume is part of a demo's patch, so a demo loads at the level it was mixed at. Cost if wrong: a
+      demo opens quieter than a factory session and the player turns the knob up.

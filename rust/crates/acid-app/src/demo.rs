@@ -166,7 +166,7 @@ fn slow_acid() -> Demo {
         state: song(
             118.0,
             0.0,
-            patches::patch([patches::SAW, 0.5, 0.35, 0.78, 0.72, 0.46, 0.52, 0.8]),
+            patches::patch([patches::SAW, 0.5, 0.35, 0.78, 0.72, 0.46, 0.52, 0.87]),
             main,
             fill,
         ),
@@ -216,7 +216,7 @@ fn hard_techno() -> Demo {
         state: song(
             142.0,
             0.0,
-            patches::patch([patches::SAW, 0.5, 0.58, 0.86, 0.88, 0.28, 0.66, 0.8]),
+            patches::patch([patches::SAW, 0.5, 0.58, 0.86, 0.88, 0.28, 0.66, 0.95]),
             main,
             fill,
         ),
@@ -253,7 +253,7 @@ fn blues() -> Demo {
         state: song(
             92.0,
             0.35,
-            patches::patch([patches::SQUARE, 0.5, 0.3, 0.34, 0.36, 0.6, 0.3, 0.8]),
+            patches::patch([patches::SQUARE, 0.5, 0.3, 0.34, 0.36, 0.6, 0.3, 0.47]),
             main,
             fill,
         ),
@@ -287,7 +287,7 @@ fn rock() -> Demo {
         state: song(
             126.0,
             0.0,
-            patches::patch([patches::SQUARE, 0.5, 0.46, 0.26, 0.42, 0.52, 0.4, 0.8]),
+            patches::patch([patches::SQUARE, 0.5, 0.46, 0.26, 0.42, 0.52, 0.4, 0.44]),
             main,
             fill,
         ),
@@ -330,7 +330,7 @@ fn funk() -> Demo {
         state: song(
             104.0,
             0.12,
-            patches::patch([patches::SAW, 0.5, 0.42, 0.58, 0.62, 0.34, 0.56, 0.8]),
+            patches::patch([patches::SAW, 0.5, 0.42, 0.58, 0.62, 0.34, 0.56, 0.88]),
             main,
             fill,
         ),

@@ -345,3 +345,21 @@ fn replacing_an_unsaved_session_takes_two_clicks() {
     click(&ctx, &mut panel, &shared, demo_row_centre(0));
     assert_eq!(panel.songs.request, Some(Request::LoadDemo(0)));
 }
+
+#[test]
+fn replacing_an_unsaved_session_with_a_saved_song_takes_two_clicks() {
+    // The guard is one path for both lists: a saved row replaces an unsaved session just as a demo row does.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(vec!["Acid 1"], "");
+    panel.dirty = true;
+
+    click(&ctx, &mut panel, &shared, song_row_centre(0));
+    assert_eq!(panel.songs.request, None, "one click only arms it");
+
+    click(&ctx, &mut panel, &shared, song_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::Load("Acid 1".to_string()))
+    );
+}
