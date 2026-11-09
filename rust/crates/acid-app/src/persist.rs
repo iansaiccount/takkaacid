@@ -458,22 +458,7 @@ pub fn delete_song(dir: &Path, name: &str) -> Result<()> {
     std::fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))
 }
 
-/// Rename a saved song. Both names are validated, an existing target is refused, and renaming to the same name is
-/// a no-op rather than an error — a person who retypes the name they see should not get a complaint.
-pub fn rename_song(dir: &Path, from: &str, to: &str) -> Result<()> {
-    let (Some(from), Some(to)) = (song_name(from), song_name(to)) else {
-        return Err(anyhow!("that is not a song name"));
-    };
-    if from == to {
-        return Ok(());
-    }
-    let (source, target) = (song_path(dir, &from), song_path(dir, &to));
-    if target.exists() {
-        return Err(anyhow!("{to} already exists"));
-    }
-    std::fs::rename(&source, &target)
-        .with_context(|| format!("renaming {} to {}", source.display(), target.display()))
-}
+// A song is never renamed in the app: a save under a new name writes a new file, and the file manager can move files.
 
 /// Where a save should land: the file the session is on, or a new one under a typed name.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -525,18 +510,24 @@ pub fn import_song(from: &Path, dir: &Path) -> Result<String> {
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_default();
     let wanted = song_name(&stem).unwrap_or_else(|| "Imported song".to_string());
-    let name = unique_name(dir, &wanted);
+    let name = free_song_name(dir, &wanted);
     save_song(dir, &name, &state)?;
     Ok(name)
 }
 
-/// The name, or the first `X (2)`, `X (3)`, and so on that is free: an import never overwrites a song.
-fn unique_name(dir: &Path, wanted: &str) -> String {
-    if !song_path(dir, wanted).exists() {
-        return wanted.to_string();
+/// The name, or the first `X (2)`, `X (3)`, and so on that is free: a save or an import never overwrites a song nobody
+/// opened. Public because `SAVE`, `SAVE A COPY` and `IMPORT` all land the same way, and one copy of this rule is enough.
+pub fn free_song_name(dir: &Path, wanted: &str) -> String {
+    let wanted = song_name(wanted).unwrap_or_else(|| "Untitled".to_string());
+    if !song_path(dir, &wanted).exists() {
+        return wanted;
     }
     for copy in 2..1000 {
-        let candidate = format!("{wanted} ({copy})");
+        let suffix = format!(" ({copy})");
+        // The suffix must not push the name past what a name may be, or the free name could not be saved at all.
+        let room = 48usize.saturating_sub(suffix.chars().count());
+        let stem: String = wanted.chars().take(room).collect();
+        let candidate = format!("{stem}{suffix}");
         if !song_path(dir, &candidate).exists() {
             return candidate;
         }

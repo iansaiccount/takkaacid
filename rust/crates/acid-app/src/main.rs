@@ -215,6 +215,9 @@ impl eframe::App for TakkaApp {
                             self.write_song(&dir, &name, false);
                         }
                         Some(persist::SaveTarget::NewFile(name)) => {
+                            // A new name must not land on a song nobody opened: it lands beside it, the way an import
+                            // does, so SAVE can never destroy a song by being given its name.
+                            let name = persist::free_song_name(&dir, &name);
                             self.write_song(&dir, &name, true);
                         }
                         None => {}
@@ -239,7 +242,7 @@ impl eframe::App for TakkaApp {
                     self.panel.notify("new song");
                 }
                 panel_ui::songs::Request::SaveCopy(typed) => {
-                    let name = self.free_copy_name(&dir, &typed);
+                    let name = persist::free_song_name(&dir, &typed);
                     self.write_song(&dir, &name, true);
                 }
                 panel_ui::songs::Request::Import => {
@@ -282,6 +285,7 @@ impl eframe::App for TakkaApp {
                     match persist::delete_song(&dir, &name) {
                         Ok(()) => {
                             // The song is gone; the session is not, but it is no longer that song.
+                            let was_open = self.panel.songs.file.as_deref() == Some(name.as_str());
                             if self.panel.songs.name.as_deref() == Some(name.as_str()) {
                                 self.panel.songs.name = None;
                             }
@@ -294,6 +298,10 @@ impl eframe::App for TakkaApp {
                                 if self.panel.songs.file.as_deref() == Some(name.as_str()) {
                                     self.panel.songs.file = None;
                                 }
+                            }
+                            if was_open {
+                                // The session outlives its file, but nothing of it is on disk now.
+                                self.panel.dirty = true;
                             }
                             self.panel.notify(format!("deleted {name}"));
                         }
@@ -544,21 +552,6 @@ impl TakkaApp {
         saved.density = self.panel.density;
         saved.scale = self.panel.scale.index() as u8;
         saved
-    }
-
-    /// A name for SAVE A COPY that is free: the typed one, or `X (2)`, so a copy never overwrites the song it copies.
-    fn free_copy_name(&self, dir: &std::path::Path, typed: &str) -> String {
-        let wanted = persist::song_name(typed).unwrap_or_else(|| "Untitled".to_string());
-        if !persist::song_exists(dir, &wanted) {
-            return wanted;
-        }
-        for copy in 2..1000 {
-            let candidate = format!("{wanted} ({copy})");
-            if !persist::song_exists(dir, &candidate) {
-                return candidate;
-            }
-        }
-        format!("{wanted} (copy)")
     }
 
     /// Say something on the status line. It survives the card that asked for it, and it clears itself.

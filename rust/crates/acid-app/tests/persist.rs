@@ -5,8 +5,8 @@ use acid_app::persist::{
     shared_to_saved,
 };
 use acid_app::persist::{
-    SaveTarget, delete_song, export_song, import_song, list_songs, load_song, new_song,
-    rename_song, save_song, save_target, song_name,
+    SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
+    new_song, save_song, save_target, song_name,
 };
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
@@ -101,27 +101,29 @@ fn deleting_a_song_removes_its_file_and_refuses_a_bad_name() {
     );
 }
 
+/// The free-name rule both save paths share: a taken name lands beside its namesake, and the result is always a name
+/// that could be saved — a suffix never pushes it past the limit.
 #[test]
-fn renaming_a_song_moves_its_file_and_refuses_a_taken_name() {
+fn a_free_name_is_the_wanted_one_or_a_numbered_neighbour() {
     let dir = tempfile::tempdir().unwrap();
     let saved = SavedState::default();
-    save_song(dir.path(), "Old", &saved).unwrap();
-    save_song(dir.path(), "Taken", &saved).unwrap();
+    assert_eq!(free_song_name(dir.path(), "Acid 1"), "Acid 1");
 
-    rename_song(dir.path(), "Old", "New").unwrap();
-    assert_eq!(
-        list_songs(dir.path()),
-        vec!["New".to_string(), "Taken".to_string()],
-        "the file moved, and the list says so"
+    save_song(dir.path(), "Acid 1", &saved).unwrap();
+    assert_eq!(free_song_name(dir.path(), "Acid 1"), "Acid 1 (2)");
+    save_song(dir.path(), "Acid 1 (2)", &saved).unwrap();
+    assert_eq!(free_song_name(dir.path(), "Acid 1"), "Acid 1 (3)");
+
+    // A name at the limit still leaves room for the suffix, or the "free" name would be one that cannot be saved.
+    let long = "y".repeat(48);
+    save_song(dir.path(), &long, &saved).unwrap();
+    let beside = free_song_name(dir.path(), &long);
+    assert_ne!(beside, long);
+    assert!(
+        song_name(&beside).is_some(),
+        "a free name is a saveable name: {beside:?}"
     );
-
-    // Retyping the name you see is not an error.
-    assert!(rename_song(dir.path(), "New", "New").is_ok());
-    // Renaming onto another song would destroy it.
-    assert!(rename_song(dir.path(), "New", "Taken").is_err());
-    // A missing source and a path-shaped name are errors.
-    assert!(rename_song(dir.path(), "Gone", "Other").is_err());
-    assert!(rename_song(dir.path(), "New", "../oops").is_err());
+    save_song(dir.path(), &beside, &saved).unwrap();
 }
 
 #[test]
