@@ -15,7 +15,7 @@ pub struct Songs {
     pub names: Vec<String>,
     /// The name being typed.
     pub name: String,
-    /// One line of feedback: "loaded X", "saved", or why the last attempt failed.
+    /// The card's own hint: what the armed row or button is waiting for. Messages from the app go to the status line.
     pub message: Option<String>,
     /// The song whose delete cross has been clicked once. Deleting a file has no undo, so it takes two clicks.
     pub delete_armed: Option<String>,
@@ -24,7 +24,7 @@ pub struct Songs {
     /// The row whose load has been clicked once while the session was unsaved: loading again replaces it. Replacing work
     /// that is not on disk takes two clicks, like deleting a file.
     pub load_armed: Option<String>,
-    /// The song the session is on, if any: RENAME acts on this one, and is dark when there is none.
+    /// The song file the session is on, if any. SAVE compares against this to decide in place or new file.
     pub open: Option<String>,
 }
 
@@ -54,6 +54,7 @@ pub fn paint(
     panel: Rect,
     scale: f32,
     songs: &mut Songs,
+    session: Option<&str>,
     session_dirty: bool,
 ) -> Option<Request> {
     let card = panel.shrink(theme::MARGIN * scale);
@@ -81,12 +82,9 @@ pub fn paint(
         theme::SILKSCREEN,
     );
     // What the card is about, on the card: the song the session is on and whether it is on disk. A player who opened the
-    // card to save should not have to work out which song they are saving.
-    let now = match (&songs.open, session_dirty) {
-        (Some(name), true) => format!("NOW: {name} · UNSAVED"),
-        (Some(name), false) => format!("NOW: {name} · SAVED"),
-        (None, _) => "NOW: untitled · UNSAVED".to_string(),
-    };
+    // card to save should not have to work out which song they are saving. The name is the session's, not the file's, so a
+    // first run and a freshly loaded demo — named, but not yet files — say so instead of calling themselves untitled.
+    let now = now_line(session, session_dirty);
     painter.text(
         egui::Pos2::new(card.right() - padding, y + 2.0 * scale),
         egui::Align2::RIGHT_TOP,
@@ -98,6 +96,8 @@ pub fn paint(
     // COPY always makes a new file. There is no third button: renaming is saving under another name.
     y += 18.0 * scale;
 
+    // The field needs a name of its own so a nameless SAVE can put the cursor in it.
+    let field_id = ui.scope_id().with("song-name");
     let field = Rect::from_min_size(
         egui::Pos2::new(left, y),
         egui::vec2(width * 0.40, row_height),
@@ -105,6 +105,7 @@ pub fn paint(
     ui.put(
         field,
         egui::TextEdit::singleline(&mut songs.name)
+            .id(field_id)
             .hint_text("song name")
             .desired_width(field.width()),
     );
@@ -117,10 +118,14 @@ pub fn paint(
         egui::vec2(width * 0.22 - padding, row_height),
     );
     let typed = crate::persist::song_name(&songs.name);
-    // A blank field still saves the song the session is on; with nothing open there is nothing to save.
+    // A blank field still saves the song the session is on. With nothing open there is nothing to save and nothing to copy:
+    // SAVE puts the cursor in the field rather than dying quietly, which is what a player would expect of a save button.
     let can_save = typed.is_some() || songs.open.is_some();
     if transport::transport_button(ui, "song-save", save_rect, "SAVE", can_save).clicked() {
-        request = save_name(songs).map(Request::Save);
+        match save_name(songs) {
+            Some(name) => request = Some(Request::Save(name)),
+            None => ui.memory_mut(|memory| memory.request_focus(field_id)),
+        }
     }
     if transport::transport_button(
         ui,
@@ -130,7 +135,7 @@ pub fn paint(
         typed.is_some(),
     )
     .clicked()
-        && let Some(name) = typed.clone()
+        && let Some(name) = save_name(songs)
     {
         request = Some(Request::SaveCopy(name));
     }
@@ -307,4 +312,14 @@ const NEW_KEY: &str = "new";
 /// The name a SAVE should use: what the player typed, or the song the session is already on when the field is blank.
 fn save_name(songs: &Songs) -> Option<String> {
     crate::persist::song_name(&songs.name).or_else(|| songs.open.clone())
+}
+
+/// The card's header: the session's name and whether it is on disk. A first run and a freshly loaded demo have a name and
+/// no file yet, and they are unsaved, not untitled.
+pub fn now_line(session: Option<&str>, dirty: bool) -> String {
+    match (session, dirty) {
+        (Some(name), true) => format!("NOW: {name} · UNSAVED"),
+        (Some(name), false) => format!("NOW: {name} · SAVED"),
+        (None, _) => "NOW: untitled · UNSAVED".to_string(),
+    }
 }

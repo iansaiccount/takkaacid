@@ -342,13 +342,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         midi::cc::CcTarget::Pattern,
     );
 
-    // MIDI status: right-aligned between the wordmark and the pattern display, amber when the app has
     // The song the session is working on, beside the pattern display: a player should never have to open the card to find
-    // out what they are working on. The status — or a notice, which outlives the card that caused it — takes the right
-    // half of the same band, so the two never fight for the same space. Amber when the app has stopped probing, and a
-    // small REPROBE target appears with it.
+    // out what they are working on. The status, or a notice that outlives the card, takes the right half of the band.
     let label = panel::song_label_rect(l.top, s);
-    ui.painter().text(
+    ui.painter().with_clip_rect(label).text(
         label.left_center(),
         egui::Align2::LEFT_CENTER,
         song_label(state.songs.name.as_deref()),
@@ -356,7 +353,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         if state.songs.file.is_some() {
             theme::SILKSCREEN_DIM
         } else {
-            theme::SILKSCREEN.gamma_multiply(0.45)
+            theme::SILKSCREEN_DIM.gamma_multiply(0.55)
         },
     );
 
@@ -376,7 +373,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             .unwrap_or(&state.midi_status)
             .to_string()
     });
-    ui.painter().text(
+    // Clipped to the band: a notice carries a path when it is a failure, and it must not paint over the song label it
+    // shares the line with.
+    ui.painter().with_clip_rect(status).text(
         status.right_center(),
         egui::Align2::RIGHT_CENTER,
         // While learning, the status line says what the panel is waiting for — it is the only free line on the face.
@@ -633,7 +632,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.
     let (save_label, save_colour) = save::state_label(state.dirty);
-    ui.painter().text(
+    // Clipped to the band: a notice carries a path when it is a failure, and it must not paint over the song label it
+    // shares the line with.
+    ui.painter().with_clip_rect(status).text(
         panel::save_indicator_rect(l.top, s).right_center(),
         egui::Align2::RIGHT_CENTER,
         save_label,
@@ -771,7 +772,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     );
     ui.painter()
         .circle_stroke(help_dot.center(), 8.0 * s, theme::silkscreen_stroke(s));
-    ui.painter().text(
+    // Clipped to the band: a notice carries a path when it is a failure, and it must not paint over the song label it
+    // shares the line with.
+    ui.painter().with_clip_rect(status).text(
         help_dot.center(),
         egui::Align2::CENTER_CENTER,
         "?",
@@ -806,8 +809,11 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             egui::Sense::click(),
         );
         let mut request = None;
+        // The card names the session by what the session is on, not by what the library file happens to be: a first run
+        // and a demo have a name and no file, and the header must not call them untitled while the field says otherwise.
+        let session = state.songs.name.clone();
         if let Some(card) = state.songs.card.as_mut() {
-            request = songs::paint(ui, l.panel, s, card, state.dirty);
+            request = songs::paint(ui, l.panel, s, card, session.as_deref(), state.dirty);
         }
         if shield.clicked() {
             request = Some(songs::Request::Close);

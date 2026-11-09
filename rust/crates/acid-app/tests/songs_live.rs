@@ -416,3 +416,32 @@ fn replacing_an_unsaved_session_with_a_saved_song_takes_two_clicks() {
         Some(Request::Load("Acid 1".to_string()))
     );
 }
+
+/// The header tells the truth about the session: its name, and whether that name is on disk. A named-but-unsaved session
+/// — a first run, a demo — is unsaved, not untitled.
+#[test]
+fn the_header_names_the_session_and_its_state() {
+    use acid_app::ui::songs::now_line;
+    assert_eq!(now_line(None, true), "NOW: untitled · UNSAVED");
+    assert_eq!(now_line(None, false), "NOW: untitled · UNSAVED");
+    assert_eq!(now_line(Some("New song"), true), "NOW: New song · UNSAVED");
+    assert_eq!(now_line(Some("Acid 1"), false), "NOW: Acid 1 · SAVED");
+}
+
+/// A session that has never been saved is a first run or a demo: the header must not call it untitled while the name
+/// field and the panel's own label both show a name.
+#[test]
+fn a_named_session_with_no_file_is_unsaved_rather_than_untitled() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(vec![], "New song");
+    assert!(panel.songs.file.is_none());
+
+    // Drawing with a name and no file is the first-run shape; it must not panic and must leave the name alone.
+    run_on(&ctx, &mut panel, &shared, Vec::new());
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().name,
+        "New song",
+        "drawing the header must not rewrite the field"
+    );
+}

@@ -192,7 +192,7 @@ const TIPS: [Tip; 26] = [
     },
     Tip {
         title: "SONGS",
-        what: "Name, save, load, rename or delete a song.",
+        what: "Name, save, copy, import, export, load or delete a song.",
         shortcut: None,
     },
     Tip {

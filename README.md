@@ -48,7 +48,7 @@ patterns with a knob is visible on the readout at once and heard at the end of t
 drive the tempo.
 
 **Keeping your work.** The session autosaves to `state.json` (atomically, through a temporary file), and named songs live
-in the same data directory; the SONGS card saves, loads, renames and deletes them.
+in the same data directory; the SONGS card saves, copies, imports, exports, loads and deletes them.
 
 **Help.** Everything hoverable explains itself, and a help card lists the gestures and the whole MIDI map.
 
