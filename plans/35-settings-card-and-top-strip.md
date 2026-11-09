@@ -209,38 +209,39 @@ A fresh-context review of `f40cfb8..d34fc08` returned **Critical 1, Important 6,
 strengths: `settings::rows` as the single layout source, the shield ordering fix with its regression test, the folds owned by
 the card, enumeration only on the rising edge, `SavedState` untouched.
 
-### Critical — not yet fixed
+### Critical — fixed in `f35b0fd`
 
-**A failed audio stream is invisible.** The bottom line was the only reader of the audio status, and it is gone. `main` still
-computes the words and `audio` still produces `"failed: …"` / `"reconnecting (attempt n/m)"`, but nothing in `ui/` reads them:
-`Settings` has `midi_status` and no audio field, and the card paints none. On a device-busy or hot-unplugged machine the app
-looks healthy and is silent. Fix is small: `Settings::audio_status`, filled every frame from `self.rig.status()`, painted
-under the SOUND OUT heading (amber when it starts with `failed:`), plus the plan's `an_audio_failure_is_visible_in_the_settings_card`.
+**A failed audio stream was invisible.** The bottom line was the only reader of the audio status, and it is gone, so on a
+device-busy or hot-unplugged machine the app looked healthy and was silent. `Settings::audio_status` now mirrors the stream
+every frame the card is open and the card paints it beside the SOUND OUT heading, amber when the words start with `failed` —
+`audio::status::is_failed` is the single place that decides that. Test:
+`settings_live::an_audio_failure_is_visible_in_the_settings_card`, plus
+`audio::status::a_failure_is_recognisable_from_the_words_alone` so the colour rule cannot drift from the words.
 
-### Important — not yet fixed
+### Important — fixed in `f35b0fd`
 
-1. **The two switches always print "ON"** — only the face colour changes, so a dim "TOOLTIPS ON" misreports the state that
-   the deleted `TIPS ON`/`AUTO OFF` keys used to show.
-2. **F1 / shift+? while settings is open leaves two cards open** — `ToggleHelp` does not clear `settings_open`, so help paints
-   over a still-open settings card and Escape then closes the invisible one first, inverting the order the spec asks for.
-3. **The card's state is a snapshot from when it opened.** Lists *and* the current devices, supervisor words and
-   `midi_given_up` are copied on the rising edge, so choosing `HDMI` leaves the card still saying `IN USE: Speakers` (no
-   feedback at all), and a supervisor that gives up 30 s after opening never shows `RETRY`. Only `list_ports()` /
-   `list_output_devices()` need the edge.
-4. **`midi_current` is the preference, not the connection** — `preference_name()` on a first run says `IN USE: none` with the
-   `none` row lit while a controller is playing. Use `self.midi.name`.
-5. **The settings card is not modal for the editing keys** — `selection.rs` refuses them only for `help_visible`, so Enter and
-   the arrows still edit the step behind the card and mark the session dirty.
-6. **The plan's entry-point tests were never written**: `f2_opens_and_closes_the_settings_card`, `the_gear_opens_settings`,
-   `opening_settings_closes_help_and_the_songs_card`, `f2_with_help_open_replaces_help`,
-   `retry_appears_only_while_the_supervisor_has_given_up`. Finding 2 is exactly what the symmetric F2 test would have caught.
-   Also `tips_live::the_help_switch_is_part_of_what_a_save_keeps` is vacuous — it asserts the two fields it just set.
-   Ruling needed on one plan defect: a live test cannot assert `picker.input_choice`, because `main` (a binary) applies the
-   request; the delivered tests stop at `settings_request`, and either request application moves into the lib or the ruling is
-   recorded here.
+1. **The two switches printed "ON" whatever they were set to** — `switch_label(name, on)` now says which. RED watched:
+   `the_switches_print_their_state` failed on "AUTOSAVE ON" with autosave off.
+2. **F1 / shift+? while settings was open left two cards up** — `ToggleHelp` now clears `settings_open` when it opens help,
+   the mirror of what F2 already did. RED watched: `the_help_key_clears_the_settings_card`.
+3. **The card was a snapshot from when it opened** — `Settings::offer` keeps the two lists on the rising edge (they cost a
+   round trip each); `Settings::follow` copies the devices in use, both supervisors' words and `midi_given_up` every frame
+   the card is up. Tests: `the_card_follows_the_devices_while_it_is_open`,
+   `a_device_unplugged_while_the_card_is_open_leaves_the_rows_working`.
+4. **`midi_current` was the preference, not the connection** — `main` passes `self.midi.name` now, so a first run says the
+   port that is playing rather than "none".
+5. **The card was not modal for the editing keys** — `selection::dispatch` refuses for `settings_open` as well as
+   `help_visible`. RED watched once it compiled: `dispatch::the_settings_card_refuses_the_editing_keys_too`.
+6. **The plan's entry-point tests were never written** — `settings_live` now proves F2 both ways, the gear,
+   one-card-at-a-time in both directions, RETRY's visibility, Escape's order, and the two Review Focus scenes;
+   `tips_live::the_help_switch_is_part_of_what_a_save_keeps` was vacuous and is now
+   `the_help_switch_silences_the_hints` (same pointer, same frames, no tip).
+
+Two of those were only testable once they moved out of the binary, which is the plan defect the review flagged:
+`dispatch::escape` holds Escape's order, and `settings::Request::pick` holds the row→picker mapping, and
+`settings_live::a_device_row_asks_for_the_choice_main_applies` proves the mapping `main` applies.
 
 ### Minor — recorded, not fixed
-
 Dead code where the removals passed through (`ui::picker` has no caller left, `panel::midi_status_rect`, and the two
 `tips::Control` entries whose keys are gone); stale words (`supervisor.rs` "press REPROBE" vs the card's RETRY, `main.rs`
 "press the amber dot", `help.rs` "click the MIDI line", `mod.rs` doc comments about REPROBE and TIPS/AUTO); the song label's
@@ -248,6 +249,15 @@ centre is the midpoint of the free interval, not the strip's centre (the test's 
 notices are clipped at both ends in the narrower centred rect; `README` says the lamp sits between the gear and the `?` when
 it is left of both; `Request::Close` is unreachable in `main`; the settings card dims the window while help and songs do not;
 rows run under the scrollbar (`area.width()` inside the scroll area).
+## The fix pass
+
+`f35b0fd` fixes the review's Critical and every Important finding, each with a test watched failing first where a test could
+fail at all; the two that were bugs at the assertion level (the help key leaving two cards, the switch captions) were seen
+red before the fix, and the ones that only needed new API were seen red as compile failures. `dispatch::escape` and
+`settings::Request::pick` moved out of `main` for exactly the reason the review gave for the plan defect: a behaviour in a
+binary cannot be watched failing.
+
+Gates at `f35b0fd`: 514 tests over 59 suites, clippy `-D warnings`, `fmt --check`.
 
 ## Done
 
@@ -255,6 +265,5 @@ Four commits landed on `Deepseek-Version`: the top strip (`3f4bea1`), the card a
 (`a6a1a5f`), the shield fix and `settings_live` (`e694274`), the removals (`b287ef4`), and the documents (`d34fc08`).
 Gates are green at `d34fc08`: 59 workspace suites, clippy `-D warnings`, fmt.
 
-The plan's product work is complete; the review's Critical and Important findings are the next session's first commit, and are
-written out above with their fixes so nothing has to be rediscovered. This session stopped at its context budget mid-way
-through implementing them — the code is green and unmodified, not half-patched.
+The plan is complete: the product work at `d34fc08`, the review's findings at `f35b0fd`. What is left is the Minor list
+directly above, recorded and deliberately not fixed.
