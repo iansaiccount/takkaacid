@@ -19,7 +19,7 @@ fn run_frame(ctx: &Context, panel: &mut PanelState, shared: &SharedState) {
     output.textures_delta.clear();
 }
 
-/// The label sits in the status band, beside the pattern display, and nowhere near the things it could cover.
+/// The label sits in the middle of the strip and nowhere near the things it could cover.
 #[test]
 fn the_song_label_sits_clear_of_everything_it_could_cover() {
     let l = layout(screen());
@@ -30,6 +30,7 @@ fn the_song_label_sits_clear_of_everything_it_could_cover() {
         ("the pattern display", panel::pattern_display_rect(l.top)),
         ("the tempo display", panel::tempo_display_rect(l.top)),
         ("the wordmark", panel::brand_rect(l.top)),
+        ("the saves lamp", panel::save_indicator_rect(l.top, s)),
     ] {
         assert!(
             !label.intersects(rect),
@@ -37,8 +38,8 @@ fn the_song_label_sits_clear_of_everything_it_could_cover() {
         );
     }
     assert!(
-        panel::midi_status_rect(l.top, s).contains_rect(label),
-        "the label lives inside the band it shares with the status line"
+        l.top.contains_rect(label),
+        "the label lives on the top strip"
     );
 }
 
@@ -89,4 +90,46 @@ fn drawing_a_notice_changes_nothing_else() {
     assert!(!panel.dirty, "saying something is not an edit");
     assert_eq!(panel.songs.request, None);
     assert!(!panel.save_requested);
+}
+
+/// The gear sits beside the help dot and clear of everything the strip already uses.
+#[test]
+fn the_gear_sits_beside_the_help_dot_and_clear_of_the_lamp() {
+    let l = layout(screen());
+    let s = scale(screen());
+    let gear = panel::gear_rect(l.top, s);
+    let help = panel::help_rect(l.top, s);
+
+    assert!(!gear.intersects(help), "the gear is its own button");
+    for (what, rect) in [
+        ("the saves lamp", panel::save_indicator_rect(l.top, s)),
+        ("the pattern display", panel::pattern_display_rect(l.top)),
+        ("the tempo display", panel::tempo_display_rect(l.top)),
+    ] {
+        assert!(!gear.intersects(rect), "the gear must not cover {what}");
+    }
+    assert!(
+        gear.width() > 0.0 && gear.height() > 0.0,
+        "a button needs a hit area"
+    );
+}
+
+/// The song label takes the middle of the strip, between the wordmark and the pattern display.
+#[test]
+fn the_song_label_is_centred_in_the_strip() {
+    let l = layout(screen());
+    let s = scale(screen());
+    let label = panel::song_label_rect(l.top, s);
+
+    assert!(
+        (label.center().x - l.top.center().x).abs() < l.top.width() * 0.12,
+        "the name belongs near the middle of the strip"
+    );
+    for (what, rect) in [
+        ("the wordmark", panel::brand_rect(l.top)),
+        ("the pattern display", panel::pattern_display_rect(l.top)),
+        ("the tempo display", panel::tempo_display_rect(l.top)),
+    ] {
+        assert!(!label.intersects(rect), "the name must not cover {what}");
+    }
 }

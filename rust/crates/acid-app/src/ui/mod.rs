@@ -342,12 +342,12 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         midi::cc::CcTarget::Pattern,
     );
 
-    // The song the session is working on, beside the pattern display: a player should never have to open the card to find
+    // The song the session is working on, in the middle of the strip: a player should never have to open the card to find
     // out what they are working on. The status, or a notice that outlives the card, takes the right half of the band.
     let label = panel::song_label_rect(l.top, s);
     ui.painter().with_clip_rect(label).text(
-        label.left_center(),
-        egui::Align2::LEFT_CENTER,
+        label.center(),
+        egui::Align2::CENTER_CENTER,
         song_label(state.songs.name.as_deref()),
         theme::legend(10.0 * s),
         if state.songs.file.is_some() {
@@ -758,29 +758,30 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 
     // A small `?` at the end of the wordmark opens the help card, and the card covers the panel while it is
     // showing — it is the only thing that needs no explanation of its own.
-    let help_dot = egui::Rect::from_center_size(
-        egui::Pos2::new(
-            panel::brand_rect(l.top).right() - 10.0 * s,
-            l.top.center().y,
-        ),
-        egui::vec2(18.0 * s, 18.0 * s),
-    );
+    // The help dot and the settings gear, side by side at the end of the wordmark: two round buttons that need no
+    // explanation of their own. Both paint unclipped — the clip that belongs to the status band is not theirs.
+    let help_dot = panel::help_rect(l.top, s);
+    let gear_dot = panel::gear_rect(l.top, s);
     let help_response = ui.interact(
         help_dot,
         ui.scope_id().with("help-toggle"),
         egui::Sense::click(),
     );
-    ui.painter()
-        .circle_stroke(help_dot.center(), 8.0 * s, theme::silkscreen_stroke(s));
-    // Clipped to the band: a notice carries a path when it is a failure, and it must not paint over the song label it
-    // shares the line with.
-    ui.painter().with_clip_rect(status).text(
+    let _gear_response = ui.interact(
+        gear_dot,
+        ui.scope_id().with("settings-toggle"),
+        egui::Sense::click(),
+    );
+    let painter = ui.painter();
+    painter.circle_stroke(help_dot.center(), 8.0 * s, theme::silkscreen_stroke(s));
+    painter.text(
         help_dot.center(),
         egui::Align2::CENTER_CENTER,
         "?",
         theme::legend(11.0 * s),
         theme::SILKSCREEN,
     );
+    paint_gear(painter, gear_dot.center(), s);
     // The card must not re-close on the click that opened it, so dismissal reads the frame-start value.
     let help_was_visible = state.help_visible;
     if help_response.clicked() && !help_was_visible {
@@ -938,4 +939,23 @@ fn song_label(name: Option<&str>) -> String {
         short.push('…');
     }
     format!("SONG {short}")
+}
+
+/// A gear, drawn rather than typed: a ring, eight teeth and a hub. The face may not use font glyphs, so the shape is the
+/// icon — and at 18 px it still reads as a gear because the teeth are strokes, not pixels.
+fn paint_gear(painter: &egui::Painter, centre: egui::Pos2, scale: f32) {
+    let stroke = theme::silkscreen_stroke(scale);
+    painter.circle_stroke(centre, 7.0 * scale, stroke);
+    for tooth in 0..8 {
+        let angle = std::f32::consts::FRAC_PI_4 * tooth as f32;
+        let (sin, cos) = angle.sin_cos();
+        painter.line_segment(
+            [
+                centre + egui::vec2(cos, sin) * 7.0 * scale,
+                centre + egui::vec2(cos, sin) * 10.0 * scale,
+            ],
+            stroke,
+        );
+    }
+    painter.circle_filled(centre, 2.0 * scale, theme::SILKSCREEN_DIM);
 }

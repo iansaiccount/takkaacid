@@ -64,13 +64,33 @@ pub fn midi_status_rect(top: Rect, scale: f32) -> Rect {
         ),
     )
 }
-/// The song label: the left half of the status band, so the name the session is working on sits beside the pattern
-/// display while the status — or a notice — keeps the right half.
+/// The help dot: at the right end of the wordmark's corner, clear of the saves lamp beside it.
+pub fn help_rect(top: Rect, scale: f32) -> Rect {
+    Rect::from_center_size(
+        Pos2::new(brand_rect(top).right() - 10.0 * scale, top.center().y),
+        egui::vec2(18.0 * scale, 18.0 * scale),
+    )
+}
+
+/// The settings gear: the help dot's twin, one step left, so help and settings read as one pair of round buttons and the
+/// gear never crowds the saves lamp.
+pub fn gear_rect(top: Rect, scale: f32) -> Rect {
+    let help = help_rect(top, scale);
+    Rect::from_center_size(
+        egui::Pos2::new(brand_rect(top).right() - 34.0 * scale, help.center().y),
+        help.size(),
+    )
+}
+
+/// The song label: the middle of the strip, between the wordmark and the pattern display, so the name the session is on
+/// is the thing the eye lands on first.
 pub fn song_label_rect(top: Rect, scale: f32) -> Rect {
-    let band = midi_status_rect(top, scale);
     Rect::from_min_max(
-        band.min,
-        Pos2::new(band.left() + band.width() * 0.45, band.max.y),
+        Pos2::new(brand_rect(top).right() + theme::GAP * scale, top.top()),
+        Pos2::new(
+            pattern_display_rect(top).left() - theme::GAP * scale,
+            top.bottom(),
+        ),
     )
 }
 
@@ -96,8 +116,8 @@ pub fn learn_highlight_bounds(rect: Rect, scale: f32) -> Rect {
 pub fn save_indicator_rect(top: Rect, scale: f32) -> Rect {
     let brand = brand_rect(top);
     Rect::from_min_max(
-        Pos2::new(brand.right() - 96.0 * scale, top.top()),
-        Pos2::new(brand.right() - 28.0 * scale, top.bottom()),
+        Pos2::new(brand.right() - 118.0 * scale, top.top()),
+        Pos2::new(brand.right() - 56.0 * scale, top.bottom()),
     )
 }
 
