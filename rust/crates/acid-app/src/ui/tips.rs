@@ -7,8 +7,6 @@
 
 use eframe::egui::Response;
 
-use super::PanelState;
-
 /// What a control does, and the key that does the same thing.
 ///
 /// `shortcut` is `None` for anything with no key: the knobs are drag-and-wheel only, and inventing a key for them would
@@ -226,7 +224,7 @@ const TIPS: [Tip; 26] = [
         shortcut: None,
     },
     Tip {
-        title: "TIPS",
+        title: "TOOLTIPS",
         what: "Turns these hover hints on and off. They are on unless you say otherwise.",
         shortcut: None,
     },
@@ -279,18 +277,19 @@ const TIPS: [Tip; 26] = [
 
 /// The help for `control`, or nothing at all when the player has turned the hints off.
 ///
-/// Split out from [`hover`] because an egui tooltip is a floating area, not something a test can read back: this is the
-/// decision, and the live test covers the key that makes it.
-pub fn text_for(state: &PanelState, control: Control) -> Option<String> {
-    state.tooltips.then(|| control.tip().text())
+/// `wants_help` rather than `&PanelState`: the settings card is painted with the two flags it needs, not with the whole
+/// panel, and its two switches are the controls the deleted TIPS and AUTO keys were. One mapping, `Control::tip`, serves
+/// every surface.
+pub fn text_for(wants_help: bool, control: Control) -> Option<String> {
+    wants_help.then(|| control.tip().text())
 }
 
 /// Attach a control's help to its response, if the player wants help.
 ///
 /// `Response::on_hover_text` is egui's own tooltip, so the hint appears after the usual hover delay, stays out of the
 /// drag's way, and follows the panel's scale.
-pub fn hover(response: &Response, state: &PanelState, control: Control) {
-    if let Some(text) = text_for(state, control) {
+pub fn hover(response: &Response, wants_help: bool, control: Control) {
+    if let Some(text) = text_for(wants_help, control) {
         response.clone().on_hover_text(text);
     }
 }
@@ -410,17 +409,14 @@ mod tests {
 
     #[test]
     fn the_hints_stay_silent_when_the_player_turned_them_off() {
-        let on = PanelState::default();
-        let off = PanelState {
-            tooltips: false,
-            ..PanelState::default()
-        };
+        // The switch, not the panel, is the question: the settings card paints with the two flags it needs, so this is
+        // the whole contract between "help is on" and a tip.
         assert_eq!(
-            text_for(&on, Control::Cutoff),
+            text_for(true, Control::Cutoff),
             Some(Control::Cutoff.tip().text())
         );
         assert_eq!(
-            text_for(&off, Control::Cutoff),
+            text_for(false, Control::Cutoff),
             None,
             "a silent panel stays silent"
         );

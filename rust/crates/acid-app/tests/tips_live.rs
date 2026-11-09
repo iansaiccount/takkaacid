@@ -37,25 +37,39 @@ fn the_help_is_on_when_the_app_opens() {
     );
 }
 
+/// `body` is a phrase from the tip's *body*, not its title: the panel paints `TEMPO -` and `TEMPO +` on its transport
+/// keys, so matching the title alone proves nothing about a tooltip.
 #[test]
 fn the_two_readouts_answer_the_pointer() {
-    // A readout is a control here — both are teachable — so both explain themselves on hover. The pointer has to hold
-    // still past egui's tooltip delay, which is why this drives several frames with the clock moving.
+    // A readout is a control here — both are teachable — so both explain themselves on hover. The pointer settles on the
+    // first frame and then stays: egui waits for the hand to stop moving before it shows a tooltip, so a PointerMoved
+    // every frame at one position keeps it away (this test used to pass on the panel's own `TEMPO -` caption).
     let l = acid_app::ui::layout::layout(screen());
-    for (rect, title) in [
-        (acid_app::ui::panel::tempo_display_rect(l.top), "TEMPO"),
-        (acid_app::ui::panel::pattern_display_rect(l.top), "PATTERN"),
+    for (rect, body) in [
+        (
+            acid_app::ui::panel::tempo_display_rect(l.top),
+            "How fast the sequencer runs",
+        ),
+        (
+            acid_app::ui::panel::pattern_display_rect(l.top),
+            "Which pattern is playing",
+        ),
     ] {
         let ctx = Context::default();
         let shared = SharedState::new();
         let mut panel = PanelState::default();
         let at = rect.center();
         let mut seen: Vec<String> = Vec::new();
-        for step in 0..4 {
+        for step in 0..5 {
+            let events = if step == 0 {
+                vec![Event::PointerMoved(at)]
+            } else {
+                Vec::new()
+            };
             let input = RawInput {
                 screen_rect: Some(screen()),
                 time: Some(f64::from(step)),
-                events: vec![Event::PointerMoved(at)],
+                events,
                 ..Default::default()
             };
             let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
@@ -63,8 +77,8 @@ fn the_two_readouts_answer_the_pointer() {
             seen.extend(painted_text(&output));
         }
         assert!(
-            seen.iter().any(|text| text.contains(title)),
-            "the {title} readout showed no help; painted: {seen:?}"
+            seen.iter().any(|text| text.contains(body)),
+            "the {body:?} readout showed no help; painted: {seen:?}"
         );
     }
 }
@@ -84,12 +98,19 @@ fn the_help_switch_silences_the_hints() {
         ..PanelState::default()
     };
 
+    // The same hover technique as the test above, so this proves the switch is what silences the tip rather than the
+    // pointer never having settled.
     let mut seen: Vec<String> = Vec::new();
-    for step in 0..4 {
+    for step in 0..5 {
+        let events = if step == 0 {
+            vec![Event::PointerMoved(at)]
+        } else {
+            Vec::new()
+        };
         let input = RawInput {
             screen_rect: Some(screen()),
             time: Some(f64::from(step)),
-            events: vec![Event::PointerMoved(at)],
+            events,
             ..Default::default()
         };
         let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));

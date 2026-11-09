@@ -12,8 +12,8 @@ use crate::audio::status as audio_status;
 use crate::midi::ports::PortChoice;
 
 use super::theme;
+use super::tips;
 use super::transport;
-
 /// How many device rows an open section shows before it scrolls.
 const VISIBLE_ROWS: usize = 4;
 
@@ -265,26 +265,28 @@ pub fn paint(
         theme::SILKSCREEN,
     );
 
-    if transport::transport_button(
+    // The two switches are the controls the deleted TIPS and AUTO keys were, so they explain themselves the way those
+    // keys did — the tip follows the control that was actually drawn, and is silent when help is off.
+    let tooltips_switch = transport::transport_button(
         ui,
         "settings-tooltips",
         rows.tooltips,
         &switch_label("TOOLTIPS", tooltips),
         tooltips,
-    )
-    .clicked()
-    {
+    );
+    tips::hover(&tooltips_switch, tooltips, tips::Control::Tooltips);
+    if tooltips_switch.clicked() {
         request = Some(Request::Tooltips);
     }
-    if transport::transport_button(
+    let autosave_switch = transport::transport_button(
         ui,
         "settings-autosave",
         rows.autosave,
         &switch_label("AUTOSAVE", autosave),
         autosave,
-    )
-    .clicked()
-    {
+    );
+    tips::hover(&autosave_switch, tooltips, tips::Control::Autosave);
+    if autosave_switch.clicked() {
         request = Some(Request::Autosave);
     }
 

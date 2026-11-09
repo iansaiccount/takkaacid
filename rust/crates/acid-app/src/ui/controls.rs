@@ -42,6 +42,6 @@ pub(super) fn switch_key(
 ) -> bool {
     let response = transport::transport_button(ui, id, rect, label, lit);
     let clicked = response.clicked();
-    tips::hover(&response, state, control);
+    tips::hover(&response, state.tooltips, control);
     clicked
 }

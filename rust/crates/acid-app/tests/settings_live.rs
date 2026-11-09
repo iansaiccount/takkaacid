@@ -90,6 +90,30 @@ fn press(
     }
 }
 
+/// Hold the pointer still over `at` for a few frames, so egui's tooltip delay passes, and answer what was painted.
+fn hovered(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) -> Vec<String> {
+    let mut seen = Vec::new();
+    for step in 0..5 {
+        // The pointer settles on the first frame and then stays: an egui tooltip waits for the hand to stop moving, so a
+        // PointerMoved every frame at one position keeps it away and a test hovers forever and sees nothing.
+        let events = if step == 0 {
+            vec![Event::PointerMoved(at)]
+        } else {
+            Vec::new()
+        };
+        let input = RawInput {
+            screen_rect: Some(screen()),
+            time: Some(f64::from(step)),
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
+        output.textures_delta.clear();
+        seen.extend(text_in(&output));
+    }
+    seen
+}
+
 /// A panel with the settings card open and a couple of devices on offer.
 fn open_settings(midi_ports: &[&str], outputs: &[&str]) -> PanelState {
     let mut panel = PanelState {
@@ -581,4 +605,33 @@ fn a_device_row_asks_for_the_choice_main_applies() {
     ] {
         assert_eq!(other.pick(), None, "{other:?} chooses no device");
     }
+}
+
+/// The card's two switches are the controls the deleted TIPS and AUTO keys were, so they explain themselves the way
+/// those keys did — and they say nothing at all when the help is turned off.
+#[test]
+fn the_settings_switches_explain_themselves() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&[], &[]);
+    let at = rows(&panel).tooltips.center();
+
+    let seen = hovered(&ctx, &mut panel, &shared, at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Turns these hover hints on and off")),
+        "the switch has to say what it does: {seen:?}"
+    );
+
+    // A fresh context for the second half: egui's clock only runs forwards, and a fresh one also proves the silence is
+    // the switch's doing rather than leftover hover state.
+    let quiet = Context::default();
+    panel.tooltips = false;
+    let seen = hovered(&quiet, &mut panel, &shared, at);
+    assert!(
+        !seen
+            .iter()
+            .any(|text| text.contains("Turns these hover hints")),
+        "help that is off must not talk: {seen:?}"
+    );
 }

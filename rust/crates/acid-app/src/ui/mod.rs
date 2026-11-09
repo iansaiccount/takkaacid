@@ -298,7 +298,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         ),
     ] {
         let response = ui.interact(rect, ui.scope_id().with(name), egui::Sense::hover());
-        tips::hover(&response, state, control);
+        tips::hover(&response, state.tooltips, control);
     }
     // Both readouts wear the pick colour: while choosing, they are the answer to "which one?"; while a learn is
     // listening for one of them, that one keeps its border so the player can see what the controller will bind.

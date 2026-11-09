@@ -225,7 +225,18 @@ the gear and the help `?`" for a lamp that is left of both.
       failed against a correct rect (0 left, 110 right — the left cluster is tighter). Rewritten to state the real rule:
       centred on the strip, reaching the nearer bound, never past either. — Cost if wrong: nothing pins "equal gaps",
       because equal gaps and a strip-centred window cannot both hold.
-- [ ] Task 4 — the two tips entries talk again.
+- [x] Task 4 — the two tips entries talk again. `tips::text_for`/`tips::hover` take `wants_help: bool` instead of
+      `&PanelState`, so the settings card — painted with two flags, not with the panel — gives its two switches the help the
+      deleted TIPS/AUTO keys had. The TIPS tip now titles itself `TOOLTIPS`, matching the caption it describes.
+      Tests: `tips::the_hints_stay_silent_when_the_player_turned_them_off` (rewritten for the new argument),
+      `settings_live::the_settings_switches_explain_themselves` (RED seen: nothing was painted for the switch).
+      **Found while doing it:** an egui tooltip waits for the pointer to stop moving, and a `PointerMoved` every frame at
+      one position keeps it away — so `tips_live::the_two_readouts_answer_the_pointer` had been passing on the panel's own
+      `TEMPO -` / `TEMPO +` captions and never showed a tooltip at all. Both it and the switch-silences-the-help test now
+      settle the pointer and assert on the tip's *body*.
+      Ruling: the hover helper is duplicated in `settings_live` and `tips_live` rather than shared through a `tests/common`
+      module. — Two independent test binaries, twelve lines each, and the comment explaining the still-pointer trap travels
+      with both. — Cost if wrong: one more copy if a third file needs to hover something.
 - [ ] Task 5 — no unreachable arm in `main`.
 - [ ] Task 6 — rows stop at the scrollbar.
 - [ ] Task 7 — dead code and stale words.
