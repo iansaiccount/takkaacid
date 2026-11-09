@@ -47,9 +47,10 @@ nothing for it to glide into.
 
 ![The switches](img/switches.png)
 
-**`BANK`**, **`PATTERN`**, **`MODE`**, **`CLEAR`**, **`SAVE`**, **`SONGS`**, **`STEP`** — the seven doors out of one
-pattern: into the bank, to the next pattern, to the computer keyboard, into the emptiness of a clear, onto disk, to the
-songs card, into the step-editing mode.
+Seven keys. Four of them work today: **`CLEAR`** empties the pattern (in two clicks), **`SAVE`** writes it to disk,
+**`SONGS`** opens the songs card, and **`STEP`** turns on the mode where the computer keyboard types a line instead of
+playing it. The other three — **`BANK`**, **`PATTERN`** and **`MODE`** — are engraved and silent: there is nothing behind
+them yet, and the bank is moved from the keyboard or a learned controller instead (`11-the-bank`).
 
 ## The transport
 
