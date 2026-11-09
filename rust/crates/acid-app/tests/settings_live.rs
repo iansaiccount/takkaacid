@@ -13,7 +13,12 @@ fn screen() -> Rect {
     Rect::from_min_size(Pos2::ZERO, vec2(980.0, 560.0))
 }
 
-fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: Vec<Event>) {
+fn run_on(
+    ctx: &Context,
+    panel: &mut PanelState,
+    shared: &SharedState,
+    events: Vec<Event>,
+) -> FullOutput {
     let input = RawInput {
         screen_rect: Some(screen()),
         events,
@@ -21,6 +26,23 @@ fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: V
     };
     let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
     output.textures_delta.clear();
+    output
+}
+
+/// Every filled rectangle egui drew this frame: a row's face is one, and so is the bar's track.
+fn filled_rects(output: &FullOutput) -> Vec<Rect> {
+    fn walk(shape: &Shape, out: &mut Vec<Rect>) {
+        match shape {
+            Shape::Rect(rect) => out.push(rect.rect),
+            Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
 }
 
 fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) {
@@ -643,5 +665,60 @@ fn the_settings_switches_explain_themselves() {
             .iter()
             .any(|text| text.contains("Turns these hover hints")),
         "help that is off must not talk: {seen:?}"
+    );
+}
+
+/// A list longer than the panel scrolls, and the scroll bar has the right edge to itself. This is measured on what is
+/// *painted*, not on where clicks land: egui already clips a click to the scroll area's viewport, so a click test passes
+/// even while every row face runs underneath the bar.
+#[test]
+fn a_scrolling_list_gives_the_scrollbar_its_gutter() {
+    fn widest_row_face(ports: &[&str]) -> (f32, f32) {
+        let ctx = Context::default();
+        let shared = SharedState::new();
+        let mut panel = open_settings(ports, &[]);
+        panel.settings.midi_open = true;
+        let band = rows(&panel).midi_panel;
+        let output = run_on(&ctx, &mut panel, &shared, Vec::new());
+        let row_height = 22.0;
+        let widest = filled_rects(&output)
+            .into_iter()
+            .filter(|rect| {
+                (rect.height() - row_height * scale(screen())).abs() < 1.0
+                    && rect.top() >= band.top() - 1.0
+                    && rect.bottom() <= band.bottom() + 1.0
+            })
+            .map(|rect| rect.right())
+            .fold(f32::MIN, f32::max);
+        (widest - band.left(), band.width())
+    }
+
+    let few: Vec<&str> = vec!["KeyStep", "IAC Driver"];
+    let many: Vec<String> = (0..12).map(|index| format!("Port {index}")).collect();
+    let many: Vec<&str> = many.iter().map(String::as_str).collect();
+
+    let (short_right, short_width) = widest_row_face(&few);
+    let (scrolling_right, scrolling_width) = widest_row_face(&many);
+
+    assert!(
+        short_right > short_width - 2.0,
+        "a list that fits should use the whole panel: {short_right} of {short_width}"
+    );
+    assert!(
+        scrolling_right <= scrolling_width - 4.0,
+        "a scrolling list has to leave the bar its gutter: {scrolling_right} of {scrolling_width}"
+    );
+
+    // Narrower rows are still rows: a click in the middle of the first one chooses its port.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&many, &[]);
+    panel.settings.midi_open = true;
+    let first_row = rows(&panel).midi_panel.min + vec2(40.0, 8.0);
+    click(&ctx, &mut panel, &shared, first_row);
+    assert_eq!(
+        panel.settings_request,
+        Some(Request::MidiIn(Some("Port 0".to_string()))),
+        "a row that stops short of the bar is still clickable"
     );
 }

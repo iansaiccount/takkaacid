@@ -243,5 +243,13 @@ the gear and the help `?`" for a lamp that is left of both.
       which is total rather than `Option`.
       Tests: `a_device_row_asks_for_the_action_main_takes` (compile-RED, then the whole mapping),
       `the_card_keeps_its_own_folds_and_its_close` (CLOSE closes and asks `main` for nothing). 528 tests over 61 suites.
-- [ ] Task 6 — rows stop at the scrollbar.
+- [x] Task 6 — rows stop at the scrollbar. `scrollable` asks for a bar that *allocates* its own column
+      (`spacing.scroll.floating = false`) and sizes each row from the style's `allocated_width()` when the list is longer
+      than `VISIBLE_ROWS`, so rows end where the content ends on the very first frame (egui animates a floating bar in).
+      Test: `a_scrolling_list_gives_the_scrollbar_its_gutter` — paints one frame and measures the widest row face: full
+      width for two ports, 13.8 px short of the panel for twelve. RED seen: 582.37 of 582.12.
+      Rulings: (a) the assertion is on painted rects, not clicks — a click was already clipped to the scroll viewport, so
+      a click test passed while every face ran under the bar; (b) the bar's width is read from the *child's* style, because
+      `ui`'s still says the bar floats and a floating bar allocates nothing. — Cost if wrong: a non-floating bar is drawn
+      in egui's stock colours at the gutter, which is a look the panel does not otherwise use.
 - [ ] Task 7 — dead code and stale words.

@@ -461,6 +461,20 @@ fn scrollable(
 ) -> Option<Request> {
     let mut request = None;
     let mut child = ui.new_child(UiBuilder::new().max_rect(area));
+    // egui's default bar *floats* over the content, which is why every row ran underneath it. A bar that allocates its
+    // own column gives the rows a right edge to stop at — and the width is taken from the style here rather than read
+    // back from the layout, because egui animates the bar's appearance in over a few frames and a row would grow its
+    // first pixel under the bar on the opening frame.
+    child.style_mut().spacing.scroll.floating = false;
+    // Only a list too long for the panel scrolls; a short one keeps the full width.
+    // Only a list too long for the panel scrolls; a short one keeps the full width. The bar's width comes from the
+    // child's style: `ui`'s still says the bar floats, and a floating bar allocates nothing.
+    let bar = if count > VISIBLE_ROWS {
+        child.style().spacing.scroll.allocated_width()
+    } else {
+        0.0
+    };
+    let row_width = (area.width() - bar).max(0.0);
     egui::ScrollArea::vertical()
         .max_height(area.height())
         .auto_shrink([false, false])
@@ -468,7 +482,9 @@ fn scrollable(
             for index in 0..count {
                 let (label, lit, asked) = row(index);
                 let top_left = ui.cursor().min;
-                let rect = Rect::from_min_size(top_left, egui::vec2(area.width(), ROW * scale));
+                // The row ends where the content area ends, not at the panel's edge: a scroll bar is laid over the right
+                // of `area`, so `area.width()` ran every row underneath it.
+                let rect = Rect::from_min_size(top_left, egui::vec2(row_width, ROW * scale));
                 ui.allocate_space(rect.size());
                 if transport::transport_button(
                     ui,
