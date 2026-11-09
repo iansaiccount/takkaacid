@@ -8,7 +8,7 @@
 use acid_core::bank::PatternBank;
 use eframe::egui::{Event, Key};
 
-use super::{PanelState, selection, shortcuts};
+use super::{PanelState, learn, selection, shortcuts};
 use crate::state::SharedState;
 
 /// One press the panel handles: the key, and whether shift was down.
@@ -90,9 +90,14 @@ pub fn handle(
             panel.songs.card = None;
         }
     }
-    // The help card is panel state, so it is toggled here rather than in `apply`.
+    // The help card is panel state, so it is toggled here rather than in `apply` — and it follows the same one-card rule
+    // as F2 in the other direction: opening help puts the settings card away, or help would paint over a card that is
+    // still open and Escape would close the one nobody can see first.
     if matches!(shortcut, shortcuts::Shortcut::ToggleHelp) {
         panel.help_visible = !panel.help_visible;
+        if panel.help_visible {
+            panel.settings_open = false;
+        }
     }
     // The selection names a position in the pattern on screen and the display names the pattern itself, so a new pattern
     // starts at its first step: one helper, shared with a learned controller's swap and a song load.
@@ -103,6 +108,32 @@ pub fn handle(
         super::pattern_swap::adopt(panel, shared, bank);
     }
     Handled::Shortcut(shortcut)
+}
+
+/// Escape gives up on one thing at a time, nearest the player's hand first: the settings card, then help, then the songs
+/// card, then a learn in progress. Returns whether there was anything to close.
+///
+/// It lives here rather than in `main` because the order is the behaviour — settings first is what stops Escape closing a
+/// card hidden behind help — and `main` is a binary no test can call.
+pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
+    if panel.settings_open {
+        panel.settings_open = false;
+        return true;
+    }
+    if panel.help_visible {
+        panel.help_visible = false;
+        return true;
+    }
+    if panel.songs.card.take().is_some() {
+        return true;
+    }
+    if panel.learn != learn::Step::Idle {
+        // Escape gives up on a learn in progress; the shared flag must fall with it, or the controller stays bound.
+        panel.learn = learn::Step::Idle;
+        learn::cancel(shared);
+        return true;
+    }
+    false
 }
 
 #[cfg(test)]
@@ -327,5 +358,46 @@ mod tests {
         // `?` is only the help key with shift, so an unshifted one is not the panel's.
         let events = vec![key_event(Key::Questionmark, false, false)];
         assert!(presses(&events, false).is_empty());
+    }
+
+    #[test]
+    fn the_settings_card_refuses_the_editing_keys_too() {
+        // The card is modal for the pointer, so it is modal for the keyboard as well: Enter behind it would edit a
+        // step the player cannot see, and mark the session unsaved for it. Help's rule, applied to the other card.
+        let shared = lit_shared();
+        let before = *shared.pattern();
+        let mut bank = PatternBank::factory();
+        let mut panel = PanelState {
+            settings_open: true,
+            ..PanelState::default()
+        };
+
+        for (key, shift) in [
+            (Key::Enter, false),
+            (Key::ArrowRight, false),
+            (Key::ArrowUp, true),
+        ] {
+            assert_eq!(
+                handle(KeyPress { key, shift }, &mut panel, &shared, &mut bank),
+                Handled::Refused,
+                "{key:?}"
+            );
+        }
+        assert_eq!(*shared.pattern(), before, "nothing may be edited behind it");
+        assert!(!panel.dirty, "and nothing new to save");
+
+        // The keys that leave the card must still reach their shortcuts.
+        assert_eq!(
+            handle(
+                KeyPress {
+                    key: Key::Space,
+                    shift: false
+                },
+                &mut panel,
+                &shared,
+                &mut bank
+            ),
+            Handled::Shortcut(shortcuts::Shortcut::PlayStop)
+        );
     }
 }

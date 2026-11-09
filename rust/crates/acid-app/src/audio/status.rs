@@ -14,6 +14,12 @@ pub fn status_text(status: &AudioStatus) -> String {
     }
 }
 
+/// Whether a status line says the stream has given up. The supervisor writes `failed: …` when it has, and
+/// `reconnecting (attempt n/m)` while it is still trying, so the words are the only signal either surface needs.
+pub fn is_failed(text: &str) -> bool {
+    text.starts_with("failed")
+}
+
 /// A device name cut to `max` characters with the middle replaced, so both ends stay recognisable.
 pub fn device_label(name: &str, max: usize) -> String {
     if name.chars().count() <= max || max < 7 {
@@ -46,6 +52,17 @@ mod tests {
             reason: "device busy".into(),
         });
         assert!(failed.starts_with("failed:") && failed.contains("device busy"));
+    }
+
+    #[test]
+    fn a_failure_is_recognisable_from_the_words_alone() {
+        // The card colours the line by this, so it must agree with what `status_text` writes for every state.
+        assert!(is_failed(&status_text(&AudioStatus::Failed {
+            reason: "device busy".into()
+        })));
+        assert!(!is_failed(&status_text(&AudioStatus::Starting)));
+        assert!(!is_failed("reconnecting (attempt 1/3)"));
+        assert!(!is_failed("48 kHz - PipeWire"));
     }
 
     #[test]

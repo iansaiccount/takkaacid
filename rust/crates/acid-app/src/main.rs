@@ -133,20 +133,9 @@ impl eframe::App for TakkaApp {
                 other => other.clone(),
             });
         }
-        // Keyboard shortcuts. F1 and `?` join this list when the help card lands (Task 54).
-        // Escape closes whatever is open, help first: it is the thing covering the panel.
+        // Escape gives up on one thing at a time; the order lives in `ui::dispatch` so it can be tested.
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
-            if self.panel.settings_open {
-                self.panel.settings_open = false;
-            } else if self.panel.help_visible {
-                self.panel.help_visible = false;
-            } else if self.panel.songs.card.is_some() {
-                self.panel.songs.card = None;
-            } else if self.panel.learn != panel_ui::learn::Step::Idle {
-                // Escape gives up on a learn in progress; the shared flag must fall with it.
-                self.panel.learn = panel_ui::learn::Step::Idle;
-                panel_ui::learn::cancel(&self.state);
-            }
+            panel_ui::dispatch::escape(&mut self.panel, &self.state);
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
         // `ui::dispatch`). A held key repeats only for the tempo nudges.
@@ -338,48 +327,17 @@ impl eframe::App for TakkaApp {
         }
         // A port chosen on the panel: drop the old connection and probe the new one now.
 
-        // The settings card's lists come from the machine, so they are filled the frame the card opens rather than every
-        // frame: enumerating ports and outputs costs a round trip each, and a hot-plugged device shows on the next open.
+        // The card's two lists come from the machine, so they are read the frame it opens rather than every frame:
+        // enumerating ports and outputs costs a round trip each, and a hot-plugged device shows on the next opening.
         if self.panel.settings_open && !self.settings_was_open {
-            self.panel.settings.midi_ports = midi::ports::list_ports().unwrap_or_default();
-            self.panel.settings.outputs = audio::list_output_devices();
-            self.panel.settings.midi_current = self.midi.preference_name();
-            self.panel.settings.output_current = match self.state.status() {
-                AudioStatus::Running { device, .. } => Some(device.clone()),
-                _ => None,
-            };
-            self.panel.settings.midi_given_up = self.panel.midi_given_up;
-            self.panel.settings.midi_status = self.panel.midi_status.clone();
+            self.panel.settings.offer(
+                midi::ports::list_ports().unwrap_or_default(),
+                audio::list_output_devices(),
+            );
         }
         self.settings_was_open = self.panel.settings_open;
         if let Some(request) = self.panel.settings_request.take() {
-            match request {
-                panel_ui::settings::Request::Close => self.panel.settings_open = false,
-                panel_ui::settings::Request::Tooltips => {
-                    self.panel.tooltips = !self.panel.tooltips;
-                    self.panel.dirty = true;
-                }
-                panel_ui::settings::Request::Autosave => {
-                    self.panel.autosave = !self.panel.autosave;
-                    self.panel.dirty = true;
-                }
-                panel_ui::settings::Request::MidiIn(port) => {
-                    self.panel.picker.input_choice = Some(match port {
-                        Some(name) => midi::ports::PortChoice::Named(name),
-                        None => midi::ports::PortChoice::Any,
-                    });
-                }
-                panel_ui::settings::Request::SoundOut(name) => {
-                    self.panel.picker.output_choice = Some(name);
-                }
-                panel_ui::settings::Request::Retry => {
-                    self.panel.reprobe_requested = true;
-                    self.panel.settings.midi_given_up = false;
-                }
-                // The card applies its own folds, so these two never reach this match.
-                panel_ui::settings::Request::ToggleMidi
-                | panel_ui::settings::Request::ToggleSound => {}
-            }
+            self.apply_settings_request(request);
         }
         if let Some(choice) = self.panel.picker.input_choice.take() {
             self.midi.choose(choice);
@@ -398,6 +356,24 @@ impl eframe::App for TakkaApp {
         );
         self.panel.midi_given_up = self.midi.name.is_none()
             && self.midi.supervisor.retries() >= midi::supervisor::MIDI_MAX_RETRIES;
+        // Everything else on the settings card is a mirror of the machine, so it is copied while the card is up rather
+        // than when it opened: an output the player just chose, a device unplugged, a stream that failed or a supervisor
+        // that gives up 30 s later must all show on the card that is already standing. The port named is the connection,
+        // not the preference: on a first run the preference is "any" while a controller is playing.
+        if self.panel.settings_open {
+            let status = self.state.status();
+            let live = panel_ui::settings::Live {
+                midi_current: self.midi.name.as_deref(),
+                output_current: match &status {
+                    AudioStatus::Running { device, .. } => Some(device.as_str()),
+                    _ => None,
+                },
+                midi_status: &self.panel.midi_status,
+                midi_given_up: self.panel.midi_given_up,
+                audio_status: self.rig.status(),
+            };
+            self.panel.settings.follow(live);
+        }
         ctx.request_repaint_after(Duration::from_millis(200));
         // Write the session when something changed and the interval has passed.
         // Write the session when the player turned autosave on, something changed, and the interval has passed.
@@ -426,6 +402,32 @@ impl eframe::App for TakkaApp {
 }
 
 impl TakkaApp {
+    /// Do what the settings card asked for. The two folds never arrive here — they are the card's own state — and the
+    /// two device rows go through `settings::Request::pick`, the single mapping from a row to the picker field `main`
+    /// consumes, so there is no second list of "which row means which field" kept here.
+    fn apply_settings_request(&mut self, request: panel_ui::settings::Request) {
+        use panel_ui::settings::{Pick, Request};
+        match request.pick() {
+            Some(Pick::Midi(choice)) => self.panel.picker.input_choice = Some(choice),
+            Some(Pick::Sound(name)) => self.panel.picker.output_choice = Some(name),
+            None => match request {
+                Request::Tooltips => {
+                    self.panel.tooltips = !self.panel.tooltips;
+                    self.panel.dirty = true;
+                }
+                Request::Autosave => {
+                    self.panel.autosave = !self.panel.autosave;
+                    self.panel.dirty = true;
+                }
+                Request::Retry => self.panel.reprobe_requested = true,
+                Request::Close => self.panel.settings_open = false,
+                // The card folds its own sections, and a device row chose a device above: nothing for `main` to do.
+                Request::ToggleMidi | Request::ToggleSound => {}
+                Request::MidiIn(_) | Request::SoundOut(_) => {}
+            },
+        }
+    }
+
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
     fn save(&mut self) {
         let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());

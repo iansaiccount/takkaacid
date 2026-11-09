@@ -4,9 +4,11 @@
 use acid_app::state::SharedState;
 use acid_app::ui::layout::{layout, scale};
 use acid_app::ui::settings::{self, Request};
-use acid_app::ui::{PanelState, draw_panel};
-use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
-
+use acid_app::ui::{PanelState, dispatch, draw_panel};
+use acid_core::bank::PatternBank;
+use eframe::egui::{
+    Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, vec2,
+};
 fn screen() -> Rect {
     Rect::from_min_size(Pos2::ZERO, vec2(980.0, 560.0))
 }
@@ -31,6 +33,61 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
     run_on(ctx, panel, shared, vec![Event::PointerMoved(at)]);
     run_on(ctx, panel, shared, vec![button(true)]);
     run_on(ctx, panel, shared, vec![button(false)]);
+}
+
+/// Every string egui drew this frame: a test asserts on what the card *says*, not on where it says it.
+fn text_in(output: &FullOutput) -> Vec<String> {
+    fn walk(shape: &Shape, out: &mut Vec<String>) {
+        match shape {
+            Shape::Text(text) => out.push(text.galley.text().to_string()),
+            Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
+/// Paint one frame with no input and answer everything it said.
+fn painted(ctx: &Context, panel: &mut PanelState, shared: &SharedState) -> Vec<String> {
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
+    output.textures_delta.clear();
+    text_in(&output)
+}
+
+fn says(texts: &[String], word: &str) -> bool {
+    texts.iter().any(|text| text == word)
+}
+
+/// One key press, through the same two calls `main` makes: the frame's events become presses, and each press is
+/// resolved. Shortcuts are not handled inside `draw_panel` — `main` does that — so this is the seam a test presses.
+fn press(
+    panel: &mut PanelState,
+    shared: &SharedState,
+    bank: &mut PatternBank,
+    key: Key,
+    shift: bool,
+) {
+    let events = vec![Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers {
+            shift,
+            ..Modifiers::default()
+        },
+    }];
+    for press in dispatch::presses(&events, shift) {
+        dispatch::handle(press, panel, shared, bank);
+    }
 }
 
 /// A panel with the settings card open and a couple of devices on offer.
@@ -203,4 +260,325 @@ fn a_sound_row_writes_the_output_choice() {
         "the row asks for the output it names"
     );
     assert!(panel.settings_open);
+}
+
+/// F2 is the card's front door, and a second press is its back door.
+#[test]
+fn f2_opens_and_closes_the_settings_card() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut bank = PatternBank::factory();
+    let mut panel = PanelState::default();
+    assert!(!says(&painted(&ctx, &mut panel, &shared), "SETTINGS"));
+
+    press(&mut panel, &shared, &mut bank, Key::F2, false);
+    assert!(panel.settings_open, "F2 opens the card");
+    assert!(
+        says(&painted(&ctx, &mut panel, &shared), "SETTINGS"),
+        "and the card paints what the key opened"
+    );
+
+    press(&mut panel, &shared, &mut bank, Key::F2, false);
+    assert!(!panel.settings_open, "F2 closes it again");
+    assert!(
+        !says(&painted(&ctx, &mut panel, &shared), "SETTINGS"),
+        "a closed card paints nothing"
+    );
+}
+
+/// The gear is the pointer's way in.
+#[test]
+fn the_gear_opens_settings() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let l = layout(screen());
+    let at = acid_app::ui::panel::gear_rect(l.top, scale(screen())).center();
+
+    click(&ctx, &mut panel, &shared, at);
+
+    assert!(panel.settings_open, "clicking the gear opens the card");
+    assert!(says(&painted(&ctx, &mut panel, &shared), "SETTINGS"));
+}
+
+/// There is room for one card: opening settings puts the other two away.
+#[test]
+fn opening_settings_closes_help_and_the_songs_card() {
+    let shared = SharedState::new();
+    let mut bank = PatternBank::factory();
+    let mut panel = PanelState {
+        help_visible: true,
+        ..PanelState::default()
+    };
+    panel.songs.card = Some(acid_app::ui::songs::Songs::default());
+
+    press(&mut panel, &shared, &mut bank, Key::F2, false);
+
+    assert!(panel.settings_open);
+    assert!(!panel.help_visible, "help must not stay up behind settings");
+    assert!(panel.songs.card.is_none(), "nor the songs card");
+}
+
+/// And the same the other way round: F2 while help is up replaces it in one keypress.
+#[test]
+fn f2_with_help_open_replaces_help() {
+    let shared = SharedState::new();
+    let mut bank = PatternBank::factory();
+    let mut panel = PanelState::default();
+
+    press(&mut panel, &shared, &mut bank, Key::F1, false);
+    assert!(panel.help_visible);
+
+    press(&mut panel, &shared, &mut bank, Key::F2, false);
+    assert!(panel.settings_open);
+    assert!(!panel.help_visible, "two cards at once is not a state");
+}
+
+/// The mirror held a bug: help opened over a still-open settings card, so Escape closed the card nobody could see first.
+#[test]
+fn the_help_key_clears_the_settings_card() {
+    let shared = SharedState::new();
+    let mut bank = PatternBank::factory();
+
+    for (key, shift) in [(Key::F1, false), (Key::Questionmark, true)] {
+        let mut panel = PanelState::default();
+        press(&mut panel, &shared, &mut bank, Key::F2, false);
+        assert!(panel.settings_open);
+
+        press(&mut panel, &shared, &mut bank, key, shift);
+
+        assert!(panel.help_visible, "{key:?} opens help");
+        assert!(
+            !panel.settings_open,
+            "{key:?} must close the settings card, or help paints over it"
+        );
+    }
+}
+
+/// RETRY is the supervisor's way back, so it is on the card exactly when the supervisor has stopped trying.
+#[test]
+fn retry_appears_only_while_the_supervisor_has_given_up() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&["KeyStep"], &[]);
+
+    assert!(
+        rows(&panel).retry.is_none(),
+        "a retrying supervisor needs no key"
+    );
+    assert!(
+        !says(&painted(&ctx, &mut panel, &shared), "RETRY"),
+        "and the card offers none"
+    );
+
+    panel.settings.midi_given_up = true;
+
+    assert!(
+        rows(&panel).retry.is_some(),
+        "a supervisor that has given up offers a way back, and the row moves the sections below it"
+    );
+    assert!(
+        says(&painted(&ctx, &mut panel, &shared), "RETRY"),
+        "the card says so"
+    );
+}
+
+/// A switch whose caption always says ON misreports the state it is in; the deleted TIPS/AUTO keys said both.
+#[test]
+fn the_switches_print_their_state() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&[], &[]);
+    assert!(panel.tooltips, "help starts on");
+    assert!(!panel.autosave, "and saving starts manual");
+
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(says(&texts, "TOOLTIPS ON"), "{texts:?}");
+    assert!(
+        says(&texts, "AUTOSAVE OFF"),
+        "autosave is off, so the switch must say so: {texts:?}"
+    );
+
+    panel.tooltips = false;
+    panel.autosave = true;
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(says(&texts, "TOOLTIPS OFF"), "{texts:?}");
+    assert!(says(&texts, "AUTOSAVE ON"), "{texts:?}");
+}
+
+/// The card mirrors the machine while it is open: a stream that fails, or a device that is chosen, must show without
+/// closing and reopening it.
+#[test]
+fn the_card_follows_the_devices_while_it_is_open() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&["KeyStep"], &["Speakers", "HDMI"]);
+
+    panel.settings.follow(settings::Live {
+        midi_current: Some("KeyStep"),
+        output_current: Some("Speakers"),
+        midi_status: "MIDI: KeyStep",
+        midi_given_up: false,
+        audio_status: "48 kHz - Speakers",
+    });
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(says(&texts, "IN USE: Speakers"), "{texts:?}");
+    assert!(says(&texts, "48 kHz - Speakers"), "{texts:?}");
+
+    panel.settings.follow(settings::Live {
+        midi_current: Some("KeyStep"),
+        output_current: Some("HDMI"),
+        midi_status: "MIDI: KeyStep",
+        midi_given_up: false,
+        audio_status: "48 kHz - HDMI",
+    });
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(
+        says(&texts, "IN USE: HDMI"),
+        "the card must say where the sound is going now, not where it went when it opened: {texts:?}"
+    );
+
+    assert_eq!(
+        panel.settings.outputs.len(),
+        2,
+        "following the devices never re-enumerates them: that is the costly half, and it belongs to the opening"
+    );
+}
+
+/// A device pulled out while the card is open: the row that was lit stops being lit, the name above the list stops
+/// claiming it, and the rows that remain still work — the list is only re-read on the next opening.
+#[test]
+fn a_device_unplugged_while_the_card_is_open_leaves_the_rows_working() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&["KeyStep", "IAC Driver"], &[]);
+    panel.settings.midi_open = true;
+    panel.settings.follow(settings::Live {
+        midi_current: Some("KeyStep"),
+        output_current: None,
+        midi_status: "MIDI: KeyStep",
+        midi_given_up: false,
+        audio_status: "48 kHz - Speakers",
+    });
+    assert!(says(&painted(&ctx, &mut panel, &shared), "IN USE: KeyStep"));
+
+    // The port goes away: `main` reports the connection it has, which is now none, and the code that makes the words
+    // has already said so. Nothing may panic on the name that is no longer there.
+    panel.settings.follow(settings::Live {
+        midi_current: None,
+        output_current: None,
+        midi_status: "MIDI: none (retrying)",
+        midi_given_up: false,
+        audio_status: "48 kHz - Speakers",
+    });
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(says(&texts, "IN USE: none"), "{texts:?}");
+    assert!(says(&texts, "MIDI: none (retrying)"), "{texts:?}");
+
+    let rows = rows(&panel);
+    let second_row = rows.midi_panel.min + vec2(12.0, 22.0 + 2.0 + 8.0);
+    click(&ctx, &mut panel, &shared, second_row);
+
+    assert_eq!(
+        panel.settings_request,
+        Some(Request::MidiIn(Some("IAC Driver".to_string()))),
+        "the rows that are left still choose, whatever the card was told before"
+    );
+}
+
+/// A failed audio stream is the one thing the old bottom line said that nothing else does: silence must not look
+/// healthy on a device-busy or hot-unplugged machine.
+#[test]
+fn an_audio_failure_is_visible_in_the_settings_card() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&[], &["Speakers"]);
+    panel.settings.follow(settings::Live {
+        midi_current: None,
+        output_current: None,
+        midi_status: "MIDI: none (retrying)",
+        midi_given_up: false,
+        audio_status: "failed: device busy",
+    });
+
+    let texts = painted(&ctx, &mut panel, &shared);
+
+    assert!(
+        texts.iter().any(|text| text == "failed: device busy"),
+        "a silent app that looks healthy is the worst state it can be in: {texts:?}"
+    );
+}
+
+/// Escape gives up on one thing at a time, nearest first, and a learn in progress is the last thing it touches.
+#[test]
+fn escape_closes_one_thing_at_a_time_and_the_card_comes_first() {
+    let shared = SharedState::new();
+    let mut panel = PanelState {
+        settings_open: true,
+        learn: acid_app::ui::learn::Step::Choosing,
+        ..PanelState::default()
+    };
+
+    assert!(
+        dispatch::escape(&mut panel, &shared),
+        "there was something to close"
+    );
+    assert!(!panel.settings_open, "the card goes first");
+    assert_eq!(
+        panel.learn,
+        acid_app::ui::learn::Step::Choosing,
+        "a learn in progress keeps going: the card was in front of it, not instead of it"
+    );
+
+    panel.help_visible = true;
+    assert!(dispatch::escape(&mut panel, &shared));
+    assert!(!panel.help_visible, "then help");
+
+    panel.songs.card = Some(acid_app::ui::songs::Songs::default());
+    assert!(dispatch::escape(&mut panel, &shared));
+    assert!(panel.songs.card.is_none(), "then the songs card");
+
+    assert!(dispatch::escape(&mut panel, &shared));
+    assert_eq!(
+        panel.learn,
+        acid_app::ui::learn::Step::Idle,
+        "and last, the learn"
+    );
+
+    assert!(
+        !dispatch::escape(&mut panel, &shared),
+        "with nothing open Escape has nothing to do, so a test can tell"
+    );
+}
+
+/// A device row's request becomes the picker field `main` writes. The mapping lives here, beside the request, because
+/// `main` is a binary and no test can call it.
+#[test]
+fn a_device_row_asks_for_the_choice_main_applies() {
+    use acid_app::midi::ports::PortChoice;
+    use acid_app::ui::settings::Pick;
+
+    assert_eq!(
+        Request::MidiIn(Some("KeyStep".to_string())).pick(),
+        Some(Pick::Midi(PortChoice::Named("KeyStep".to_string())))
+    );
+    assert_eq!(
+        Request::MidiIn(None).pick(),
+        Some(Pick::Midi(PortChoice::Any)),
+        "the `none` row is the app picking a controller for itself"
+    );
+    assert_eq!(
+        Request::SoundOut("HDMI".to_string()).pick(),
+        Some(Pick::Sound("HDMI".to_string()))
+    );
+    for other in [
+        Request::Tooltips,
+        Request::Autosave,
+        Request::Retry,
+        Request::ToggleMidi,
+        Request::ToggleSound,
+        Request::Close,
+    ] {
+        assert_eq!(other.pick(), None, "{other:?} chooses no device");
+    }
 }

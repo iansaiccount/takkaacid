@@ -69,19 +69,38 @@ fn the_two_readouts_answer_the_pointer() {
     }
 }
 
-/// The switch that silences the help lives in the settings card now, so the card's own row is where turning it off is
-/// proven; what this pins is that the flag itself travels as a change worth saving.
+/// The switch that silences the help lives in the settings card now. What this pins is what the switch *does*: with it
+/// off, the readouts stop answering the pointer — same pointer, same frames, no tip. Whether the flag reaches disk is
+/// `persist`'s business (`SavedState::tooltips`), not the panel's; the test this replaces asserted only the two fields it
+/// had just set itself, which is no test at all.
 #[test]
-fn the_help_switch_is_part_of_what_a_save_keeps() {
-    let panel = PanelState {
+fn the_help_switch_silences_the_hints() {
+    let l = acid_app::ui::layout::layout(screen());
+    let at = acid_app::ui::panel::tempo_display_rect(l.top).center();
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState {
         tooltips: false,
-        dirty: true,
         ..PanelState::default()
     };
 
-    assert!(!panel.tooltips);
+    let mut seen: Vec<String> = Vec::new();
+    for step in 0..4 {
+        let input = RawInput {
+            screen_rect: Some(screen()),
+            time: Some(f64::from(step)),
+            events: vec![Event::PointerMoved(at)],
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+        output.textures_delta.clear();
+        seen.extend(painted_text(&output));
+    }
+
     assert!(
-        panel.dirty,
-        "switching the help off survives a restart, so it is a change until it is written"
+        !seen
+            .iter()
+            .any(|text| text.contains("How fast the sequencer runs")),
+        "help that is turned off must not talk: {seen:?}"
     );
 }

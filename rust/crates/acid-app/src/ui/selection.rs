@@ -41,7 +41,7 @@ pub enum Press {
     NotOurs,
     /// Applied to the selection or to the pattern.
     Applied,
-    /// Ours, but refused: the help card is modal, so this press must not also become a shortcut.
+    /// Ours, but refused: a card is modal, so this press must not also become a shortcut.
     Refused,
 }
 
@@ -52,13 +52,13 @@ impl Press {
     }
 }
 
-/// Apply one key to the selected step. The card covers the panel and is modal, so while it is up the step
+/// Apply one key to the selected step. Both cards cover the panel and are modal, so while either is up the step
 /// editor refuses its keys instead of letting them fall through to the transport behind it.
 pub fn dispatch(key: Key, shift: bool, panel: &mut PanelState, shared: &SharedState) -> Press {
     let Some(edit) = edit_key(key, shift) else {
         return Press::NotOurs;
     };
-    if panel.help_visible {
+    if panel.help_visible || panel.settings_open {
         return Press::Refused;
     }
     let index = panel.selected.min(STEPS_PER_PATTERN - 1);

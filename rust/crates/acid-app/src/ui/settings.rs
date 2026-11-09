@@ -8,31 +8,70 @@
 
 use eframe::egui::{self, Align2, Pos2, Rect, Ui, UiBuilder};
 
+use crate::audio::status as audio_status;
+use crate::midi::ports::PortChoice;
+
 use super::theme;
 use super::transport;
 
 /// How many device rows an open section shows before it scrolls.
 const VISIBLE_ROWS: usize = 4;
 
-/// What the card shows besides the two switches. `main` fills the lists when the card opens, because it owns them.
+/// What the card shows besides the two switches. The two lists are what the machine offered when the card opened;
+/// everything else on the card mirrors the machine and is copied while the card is up, because a device chosen, unplugged
+/// or failed must show without closing and reopening it.
 #[derive(Clone, Default)]
 pub struct Settings {
     /// Every MIDI input the machine offers, as names.
     pub midi_ports: Vec<String>,
     /// Every audio output the machine offers.
     pub outputs: Vec<String>,
-    /// The port in use, named above the panel so the answer is visible while the list is shut.
+    /// The port actually connected, named above the panel so the answer is visible while the list is shut. Not the
+    /// preference: on a first run the preference is "any" while a controller is playing, and the card must say which.
     pub midi_current: Option<String>,
-    /// The output in use, named above the panel for the same reason.
+    /// The output the stream is on, named above the panel for the same reason.
     pub output_current: Option<String>,
     /// True while the supervisor has stopped retrying: the card then offers RETRY, where the status line used to.
     pub midi_given_up: bool,
     /// The supervisor's own words, shown beside the MIDI IN heading.
     pub midi_status: String,
+    /// The audio supervisor's own words, shown beside the SOUND OUT heading: the one place a failed stream is visible
+    /// now that the bottom line is gone.
+    pub audio_status: String,
     /// Whether the MIDI panel is unfolded. Collapsed by default: the card is visited for one thing at a time.
     pub midi_open: bool,
     /// Whether the sound panel is unfolded.
     pub sound_open: bool,
+}
+
+/// What is happening to the two devices right now. `main` builds this every frame the card is open; the card only
+/// copies it, so nothing here queries a device.
+pub struct Live<'a> {
+    pub midi_current: Option<&'a str>,
+    pub output_current: Option<&'a str>,
+    pub midi_status: &'a str,
+    pub midi_given_up: bool,
+    pub audio_status: &'a str,
+}
+
+impl Settings {
+    /// Offer what the machine has. This enumerates ports and devices, a round trip each, so `main` does it once per
+    /// opening — on the rising edge of the card — and never per frame.
+    pub fn offer(&mut self, midi_ports: Vec<String>, outputs: Vec<String>) {
+        self.midi_ports = midi_ports;
+        self.outputs = outputs;
+    }
+
+    /// Copy what is happening to the devices and their two supervisors. Cheap, and it must be every frame: a stream
+    /// that fails, a supervisor that gives up 30 s after the card opened, or an output the player just chose must show
+    /// on the card that is already up.
+    pub fn follow(&mut self, live: Live<'_>) {
+        self.midi_current = live.midi_current.map(str::to_string);
+        self.output_current = live.output_current.map(str::to_string);
+        self.midi_status = live.midi_status.to_string();
+        self.midi_given_up = live.midi_given_up;
+        self.audio_status = live.audio_status.to_string();
+    }
 }
 
 /// What the card asked for. `main` does the work; the two folds are panel state and are also applied here.
@@ -55,6 +94,33 @@ pub enum Request {
     Close,
 }
 
+/// The device a row chose, in the shape the picker keeps. `main` writes it into `PickerState`, which the stream handling
+/// already consumes — the card is a new surface on the same mechanism, not a second one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Pick {
+    Midi(PortChoice),
+    Sound(String),
+}
+
+impl Request {
+    /// The device this request chooses, or `None` for the ones that flip something or close the card. This is the only
+    /// place that answers "what does this row choose", which is why it lives beside the request rather than in `main`:
+    /// `main` is a binary, so a mapping kept there could not be tested.
+    pub fn pick(&self) -> Option<Pick> {
+        match self {
+            Request::MidiIn(Some(name)) => Some(Pick::Midi(PortChoice::Named(name.clone()))),
+            // The `none` row is the app picking a controller for itself.
+            Request::MidiIn(None) => Some(Pick::Midi(PortChoice::Any)),
+            Request::SoundOut(name) => Some(Pick::Sound(name.clone())),
+            Request::Tooltips
+            | Request::Autosave
+            | Request::Retry
+            | Request::ToggleMidi
+            | Request::ToggleSound
+            | Request::Close => None,
+        }
+    }
+}
 /// Where the fixed parts of the card sit. Device rows live inside the two panels and are laid out by the scroll area, so
 /// they are not here; a test clicks the fold headers and the switches, which do not move.
 pub struct Rows {
@@ -203,7 +269,7 @@ pub fn paint(
         ui,
         "settings-tooltips",
         rows.tooltips,
-        "TOOLTIPS ON",
+        &switch_label("TOOLTIPS", tooltips),
         tooltips,
     )
     .clicked()
@@ -214,7 +280,7 @@ pub fn paint(
         ui,
         "settings-autosave",
         rows.autosave,
-        "AUTOSAVE ON",
+        &switch_label("AUTOSAVE", autosave),
         autosave,
     )
     .clicked()
@@ -304,6 +370,19 @@ pub fn paint(
         theme::legend(10.0 * scale),
         theme::SILKSCREEN_DIM,
     );
+    // The stream's own words, beside the output in use. This is the card's half of what the deleted bottom line said:
+    // a machine with a busy or hot-unplugged device looks healthy on the face and is silent, so it must say so here.
+    ui.painter().text(
+        Pos2::new(card.right() - padding, rows.sound_header.bottom()),
+        Align2::RIGHT_TOP,
+        &settings.audio_status,
+        theme::legend(10.0 * scale),
+        if audio_status::is_failed(&settings.audio_status) {
+            theme::LED_ACCENT
+        } else {
+            theme::SILKSCREEN_DIM
+        },
+    );
     if settings.sound_open
         && let Some(clicked) = scrollable(
             ui,
@@ -332,6 +411,12 @@ pub fn paint(
 /// A folded section's heading: the name, and an ASCII fold mark, because the face may not use font glyphs.
 fn fold_label(name: &str, open: bool) -> String {
     format!("{name}  [{}]", if open { "-" } else { "+" })
+}
+
+/// A switch's caption: what it is *and* where it stands. A switch that always prints ON misreports the state it is in —
+/// the deleted TIPS and AUTO keys said both words, and the card has to say what they said.
+fn switch_label(name: &str, on: bool) -> String {
+    format!("{name} {}", if on { "ON" } else { "OFF" })
 }
 
 /// The device in use, named above its list so the answer is readable while the list is shut.
