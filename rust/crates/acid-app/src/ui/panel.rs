@@ -82,15 +82,26 @@ pub fn gear_rect(top: Rect, scale: f32) -> Rect {
     )
 }
 
-/// The song label: the middle of the strip, between the wordmark and the pattern display, so the name the session is on
-/// is the thing the eye lands on first.
+/// The song label: the strip's own middle, so the name the session is on is the thing the eye lands on first.
+///
+/// The gap between the two clusters is *not* centred — the left one (volume, wordmark, saves lamp, gear, `?`) is much
+/// wider than the right (pattern, tempo), so the gap's midpoint sits about sixty pixels right of the strip's centre at
+/// 1x and the name reads off-centre. The rect is therefore symmetric about `top.center().x`, as wide as the nearer
+/// neighbour allows, so a line cut by `text::fit` loses the same amount from each side.
 pub fn song_label_rect(top: Rect, scale: f32) -> Rect {
+    let gap = theme::GAP * scale;
+    let left = brand_rect(top).right() + gap;
+    let right = pattern_display_rect(top).left() - gap;
+    let centre = top.center().x;
+    let half = (centre - left).min(right - centre);
+    if half <= 0.0 {
+        // A window narrow enough that the two clusters meet or cross: the gap itself is the best there is, and a rect
+        // centred on a midpoint outside it would be worse than one that merely fits.
+        return Rect::from_min_max(Pos2::new(left, top.top()), Pos2::new(right, top.bottom()));
+    }
     Rect::from_min_max(
-        Pos2::new(brand_rect(top).right() + theme::GAP * scale, top.top()),
-        Pos2::new(
-            pattern_display_rect(top).left() - theme::GAP * scale,
-            top.bottom(),
-        ),
+        Pos2::new(centre - half, top.top()),
+        Pos2::new(centre + half, top.bottom()),
     )
 }
 

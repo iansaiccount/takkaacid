@@ -216,7 +216,15 @@ the gear and the help `?`" for a lamp that is left of both.
       it, and `song_label`'s private 18-character cap is gone — one truncation rule now, not two.
       Tests: `tests/text_fit.rs` (5, pure arithmetic) and `notice_live` (8; RED seen: the notice was painted whole and the
       clip rect ate both ends). 524 tests over 61 suites.
-- [ ] Task 3 — the name centred on the strip.
+- [x] Task 3 — the name centred on the strip. `song_label_rect` is now symmetric about `top.center().x`, half as wide as the
+      nearer neighbour allows, and falls back to the gap itself when a tiny window makes the two meet. RED seen: the name
+      sat at 545 against a strip centre of 490. Tests: `the_song_label_is_centred_in_the_strip` (1 px, and clear of the
+      lamp, gear and `?` as well), `the_song_label_window_uses_all_the_room_the_tighter_side_allows`,
+      `the_song_label_window_survives_a_tiny_window`.
+      Ruling: the symmetry test I first wrote compared the gaps to the two neighbours, which is a different property and
+      failed against a correct rect (0 left, 110 right — the left cluster is tighter). Rewritten to state the real rule:
+      centred on the strip, reaching the nearer bound, never past either. — Cost if wrong: nothing pins "equal gaps",
+      because equal gaps and a strip-centred window cannot both hold.
 - [ ] Task 4 — the two tips entries talk again.
 - [ ] Task 5 — no unreachable arm in `main`.
 - [ ] Task 6 — rows stop at the scrollbar.

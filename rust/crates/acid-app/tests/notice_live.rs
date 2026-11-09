@@ -139,7 +139,9 @@ fn the_gear_sits_beside_the_help_dot_and_clear_of_the_lamp() {
     );
 }
 
-/// The song label takes the middle of the strip, between the wordmark and the pattern display.
+/// The song label sits on the strip's own middle — not on the midpoint of the gap it lives in. The left cluster
+/// (volume, wordmark, lamp, gear, `?`) is far wider than the right (pattern, tempo), so the gap's midpoint is about
+/// sixty pixels right of centre and the name reads off-centre.
 #[test]
 fn the_song_label_is_centred_in_the_strip() {
     let l = layout(screen());
@@ -147,15 +149,66 @@ fn the_song_label_is_centred_in_the_strip() {
     let label = panel::song_label_rect(l.top, s);
 
     assert!(
-        (label.center().x - l.top.center().x).abs() < l.top.width() * 0.12,
-        "the name belongs near the middle of the strip"
+        (label.center().x - l.top.center().x).abs() <= 1.0,
+        "the name belongs on the middle of the strip: {} vs {}",
+        label.center().x,
+        l.top.center().x
     );
     for (what, rect) in [
         ("the wordmark", panel::brand_rect(l.top)),
+        ("the saves lamp", panel::save_indicator_rect(l.top, s)),
+        ("the gear", panel::gear_rect(l.top, s)),
+        ("the help dot", panel::help_rect(l.top, s)),
         ("the pattern display", panel::pattern_display_rect(l.top)),
         ("the tempo display", panel::tempo_display_rect(l.top)),
     ] {
         assert!(!label.intersects(rect), "the name must not cover {what}");
+    }
+    assert!(
+        l.top.contains_rect(label),
+        "the label lives on the top strip"
+    );
+}
+
+/// Centred *and* symmetric: the window is as far from the left cluster as from the right, so a cut line loses the same
+/// The window spends the room evenly and wastes none: it is centred on the strip and reaches the *nearer* neighbour's
+/// edge, so no width is thrown away and a cut line loses the same amount from each side.
+#[test]
+fn the_song_label_window_uses_all_the_room_the_tighter_side_allows() {
+    let l = layout(screen());
+    let s = scale(screen());
+    let label = panel::song_label_rect(l.top, s);
+    let bound_left = panel::brand_rect(l.top).right() + acid_app::ui::theme::GAP * s;
+    let bound_right = panel::pattern_display_rect(l.top).left() - acid_app::ui::theme::GAP * s;
+    let half = label.width() * 0.5;
+    let centre = label.center().x;
+
+    // The left cluster is the tighter side at these proportions, so that is the edge the window must reach.
+    assert!(
+        (label.left() - bound_left).abs() <= 1.0,
+        "the window should reach the tighter neighbour: {} vs {bound_left}",
+        label.left()
+    );
+    // And it must never reach past either neighbour, counting from the centre it is built on.
+    assert!(half <= centre - bound_left + 1.0, "past the left bound");
+    assert!(half <= bound_right - centre + 1.0, "past the right bound");
+}
+
+/// A window small enough to squeeze the strip must still yield a usable rect rather than an inverted one.
+#[test]
+fn the_song_label_window_survives_a_tiny_window() {
+    for size in [vec2(320.0, 200.0), vec2(240.0, 160.0)] {
+        let l = layout(Rect::from_min_size(Pos2::ZERO, size));
+        let label = panel::song_label_rect(l.top, scale(Rect::from_min_size(Pos2::ZERO, size)));
+        assert!(
+            label.width() >= 0.0 && label.height() > 0.0,
+            "an inverted or empty label at {size:?}: {label:?}"
+        );
+        assert!(
+            l.top.contains_rect(label),
+            "the label left the strip at {size:?}: {label:?} in {:?}",
+            l.top
+        );
     }
 }
 
