@@ -259,6 +259,21 @@ binary cannot be watched failing.
 
 Gates at `f35b0fd`: 514 tests over 59 suites, clippy `-D warnings`, `fmt --check`.
 
+**Rulings this pass made.** Each with what it costs if wrong.
+
+- *Escape's order and the row→picker mapping live in the lib, not in `main`.* The plan put both in the binary, which is why
+  the plan's own entry-point tests could not be written. Cost if wrong: one hop for a reader following a frame in `main`.
+- *The five tests that pin behaviour already working were watched red only as compile failures* — F2 both ways, the gear,
+  one-card-at-a-time, RETRY's visibility, the unplug scene. They cover code that landed last session untested, and the
+  skill's rule for that is "add tests for existing code". Cost if wrong: they pin today's behaviour rather than proving a
+  bug existed; the two that did fail at the assertion level are the two that were bugs.
+- *`tips_live`'s vacuous "save keeps the switch" test became `the_help_switch_silences_the_hints`*, which passes without a
+  code change because that behaviour already worked. Cost if wrong: the flag's journey to disk is covered by
+  `SavedState::tooltips` in the save contract rather than by a panel test.
+- *`Request::pick` returns `None` for every non-device request*, so `main` matches on `None` and then lists them — the
+  alternative, matching the request first, would have made the two device arms unreachable code. Cost if wrong: one extra
+  nesting level in `apply_settings_request`.
+
 ## Done
 
 Four commits landed on `Deepseek-Version`: the top strip (`3f4bea1`), the card and F2 (`a0d6e69`), the fold/scroll rework
