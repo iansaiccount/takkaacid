@@ -27,39 +27,44 @@ the box that plays one line well.
 
 ## Features
 
-**The pattern.** Sixteen steps, each with a note (C…C over several octaves), an octave, a velocity, and two switches:
-accent (a brighter, louder hit) and slide (the note glides into the next instead of retriggering). Sixty-four patterns sit
-in eight banks of eight; the pattern readout in the top strip names the one playing (`A1`…`H8`).
+**The pattern.** Sixteen steps per pattern, 64 patterns in eight banks of eight (`A1`…`H8`). Each step holds a note, an
+octave, a velocity, an accent and a slide.
 
-**The row.** Seven tone knobs in the order the panel draws them — waveform, tuning, cutoff, resonance, envelope mod,
-decay, accent — plus the volume knob in the top-left corner. Every one of them can be taught to a MIDI controller.
+**The sound.** Seven tone knobs — waveform, tuning, cutoff, resonance, envelope mod, decay, accent — plus a volume knob.
+Every one of them can be taught to a MIDI controller.
 
-**The performance row.** Transpose the line an octave either way, shuffle the clock, fill the pattern with a randomised
-acid line (density decides how many steps, scale decides which notes), and pick the scale from a catalogue rooted on C.
+**The performance row.** Transpose an octave either way, shuffle the clock, or roll a randomised acid line from a density
+and a scale.
 
-**Transport.** Run/stop (with the step LED chasing the audio, not the wall clock), tempo in 40–300 BPM, swing, and the
-MIDI LEARN key.
+**Transport.** Run/stop, tempo in 40–300 BPM, swing, and a step LED that chases the audio rather than the wall clock.
 
-**MIDI.** Choose the input port in settings (**F2**); notes with velocity play the voice and — in step mode or with shift held —
-write into the pattern. Every control can be taught a continuous controller: the seven knobs, volume, tempo, the pattern
-selector and the shuffle. Dial-like controls use **pickup** — a fader parked somewhere else has to reach the knob before
-it may turn it, so a song load never slams the patch. The pattern selector additionally waits for the bar: cycling through
-patterns with a knob is visible on the readout at once and heard at the end of the pattern, and an external MIDI clock can
-drive the tempo.
+**MIDI.** Port choice in settings; notes with velocity; every control learnable, with pickup on the dials; a pattern
+selector that waits for the bar; and an external clock for the tempo.
 
-**Keeping your work.** The session autosaves to `state.json` (atomically, through a temporary file), and named songs live
-in the same data directory; the SONGS card saves, copies, imports, exports, loads and deletes them.
-
-**Help.** Everything hoverable explains itself, and a help card lists the gestures and the whole MIDI map.
+**Keeping your work.** A session file and a library of named songs, with a songs card to save, copy, import, export, load
+and delete them.
 
 ## Installation
 
-**What you need:** a Rust toolchain new enough for edition 2024 (1.85 or later; developed on 1.99), and on Linux the ALSA
-development headers, because the audio and MIDI crates talk to it directly:
+**What you need.** Everything the app actually asks for, including the parts this list used to miss:
+
+| Needed | Why |
+|---|---|
+| Rust 1.85 or newer (the workspace is edition 2024; developed on 1.99) | builds it |
+| `build-essential` and `pkg-config` | linking |
+| `libasound2-dev` (the ALSA headers) | the audio and MIDI crates talk to ALSA directly |
+| A Wayland or X11 session | egui needs a surface to draw on |
+| A working OpenGL 3.3+ or GLES driver | the panel is drawn on the GPU |
+| `xdg-desktop-portal` **and a backend** (`-hyprland`, `-gtk`, …), plus a D-Bus session | `IMPORT` and `EXPORT` are the only file dialogs, and `rfd` is built with `xdg-portal` |
+| PipeWire or ALSA for audio out | `cpal`'s default host |
+| `mdbook` 0.4 or newer (built with 0.5.4) | building the player's guide only |
+| `grim`, `slurp` and ImageMagick | regenerating the guide's screenshots only |
+
+On Debian or Ubuntu the first three are one command; on Arch, another:
 
 ```bash
-sudo apt install build-essential pkg-config libasound2-dev     # Debian / Ubuntu
-sudo pacman -S base-devel alsa-lib                              # Arch
+sudo apt install build-essential pkg-config libasound2-dev
+sudo pacman -S base-devel alsa-lib
 ```
 
 **Build and run** from the repository root:
@@ -89,6 +94,14 @@ cargo fmt --check
 
 `EAR_TESTING.md` explains the other half of testing: the suite pins RMS, peak, brightness and timing, but whether it sounds
 like acid is a judgement only your ears make — including how to render the voice to WAVs and A/B them.
+
+## The player's guide
+
+Playing the instrument — installing it, the face, the knobs, writing a line, songs, MIDI, and what to do when it makes no
+sound — is `docs/guide`, an mdBook with screenshots of the real panel. `mdbook serve docs/guide` reads it in a browser,
+`mdbook build docs/guide` writes the site into `docs/guide/book/`, and `bash docs/guide/check.sh` is its test: the book
+builds, every page is reachable from the table of contents, every image a page references exists, and the facts that must
+not drift are still in it.
 
 ## Where it started: `Prompt.txt`
 
@@ -133,6 +146,7 @@ rust/
   crates/acid-app/tests/   the live tests: they drive real egui frames
 AGENTS.md              the conventions the codebase is held to
 docs/                  design notes and review material
+  guide/               the player's guide (mdBook): its pages, screenshots and check.sh
 ```
 
 ## Licence
@@ -142,24 +156,9 @@ MIT.
 ## Demo songs and saving
 
 Five demos ship inside the binary — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and **Funk** — each a patch
-and a bank of eight variations of its line. They are read-only: the SONGS card lists them in a `DEMO SONGS` section of
-their own, and picking one loads it as a *new* song called "New song", unsaved, which you rename and save under your own
-name. Your own songs sit below them under `MY SONGS`, and replacing a session you have not saved takes a second click.
+and a bank of eight variations of its line. They are read-only, and picking one loads it as a new song called "New song",
+unsaved. Saving is manual by default: `SAVE` writes, the wordmark says `SAVED` or `UNSAVED`, and a name that has changed
+writes a new file rather than moving the old one.
 
-Saving is manual by default: the `SAVE` key writes the session (and the song file, when the session came from one), and the
-wordmark says `SAVED` or `UNSAVED`, left of the gear and the help `?`. Autosave is a switch in the settings card for those
-who want it, along with tooltips and the two device lists; the choices are kept in the session file.
-A first run opens on the Slow Acid demo, named "New song", with the lamp already saying what needs saying.
-
-**F2** opens settings: tooltips, autosave, MIDI in and sound out, the last two folded and scrollable with the device in use
-named above each one. Inside the songs card, one `SAVE` does the whole job, and the strip names the session in the middle.
-
-- The name field holds the song's name. Saving with the name unchanged writes in place; a name that has changed writes a
-  **new** file and leaves the old one where it is, so a save can never move a song out from under its own name. A blank
-  field still saves the song the session is on.
-- `SAVE A COPY` always makes a second song, under a free name (`Acid 1 (2)`), and never touches the original.
-- `IMPORT` and `EXPORT` are the only file dialogs in the app. Import copies a song into your library and loads it;
-  export writes the session out in the library's own format, so an exported file can be dropped straight into `songs/`.
-- `NEW` starts from the starter phrase. While the session is unsaved it asks twice, like loading or deleting does.
-- Messages ("saved as Acid 2", "could not import: …") appear on the status line and fade by themselves, so they are still
-  readable after the card closes.
+The whole of it — the card, the five keys, and exactly what a save does to a name — is
+[`docs/guide/src/12-songs-and-demos.md`](docs/guide/src/12-songs-and-demos.md).
