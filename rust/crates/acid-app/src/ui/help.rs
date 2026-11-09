@@ -36,8 +36,8 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "backspace: rest, shift+note: write where you are",
                 "shift+up / down: note up or down",
                 "enter: note on or off",
-                "F1 or shift+?: this card",
-                "TIPS: hover a knob or key to read it",
+                "F1 or shift+?: this card, F2: settings",
+                "hover a knob or key to read it; TIPS and AUTO live in settings",
             ],
         ),
         (
@@ -54,8 +54,8 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
         (
             "NOTES",
             &[
-                "the top strip names the audio device",
-                "MIDI status sits beside the pattern display",
+                "the top strip names the song; F2 or the gear opens settings",
+                "settings: tooltips, autosave, MIDI in, sound out",
                 "one voice: MIDI and the keyboard share it",
                 "SAVED / UNSAVED sits by the wordmark",
                 "saved on exit and 2 s after a change",

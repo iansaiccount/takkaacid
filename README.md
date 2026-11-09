@@ -147,12 +147,12 @@ their own, and picking one loads it as a *new* song called "New song", unsaved, 
 name. Your own songs sit below them under `MY SONGS`, and replacing a session you have not saved takes a second click.
 
 Saving is manual by default: the `SAVE` key writes the session (and the song file, when the session came from one), and the
-lamp beside the top strip says `SAVED` or `UNSAVED`. The `AUTO` key beside `TIPS` turns the old autosave back on for those
-who want it; the choice is kept in the session file. A first run opens on the Slow Acid demo, named "New song", with the
-lamp already saying what needs saying.
+wordmark says `SAVED` or `UNSAVED`, between the gear and the help `?`. Autosave is a switch in the settings card for those
+who want it, along with tooltips and the two device lists; the choices are kept in the session file.
+A first run opens on the Slow Acid demo, named "New song", with the lamp already saying what needs saying.
 
-Inside the card, one `SAVE` does the whole job, and the top strip tells you what you are working on: `SONG <name>` sits
-beside the pattern display, and the card's header repeats it as `NOW: <name> · SAVED/UNSAVED`.
+**F2** opens settings: tooltips, autosave, MIDI in and sound out, the last two folded and scrollable with the device in use
+named above each one. Inside the songs card, one `SAVE` does the whole job, and the strip names the session in the middle.
 
 - The name field holds the song's name. Saving with the name unchanged writes in place; a name that has changed writes a
   **new** file and leaves the old one where it is, so a save can never move a song out from under its own name. A blank

@@ -164,3 +164,43 @@ fn an_open_panel_is_four_rows_tall_at_most() {
         "twelve outputs must not fill the card"
     );
 }
+
+/// A device row writes the same choice the old status-line picker wrote: the card is a new surface, not a new mechanism.
+#[test]
+fn a_midi_row_writes_the_input_choice() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&["KeyStep", "IAC Driver"], &[]);
+    panel.settings.midi_open = true;
+
+    let rows = rows(&panel);
+    let first_row = rows.midi_panel.min + vec2(12.0, 8.0);
+    click(&ctx, &mut panel, &shared, first_row);
+
+    assert_eq!(
+        panel.settings_request,
+        Some(Request::MidiIn(Some("KeyStep".to_string()))),
+        "the row asks for the port it names"
+    );
+    assert!(panel.settings_open, "choosing a device is not a dismissal");
+}
+
+/// The sound rows do the same for the output, and the card stays up while the stream moves.
+#[test]
+fn a_sound_row_writes_the_output_choice() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&[], &["Speakers", "HDMI"]);
+    panel.settings.sound_open = true;
+
+    let rows = rows(&panel);
+    let second_row = rows.sound_panel.min + vec2(12.0, 22.0 + 2.0 + 8.0);
+    click(&ctx, &mut panel, &shared, second_row);
+
+    assert_eq!(
+        panel.settings_request,
+        Some(Request::SoundOut("HDMI".to_string())),
+        "the row asks for the output it names"
+    );
+    assert!(panel.settings_open);
+}
