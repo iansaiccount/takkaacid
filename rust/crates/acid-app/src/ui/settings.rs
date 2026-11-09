@@ -1,31 +1,41 @@
 //! The settings card: tooltips, autosave, MIDI in, sound out — everything the top strip and the bottom line used to hold,
 //! in one place that opens with F2 or the gear and closes when you are done.
 //!
+//! The two device lists are collapsed sections with the device in use named above them: a machine with a dozen outputs
+//! must not let its list eat the screen. An open section scrolls once it has more rows than fit.
+//!
 //! Pure painting plus a request enum, like the songs and help cards: `main` owns the ports, the streams and the probes.
 
-use eframe::egui::{self, Align2, Pos2, Rect, Ui};
+use eframe::egui::{self, Align2, Pos2, Rect, Ui, UiBuilder};
 
 use super::theme;
 use super::transport;
 
-/// What the card shows besides the two switches. `main` fills this when the card opens, because it owns the lists.
+/// How many device rows an open section shows before it scrolls.
+const VISIBLE_ROWS: usize = 4;
+
+/// What the card shows besides the two switches. `main` fills the lists when the card opens, because it owns them.
 #[derive(Clone, Default)]
 pub struct Settings {
     /// Every MIDI input the machine offers, as names.
     pub midi_ports: Vec<String>,
     /// Every audio output the machine offers.
     pub outputs: Vec<String>,
-    /// The port in use, so its row is the lit one.
+    /// The port in use, named above the panel so the answer is visible while the list is shut.
     pub midi_current: Option<String>,
-    /// The output in use.
+    /// The output in use, named above the panel for the same reason.
     pub output_current: Option<String>,
     /// True while the supervisor has stopped retrying: the card then offers RETRY, where the status line used to.
     pub midi_given_up: bool,
-    /// The supervisor's own words, shown under the MIDI IN heading.
+    /// The supervisor's own words, shown beside the MIDI IN heading.
     pub midi_status: String,
+    /// Whether the MIDI panel is unfolded. Collapsed by default: the card is visited for one thing at a time.
+    pub midi_open: bool,
+    /// Whether the sound panel is unfolded.
+    pub sound_open: bool,
 }
 
-/// What the card asked for. `main` does the work.
+/// What the card asked for. `main` does the work; the two folds are panel state and are also applied here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
     /// Flip the hover help.
@@ -38,15 +48,22 @@ pub enum Request {
     SoundOut(String),
     /// Ask the supervisor to probe again.
     Retry,
+    /// Fold or unfold the MIDI panel.
+    ToggleMidi,
+    /// Fold or unfold the sound panel.
+    ToggleSound,
     Close,
 }
 
-/// Where every row of the card sits, so the card paints from the same arithmetic a test clicks.
+/// Where the fixed parts of the card sit. Device rows live inside the two panels and are laid out by the scroll area, so
+/// they are not here; a test clicks the fold headers and the switches, which do not move.
 pub struct Rows {
     pub tooltips: Rect,
     pub autosave: Rect,
-    pub midi: Vec<Rect>,
-    pub sound: Vec<Rect>,
+    pub midi_header: Rect,
+    pub midi_panel: Rect,
+    pub sound_header: Rect,
+    pub sound_panel: Rect,
     pub retry: Option<Rect>,
     pub close: Rect,
 }
@@ -55,44 +72,72 @@ const PADDING: f32 = 12.0;
 const ROW: f32 = 22.0;
 const GAP: f32 = 2.0;
 const HEADING: f32 = 18.0;
+const CURRENT: f32 = 14.0;
 
 /// The card's own rect inside `panel`.
 pub fn card_rect(panel: Rect, scale: f32) -> Rect {
     panel.shrink(theme::MARGIN * scale)
 }
 
-/// Lay the rows out. One row per device, then a `none` row for the input: the two lists the status lines used to open.
-pub fn rows(panel: Rect, scale: f32, ports: usize, outputs: usize, retry: bool) -> Rows {
+/// Lay the card out. An open panel is as tall as its rows, up to `VISIBLE_ROWS`, and whatever does not fit scrolls.
+pub fn rows(
+    panel: Rect,
+    scale: f32,
+    ports: usize,
+    outputs: usize,
+    retry: bool,
+    midi_open: bool,
+    sound_open: bool,
+) -> Rows {
     let card = card_rect(panel, scale);
     let left = card.left() + PADDING * scale;
     let width = card.width() - PADDING * 2.0 * scale;
-    let row = |y: f32, w: f32| Rect::from_min_size(Pos2::new(left, y), egui::vec2(w, ROW * scale));
-    let mut y = card.top() + PADDING * scale + HEADING * scale;
+    let row =
+        |y: f32, w: f32, h: f32| Rect::from_min_size(Pos2::new(left, y), egui::vec2(w, h * scale));
+    let panel_height = |count: usize| {
+        let shown = count.clamp(1, VISIBLE_ROWS);
+        shown as f32 * (ROW + GAP) * scale
+    };
 
-    let switches = row(y, width * 0.30 - PADDING * scale);
+    let mut y = card.top() + PADDING * scale + HEADING * scale;
+    let switches = row(y, width * 0.30 - PADDING * scale, ROW);
     let autosave = Rect::from_min_size(
         Pos2::new(switches.right() + PADDING * scale, y),
         switches.size(),
     );
-    y += ROW * scale + PADDING * scale + HEADING * scale;
+    y += ROW * scale + PADDING * scale;
 
-    let mut midi = Vec::with_capacity(ports + 1);
-    for _ in 0..=ports {
-        midi.push(row(y, width * 0.72));
-        y += ROW * scale + GAP * scale;
-    }
+    let midi_header = row(y, width * 0.60, HEADING);
+    y += HEADING * scale + CURRENT * scale;
+    // The input list has one extra row: `none`, which lets the app pick a controller for itself.
+    let midi_panel = row(
+        y,
+        width * 0.72,
+        if midi_open {
+            panel_height(ports + 1)
+        } else {
+            0.0
+        },
+    );
+    y += midi_panel.height();
     let retry_rect = retry.then(|| {
-        let rect = row(y, width * 0.18);
+        let rect = row(y, width * 0.18, ROW);
         y += ROW * scale + GAP * scale;
         rect
     });
-    y += HEADING * scale;
+    y += PADDING * scale;
 
-    let mut sound = Vec::with_capacity(outputs);
-    for _ in 0..outputs {
-        sound.push(row(y, width * 0.72));
-        y += ROW * scale + GAP * scale;
-    }
+    let sound_header = row(y, width * 0.60, HEADING);
+    y += HEADING * scale + CURRENT * scale;
+    let sound_panel = row(
+        y,
+        width * 0.72,
+        if sound_open {
+            panel_height(outputs)
+        } else {
+            0.0
+        },
+    );
 
     let close = Rect::from_min_size(
         Pos2::new(
@@ -104,8 +149,10 @@ pub fn rows(panel: Rect, scale: f32, ports: usize, outputs: usize, retry: bool) 
     Rows {
         tooltips: switches,
         autosave,
-        midi,
-        sound,
+        midi_header,
+        midi_panel,
+        sound_header,
+        sound_panel,
         retry: retry_rect,
         close,
     }
@@ -131,6 +178,7 @@ pub fn paint(
             egui::StrokeKind::Inside,
         );
     }
+
     let padding = PADDING * scale;
     let rows = rows(
         panel,
@@ -138,6 +186,8 @@ pub fn paint(
         settings.midi_ports.len(),
         settings.outputs.len(),
         settings.midi_given_up,
+        settings.midi_open,
+        settings.sound_open,
     );
     let mut request = None;
 
@@ -147,16 +197,6 @@ pub fn paint(
         "SETTINGS",
         theme::legend(13.0 * scale),
         theme::SILKSCREEN,
-    );
-    ui.painter().text(
-        Pos2::new(card.right() - padding, card.top() + padding + 2.0 * scale),
-        Align2::RIGHT_TOP,
-        format!(
-            "SOUND OUT: {}",
-            settings.output_current.as_deref().unwrap_or("none")
-        ),
-        theme::legend(10.0 * scale),
-        theme::SILKSCREEN_DIM,
     );
 
     if transport::transport_button(
@@ -182,21 +222,27 @@ pub fn paint(
         request = Some(Request::Autosave);
     }
 
-    // MIDI IN: every port, the one in use lit, and a `none` row that lets the app choose.
-    let y = rows
-        .midi
-        .first()
-        .map_or(rows.tooltips.top(), |rect| rect.top())
-        - HEADING * scale;
+    // MIDI IN: the fold, the device in use named above it, then the ports themselves, scrolling if there are many.
+    if transport::transport_button(
+        ui,
+        "settings-midi-fold",
+        rows.midi_header,
+        &fold_label("MIDI IN", settings.midi_open),
+        settings.midi_open,
+    )
+    .clicked()
+    {
+        request = Some(Request::ToggleMidi);
+    }
     ui.painter().text(
-        Pos2::new(card.left() + padding, y),
+        Pos2::new(card.left() + padding, rows.midi_header.bottom()),
         Align2::LEFT_TOP,
-        "MIDI IN",
-        theme::legend(11.0 * scale),
-        theme::SILKSCREEN,
+        current_line(settings.midi_current.as_deref()),
+        theme::legend(10.0 * scale),
+        theme::SILKSCREEN_DIM,
     );
     ui.painter().text(
-        Pos2::new(card.right() - padding, y),
+        Pos2::new(card.right() - padding, rows.midi_header.bottom()),
         Align2::RIGHT_TOP,
         &settings.midi_status,
         theme::legend(10.0 * scale),
@@ -206,31 +252,32 @@ pub fn paint(
             theme::SILKSCREEN_DIM
         },
     );
-    for (index, port) in settings.midi_ports.iter().enumerate() {
-        let lit = settings.midi_current.as_deref() == Some(port.as_str());
-        if transport::transport_button(
+    if settings.midi_open
+        && let Some(clicked) = scrollable(
             ui,
-            &format!("settings-midi-{index}"),
-            rows.midi[index],
-            &shorten(port, 34),
-            lit,
+            rows.midi_panel,
+            scale,
+            settings.midi_ports.len() + 1,
+            |index| {
+                let (label, lit, request) = if index < settings.midi_ports.len() {
+                    let port = &settings.midi_ports[index];
+                    (
+                        shorten(port, 34),
+                        settings.midi_current.as_deref() == Some(port.as_str()),
+                        Request::MidiIn(Some(port.clone())),
+                    )
+                } else {
+                    (
+                        "none".to_string(),
+                        settings.midi_current.is_none(),
+                        Request::MidiIn(None),
+                    )
+                };
+                (label, lit, request)
+            },
         )
-        .clicked()
-        {
-            request = Some(Request::MidiIn(Some(port.clone())));
-        }
-    }
-    let none_row = rows.midi[settings.midi_ports.len()];
-    if transport::transport_button(
-        ui,
-        "settings-midi-none",
-        none_row,
-        "none",
-        settings.midi_current.is_none(),
-    )
-    .clicked()
     {
-        request = Some(Request::MidiIn(None));
+        request = Some(clicked);
     }
     if let Some(retry) = rows.retry
         && transport::transport_button(ui, "settings-retry", retry, "RETRY", true).clicked()
@@ -238,37 +285,97 @@ pub fn paint(
         request = Some(Request::Retry);
     }
 
-    // SOUND OUT: the same shape, without a `none`: an audio stream needs a device to land on.
-    let y = rows
-        .sound
-        .first()
-        .map_or(none_row.bottom(), |rect| rect.top())
-        - HEADING * scale;
+    // SOUND OUT: the same shape. No `none` row: an audio stream needs a device to land on.
+    if transport::transport_button(
+        ui,
+        "settings-sound-fold",
+        rows.sound_header,
+        &fold_label("SOUND OUT", settings.sound_open),
+        settings.sound_open,
+    )
+    .clicked()
+    {
+        request = Some(Request::ToggleSound);
+    }
     ui.painter().text(
-        Pos2::new(card.left() + padding, y),
+        Pos2::new(card.left() + padding, rows.sound_header.bottom()),
         Align2::LEFT_TOP,
-        "SOUND OUT",
-        theme::legend(11.0 * scale),
-        theme::SILKSCREEN,
+        current_line(settings.output_current.as_deref()),
+        theme::legend(10.0 * scale),
+        theme::SILKSCREEN_DIM,
     );
-    for (index, output) in settings.outputs.iter().enumerate() {
-        let lit = settings.output_current.as_deref() == Some(output.as_str());
-        if transport::transport_button(
+    if settings.sound_open
+        && let Some(clicked) = scrollable(
             ui,
-            &format!("settings-out-{index}"),
-            rows.sound[index],
-            &shorten(output, 34),
-            lit,
+            rows.sound_panel,
+            scale,
+            settings.outputs.len(),
+            |index| {
+                let output = &settings.outputs[index];
+                (
+                    shorten(output, 34),
+                    settings.output_current.as_deref() == Some(output.as_str()),
+                    Request::SoundOut(output.clone()),
+                )
+            },
         )
-        .clicked()
-        {
-            request = Some(Request::SoundOut(output.clone()));
-        }
+    {
+        request = Some(clicked);
     }
 
     if transport::transport_button(ui, "settings-close", rows.close, "CLOSE", false).clicked() {
         request = Some(Request::Close);
     }
+    request
+}
+
+/// A folded section's heading: the name, and an ASCII fold mark, because the face may not use font glyphs.
+fn fold_label(name: &str, open: bool) -> String {
+    format!("{name}  [{}]", if open { "-" } else { "+" })
+}
+
+/// The device in use, named above its list so the answer is readable while the list is shut.
+fn current_line(current: Option<&str>) -> String {
+    match current {
+        Some(name) => format!("IN USE: {}", shorten(name, 40)),
+        None => "IN USE: none".to_string(),
+    }
+}
+
+/// Paint `count` rows into `area` behind a vertical scroll, and answer the request the player clicked, if any. The rows are
+/// built lazily by `row`, which returns the label, whether it is the one in use, and the request it asks for.
+fn scrollable(
+    ui: &mut Ui,
+    area: Rect,
+    scale: f32,
+    count: usize,
+    row: impl Fn(usize) -> (String, bool, Request),
+) -> Option<Request> {
+    let mut request = None;
+    let mut child = ui.new_child(UiBuilder::new().max_rect(area));
+    egui::ScrollArea::vertical()
+        .max_height(area.height())
+        .auto_shrink([false, false])
+        .show(&mut child, |ui| {
+            for index in 0..count {
+                let (label, lit, asked) = row(index);
+                let top_left = ui.cursor().min;
+                let rect = Rect::from_min_size(top_left, egui::vec2(area.width(), ROW * scale));
+                ui.allocate_space(rect.size());
+                if transport::transport_button(
+                    ui,
+                    &format!("settings-row-{index}"),
+                    rect,
+                    &label,
+                    lit,
+                )
+                .clicked()
+                {
+                    request = Some(asked);
+                }
+                ui.add_space(GAP * scale);
+            }
+        });
     request
 }
 
@@ -280,5 +387,3 @@ fn shorten(name: &str, max: usize) -> String {
     }
     short
 }
-
-// `y` is recomputed per section above, so the layout is the single source of truth and this card holds no state of its own.

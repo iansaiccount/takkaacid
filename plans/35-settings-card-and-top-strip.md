@@ -173,3 +173,9 @@ egui shapes in `ui/panel.rs`, next to a `?` that loses its accidental clip rect.
       audio line with its output list. `tips_live`, `save_live` and `midi_picker_live` each lose the tests that clicked
       the removals.
 - [ ] **Task 4 — the documents follow.**
+- [x] **Task 2b — the device lists fold and scroll.** `Settings::{midi_open, sound_open}` (both start collapsed),
+      `Request::{ToggleMidi, ToggleSound}`, `rows()` now returns the fold headers and the two panel rects, and an open panel
+      is at most `VISIBLE_ROWS` (4) rows tall: whatever does not fit scrolls in an `egui::ScrollArea` clipped to the panel.
+      Each section names the device in use above it — `IN USE: <name>` — so the answer is readable while the list is shut,
+      and the fold mark is ASCII (`[+]` / `[-]`) because the face may not use font glyphs. This is the fix for a machine
+      whose SOUND OUT list was taller than the card.
