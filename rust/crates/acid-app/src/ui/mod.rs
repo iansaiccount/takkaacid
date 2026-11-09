@@ -124,6 +124,9 @@ pub struct PanelState {
     /// Whether the session writes itself when it changes. Off unless the player turns it on with the AUTO key: saving is
     /// manual, and the lamp plus the SAVE key are how a player knows where they stand.
     pub autosave: bool,
+    /// Something the panel wants to say — "saved as Acid 2", "could not import: …" — with the moment it was said. It
+    /// outlives the card that asked for it, and it clears itself, so a message is never something to dismiss.
+    pub notice: Option<(String, std::time::Instant)>,
     /// How full a randomise fills the pattern, `0.0..=1.0`.
     pub density: f32,
     /// The scale a randomise draws from.
@@ -195,6 +198,7 @@ impl Default for PanelState {
             placed: Vec::new(),
             tooltips: true,
             autosave: false,
+            notice: None,
             density: randomise::DEFAULT_DENSITY,
             scale: scale::Scale::default(),
             scale_knob: scale::scale_position(scale::Scale::default()),
@@ -203,6 +207,22 @@ impl Default for PanelState {
 }
 
 impl PanelState {
+    /// How long a notice stays on the status line before the MIDI status comes back.
+    pub const NOTICE_FOR: std::time::Duration = std::time::Duration::from_secs(4);
+
+    /// Say something on the status line. It survives the card that asked for it, and it clears itself.
+    pub fn notify(&mut self, message: impl Into<String>) {
+        self.notice = Some((message.into(), std::time::Instant::now()));
+    }
+
+    /// The notice still worth showing at `now`, if any.
+    pub fn notice_now(&self, now: std::time::Instant) -> Option<&str> {
+        self.notice
+            .as_ref()
+            .filter(|(_, at)| now.duration_since(*at) < Self::NOTICE_FOR)
+            .map(|(text, _)| text.as_str())
+    }
+
     /// Adopt a scale and put the knob where it belongs.
     ///
     /// Two fields, one setting: while the hand is off the SCALE knob the panel snaps the scale from the knob's position,
@@ -323,15 +343,46 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     );
 
     // MIDI status: right-aligned between the wordmark and the pattern display, amber when the app has
-    // stopped probing and a small REPROBE target appears with it.
+    // The song the session is working on, beside the pattern display: a player should never have to open the card to find
+    // out what they are working on. The status — or a notice, which outlives the card that caused it — takes the right
+    // half of the same band, so the two never fight for the same space. Amber when the app has stopped probing, and a
+    // small REPROBE target appears with it.
+    let label = panel::song_label_rect(l.top, s);
+    ui.painter().text(
+        label.left_center(),
+        egui::Align2::LEFT_CENTER,
+        song_label(state.songs.name.as_deref()),
+        theme::legend(10.0 * s),
+        if state.songs.file.is_some() {
+            theme::SILKSCREEN_DIM
+        } else {
+            theme::SILKSCREEN.gamma_multiply(0.45)
+        },
+    );
+
+    // A notice is said once and clears itself; the status line underneath comes back when it has.
+    let now = std::time::Instant::now();
+    if state
+        .notice
+        .as_ref()
+        .is_some_and(|(_, at)| now.duration_since(*at) >= PanelState::NOTICE_FOR)
+    {
+        state.notice = None;
+    }
+    let notice = state.notice_now(now);
     let status = panel::midi_status_rect(l.top, s);
+    let line = notice.map(str::to_string).unwrap_or_else(|| {
+        learn::hint(state.learn)
+            .unwrap_or(&state.midi_status)
+            .to_string()
+    });
     ui.painter().text(
         status.right_center(),
         egui::Align2::RIGHT_CENTER,
         // While learning, the status line says what the panel is waiting for — it is the only free line on the face.
-        learn::hint(state.learn).unwrap_or(&state.midi_status),
+        line,
         theme::legend(11.0 * s),
-        if state.learn != learn::Step::Idle || state.midi_given_up {
+        if notice.is_some() || state.learn != learn::Step::Idle || state.midi_given_up {
             theme::LED_ACCENT
         } else {
             theme::SILKSCREEN_DIM
@@ -869,3 +920,16 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
 // The control position of a wave is the switch's business, so it lives with the catalogue; the panel keeps these names
 // because a detent marker and a learned controller both speak in positions.
 pub use crate::knobs::{waveform_from_position, waveform_position};
+
+/// What the song label says: the name the session is on, or that it has none. Truncated so a long name cannot run into
+/// the status line beside it.
+fn song_label(name: Option<&str>) -> String {
+    let Some(name) = name else {
+        return "SONG untitled".to_string();
+    };
+    let mut short: String = name.chars().take(18).collect();
+    if name.chars().count() > 18 {
+        short.push('…');
+    }
+    format!("SONG {short}")
+}

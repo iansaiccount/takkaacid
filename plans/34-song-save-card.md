@@ -56,3 +56,10 @@ header, two save buttons and two file buttons. Notices move from the card to `Pa
       `load_song_now`, and the session-on-disk snapshot became `session_for_disk`, so a load and an import land the same
       way. `rfd` 0.18 (XDG-portal) added. Tests: `songs_live` 16 pass, including SAVE on a typed name, SAVE on a blank
       field keeping the open song, SAVE A COPY, IMPORT/EXPORT, and NEW arming then firing.
+- [x] **Task 3 — the panel names the song, and keeps the message.** `panel::song_label_rect` takes the left half of the
+      status band; `SONG <name>` is drawn there, dimmer when the session is untitled and brighter once the song is a file.
+      `PanelState::notice: Option<(String, Instant)>` with `notify`/`notice_now`/`NOTICE_FOR` (4 s) replaces the status
+      line while it lasts, clears itself, and survives the card closing; `main`'s `notice` and every message site (save,
+      save a copy, load, delete, import, export) now go through it. The card keeps its own "click again" hint, which belongs
+      to the card and nowhere else. Tests: `tests/notice_live.rs` (4) — the label clears the displays and the wordmark, a
+      notice shows and expires, survives a frame with no card, and drawing one changes nothing.

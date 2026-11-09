@@ -64,6 +64,15 @@ pub fn midi_status_rect(top: Rect, scale: f32) -> Rect {
         ),
     )
 }
+/// The song label: the left half of the status band, so the name the session is working on sits beside the pattern
+/// display while the status — or a notice — keeps the right half.
+pub fn song_label_rect(top: Rect, scale: f32) -> Rect {
+    let band = midi_status_rect(top, scale);
+    Rect::from_min_max(
+        band.min,
+        Pos2::new(band.left() + band.width() * 0.45, band.max.y),
+    )
+}
 
 /// Outline a control that a learn can pick, while a learn is choosing.
 ///

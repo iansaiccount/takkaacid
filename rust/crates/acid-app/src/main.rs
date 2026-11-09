@@ -235,8 +235,8 @@ impl eframe::App for TakkaApp {
                         self.panel.songs.file = None;
                         card.names = persist::list_songs(&dir);
                         card.delete_armed = None;
-                        card.message = Some("new song".to_string());
                     }
+                    self.panel.notify("new song");
                 }
                 panel_ui::songs::Request::SaveCopy(typed) => {
                     let name = self.free_copy_name(&dir, &typed);
@@ -294,13 +294,11 @@ impl eframe::App for TakkaApp {
                                 if self.panel.songs.file.as_deref() == Some(name.as_str()) {
                                     self.panel.songs.file = None;
                                 }
-                                card.message = Some(format!("deleted {name}"));
                             }
+                            self.panel.notify(format!("deleted {name}"));
                         }
                         Err(error) => {
-                            if let Some(card) = self.panel.songs.card.as_mut() {
-                                card.message = Some(format!("could not delete: {error}"));
-                            }
+                            self.notice(format!("could not delete: {error}"));
                         }
                     }
                 }
@@ -505,8 +503,8 @@ impl TakkaApp {
             card.names = persist::list_songs(dir);
             card.name = name.to_string();
             card.open = Some(name.to_string());
-            card.message = Some(format!("loaded {name}"));
         }
+        self.panel.notify(format!("loaded {name}"));
     }
 
     /// Write the session into the library under `name`, and make that song the session's own. `as_copy` only changes the
@@ -524,12 +522,12 @@ impl TakkaApp {
                     card.names = persist::list_songs(dir);
                     card.name = name.to_string();
                     card.open = Some(name.to_string());
-                    card.message = Some(if as_copy {
-                        format!("saved a copy as {name}")
-                    } else {
-                        format!("saved {name}")
-                    });
                 }
+                self.notice(if as_copy {
+                    format!("saved a copy as {name}")
+                } else {
+                    format!("saved {name}")
+                });
             }
             Err(error) => self.notice(format!("could not save: {error}")),
         }
@@ -563,11 +561,9 @@ impl TakkaApp {
         format!("{wanted} (copy)")
     }
 
-    /// Say something on the card, if one is open. The status line takes this over in plan 34's third step.
+    /// Say something on the status line. It survives the card that asked for it, and it clears itself.
     fn notice(&mut self, message: String) {
-        if let Some(card) = self.panel.songs.card.as_mut() {
-            card.message = Some(message);
-        }
+        self.panel.notify(message);
     }
 }
 
