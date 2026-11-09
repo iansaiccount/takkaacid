@@ -75,3 +75,26 @@ Gates are green: `cargo test --workspace` (59 suites), `cargo clippy --workspace
 
 One deviation from the plan, recorded on purpose: tasks 2 and 4 landed together, because the `Request` enum and its handler
 in `main` are one change and splitting them would have left a commit that does not compile.
+
+## Review, and what it changed
+
+A fresh-context review of `b658d19..f40cfb8` found one Critical, six Important and twelve Minor issues. Two fix commits:
+
+- `fad6af4` — **C1 (Critical)**: `SAVE` onto a name that already existed wrote straight through that song and reported
+  success, because only `SAVE A COPY` went through the uniquifier. `persist::free_song_name` is now the one free-name
+  rule, public, suffix-truncated so a free name is always saveable (also M1); `SAVE`'s new-file branch and `SAVE A COPY`
+  both use it, and `main::free_copy_name` is deleted (I5). `delete_song` of the session's own song marks the session
+  unsaved (I4), and the dead `rename_song` went with `RENAME` (M4, partly).
+- `f73e465` — **I1**: the header derives from the session's *name* and the dirty flag via a pure `songs::now_line`, so a
+  first run and a demo are "unsaved", not "untitled", and they agree with the field and the panel label. **I2**: a blank
+  field with nothing open focuses the field instead of dying quietly, and `SAVE A COPY` accepts a blank field like `SAVE`
+  does. **I3**: the notice is clipped to the status band, so a failure carrying a path cannot paint over the song label.
+  **M2**: the untitled label is visibly dimmer. **M3**: the help card, the SONGS tooltip and the README no longer advertise
+  RENAME. **I6 (partial)**: `the_header_names_the_session_and_its_state` and
+  `a_named_session_with_no_file_is_unsaved_rather_than_untitled` pin the header; `a_free_name_is_the_wanted_one_or_a_numbered_neighbour`
+  pins the naming rule.
+
+Left open, recorded on purpose: `main`'s save routing is still only testable through the binary (the review's suggestion
+`persist::save_plan` is the right next step), the notice-vs-status paint has no test that the painted line is the notice,
+`save()`/`session_for_disk()` still repeat the panel-state assignments (M5), `LoadDemo` still closes the card while `Load`
+keeps it open (M7), and `IMPORT`/`EXPORT` stay ASCII while the header uses `·` (M8).
