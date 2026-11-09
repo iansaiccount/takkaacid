@@ -827,16 +827,18 @@ fn draw_settings(
         state.autosave,
     );
     if shield.clicked() {
-        request = Some(settings::Request::Close);
+        request = Some(settings::Click::Own(settings::Own::Close));
     }
     match request {
-        // The two folds belong to the card, so they are applied here instead of going through main.
-        Some(settings::Request::ToggleMidi) => state.settings.midi_open = !state.settings.midi_open,
-        Some(settings::Request::ToggleSound) => {
-            state.settings.sound_open = !state.settings.sound_open
+        // The folds and CLOSE are the card's own state, so they are applied here rather than going through `main`.
+        Some(settings::Click::Own(settings::Own::ToggleMidi)) => {
+            state.settings.midi_open = !state.settings.midi_open;
         }
-        Some(settings::Request::Close) => state.settings_open = false,
-        Some(other) => state.settings_request = Some(other),
+        Some(settings::Click::Own(settings::Own::ToggleSound)) => {
+            state.settings.sound_open = !state.settings.sound_open;
+        }
+        Some(settings::Click::Own(settings::Own::Close)) => state.settings_open = false,
+        Some(settings::Click::Ask(request)) => state.settings_request = Some(request),
         None => {}
     }
 }

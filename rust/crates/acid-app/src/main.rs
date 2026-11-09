@@ -402,29 +402,23 @@ impl eframe::App for TakkaApp {
 }
 
 impl TakkaApp {
-    /// Do what the settings card asked for. The two folds never arrive here — they are the card's own state — and the
-    /// two device rows go through `settings::Request::pick`, the single mapping from a row to the picker field `main`
-    /// consumes, so there is no second list of "which row means which field" kept here.
+    /// Do what the settings card asked for. The folds and CLOSE never arrive here — they are the card's own state — and
+    /// every case below is reachable, because `Request` only names the work `main` can do.
     fn apply_settings_request(&mut self, request: panel_ui::settings::Request) {
-        use panel_ui::settings::{Pick, Request};
-        match request.pick() {
-            Some(Pick::Midi(choice)) => self.panel.picker.input_choice = Some(choice),
-            Some(Pick::Sound(name)) => self.panel.picker.output_choice = Some(name),
-            None => match request {
-                Request::Tooltips => {
-                    self.panel.tooltips = !self.panel.tooltips;
-                    self.panel.dirty = true;
-                }
-                Request::Autosave => {
-                    self.panel.autosave = !self.panel.autosave;
-                    self.panel.dirty = true;
-                }
-                Request::Retry => self.panel.reprobe_requested = true,
-                Request::Close => self.panel.settings_open = false,
-                // The card folds its own sections, and a device row chose a device above: nothing for `main` to do.
-                Request::ToggleMidi | Request::ToggleSound => {}
-                Request::MidiIn(_) | Request::SoundOut(_) => {}
-            },
+        use panel_ui::settings::{Action, Pick};
+        match request.action() {
+            Action::ToggleTooltips => {
+                self.panel.tooltips = !self.panel.tooltips;
+                self.panel.dirty = true;
+            }
+            Action::ToggleAutosave => {
+                self.panel.autosave = !self.panel.autosave;
+                self.panel.dirty = true;
+            }
+            Action::Retry => self.panel.reprobe_requested = true,
+            // The same picker fields the status-line pickers wrote; `main::ui` hands the output choice to the rig.
+            Action::Choose(Pick::Midi(choice)) => self.panel.picker.input_choice = Some(choice),
+            Action::Choose(Pick::Sound(name)) => self.panel.picker.output_choice = Some(name),
         }
     }
 

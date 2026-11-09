@@ -74,7 +74,8 @@ impl Settings {
     }
 }
 
-/// What the card asked for. `main` does the work; the two folds are panel state and are also applied here.
+/// What the card asked `main` to do: the things only the app can do, because it owns the ports, the streams and the
+/// probes. The card's own state — its two folds and its CLOSE — is [`Own`] and never travels.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
     /// Flip the hover help.
@@ -87,11 +88,24 @@ pub enum Request {
     SoundOut(String),
     /// Ask the supervisor to probe again.
     Retry,
+}
+
+/// What the card does to itself. These are panel state, so they never leave the panel — and because they are not
+/// [`Request`]s, `main` has no arm for them that could never run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Own {
     /// Fold or unfold the MIDI panel.
     ToggleMidi,
     /// Fold or unfold the sound panel.
     ToggleSound,
     Close,
+}
+
+/// One thing a click on the card asked for: `main`'s work, or the card's own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Click {
+    Ask(Request),
+    Own(Own),
 }
 
 /// The device a row chose, in the shape the picker keeps. `main` writes it into `PickerState`, which the stream handling
@@ -102,22 +116,29 @@ pub enum Pick {
     Sound(String),
 }
 
+/// What `main` does with a request: one total mapping, so every arm of the match in `main` can run and a test can prove
+/// the mapping without the binary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    ToggleTooltips,
+    ToggleAutosave,
+    Retry,
+    Choose(Pick),
+}
+
 impl Request {
-    /// The device this request chooses, or `None` for the ones that flip something or close the card. This is the only
-    /// place that answers "what does this row choose", which is why it lives beside the request rather than in `main`:
-    /// `main` is a binary, so a mapping kept there could not be tested.
-    pub fn pick(&self) -> Option<Pick> {
+    /// What this request means. The only place that answers it, so `main` adds no second list of cases.
+    pub fn action(&self) -> Action {
         match self {
-            Request::MidiIn(Some(name)) => Some(Pick::Midi(PortChoice::Named(name.clone()))),
+            Request::Tooltips => Action::ToggleTooltips,
+            Request::Autosave => Action::ToggleAutosave,
+            Request::Retry => Action::Retry,
+            Request::MidiIn(Some(name)) => {
+                Action::Choose(Pick::Midi(PortChoice::Named(name.clone())))
+            }
             // The `none` row is the app picking a controller for itself.
-            Request::MidiIn(None) => Some(Pick::Midi(PortChoice::Any)),
-            Request::SoundOut(name) => Some(Pick::Sound(name.clone())),
-            Request::Tooltips
-            | Request::Autosave
-            | Request::Retry
-            | Request::ToggleMidi
-            | Request::ToggleSound
-            | Request::Close => None,
+            Request::MidiIn(None) => Action::Choose(Pick::Midi(PortChoice::Any)),
+            Request::SoundOut(name) => Action::Choose(Pick::Sound(name.clone())),
         }
     }
 }
@@ -232,7 +253,7 @@ pub fn paint(
     settings: &Settings,
     tooltips: bool,
     autosave: bool,
-) -> Option<Request> {
+) -> Option<Click> {
     let card = card_rect(panel, scale);
     {
         let painter = ui.painter();
@@ -255,7 +276,7 @@ pub fn paint(
         settings.midi_open,
         settings.sound_open,
     );
-    let mut request = None;
+    let mut request: Option<Click> = None;
 
     ui.painter().text(
         Pos2::new(card.left() + padding, card.top() + padding),
@@ -276,7 +297,7 @@ pub fn paint(
     );
     tips::hover(&tooltips_switch, tooltips, tips::Control::Tooltips);
     if tooltips_switch.clicked() {
-        request = Some(Request::Tooltips);
+        request = Some(Click::Ask(Request::Tooltips));
     }
     let autosave_switch = transport::transport_button(
         ui,
@@ -287,7 +308,7 @@ pub fn paint(
     );
     tips::hover(&autosave_switch, tooltips, tips::Control::Autosave);
     if autosave_switch.clicked() {
-        request = Some(Request::Autosave);
+        request = Some(Click::Ask(Request::Autosave));
     }
 
     // MIDI IN: the fold, the device in use named above it, then the ports themselves, scrolling if there are many.
@@ -300,7 +321,7 @@ pub fn paint(
     )
     .clicked()
     {
-        request = Some(Request::ToggleMidi);
+        request = Some(Click::Own(Own::ToggleMidi));
     }
     ui.painter().text(
         Pos2::new(card.left() + padding, rows.midi_header.bottom()),
@@ -345,12 +366,12 @@ pub fn paint(
             },
         )
     {
-        request = Some(clicked);
+        request = Some(Click::Ask(clicked));
     }
     if let Some(retry) = rows.retry
         && transport::transport_button(ui, "settings-retry", retry, "RETRY", true).clicked()
     {
-        request = Some(Request::Retry);
+        request = Some(Click::Ask(Request::Retry));
     }
 
     // SOUND OUT: the same shape. No `none` row: an audio stream needs a device to land on.
@@ -363,7 +384,7 @@ pub fn paint(
     )
     .clicked()
     {
-        request = Some(Request::ToggleSound);
+        request = Some(Click::Own(Own::ToggleSound));
     }
     ui.painter().text(
         Pos2::new(card.left() + padding, rows.sound_header.bottom()),
@@ -401,11 +422,11 @@ pub fn paint(
             },
         )
     {
-        request = Some(clicked);
+        request = Some(Click::Ask(clicked));
     }
 
     if transport::transport_button(ui, "settings-close", rows.close, "CLOSE", false).clicked() {
-        request = Some(Request::Close);
+        request = Some(Click::Own(Own::Close));
     }
     request
 }

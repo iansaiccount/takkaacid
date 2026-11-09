@@ -237,6 +237,11 @@ the gear and the help `?`" for a lamp that is left of both.
       Ruling: the hover helper is duplicated in `settings_live` and `tips_live` rather than shared through a `tests/common`
       module. — Two independent test binaries, twelve lines each, and the comment explaining the still-pointer trap travels
       with both. — Cost if wrong: one more copy if a third file needs to hover something.
-- [ ] Task 5 — no unreachable arm in `main`.
+- [x] Task 5 — no unreachable arm in `main`. `settings::{Request, Own, Click, Action}`: `Request` names only what `main`
+      can do, `Own` is the card's own three (two folds and CLOSE), `paint` returns a `Click`, `draw_settings` applies the
+      `Own` half, and `main` matches `Request::action()` — six cases, all reachable. `Request::pick` became `action`,
+      which is total rather than `Option`.
+      Tests: `a_device_row_asks_for_the_action_main_takes` (compile-RED, then the whole mapping),
+      `the_card_keeps_its_own_folds_and_its_close` (CLOSE closes and asks `main` for nothing). 528 tests over 61 suites.
 - [ ] Task 6 — rows stop at the scrollbar.
 - [ ] Task 7 — dead code and stale words.

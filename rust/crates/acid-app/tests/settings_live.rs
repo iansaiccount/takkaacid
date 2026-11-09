@@ -575,36 +575,46 @@ fn escape_closes_one_thing_at_a_time_and_the_card_comes_first() {
     );
 }
 
-/// A device row's request becomes the picker field `main` writes. The mapping lives here, beside the request, because
-/// `main` is a binary and no test can call it.
+/// A device row's request becomes the action `main` takes. The mapping lives here, beside the request, because `main` is
+/// a binary and no test can call it — and it is total, so `main` has no arm that cannot run.
 #[test]
-fn a_device_row_asks_for_the_choice_main_applies() {
+fn a_device_row_asks_for_the_action_main_takes() {
     use acid_app::midi::ports::PortChoice;
-    use acid_app::ui::settings::Pick;
+    use acid_app::ui::settings::{Action, Pick};
 
     assert_eq!(
-        Request::MidiIn(Some("KeyStep".to_string())).pick(),
-        Some(Pick::Midi(PortChoice::Named("KeyStep".to_string())))
+        Request::MidiIn(Some("KeyStep".to_string())).action(),
+        Action::Choose(Pick::Midi(PortChoice::Named("KeyStep".to_string())))
     );
     assert_eq!(
-        Request::MidiIn(None).pick(),
-        Some(Pick::Midi(PortChoice::Any)),
+        Request::MidiIn(None).action(),
+        Action::Choose(Pick::Midi(PortChoice::Any)),
         "the `none` row is the app picking a controller for itself"
     );
     assert_eq!(
-        Request::SoundOut("HDMI".to_string()).pick(),
-        Some(Pick::Sound("HDMI".to_string()))
+        Request::SoundOut("HDMI".to_string()).action(),
+        Action::Choose(Pick::Sound("HDMI".to_string()))
     );
-    for other in [
-        Request::Tooltips,
-        Request::Autosave,
-        Request::Retry,
-        Request::ToggleMidi,
-        Request::ToggleSound,
-        Request::Close,
-    ] {
-        assert_eq!(other.pick(), None, "{other:?} chooses no device");
-    }
+    assert_eq!(Request::Tooltips.action(), Action::ToggleTooltips);
+    assert_eq!(Request::Autosave.action(), Action::ToggleAutosave);
+    assert_eq!(Request::Retry.action(), Action::Retry);
+}
+
+/// The card folds and closes itself: its own state never travels to `main`, so there is no arm there that cannot run.
+#[test]
+fn the_card_keeps_its_own_folds_and_its_close() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&["KeyStep"], &[]);
+
+    let at = rows(&panel).close.center();
+    click(&ctx, &mut panel, &shared, at);
+
+    assert!(!panel.settings_open, "CLOSE closes the card");
+    assert_eq!(
+        panel.settings_request, None,
+        "and asks main for nothing at all"
+    );
 }
 
 /// The card's two switches are the controls the deleted TIPS and AUTO keys were, so they explain themselves the way
