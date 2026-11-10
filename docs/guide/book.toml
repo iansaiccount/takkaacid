@@ -1,0 +1,8 @@
+[book]
+title = "takka-acid"
+authors = ["takka-acid"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "dark"

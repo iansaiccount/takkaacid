@@ -1,0 +1,273 @@
+//! The seven tone knobs, as one catalogue.
+//!
+//! A knob's identity used to live in six places at once — the position array, the publish `match`, the label special
+//! case, the tooltip mapping, the learn mapping and the saved struct — each a `match` on `0..=6` with a `_` fallback, so
+//! reordering a knob in one of them produced a silent or mislabelled knob instead of a compile error. This module is now
+//! the only place that knows what a knob is called, which atomic it drives, and whether it is a dial or a switch.
+
+use crate::midi::cc::CcTarget;
+use crate::state::SharedState;
+
+/// One tone knob of the panel. Drawn left to right in [`Knob::ALL`] order.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Knob {
+    /// Not a dial: a four-face switch over the wave catalogue, snapped to its detents.
+    Waveform,
+    Tuning,
+    Cutoff,
+    Resonance,
+    EnvMod,
+    Decay,
+    Accent,
+}
+
+/// What sort of control a knob is. A dial follows the hand continuously; a switch lands on the nearest detent and is
+/// read back from the shared state only when the hand is off it.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Kind {
+    Dial,
+    Switch,
+}
+
+impl Knob {
+    /// Every knob, in the order the panel draws them.
+    pub const ALL: [Knob; 7] = [
+        Knob::Waveform,
+        Knob::Tuning,
+        Knob::Cutoff,
+        Knob::Resonance,
+        Knob::EnvMod,
+        Knob::Decay,
+        Knob::Accent,
+    ];
+
+    /// Where this knob sits in [`Self::ALL`], and therefore in `PanelState::knobs`.
+    pub fn index(self) -> usize {
+        match self {
+            Knob::Waveform => 0,
+            Knob::Tuning => 1,
+            Knob::Cutoff => 2,
+            Knob::Resonance => 3,
+            Knob::EnvMod => 4,
+            Knob::Decay => 5,
+            Knob::Accent => 6,
+        }
+    }
+
+    pub fn kind(self) -> Kind {
+        match self {
+            Knob::Waveform => Kind::Switch,
+            Knob::Tuning
+            | Knob::Cutoff
+            | Knob::Resonance
+            | Knob::EnvMod
+            | Knob::Decay
+            | Knob::Accent => Kind::Dial,
+        }
+    }
+
+    /// The silkscreen caption. The waveform's names itself from the wave catalogue, hence the shared state.
+    pub fn label(self, shared: &SharedState) -> &'static str {
+        match self {
+            Knob::Waveform => shared.waveform().name(),
+            Knob::Tuning => "TUNING",
+            Knob::Cutoff => "CUT OFF",
+            Knob::Resonance => "RESONANCE",
+            Knob::EnvMod => "ENV MOD",
+            Knob::Decay => "DECAY",
+            Knob::Accent => "ACCENT",
+        }
+    }
+
+    /// The MIDI-learn target this knob teaches. Every tone knob is learnable, so there is no `None` case to forget.
+    pub const fn learn_target(self) -> CcTarget {
+        match self {
+            Knob::Waveform => CcTarget::Waveform,
+            Knob::Tuning => CcTarget::Tuning,
+            Knob::Cutoff => CcTarget::Cutoff,
+            Knob::Resonance => CcTarget::Resonance,
+            Knob::EnvMod => CcTarget::EnvMod,
+            Knob::Decay => CcTarget::Decay,
+            Knob::Accent => CcTarget::Accent,
+        }
+    }
+
+    /// What the knob shows: the shared value, as a control position. The waveform's position comes from the switch.
+    pub fn read(self, shared: &SharedState) -> f32 {
+        match self {
+            Knob::Waveform => waveform_position(shared.waveform()),
+            Knob::Tuning => shared.tuning.get(),
+            Knob::Cutoff => shared.cutoff.get(),
+            Knob::Resonance => shared.resonance.get(),
+            Knob::EnvMod => shared.env_mod.get(),
+            Knob::Decay => shared.decay.get(),
+            Knob::Accent => shared.accent.get(),
+        }
+    }
+
+    /// Publish a position to the atomic this knob owns. The waveform is a switch, so its position is snapped first.
+    pub fn publish(self, shared: &SharedState, position: f32) {
+        match self {
+            Knob::Waveform => shared.set_waveform(waveform_from_position(position)),
+            Knob::Tuning => shared.tuning.set(position),
+            Knob::Cutoff => shared.cutoff.set(position),
+            Knob::Resonance => shared.resonance.set(position),
+            Knob::EnvMod => shared.env_mod.set(position),
+            Knob::Decay => shared.decay.set(position),
+            Knob::Accent => shared.accent.set(position),
+        }
+    }
+}
+
+/// The control position of a wave: `0.0` is the first entry of the wave catalogue, `1.0` the last. It lives here because
+/// the WAVEFORM knob is the switch that turns a wave into a position and back; the arithmetic itself is `acid_core`'s,
+/// because a learned controller snaps with the same rule and the MIDI thread may not borrow the panel's copy.
+pub fn waveform_position(wave: acid_core::oscillator::Waveform) -> f32 {
+    wave.position()
+}
+
+/// The wave nearest a control position. Rounded, not floored, so the detents divide the travel evenly and the switch can
+/// never rest between two waves.
+pub fn waveform_from_position(position: f32) -> acid_core::oscillator::Waveform {
+    acid_core::oscillator::Waveform::from_position(position)
+}
+
+/// A control that lands on detents: the position the hand left snaps onto the nearest face.
+///
+/// `face_of` turns a position into the face it is near and `position_of` puts the face back on the strip. Both detent
+/// controls share this rule — the WAVEFORM switch and the SCALE knob — because doing it every frame instead of on release
+/// pulls the position back onto the face the drag started from, and a slow drag could never cross a midpoint.
+pub fn snap_to_detent<F>(
+    position: f32,
+    face_of: impl Fn(f32) -> F,
+    position_of: impl Fn(F) -> f32,
+) -> f32 {
+    position_of(face_of(position))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use acid_core::oscillator::Waveform;
+
+    #[test]
+    fn every_knob_is_in_all_once_and_in_index_order() {
+        assert_eq!(Knob::ALL.len(), 7);
+        for (position, knob) in Knob::ALL.iter().enumerate() {
+            assert_eq!(knob.index(), position, "{knob:?} has the wrong slot");
+            assert_eq!(
+                Knob::ALL.iter().filter(|other| *other == knob).count(),
+                1,
+                "{knob:?} is listed twice"
+            );
+        }
+    }
+
+    #[test]
+    fn each_knob_is_named_by_its_own_caption_tip_and_learn_target() {
+        let shared = SharedState::new();
+        // The silkscreen says exactly this; a caption typo used to fail nothing, because the tip table holds its own
+        // strings. The switch is captioned by the wave it is on.
+        assert_eq!(
+            Knob::ALL.map(|knob| knob.label(&shared)),
+            [
+                shared.waveform().name(),
+                "TUNING",
+                "CUT OFF",
+                "RESONANCE",
+                "ENV MOD",
+                "DECAY",
+                "ACCENT"
+            ]
+        );
+        for knob in Knob::ALL {
+            assert!(knob.label(&shared).is_ascii(), "{knob:?} is not ASCII");
+            // A permuted arm is the failure no round trip can see — `publish` and `read` would both follow it — so the two
+            // lookups are pinned to the knob's own name. Every knob's tip and learn target are named after it by design.
+            assert_eq!(
+                format!("{:?}", crate::ui::tips::Control::for_knob(knob)),
+                format!("{knob:?}"),
+                "{knob:?} wears another control's tip"
+            );
+            assert_eq!(
+                format!("{:?}", knob.learn_target()),
+                format!("{knob:?}"),
+                "{knob:?} teaches another control's slot"
+            );
+        }
+    }
+
+    #[test]
+    fn publishing_a_knob_moves_exactly_that_ctrl_and_reading_it_returns_it() {
+        // The round trip is the contract: if a knob's publish and read ever disagree, the face lies about the sound.
+        for knob in Knob::ALL {
+            let shared = SharedState::new();
+            let before: Vec<f32> = Knob::ALL.iter().map(|other| other.read(&shared)).collect();
+            let wanted = if knob.kind() == Kind::Switch {
+                1.0
+            } else {
+                0.75
+            };
+            knob.publish(&shared, wanted);
+            assert!(
+                (knob.read(&shared) - wanted).abs() < 1e-6,
+                "{knob:?} does not read back what it published: {}",
+                knob.read(&shared)
+            );
+            for (index, other) in Knob::ALL.iter().enumerate() {
+                if *other != knob {
+                    assert!(
+                        (other.read(&shared) - before[index]).abs() < 1e-6,
+                        "{knob:?} moved {other:?} as well"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_waveform_is_the_only_switch() {
+        assert_eq!(Knob::Waveform.kind(), Kind::Switch);
+        for knob in Knob::ALL.iter().filter(|knob| **knob != Knob::Waveform) {
+            assert_eq!(knob.kind(), Kind::Dial, "{knob:?} should be a dial");
+        }
+        // A switch snaps to the nearest face, and an exact tie rounds up: 0.4 is nearer the second face, 0.5 is the tie
+        // between the second and third.
+        let shared = SharedState::new();
+        Knob::Waveform.publish(&shared, 0.4);
+        assert_eq!(shared.waveform(), Waveform::Square);
+        Knob::Waveform.publish(&shared, 0.5);
+        assert_eq!(shared.waveform(), Waveform::Sine);
+    }
+
+    #[test]
+    fn a_detent_position_snaps_onto_its_face_and_an_exact_face_stays_put() {
+        // The rule both detent controls share: the position the hand left lands on the nearest face. A frame-by-frame
+        // snap instead of a release-time one would pull the position back onto the face it started from.
+        let snap = |position: f32| {
+            crate::knobs::snap_to_detent(position, waveform_from_position, waveform_position)
+        };
+        assert_eq!(snap(0.0), waveform_position(Waveform::Saw));
+        assert_eq!(snap(0.4), waveform_position(Waveform::Square));
+        assert_eq!(snap(0.5), waveform_position(Waveform::Sine));
+        // An exact face is its own answer, and the ends clamp rather than run off the catalogue.
+        for wave in Waveform::ALL {
+            let face = waveform_position(wave);
+            assert!(
+                (snap(face) - face).abs() < 1e-6,
+                "{wave:?} moved off its face"
+            );
+        }
+        assert_eq!(snap(-1.0), 0.0);
+        assert_eq!(snap(2.0), 1.0);
+    }
+
+    #[test]
+    fn every_knob_teaches_a_different_controller_slot() {
+        let mut targets: Vec<CcTarget> = Knob::ALL.iter().map(|knob| knob.learn_target()).collect();
+        let count = targets.len();
+        targets.sort_by_key(|target| format!("{target:?}"));
+        targets.dedup();
+        assert_eq!(targets.len(), count, "two knobs teach the same target");
+    }
+}
