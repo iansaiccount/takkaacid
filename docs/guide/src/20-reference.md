@@ -67,15 +67,16 @@ has to be reached before it takes over.
 
 ## The words the panel prints
 
-**The top strip.** The middle holds one of these:
+**The top strip** holds four things: the lamp inside the wordmark's corner, the song name in the middle, and the pattern
+and tempo wells at the right.
 
-| Word | Meaning |
-|---|---|
-| `SAVED` / `UNSAVED` | whether what is on screen is on disk (the lamp, by the wordmark) |
-| `SONG <name>` | the session's name; `SONG untitled` when it has none |
-| a notice | something just happened — `saved as Acid 2`, `could not import: …` — for a few seconds, then the name returns |
-| `A1` … `H8` | the pattern playing |
-| a number | the tempo in BPM |
+| Word | Where | Meaning |
+|---|---|---|
+| `SAVED` / `UNSAVED` | by the wordmark | whether what is on screen is on disk |
+| `SONG <name>` | the middle | the session's name; `SONG untitled` when it has none |
+| a notice | the middle | something just happened — `saved Acid 2`, `saved a copy as Acid 2`, `could not import: …` — for a few seconds, then the name returns |
+| `A1` … `H8` | the pattern well | the pattern playing |
+| a number | the tempo well | the tempo in BPM |
 
 **Armed keys** say what they are waiting for:
 
@@ -102,15 +103,14 @@ has to be reached before it takes over.
 | `MIDI: none (retrying)` | no port yet, still trying |
 | `MIDI: none (gave up)` | no port, and it has stopped — `RETRY` appears beside it |
 | `RETRY` | try the MIDI input again |
-| `48 kHz · Default Audio Device` | the stream is healthy: rate and device |
+| `48 kHz - <device>` | the stream is healthy: rate and device name |
 | `failed: <reason>` | the stream is not running, and why |
 | `CLOSE` | put the card away |
 
 **The songs card:** `SONGS`, `DEMO SONGS`, `MY SONGS`, `SAVE`, `SAVE A COPY`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the
 `x` / `SURE` on each of your own rows.
 
-**The help card** has four sections — `STEPS`, `KEYBOARD`, `MIDI`, `NOTES` — and, while a learn is running, one of the
-hints `LEARN: click a knob or a readout` or `LEARN: move a MIDI control`.
+**The help card** has four sections — `STEPS`, `KEYBOARD`, `MIDI`, `NOTES`.
 
 ## The files
 
@@ -123,3 +123,9 @@ hints `LEARN: click a knob or a readout` or `LEARN: move a MIDI control`.
 | `songs/<name>.json` | one file per named song; the name is the file name |
 
 Song names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.
+
+## The one flag
+
+`takka-acid --midi-map` prints the note map — one row per note number, 21 to 108, with the keyboard's name for it, the
+note the app writes and shows, and the frequency it plays — then exits. No window, no audio device.
+[`17-trouble`](17-trouble.md) says when to reach for it.

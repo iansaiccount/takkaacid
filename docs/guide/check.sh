@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The guide's only test. It builds the book and proves four things:
-#   1. the book builds;
+# The guide's only test. It builds the book and proves five things:
+#   1. the book builds (which also proves every SUMMARY entry names a page that exists);
 #   2. every source page is reachable from SUMMARY.md;
-#   3. every image a page references exists;
+#   3. every image a page references exists, and every page a page links to exists;
 #   4. the facts that must not drift are present, and the stale save line is gone.
 set -euo pipefail
 cd "$(dirname "$0")"

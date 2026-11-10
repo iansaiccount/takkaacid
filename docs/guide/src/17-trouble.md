@@ -7,11 +7,11 @@ This page is the order to check things in.
 
 1. **Is the line running?** `RUN` lit, `STOP` dark. `SPACE` toggles it.
 2. **Does the pattern have notes?** A pattern of rests is silent and looks almost the same as a pattern — the keycaps
-   print `--` and their LEDs are dark. `CLEAR` twice, or press `RANDOM`, and see whether sound comes back.
+   print `--` and their LEDs are dark. Press `RANDOM` and see whether a line comes back; `CLEAR` cannot help: it empties a pattern, it does not fill one.
 3. **Is the filter shut?** Cutoff at the bottom with a sine wave is a very quiet machine. Turn `CUT OFF` up.
 4. **Is the volume down?** The knob in the top-left corner, not one of the row.
 5. **What does the settings card say?** `F2`, and look at the words to the right of `SOUND OUT`. Healthy, they read
-   something like `48 kHz · Default Audio Device`. If they begin `failed:` the audio stream is not running and nothing
+   something like `48 kHz - Default Audio Device`. If they begin `failed:` the audio stream is not running and nothing
    else matters until it is.
 6. **Are the notes inside the instrument's range?** `OCT -` or `OCT +` pressed a few times too often walks a line out of
    what the voice can play, and those steps go quiet.
@@ -20,8 +20,8 @@ This page is the order to check things in.
 
 `failed: …` beside `SOUND OUT` means the audio device is gone or busy — another app took exclusive hold of it, or a USB
 interface was unplugged. Unfold `SOUND OUT  [+]` and pick another device; the app reopens the stream on the one you
-choose. If only one device is listed and it says `failed:`, close whatever else is holding the device and unfold the list
-again.
+choose. If only one device is listed and it says `failed:`, close whatever else is holding the device, then close the card
+and open it again with `F2` — the lists are read when the card opens — and pick the device.
 
 ## The controller is not seen
 
@@ -36,7 +36,8 @@ Look at `MIDI IN` in the settings card (`F2`):
   `--midi-map`).
 
 Then unfold `MIDI IN  [+]` and check the list: an interface with several ports may have more than one, and the app is
-holding the one you picked last time.
+holding the one you picked last time. The list is read when the card opens, so close and reopen it (`Escape`, then `F2`)
+after plugging anything in.
 
 ## "Is it my keyboard or the app?"
 
@@ -44,9 +45,9 @@ holding the one you picked last time.
 takka-acid --midi-map
 ```
 
-This prints a table of every MIDI note number, the note the app makes of it and the frequency it plays, then exits. No
-window, no audio device, no controller needed. Press a key on the controller and compare the note you expected with the
-row for the number that arrives:
+This prints one row for every note in an 88-key range (21 to 108): the number, the keyboard's name for it, the note the app
+writes, the note it shows and the frequency it plays — then it exits. No window, no audio device, no controller needed. Press
+a key on the controller and compare the note you expected with the row for the number that arrives:
 
 - **The app's row matches what you pressed** — the app is fine; the problem is in the sound (back to the top of this page)
   or in the pattern.

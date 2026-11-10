@@ -29,20 +29,15 @@ selected step instead of the voice.
 - With `STEP` on, a key **down** writes and the key **up** walks the selection on by one: good for typing a phrase left to
   right.
 
-The rest of the editing keys, in the order you will meet them:
+The four keys that do the editing, in the order you will meet them:
 
-| Key | What it does |
-|---|---|
-| `left` / `right` | move the selection one step |
-| `shift+left` / `shift+right` | previous / next pattern ([`11-the-bank`](11-the-bank.md)) |
-| `shift+up` / `shift+down` | note up or down a step |
-| `enter` | note on or off |
-| `backspace` | empty the step to a rest (while editing) |
-| `space` | start or stop, same as `RUN` / `STOP` |
-| `up` / `down` | tempo, one BPM |
-| `F1` or `shift+?` | the help card |
-| `F2` | the settings card |
-| `escape` | close a card, or give up on a `LEARN` |
+- `left` / `right` move the selection one step.
+- `shift+up` / `shift+down` move the selected note up or down a step.
+- `enter` turns the selected step on and off.
+- `backspace` empties it to a rest, while you are editing.
+
+Everything else — the transport, the tempo, `shift+left` / `shift+right` for the next pattern, and the two cards — is on
+one table in [`20-reference`](20-reference.md), so there is only one list to keep right.
 
 ## Why one voice is not a limitation
 

@@ -1,6 +1,7 @@
 # Writing steps
 
-A pattern is **sixteen steps**. Each step is either a rest or a note, and a note carries five things:
+A pattern is **sixteen steps**. Each step is either a rest or a note; the first row below is the step itself, and the
+other five are what a note carries:
 
 | Part | What it is |
 |---|---|

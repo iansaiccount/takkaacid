@@ -4,9 +4,9 @@ takka-acid has one MIDI input. It plays notes, and it can be taught to drive alm
 
 ## Choosing a port
 
-`F2`, then unfold **`MIDI IN  [+]`** and click the port. The list ends with `none`, which closes the port without opening
-another. The choice is remembered across sessions; if the port is missing next time, the card says so — `MIDI: none
-(retrying)` — rather than silently picking a different device.
+`F2`, then unfold **`MIDI IN  [+]`** and click the port. The list ends with `none`, which means *any port*: the app opens
+the first input it finds, which is where a fresh session starts. The choice is remembered across sessions; if the port is
+missing next time, the card says so — `MIDI: none (retrying)` — rather than silently picking a different device.
 
 ## Playing notes in
 
@@ -24,9 +24,9 @@ keys closes the gate, which also ends a MIDI note that was sounding.
 
 Eleven controls come factory-mapped ([`20-reference`](20-reference.md) has the list), and any of them — and every knob — can be re-taught:
 
-1. Press **`LEARN`**. Its face changes to **`PICK`**, and the hint line says `LEARN: click a knob or a readout`.
-2. Click the knob, switch or readout you want the controller to drive. The face changes to **`MOVE`** and the hint says
-   `LEARN: move a MIDI control`.
+1. Press **`LEARN`**. Its face changes to **`PICK`** — it is asking which control you mean.
+2. Click the knob, switch or readout you want the controller to drive. Its face changes to **`MOVE`**, and every control
+   that can be taught wears a border while it waits.
 3. Move a fader, knob or button on the controller. That controller number is now that control's.
 
 What the controller does *not* do is jump the control the moment it is taught: **dials take pickup**. A fader parked
@@ -34,7 +34,7 @@ somewhere else has to reach the knob before it may turn it, so loading a song �
 never slam the patch. The wave switch is the exception: it is a choice rather than a position, so a fader pointed at the
 triangle means the triangle.
 
-`Escape` gives up on a learn in progress and leaves the mapping as it was. A control that is listening shows a border, so
+`Escape` gives up on a learn in progress and leaves the mapping as it was. The control that is waiting wears a border, so
 you can see which one is about to be bound.
 
 ## The pattern selector

@@ -9,7 +9,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 - **App:** built from `fc1d0a4`, the last commit that touched `rust/` (the guide itself was at `7d3cdc4`), on
   2026-11-09, with `cargo build --release -p acid-app --bin takka-acid`.
 - **Scratch data directory:** `TAKKA_ACID_DATA_DIR=/tmp/takka-guide`, emptied before the first launch, so the session
-  is a first run — the Slow Acid demo, named "New song", unsaved, pattern `A1`, 120 BPM.
+  is a first run — the Slow Acid demo, named "New song", unsaved, pattern `A1`, 118 BPM.
 - **Window:** floated and sized to the design size, 980 × 640 logical pixels, at `(40, 60)` on a single output,
   `eDP-1` (2880 × 1920 at scale 2). The window was not moved again until the last capture.
 - **Grab:** `grim -s 2 -g "40,60 980x640" NAME.png` — the geometry is the panel in logical pixels, `-s 2` renders it
@@ -29,13 +29,13 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 
 | Image | State | How it was reached |
 |---|---|---|
-| `img/first-sound.png` | A first run: `UNSAVED` lamp, `SONG New song`, pattern `A1`, 120 BPM, the Slow Acid demo in the step row, transport stopped | launch, wait for the window |
+| `img/first-sound.png` | A first run: `UNSAVED` lamp, `SONG New song`, pattern `A1`, 118 BPM, the Slow Acid demo in the step row, transport stopped | launch, wait for the window |
 | `img/help-card.png` | The help card over the panel | `F1` |
 | `img/settings-card.png` | The settings card, both device lists folded | `F2` |
-| `img/running.png` | The transport running, `STOP` lit rather than `RUN` | `space` from the first-sound state |
+| `img/running.png` | The transport running, `RUN` lit rather than `STOP` | `space` from the first-sound state |
 | `img/top-strip.png` | The top strip: volume knob, wordmark, `SAVED`/`UNSAVED` lamp, gear, `?`, song name, pattern and tempo readouts | `grim -s 2 -g "40,60 980x76"` |
 | `img/knob-row.png` | The seven tone knobs and their captions | `grim -s 2 -g "40,138 980x232"` |
-| `img/step-row.png` | The sixteen step keys, with the LED row above and the step numbers below | `grim -s 2 -g "40,434 980x132"` |
+| `img/step-row.png` | The sixteen step keys, with the LED row above and the step number in each keycap's corner | `grim -s 2 -g "40,434 980x132"` |
 | `img/switches.png` | `BANK PATTERN MODE CLEAR SAVE SONGS STEP` | `grim -s 2 -g "40,562 980x64"` |
 | `img/transport.png` | `RUN STOP TEMPO - TEMPO + LEARN` | `grim -s 2 -g "40,628 980x54"` |
 

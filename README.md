@@ -60,7 +60,7 @@ and delete them.
 | `mdbook` 0.4 or newer (built with 0.5.4) | building the player's guide only |
 | `grim`, `slurp` and ImageMagick | regenerating the guide's screenshots only |
 
-On Debian or Ubuntu the first three are one command; on Arch, another:
+On Debian or Ubuntu the packages in the second and third rows are one command; on Arch, another:
 
 ```bash
 sudo apt install build-essential pkg-config libasound2-dev
@@ -79,7 +79,7 @@ The binary is `rust/target/release/takka-acid` afterwards, so you can run it wit
 **Where it keeps things.** The session and your songs live in `$XDG_DATA_HOME/takka-acid`, or `~/.local/share/takka-acid`
 when `XDG_DATA_HOME` is unset. Point `TAKKA_ACID_DATA_DIR` somewhere else to keep a separate rig or to test.
 
-**Two flags worth knowing.** `takka-acid --midi-map` prints what the app makes of every MIDI note number without opening a
+**Two flags worth knowing.** `takka-acid --midi-map` prints what the app makes of every note from 21 to 108 without opening a
 window or an audio device — the fastest way to answer "is it my keyboard or the app?". And the app picks its MIDI input
 from the settings card, remembering the choice.
 
@@ -100,8 +100,8 @@ like acid is a judgement only your ears make — including how to render the voi
 Playing the instrument — installing it, the face, the knobs, writing a line, songs, MIDI, and what to do when it makes no
 sound — is `docs/guide`, an mdBook with screenshots of the real panel. `mdbook serve docs/guide` reads it in a browser,
 `mdbook build docs/guide` writes the site into `docs/guide/book/`, and `bash docs/guide/check.sh` is its test: the book
-builds, every page is reachable from the table of contents, every image a page references exists, and the facts that must
-not drift are still in it.
+builds, every page is reachable from the table of contents, every image and every cross-reference points at something that
+exists, and the facts that must not drift are still in it.
 
 ## Where it started: `Prompt.txt`
 
@@ -160,5 +160,5 @@ and a bank of eight variations of its line. They are read-only, and picking one 
 unsaved. Saving is manual by default: `SAVE` writes, the wordmark says `SAVED` or `UNSAVED`, and a name that has changed
 writes a new file rather than moving the old one.
 
-The whole of it — the card, the five keys, and exactly what a save does to a name — is
+The whole of it — the card, its buttons, and exactly what a save does to a name — is
 [`docs/guide/src/12-songs-and-demos.md`](docs/guide/src/12-songs-and-demos.md).

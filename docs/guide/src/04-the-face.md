@@ -38,7 +38,7 @@ Sixteen keys, one per step, each printing its note (`A1`, `C2`, `E1`, or `--` fo
 lit while that step is playing or holds a note, and ringed when the step is accented. The step you have selected wears an
 amber outline around the whole key.
 
-Under the keys, the step numbers 1 to 16. An amber bar under a keycap means slide; the `>` beside the note says it will
+In the corner of each keycap, its number, 1 to 16. An amber bar under a keycap means slide; the `>` beside the note says it will
 really glide into the next step. A slide whose next step is a rest keeps the bar but drops the arrow, because there is
 nothing for it to glide into.
 
@@ -65,7 +65,7 @@ Everything above is drawn on a face designed at 980 × 640 and scaled as a singl
 rearranged. The screenshots in this book show it at its design size.
 
 Two consequences worth knowing: a window dragged small does not hide controls, it shrinks them, so the answer to "where
-did the `STEP` key go" is never "off the edge"; and a drag is measured in the panel's coordinates, so a knob moved "a
-third of the way" is a third of the way at any size.
+did the `STEP` key go" is never "off the edge"; and a knob's sweep is the same 180-pixel pull at any window size — only the
+knob's size changes — so "a third of the way" means the same thing small and large.
 
 [`05-the-three-cards`](05-the-three-cards.md) covers the three cards that open over this face.

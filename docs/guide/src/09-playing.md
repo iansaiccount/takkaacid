@@ -2,43 +2,51 @@
 
 ![The transport](img/transport.png)
 
-**`RUN`** starts the line and **`STOP`** stops it; the space bar is both. While it runs, `RUN` goes dark and `STOP` lights
-up, so the transport always says what is happening rather than what happened last.
+**`RUN`** starts the line and **`STOP`** stops it; the space bar is both. The transport says what is happening rather than
+what happened last: `RUN` is lit while the line runs, `STOP` is lit while it is stopped.
 
 ![The panel while the transport runs](img/running.png)
 
 ## Tempo
 
-The tempo readout sits in the top strip, in BPM, from **40–300**. Three things move it, all by a single BPM:
+The tempo readout sits in the top strip, in BPM, from **40–300**. Two things move it a BPM at a time:
 
 - `TEMPO -` and `TEMPO +`, one press each way.
-- `up` and `down` on the computer keyboard, one BPM each.
-- A learned controller fader, which covers the whole range in one sweep ([`14-midi`](14-midi.md)).
+- `up` and `down` on the computer keyboard.
+
+There is a third way in, and it is not a nudge: a learned controller fader throws the tempo wherever you leave it
+([`14-midi`](14-midi.md)).
 
 Holding `up` or `down` sweeps the tempo; those two are the only keys in the panel that repeat while held.
 
 
 ## Swing
 
-Swing pushes the even-numbered steps late and pulls the odd ones early, by the same amount, so a pair of steps always
-lasts exactly two steps and the bar length never changes however far you turn it. At zero the line is straight; pushed up
-it becomes a shuffle.
+Swing makes the first of each pair of steps long and the second short by the same amount, so a pair always lasts exactly
+two steps and the bar length never changes however far you turn it. At zero the sixteenths are even; turned up, the second
+of each pair arrives late and the line leans. That lean is the shuffle.
 
 The knob is **`SHUFFLE`**, in the performance row, and it is [`10-performance-row`](10-performance-row.md)'s subject.
 
-## Why the step LED chases the sound
+## Why the step LED follows the sound
 
-The keys light one at a time as the line plays. That light is not a metronome running in the panel: it is the **audio
-engine's own position** in the pattern, read back once a frame. So the lit key is the note you are hearing, not the note
-you are about to hear — which matters the moment the machine is working hard, because the sound and the light stay
-together even when the panel is late to draw.
+The panel keeps no clock of its own. Every frame it asks the **audio engine** where it is in the pattern and lights the LED
+over that step, so the light is where the sound is rather than where a timer in the panel thinks it should be.
 
-It also means the LED row is honest in the two cases you would otherwise notice most: change the tempo while the line
-runs and the light follows at once, and a stopped line leaves the light wherever the music stopped.
+Two things follow. The light and the sound cannot drift apart when the machine is busy: the panel may skip a frame, and the
+light is then a frame behind, but it never runs ahead of what you hear. And because a step that holds a note keeps its LED
+lit whether or not the transport is on it, the *moving* light is easiest to follow across the rests — which is exactly
+where you want to know where the bar is.
 
-## What the transport does not do
+A stopped line lights no position: the row shows which steps carry notes and nothing else.
 
-It does not restart the line on a stop, and it does not quantise your presses. Stop in the middle and the line resumes
-from the step the engine was on; the pattern is where you left it.
+## Starting and stopping
+
+`STOP` leaves the pattern where it is, but `RUN` does not resume from there — it starts again from step 1, with the clock
+on the downbeat, so the first note you hear after a start is always the first note of the bar. Nothing is quantised: your
+presses land when you press them.
+
+The pattern itself is untouched by any of this — but the touch of a transport key does mark the session unsaved, because
+whether the line was running is part of the session that gets saved.
 
 [`10-performance-row`](10-performance-row.md) is what to reach for while the line is playing.

@@ -11,8 +11,9 @@ behind their headings.
 tip you were reading is gone. It is on by default.
 
 **`AUTOSAVE OFF`** — **saving is manual by default.** With autosave on, the session is written two seconds after a change
-without your asking; with it off, nothing reaches the disk until you press `SAVE`. Nothing here can make that decision
-for you: if you are exploring, leave it off and watch the lamp.
+without your asking; with it off, nothing is written while you play — `state.json` and the open song are written when you
+close the app, and `SAVE` is what keeps them current as you go. Nothing here can make that decision for you: if you are
+exploring, leave it off and watch the lamp.
 
 Both switches print their own state, so there is never a switch that always says `ON`.
 
@@ -22,20 +23,21 @@ A folded section: the heading, then the device **in use** under it on the left, 
 right. The right-hand words are one of three:
 
 - `MIDI: <name>` — a port is open.
-- `MIDI: none (retrying)` — no port yet, and the app is trying again on its own.
+- `MIDI: none (retrying)` — no port yet: the app tries again every two seconds, and gives up after about half a minute.
 - `MIDI: none (gave up)` — it has stopped trying. A **`RETRY`** key appears next to the section while this is showing;
   pressing it starts the attempt again.
 
 Under it, `IN USE:` followed by the device's full name, or `IN USE: none` when nothing is open. Unfold the heading with
-`[+]` and you get the ports themselves, each row clickable, with `none` at the bottom to close the port. A long list
-scrolls. The chosen port is remembered: the next session asks for that one by name, and if it is not there it says so
-rather than quietly taking a different device.
+`[+]` and you get the ports themselves, each row clickable, with `none` at the bottom. `none` does not mean "no port": it
+means *any port*, so the app opens the first input it finds — the same choice a fresh session makes. To open no port at
+all, unplug it or close the app. A long list scrolls. The chosen port is remembered: the next session asks for that one by
+name, and if it is not there it says so rather than quietly taking a different device.
 
 ## `SOUND OUT  [+]`
 
-The same shape for audio: `IN USE:` on the left, and the stream's own words on the right — `48 kHz · Default Audio
-Device` when it is healthy, or `failed: …` followed by the reason when the stream has stopped. There is no `none` row
-here, because an audio stream needs a device to land on.
+The same shape for audio: `IN USE:` on the left, and the stream's own words on the right — `48 kHz - <device>` when it is
+healthy, or `failed: …` followed by the reason when the stream has stopped. There is no `none` row here, because an audio
+stream needs a device to land on.
 
 ## What the card does not say
 

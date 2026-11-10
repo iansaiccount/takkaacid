@@ -43,7 +43,8 @@ There is **no numeric readout on the panel and nothing to type**. The knobs are 
 are as exact as the instrument gets, and they are exact enough — the picture in [`04-the-face`](04-the-face.md), taken from this very demo,
 is the reference you dial against.
 
-If your version of it sounds a little different to the demo, that is expected: how far a drag travels depends on the
-window, and how it sounds depends on your ears. Dial until the line speaks, then leave it alone and write the next one.
+If your version of it sounds a little different to the demo, that is expected: a knob's sweep is a fixed 180-pixel pull, so
+"a third" is a third however big the window, but how far you turn it is still your hand. Dial until the line speaks, then
+leave it alone and write the next one.
 
 From here: [`08-writing-steps`](08-writing-steps.md) puts notes where there are none.

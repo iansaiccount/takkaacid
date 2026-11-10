@@ -50,7 +50,7 @@ takka-acid. On a machine without `xdg-desktop-portal` and a backend behind it, t
 ## Messages and the strip
 
 The middle of the top strip names the session — `SONG New song`, `SONG Acid 1`. When there is something to say, the
-notice takes that space for a few seconds and then the name comes back: `saved as Acid 2`, `could not import: …`. Nothing
+notice takes that space for a few seconds and then the name comes back: `saved Acid 2`, `could not import: …`. Nothing
 needs dismissing, and nothing is lost when the card closes, because the notice lives on the strip rather than in the card
 that caused it.
 

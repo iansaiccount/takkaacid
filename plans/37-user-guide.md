@@ -399,7 +399,39 @@ The input classes a player will actually meet, and where each is pinned:
     "screenshots are at 1×" claim (they are 2× grabs of a 1× panel), and a sentence that made the editing keys modal behind
     all three cards when the songs card is the one drawn over everything.
 
+## Final review
+
+A fresh reviewer (a subagent with an empty context) read the whole diff, the plan, the spec and the ledger, and checked
+every claim against `rust/`. Its verdict was BLOCK, with two criticals that were real:
+
+- **The transport lights were documented backwards**, on the page a beginner reads first: the code lights `RUN` while the
+  line runs and `STOP` while it is stopped (`row_transport.rs`), and two pages plus the provenance note said the opposite.
+  Fixed in `03`, `09` and `img/README.md`, and the panel was captured again stopped-then-running to prove it rather than
+  trusting the read — the screenshot was right all along, the prose was not.
+- **A sentence in `05-the-three-cards` had been cut in half** by the read-through's own edit. Restored.
+
+Eight importants were also right and are fixed: the claim that nothing reaches disk before `SAVE` (the session is written on
+exit), the `none` row of the MIDI list (it means *any port*, not *no port*), the audio status separator (`48 kHz - device`,
+not a middle dot), two `LEARN` hint lines that no code draws (`learn::hint` is dead), the reference's top-strip table
+putting the lamp and the readouts "in the middle", the step-LED paragraph promising a chase the panel cannot show on
+note-bearing steps, `RUN` resuming where it stopped (it restarts at step 1), and "unfold the list again" (the device lists
+are read when the card opens). Twelve more were one-line factual corrections — `--midi-map`'s real range (21–108), a
+first-run tempo of 118 rather than 120, the notice strings `saved Acid 2` / `saved a copy as …`, `CLEAR` being unable to
+bring a silent pattern back, and the keyboard table that `15` and `20` were both keeping. That table now lives in `20` only:
+the second hand-kept list is the exact failure `AGENTS.md` warns about.
+
+Nothing was deferred: the reviewer's minor list was all wrong facts, and a wrong fact in a manual is not a polish
+suggestion. All five guide checks were run again after the pass and are green; the three workspace gates were re-run too
+(526 tests passed, clippy clean, `fmt --check` clean) even though nothing under `rust/` changed.
+
 ## Follow-up offered, not taken
 
-`rust/crates/acid-app/src/ui/help.rs` line `"saved on exit and 2 s after a change"` is false by default (the 2 s write is
-`AUTOSAVE`-only). One-line fix, no behaviour change; the guide works around it with a footnote until someone green-lights it.
+Two one-line fixes in the app, both offered and neither taken:
+
+- `rust/crates/acid-app/src/ui/help.rs`: `"saved on exit and 2 s after a change"` is false by default (the 2 s write is
+  `AUTOSAVE`-only). The guide paraphrases around it.
+- `rust/crates/acid-app/src/ui/tips.rs`: the TUNING tip says "a semitone either side"; `param::tuning_semitones` is
+  ±12, so the tip is out by a factor of twelve. Found by the final review's read of the code, not by the guide.
+
+Both are strings, not behaviour. The guide states the truth about the knobs and the save model, so it is correct today and
+stays correct when the strings are fixed.

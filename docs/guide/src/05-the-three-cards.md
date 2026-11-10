@@ -4,9 +4,9 @@ Three cards open over the panel: **help**, **settings** and **songs**. One at a 
 and the songs card away, opening **help** puts settings away, and the **songs** card is drawn over whatever else is open —
 so while it is up, it is the card you are in.
 
-Each card dims the face behind it and swallows clicks meant for the panel, so nothing can be edited behind a card by
-While **help** or **settings** is up, the panel's editing keys are spent, so a stray `enter` cannot change a step you
-cannot see. The transport keys still work: `SPACE` starts and stops the line even with a card open.
+Each card dims the face behind it and swallows clicks meant for the panel, so nothing can be edited behind a card by the
+pointer. While **help** or **settings** is up, the panel's editing keys are spent too, so a stray `enter` cannot change a
+step you cannot see. The transport keys still work: `SPACE` starts and stops the line even with a card open.
 
 ## Help — `F1`, `shift+?`, or the `?`
 
