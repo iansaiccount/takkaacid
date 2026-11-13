@@ -50,6 +50,9 @@ pub struct AudioRenderer {
     max_block: usize,
     /// Whether a MIDI note was held at the last block, so only changes trigger a note.
     midi_gate_on: bool,
+    /// A step this device should start on at the next block: a device joining a running rack comes in on the bar
+    /// the rack is on rather than on step 0. Applied after `apply`, so it overrides the start that a rising gate issues.
+    pending_seek: Option<usize>,
 }
 
 impl AudioRenderer {
@@ -70,7 +73,16 @@ impl AudioRenderer {
             channels: channels.max(1),
             max_block: max_block.max(1),
             midi_gate_on: false,
+            pending_seek: None,
         }
+    }
+
+    /// Start this device's clock on `step` at the next block, instead of on the downbeat.
+    ///
+    /// Used when a device joins a rack that is already playing: the mixer hands it the reference device's published step,
+    /// so it comes in on the bar. Harmless while stopped — a seek that lands before the transport starts is dropped.
+    pub fn seek(&mut self, step: usize) {
+        self.pending_seek = Some(step);
     }
 
     pub fn engine(&self) -> &Engine {
@@ -81,6 +93,14 @@ impl AudioRenderer {
     pub fn render_mono(&mut self, out: &mut [f32]) {
         let params = self.state.snapshot();
         apply(&params, &mut self.engine);
+
+        // A device that joined a running rack starts where it was told to. After `apply`, because `apply` is what starts an
+        // engine whose transport has just begun.
+        if let Some(step) = self.pending_seek.take()
+            && self.engine.is_playing()
+        {
+            self.engine.start_at(step);
+        }
 
         // MIDI: a rising gate starts a note, a falling one releases it. Only edges act, so a held note is
         // not retriggered every block. The sequencer keeps running underneath — this plays over the pattern.

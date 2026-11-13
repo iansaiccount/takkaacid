@@ -72,6 +72,10 @@ impl Device {
         state: Arc<SharedState>,
         bank: PatternBank,
     ) -> Self {
+        // The engine plays what `SharedState` holds, not what the bank holds. A device whose state was never handed its
+        // pattern renders silence, which the mixer's sum test found the day a second device existed.
+        state.set_pattern(Arc::new(*bank.current_pattern()));
+        state.set_pattern_index(bank.current());
         Self {
             kind,
             number,
