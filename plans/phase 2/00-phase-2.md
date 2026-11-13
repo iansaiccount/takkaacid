@@ -98,11 +98,23 @@ between tasks hide that no single diff showed?
 
 ## Progress
 
-Nothing started. Plan 38 is the next thing to do.
+**Where the phase is: plans 38 and 39 are complete, plan 40 is 4 of 6.** Everything is committed and the tree is green
+(64 test suites, `clippy --all-targets -D warnings` and `fmt --check` clean). A new session resumes by reading the plan named
+below — its `## Progress` section carries every commit, what each task's review found, and the rulings — and by `git log`, not
+by re-deriving anything.
 
-- [ ] 38 — the rack
-- [ ] 39 — the mixer
-- [ ] 40 — MIDI routing
-- [ ] 41 — the strip
-- [ ] 42 — the device card
-- [ ] 43 — documents and gates
+- [x] **38 — the rack** (`plans/phase 2/38-the-rack.md`): `SharedState::mute`, `Device`, `Rack`, `BusState`, `Rack::rename`,
+      the rack's transport and fan-out, and `main` running on a rack of one. Commits `af4843b`..`b8e4f82`, `3591083`.
+- [x] **39 — the mixer** (`plans/phase 2/39-the-mixer.md`): `Engine::start_at`, `audio::mixer::Mixer` (slots, reconcile, mute
+      ramp, master limiter), `AudioRenderer::seek`, and the `Rig` closure rendering the rack. Commits `ed4a66c`..`784bca2`.
+- [ ] **40 — MIDI routing** (`plans/phase 2/40-midi-routing.md`): tasks 1–4 landed (`39e6575`, `34023c5`); **task 5 (several
+      ports at once) is next**, then task 6 (wire the router, delete `main`'s inline handler).
+- [ ] **41 — the strip** (`plans/phase 2/41-the-strip.md`)
+- [ ] **42 — the device card** (`plans/phase 2/42-the-device-card.md`)
+- [ ] **43 — documents and gates** (`plans/phase 2/43-documents-and-gates.md`)
+
+**Review mode.** The twelve commits so far ran the review gate *inline* — the executor reading its own staged diff — because
+`pi-subagents` was not loaded in that session, so no `subagent` tool could be dispatched. It still caught five real defects
+(a wrong doc comment, two transport-write bugs, a device whose engine had no pattern, and a mutation check that did not fire).
+Every commit from here should dispatch a fresh reviewer if the tool is available; the plan's Review Focus sections are written
+for exactly that brief. Record in each Progress line which mode the gate ran in.
