@@ -594,13 +594,32 @@ git commit -m "refactor(main): the audio callback renders the rack"
 
 ## Progress
 
-- [ ] Task 1 — `start_at` in the core
-- [ ] Task 2 — the mixer, one device
-- [ ] Task 3 — mute is a ramp
-- [ ] Task 4 — the master limiter
-- [ ] Task 5 — the reconcile and its fast path (mutation check recorded here)
-- [ ] Task 6 — join in phase
-- [ ] Task 7 — `main` hands the bus to the mixer
+- [x] **Task 1 — `start_at` in the core.** `ed4a66c`. `Engine`/`Sequencer::start_at`, `start()` = `start_at(0)`, the step
+      wraps. 3 tests in `acid-core/tests/seek.rs`; the existing sequencer and clock tests unchanged.
+- [x] **Task 2 — the mixer, one device.** `4a75910`. `audio::mixer::Mixer` with `new`/`render_mono`/`slots`/`rebuilds`, a slot
+      per published device, chunked rendering so a host block of any size is fine. The sample-for-sample test against
+      `AudioRenderer` passes at 1e-6, which is the phase's regression.
+- [x] **Task 3 — mute is a ramp.** `4a75910`. `Smooth::new(initial, 10.0, rate)` where `initial` is the device's mute state at
+      build time, so a slot born muted does not fade in from unity. Unmuting a running device is audible and its `position`
+      kept counting.
+- [x] **Task 4 — the master limiter.** `4a75910`. `Limiter::new(sample_rate)` at the same `CEILING`, per sample on the sum. Two
+      devices at full volume peak at 0.98, not 1.96.
+- [x] **Task 5 — the reconcile and its fast path.** `4a75910`. Same length + `Arc::ptr_eq` per slot is the fast path; survivors
+      keep their `AudioRenderer`, so an add does not restart a neighbour.
+      **The mutation check does not fire.** With the fast path disabled, `a_steady_rack_rebuilds_no_engine` still passes,
+      because survivors are reused by `Arc` identity either way. The design's claim ("a per-block rebuild would reset every
+      engine's transport") is wrong: the fast path is an *allocation* guard, not the correctness guard. The test is renamed to
+      what it pins and the doc comment says so. Cost if wrong: a per-block `Vec` allocation nobody hears.
+- [x] **Task 6 — join in phase.** `4a75910`. `AudioRenderer::seek` records a step and applies it after `apply`, so it overrides
+      the `start()` a rising gate issues rather than fighting it; the mixer seeks non-reference slots to the reference device's
+      published `position`. The test allows one step of slack, because the seek aligns the step and not the sample inside it.
+- [x] **Task 7 — `main` hands the bus to the mixer.** `784bca2`. The `Rig` closure builds a `Mixer` at the device's rate; the old
+      `AudioRenderer` construction is gone.
+- **Finding the plan missed, for whoever builds more devices:** `Device::adopted` never published the bank's current pattern
+      into the device's `SharedState`, so a second device rendered *silence*. Fixed in `4a75910`; the sum test caught it on its
+      first run. Any future constructor of a `Device` owes the same two lines.
+- **Ruling:** tasks 2–6 landed in one implementation pass and one commit. They are three defences inside one new file; splitting
+      the commit would have been staging, not sequence. Each still has the test the plan named, and they gate.
 
 Rulings made while writing this plan, and their cost if wrong:
 
