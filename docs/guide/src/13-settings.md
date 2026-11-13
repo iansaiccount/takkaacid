@@ -20,18 +20,22 @@ Both switches print their own state, so there is never a switch that always says
 ## `MIDI IN  [+]`
 
 A folded section: the heading, then the device **in use** under it on the left, and the app's words about it on the
-right. The right-hand words are one of three:
+right. The right-hand words are one of four:
 
-- `MIDI: <name>` — a port is open.
+- `MIDI: <name>`, or the names in a list — those ports are open.
 - `MIDI: none (retrying)` — no port yet: the app tries again every two seconds, and gives up after about half a minute.
 - `MIDI: none (gave up)` — it has stopped trying. A **`RETRY`** key appears next to the section while this is showing;
   pressing it starts the attempt again.
+- `MIDI: off` — every row is turned off, so there is nothing to try and no `RETRY` to press.
 
-Under it, `IN USE:` followed by the device's full name, or `IN USE: none` when nothing is open. Unfold the heading with
-`[+]` and you get the ports themselves, each row clickable, with `none` at the bottom. `none` does not mean "no port": it
-means *any port*, so the app opens the first input it finds — the same choice a fresh session makes. To open no port at
-all, unplug it or close the app. A long list scrolls. The chosen port is remembered: the next session asks for that one by
-name, and if it is not there it says so rather than quietly taking a different device.
+Under it, `IN USE:` followed by the name of every port that answered, or `IN USE: none` when none has. Unfold the heading
+with `[+]` and you get the ports themselves, one row each: `[x]` is a port the app is holding open and `[ ]` is one it is
+not, and a click moves a row to the other state. Any number may be on at once. There is no `none` row any more: turning
+every row off is what "none" now is. A port the machine has stopped reporting keeps its row, marked `(missing)`, so a
+controller with its cable out can be turned off without plugging it back in. A long list scrolls.
+
+A fresh session opens the first port the machine reports, and the session remembers the first port it had open: the next
+one asks for that by name, and if it is not there it says so rather than quietly taking a different device.
 
 ## `SOUND OUT  [+]`
 

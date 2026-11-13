@@ -87,12 +87,21 @@ impl MidiSupervisor {
 }
 
 /// The one line the panel shows about MIDI.
-pub fn status_line(connected: Option<&str>, retries: u32) -> String {
-    match connected {
-        Some(name) => format!("MIDI: {name}"),
-        None if retries >= MIDI_MAX_RETRIES => "MIDI: none (gave up)".to_string(),
-        None => "MIDI: none (retrying)".to_string(),
+///
+/// `wanted` is how many ports the app is trying to open: none of them means the player turned every port off, which is a
+/// settled state and not a retry. Otherwise the line names the ports that answered, and says whether it is still trying.
+pub fn status_line(wanted: usize, connected: &[&str], retries: u32) -> String {
+    if wanted == 0 {
+        return "MIDI: off".to_string();
     }
+    if connected.is_empty() {
+        return if retries >= MIDI_MAX_RETRIES {
+            "MIDI: none (gave up)".to_string()
+        } else {
+            "MIDI: none (retrying)".to_string()
+        };
+    }
+    format!("MIDI: {}", connected.join(", "))
 }
 
 #[cfg(test)]
@@ -161,13 +170,23 @@ mod tests {
     #[test]
     fn status_lines_are_plain_ascii_and_name_the_state() {
         assert_eq!(
-            status_line(Some("Launchkey MIDI"), 0),
+            status_line(1, &["Launchkey MIDI"], 0),
             "MIDI: Launchkey MIDI"
         );
-        assert!(status_line(None, 1).contains("retrying"));
-        let given_up = status_line(None, MIDI_MAX_RETRIES);
+        assert_eq!(
+            status_line(2, &["Launchkey MIDI", "nanoKONTROL"], 0),
+            "MIDI: Launchkey MIDI, nanoKONTROL",
+            "several ports are named, not counted"
+        );
+        assert!(status_line(1, &[], 1).contains("retrying"));
+        let given_up = status_line(1, &[], MIDI_MAX_RETRIES);
         assert!(given_up.contains("none"));
-        for line in [status_line(None, 0), given_up] {
+        assert_eq!(
+            status_line(0, &[], 0),
+            "MIDI: off",
+            "wanting no port is a settled state, not a retry"
+        );
+        for line in [status_line(1, &[], 0), given_up, status_line(0, &[], 0)] {
             assert!(line.is_ascii(), "{line}");
         }
     }

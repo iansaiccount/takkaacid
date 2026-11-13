@@ -637,17 +637,36 @@ git commit -m "refactor(midi): the routing table decides, and main is out of the
       device that hears them, one note gate per port so a duplicate note-on is a duplicate for everyone. Transport bytes are
       parsed and dropped, exactly as before this plan — a MIDI transport has no rack to reach from midir's thread, and the
       plan does not pretend otherwise.
-- [ ] **Task 5 — several ports at once.** **Not started.** `main::Midi` becomes `{ enabled: Vec<String>, inputs: Vec<(String,
-      MidiIn)>, .. }`, one connection per enabled port, one supervisor for the app; `ui::settings` turns its MIDI picker into a
-      checkbox list (`Action::TogglePort(String, bool)`, `Rows::ports: Vec<Rect>`), and `tests/settings_live.rs` gains the
-      three-port test the plan gives.
+- [x] **Task 5 — several ports at once.** `main::Midi` is `{ enabled, inputs, supervisor, pending, filled }`: one `MidiIn`
+      per enabled name, opened by one probe thread per round that reports **every** port it tried, so one dead port cannot
+      starve the rest; each result is installed as it arrives and only while its port is still wanted. `ui::settings`'s MIDI
+      list is a checkbox list — `Request::MidiPort(String, bool)` → `Action::TogglePort(String, bool)`, `Rows::ports:
+      Vec<Rect>`, no `none` row, and a held-but-gone port keeps its row marked `(missing)`. `PortChoice`, `pick_port`,
+      `MidiIn::open`/`port_name` and `PickerState::input_choice` are gone: a name the app holds came from the machine, so
+      `open_named` answers it exactly or not at all. `supervisor::status_line` takes the ports wanted, the names connected
+      and the retries, so "off" is a state and not a retry. New tests: 3 in `settings_live.rs`, 2 in `main.rs` (the roster,
+      and the in-flight result for a port turned off), 6 in `midi/route.rs` (the router, which had none — the debt this
+      plan's own ruling named), 2 in `midi/ports.rs` (the exact-name rule and the first-run fill).
+- **Task 5 review** (fresh `reviewer` subagent, 10 findings: 8 actioned, 2 ruled). Actioned: a probe result landing after
+      the player turned that port off would have reconnected it with nothing to remove it (`still_wanted`, tested); a first
+      run filling `enabled` with every port can deliver one press twice across two ports of one instrument (now the first
+      port only — `opened_by_default`, tested); the `Router` tests the plan owed; `midi_given_up` offered RETRY to a player
+      who had turned everything off; the clock test slept through a real-time stream, so `on_message_at` takes the arrival
+      time; a duplicated doc line; an orphaned comment the deleted picker left behind; `MidiIn::port_name` dead API; and three
+      places whose prose still described the `none` row (`persist::SavedState::midi_input` and `docs/guide/src/13-settings.md`,
+      `14-midi.md`). Ruled, with the cost: a session that turned every port off opens one again on the next launch, because
+      `midi_input: Option<String>` cannot tell "none chosen" from "nothing saved yet" and the format is frozen — cost, one
+      untick per launch, and the save-a-list round is where it gets a field; and the probe thread is checked by hand with two
+      ports rather than in a test, because constructing a `MidiIn` needs a device (the roster around it is tested). The
+      scrolling-list test's rect filter also now rejects a sliver, so an animating scroll-bar handle can no longer be counted
+      as a row face.
 - [ ] **Task 6 — the app routes.** **Not started.** Each opened port's handler owns
       `Router::new(name, rack.tempo_cell())` with `Arc::clone(&bus)` captured; the closure becomes
       `move |_, bytes| router.on_message(&bus.load(), bytes)`; the inline `match event` in `main` goes. `main::save` writes
       `saved.midi_input` from the first enabled port — the field is one string and stays one until the save format lands.
-- **Ruling:** the router is written and tested but not yet wired. `Router::on_message` has no caller until 40.6, so its
-      behaviour is pinned by the filter tests and by review rather than by an integration test; whoever takes 40.5 should add
-      the `BusState { slots, routes }` routing test the plan specifies before trusting it.
+- **Ruling (paid in task 5):** the router was written and tested by its filters but had no `on_message` test until task 5
+      added six, which is what this ruling asked of whoever took it: task 4 shipped `Router::on_message` with no caller and no
+      routing test, and it is exactly the function 40.6 turns into the only message path.
 - **Ruling:** transport bytes (`Start`/`Stop`/`Continue`) stay unhandled, as they were before this plan. Wiring them needs the
       rack, which the MIDI thread cannot reach; it belongs with the global-transport round in `plans/future/wishlist.md`.
 
@@ -659,4 +678,8 @@ Rulings made while writing this plan, and their cost if wrong:
 | `hears` ignores the role | A caller that forgets to check the role on a note event routes notes to a `ControlOnly` device. Mitigated: the router is the only caller and its note arm checks. |
 | Transport bytes go to `ControlOnly` devices too | A controller-only device starts and stops with the rack. That is what "controllers only" means — it is about notes, not about the transport. |
 | `enabled` keeps a name whose port is gone | The device stays silent instead of quietly listening to the survivors. The card shows the port as missing; a removal is the player's decision. |
-| `SavedState::midi_input` keeps holding one name | A rig with three enabled ports remembers one of them across a restart. Accepted: the field is part of the frozen format, and the wishlist's save-the-rack round replaces it with a list. |
+| `SavedState::midi_input` keeps holding one name | A rig with three enabled ports remembers one of them across a restart, and a session that turned every port off opens one again the next time — the field cannot tell "none chosen" from "nothing saved yet". Accepted: it is part of the frozen format, and the save-the-rack round replaces it with a list. |
+| A fresh session opens the first port the machine reports, not every one (task 5) | A rig with two controllers ticks the second row once. The alternative delivers one press twice when one instrument publishes two ports — USB and DIN, or a DAW forwarding its input — which is the bug this repo has already paid for. |
+| An unplugged port keeps its card row, marked `(missing)` (task 5) | The list can carry a name the machine does not report. Without the row, the only way to turn a gone port off is to plug the cable back in. |
+| A song load adds its saved port to the set instead of replacing it (task 5) | A song that named one port leaves the player's others enabled. Replacing would drop controllers the file cannot name. |
+| `Router::on_message_at` takes the arrival time (task 5) | One public method whose only caller is a test. The alternative is a clock test that sleeps through a real-time stream and flakes on a loaded machine. |

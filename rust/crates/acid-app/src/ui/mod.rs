@@ -141,13 +141,11 @@ pub struct SongState {
     /// nothing of it is on disk until the player saves it.
     pub file: Option<String>,
 }
-/// What the player chose on the panel, consumed by `main` on the next frame. The lists themselves live in the settings card,
-/// which asks for a choice the same way the old status-line pickers did, so the stream handling is unchanged.
-
+/// What the player chose on the panel, consumed by `main` on the next frame. The output list lives in the settings card,
+/// which asks for a choice the same way the old status-line picker did, so the stream handling is unchanged. The inputs
+/// are not here: a port row is a switch, so opening one is a state `main` acts on, not a choice it waits for.
 #[derive(Default)]
 pub struct PickerState {
-    /// The MIDI input the player chose.
-    pub input_choice: Option<midi::ports::PortChoice>,
     /// The audio output the player chose.
     pub output_choice: Option<String>,
 }

@@ -25,11 +25,9 @@ fn main() -> eframe::Result {
     let rack = device::Rack::from_saved(&saved);
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
     rack.state().set_pattern_index(rack.bank().current());
-    // The MIDI input the last session used, if any: a missing port is reported, never swapped for another.
-    let midi_preference = match saved.midi_input.as_deref() {
-        Some(name) => midi::ports::PortChoice::Named(name.to_string()),
-        None => midi::ports::PortChoice::Any,
-    };
+    // The MIDI inputs the last session had open, if any: a missing port is reported, never swapped for another. A session
+    // that saved no name takes every port the machine reports, filled in on the first probe.
+    let midi_enabled: Vec<String> = saved.midi_input.clone().into_iter().collect();
     let song_name = saved.song.clone();
     // Copied out before the closure takes its other fields: a `bool` needs no ceremony to travel.
     let saved_tooltips = saved.tooltips;
@@ -83,7 +81,7 @@ fn main() -> eframe::Result {
                 panel,
                 autosave: persist::Autosave::new(),
                 settings_was_open: false,
-                midi: Midi::new(midi_preference),
+                midi: Midi::new(midi_enabled),
                 pending_pattern: None,
                 last_position: 0,
             }))
@@ -348,7 +346,8 @@ impl eframe::App for TakkaApp {
                 }
             }
         }
-        // A port chosen on the panel: drop the old connection and probe the new one now.
+        // A port the card turned on or off has already been opened or closed: `apply_settings_request` does it, because a
+        // row is a switch and not a choice waiting for the next frame.
 
         // The card's two lists come from the machine, so they are read the frame it opens rather than every frame:
         // enumerating ports and outputs costs a round trip each, and a hot-plugged device shows on the next opening.
@@ -362,9 +361,6 @@ impl eframe::App for TakkaApp {
         if let Some(request) = self.panel.settings_request.take() {
             self.apply_settings_request(request);
         }
-        if let Some(choice) = self.panel.picker.input_choice.take() {
-            self.midi.choose(choice);
-        }
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
         self.midi.poll();
@@ -374,20 +370,29 @@ impl eframe::App for TakkaApp {
         }
         self.midi.probe_if_due(self.state_arc());
         // The supervisor's own words, and whether it has given up: the settings card shows both, and nowhere else does.
+        let connected = self.midi.connected();
         let midi_status = midi::supervisor::status_line(
-            self.midi.name.as_deref(),
+            self.midi.enabled().len(),
+            &connected,
             self.midi.supervisor.retries(),
         );
-        self.panel.midi_given_up = self.midi.name.is_none()
+        // Given up means nothing answered and nothing is being tried: a player who turned every port off is not stuck.
+        // Given up means a port was wanted, nothing answered, and nothing is being tried any more. A player who turned
+        // every port off is not stuck, so RETRY has nothing to offer them.
+        let wanted = !self.midi.enabled().is_empty();
+        self.panel.midi_given_up = wanted
+            && connected.is_empty()
             && self.midi.supervisor.retries() >= midi::supervisor::MIDI_MAX_RETRIES;
         // Everything else on the settings card is a mirror of the machine, so it is copied while the card is up rather
         // than when it opened: an output the player just chose, a device unplugged, a stream that failed or a supervisor
         // that gives up 30 s later must all show on the card that is already standing. The port named is the connection,
-        // not the preference: on a first run the preference is "any" while a controller is playing.
+        // not the set held: a controller with its cable out keeps its row, and the line above the list names what answers.
         if self.panel.settings_open {
+            let enabled: Vec<&str> = self.midi.enabled().iter().map(String::as_str).collect();
             let status = self.rack.state().status();
             let live = panel_ui::settings::Live {
-                midi_current: self.midi.name.as_deref(),
+                midi_current: &connected,
+                midi_enabled: &enabled,
                 output_current: match &status {
                     AudioStatus::Running { device, .. } => Some(device.as_str()),
                     _ => None,
@@ -437,7 +442,7 @@ impl TakkaApp {
     /// Do what the settings card asked for. The folds and CLOSE never arrive here — they are the card's own state — and
     /// every case below is reachable, because `Request` only names the work `main` can do.
     fn apply_settings_request(&mut self, request: panel_ui::settings::Request) {
-        use panel_ui::settings::{Action, Pick};
+        use panel_ui::settings::Action;
         match request.action() {
             Action::ToggleTooltips => {
                 self.panel.tooltips = !self.panel.tooltips;
@@ -448,16 +453,23 @@ impl TakkaApp {
                 self.panel.dirty = true;
             }
             Action::Retry => self.panel.reprobe_requested = true,
-            // The same picker fields the status-line pickers wrote; `main::ui` hands the output choice to the rig.
-            Action::Choose(Pick::Midi(choice)) => self.panel.picker.input_choice = Some(choice),
-            Action::Choose(Pick::Sound(name)) => self.panel.picker.output_choice = Some(name),
+            // A port row opens or closes one input. `enable` probes at once, because the player asked for it.
+            Action::TogglePort(name, on) => {
+                if on {
+                    self.midi.enable(name);
+                } else {
+                    self.midi.disable(&name);
+                }
+            }
+            Action::SoundOut(name) => self.panel.picker.output_choice = Some(name),
         }
     }
 
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
     fn save(&mut self) {
         let mut saved = persist::shared_to_saved(self.rack.state(), self.rack.bank().clone());
-        saved.midi_input = self.midi.preference_name();
+        // One name is all the save file holds until the format lands: the first port the player turned on.
+        saved.midi_input = self.midi.enabled().first().cloned();
         saved.song = self.panel.songs.name.clone();
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
         saved.tooltips = self.panel.tooltips;
@@ -501,7 +513,9 @@ impl TakkaApp {
         self.panel
             .set_scale(panel_ui::scale::Scale::from_index(saved.scale as usize));
         if let Some(port) = saved.midi_input.clone() {
-            self.midi.choose(midi::ports::PortChoice::Named(port));
+            // Added to the set rather than replacing it: the file names one port, and dropping the player's other
+            // controllers because a song remembered one of them would be a surprise.
+            self.midi.enable(port);
         }
         if let Some(card) = self.panel.songs.card.as_mut() {
             card.names = persist::list_songs(dir);
@@ -540,7 +554,7 @@ impl TakkaApp {
     /// The session as it should be written to disk, under `name` when the save is landing in a file.
     fn session_for_disk(&self, name: &str) -> persist::SavedState {
         let mut saved = persist::shared_to_saved(self.rack.state(), self.rack.bank().clone());
-        saved.midi_input = self.midi.preference_name();
+        saved.midi_input = self.midi.enabled().first().cloned();
         saved.song = Some(name.to_string());
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
         saved.tooltips = self.panel.tooltips;
@@ -556,42 +570,69 @@ impl TakkaApp {
     }
 }
 
-/// Owns the MIDI connection and the probe machinery.
+/// What one port's probe found: the name and the connection it opened, or the name and why it did not open.
+type ProbeResult = Result<(String, midi::ports::MidiIn), (String, String)>;
+
+/// Whether a probe result should be installed. A port turned off while the probe was in flight must not come back on its
+/// own: the liveness check only drops ports the machine stopped reporting, so nothing would ever turn it off again.
+fn still_wanted(enabled: &[String], name: &str) -> bool {
+    enabled.iter().any(|wanted| wanted == name)
+}
+
+/// Owns the MIDI connections and the probe machinery.
 ///
-/// A probe runs on its own thread and reports through a channel, so a missing or unplugged interface can
-/// never block a frame. The message handler runs on midir's thread and only writes atomics.
+/// A probe runs on its own thread and reports through a channel, so a missing or unplugged interface can never block a
+/// frame. Each connection's handler runs on midir's thread and only writes atomics.
 struct Midi {
-    input: Option<midi::ports::MidiIn>,
+    /// The ports to open, by name. A name whose port has gone away stays here, in the order the player turned them on: the
+    /// device it feeds stays silent until that is decided, rather than quietly listening to whatever is left.
+    enabled: Vec<String>,
+    /// The live connections, one per enabled port that answered.
+    inputs: Vec<(String, midi::ports::MidiIn)>,
+    /// One for the app, not one per port: it answers "is there a MIDI input at all", and that question did not change.
     supervisor: midi::supervisor::MidiSupervisor,
-    pending: Option<std::sync::mpsc::Receiver<Result<midi::ports::MidiIn, String>>>,
-    name: Option<String>,
-    /// Which port to open. `Any` is the first the system reports; a name never falls back to another port.
-    preference: midi::ports::PortChoice,
+    /// The probe in flight, if any: one result per port it tried, and the channel closes when the thread is done.
+    pending: Option<std::sync::mpsc::Receiver<ProbeResult>>,
+    /// Whether `enabled` has ever been filled from the machine. A first run fills it with every port the machine reports,
+    /// which is how a rig that works today keeps working; a player who then turns every port off means it, so the fill
+    /// happens once and never again.
+    filled: bool,
 }
 
 impl Midi {
-    fn new(preference: midi::ports::PortChoice) -> Self {
+    fn new(enabled: Vec<String>) -> Self {
         Self {
-            input: None,
+            filled: !enabled.is_empty(),
+            enabled,
+            inputs: Vec::new(),
             supervisor: midi::supervisor::MidiSupervisor::new(),
             pending: None,
-            name: None,
-            preference,
         }
     }
 
-    /// Switch ports: drop the open connection, remember the choice and probe straight away.
-    fn choose(&mut self, choice: midi::ports::PortChoice) {
-        self.input = None;
-        self.name = None;
-        self.pending = None;
-        self.preference = choice;
+    /// The ports the app is holding open, by name: what the card ticks, and what the session remembers.
+    fn enabled(&self) -> &[String] {
+        &self.enabled
+    }
+
+    /// The ports that answered. Not the same list as `enabled`: an unplugged port is still held.
+    fn connected(&self) -> Vec<&str> {
+        self.inputs.iter().map(|(name, _)| name.as_str()).collect()
+    }
+
+    /// Open a port, and probe straight away: the player asked for this one.
+    fn enable(&mut self, port: String) {
+        if self.enabled.iter().any(|name| name == &port) {
+            return;
+        }
+        self.enabled.push(port);
         self.supervisor.probe_now();
     }
 
-    /// The port name the session should remember, `None` for "any".
-    fn preference_name(&self) -> Option<String> {
-        self.preference.name().map(str::to_string)
+    /// Close a port and forget it. Dropping the connection here is what stops it delivering, at once.
+    fn disable(&mut self, port: &str) {
+        self.enabled.retain(|name| name != port);
+        self.inputs.retain(|(name, _)| name != port);
     }
 
     /// Start a probe unless one is already running or the supervisor is waiting.
@@ -600,89 +641,150 @@ impl Midi {
         if self.pending.is_some() || !self.supervisor.should_probe(now) {
             return;
         }
-        // While a port is open, only ask whether it is still there. Opening a second connection to find out would make
-        // every note arrive twice, which is exactly the "one press writes two steps" report.
-        if let Some(name) = self.name.clone() {
-            if midi::ports::is_listed(&name) {
-                self.supervisor.on_success(now);
-                return;
+        // A session with no saved port opens the first the machine reports. Once: a player who turns every port off gets
+        // silence for the rest of the session, which is what the card's unticked rows say.
+        if !self.filled {
+            match midi::ports::list_ports() {
+                Ok(names) => {
+                    self.enabled = midi::ports::opened_by_default(&names);
+                    self.filled = true;
+                }
+                // Nothing to enumerate yet: count it like any other failed probe and try again in a moment.
+                Err(_) => {
+                    self.supervisor.on_error(now);
+                    return;
+                }
             }
-            self.input = None;
-            self.name = None;
+        }
+        // Ask the port list, once, whether the connections are still there. Opening a second connection to find out would
+        // make every note arrive twice, which is exactly the "one press writes two steps" report. An enumeration that
+        // fails counts as "still there": dropping a working connection over a transient error is the worse mistake.
+        if let Ok(listed) = midi::ports::list_ports() {
+            self.inputs
+                .retain(|(name, _)| listed.iter().any(|listed| listed == name));
+        }
+        let missing: Vec<String> = self
+            .enabled
+            .iter()
+            .filter(|name| !self.inputs.iter().any(|(open, _)| open == *name))
+            .cloned()
+            .collect();
+        if missing.is_empty() {
+            // Everything it wants is open — or it wants nothing, which is a settled state and not a retry.
+            self.supervisor.on_success(now);
+            return;
         }
         let (tx, rx) = std::sync::mpsc::channel();
         self.pending = Some(rx);
-        let choice = self.preference.clone();
         std::thread::spawn(move || {
-            let mut follower = midi::tempo::TempoFollower::new();
-            let mut gate = midi::gate::NoteGate::new();
-            let result = midi::ports::MidiIn::open(&choice, move |_, bytes| {
-                // The raw bytes are the ground truth: they are what the keyboard actually sent, before the app reads
-                // anything into them. Looking at them is how a player tells a transposed keyboard from a wrong mapping.
-                acid_app::trace::note("midi raw", || {
-                    let hex: Vec<String> = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
-                    format!("{} ({} bytes)", hex.join(" "), bytes.len())
-                });
-                let Some(event) = midi::message::parse(bytes) else {
+            for name in missing {
+                let handler = port_handler(Arc::clone(&state));
+                let result = midi::ports::MidiIn::open_named(&name, handler)
+                    .map(|input| (name.clone(), input))
+                    .map_err(|error| (name, error.to_string()));
+                // A receiver that has gone away means the app is closing: drop the connection and stop opening more.
+                if tx.send(result).is_err() {
                     return;
-                };
-                match event {
-                    midi::message::MidiEvent::Clock => {
-                        if let Some(bpm) = follower.on_clock(std::time::Instant::now()) {
-                            midi::tempo::follow_clock(&state, bpm);
-                        }
-                    }
-                    midi::message::MidiEvent::ControlChange { cc, value, .. } => {
-                        midi::cc::apply_cc(&state, cc, value);
-                    }
-                    other => {
-                        // One note-on per press: a note already down is the same note delivered twice, not a second
-                        // press, and it must not write a second step.
-                        if midi::gate::passes(&mut gate, other) {
-                            midi::message::handle(other, &state);
-                        }
-                    }
                 }
-            })
-            .map_err(|error| error.to_string());
-            let _ = tx.send(result);
+            }
         });
     }
 
-    /// Collect a finished probe, if any, and update the supervisor.
+    /// Collect what the probe found, if anything, and update the supervisor.
     fn poll(&mut self) {
-        let Some(rx) = &self.pending else {
+        // Taken out so the drain below can push into `inputs`; put back if the thread is still opening ports, because a
+        // result sent after the channel was dropped would close the connection it carries.
+        let Some(rx) = self.pending.take() else {
             return;
         };
-        let Ok(result) = rx.try_recv() else {
-            return;
-        };
-        self.pending = None;
-        match result {
-            Ok(input) => {
-                self.name = Some(input.port_name().to_string());
-                self.input = Some(input);
-                self.supervisor.on_success(std::time::Instant::now());
-            }
-            Err(message) => {
-                if self.name.is_some() {
-                    // The port went away: drop the connection so nothing is left holding it.
-                    self.input = None;
-                    self.name = None;
+        let mut opened = 0;
+        let mut failed = 0;
+        let mut first_error: Option<String> = None;
+        let mut done = false;
+        loop {
+            match rx.try_recv() {
+                Ok(Ok((name, input))) => {
+                    // A port the player turned off while the probe was in flight must not come back on its own: nothing
+                    // else would take it away again, so the result is dropped here and the connection with it.
+                    if !still_wanted(&self.enabled, &name) {
+                        continue;
+                    }
+                    self.inputs.push((name, input));
+                    opened += 1;
                 }
-                let action = self.supervisor.on_error(std::time::Instant::now());
-                if matches!(action, midi::supervisor::MidiAction::GiveUp) {
-                    eprintln!(
-                        "takka-acid: {message} — giving up on the MIDI input (RETRY in settings, F2)"
-                    );
+                Ok(Err((name, message))) => {
+                    failed += 1;
+                    if first_error.is_none() {
+                        first_error = Some(format!("{name}: {message}"));
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    done = true;
+                    break;
                 }
             }
+        }
+        if !done {
+            self.pending = Some(rx);
+        }
+        let now = std::time::Instant::now();
+        if opened > 0 {
+            self.supervisor.on_success(now);
+        } else if failed > 0
+            && matches!(
+                self.supervisor.on_error(now),
+                midi::supervisor::MidiAction::GiveUp
+            )
+        {
+            // Said once, when the retries run out, instead of once per probe round. The name stays held regardless: a
+            // controller that comes back is opened again, and one that does not is the player's to turn off.
+            let reason = first_error.unwrap_or_else(|| "no MIDI input answered".to_string());
+            eprintln!("takka-acid: {reason} — giving up on the MIDI input (RETRY in settings, F2)");
         }
     }
 
     /// Try again now, whatever the supervisor thinks.
     fn reprobe(&mut self) {
         self.supervisor.probe_now();
+    }
+}
+
+/// The handler one connection runs on midir's thread: it writes atomics and returns, and never blocks.
+///
+/// Until the routing table lands (the next task in this plan) every port's messages go to the selected device's state,
+/// exactly as the single connection did — but the clock follower and the note gate are per connection, so two ports
+/// cannot share an "already down" set and one press on one keyboard cannot swallow a press on the other.
+fn port_handler(state: Arc<state::SharedState>) -> impl FnMut(u64, &[u8]) + Send + 'static {
+    let mut follower = midi::tempo::TempoFollower::new();
+    let mut gate = midi::gate::NoteGate::new();
+    move |_, bytes| {
+        // The raw bytes are the ground truth: they are what the keyboard actually sent, before the app reads anything
+        // into them. Looking at them is how a player tells a transposed keyboard from a wrong mapping.
+        acid_app::trace::note("midi raw", || {
+            let hex: Vec<String> = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
+            format!("{} ({} bytes)", hex.join(" "), bytes.len())
+        });
+        let Some(event) = midi::message::parse(bytes) else {
+            return;
+        };
+        match event {
+            midi::message::MidiEvent::Clock => {
+                if let Some(bpm) = follower.on_clock(std::time::Instant::now()) {
+                    midi::tempo::follow_clock(&state, bpm);
+                }
+            }
+            midi::message::MidiEvent::ControlChange { cc, value, .. } => {
+                midi::cc::apply_cc(&state, cc, value);
+            }
+            other => {
+                // One note-on per press: a note already down is the same note delivered twice, not a second press, and it
+                // must not write a second step.
+                if midi::gate::passes(&mut gate, other) {
+                    midi::message::handle(other, &state);
+                }
+            }
+        }
     }
 }
 
@@ -711,6 +813,33 @@ mod tests {
     use acid_core::engine::Engine;
     use acid_core::factory::launcher;
     use std::sync::Arc;
+
+    use super::{Midi, still_wanted};
+    /// Each port is one entry in a set, and turning one off cannot disturb another. No device is needed: the roster is
+    /// bookkeeping, and the connections it drops are only ever the ones it was handed.
+    #[test]
+    fn ports_are_a_set_and_turning_one_off_leaves_the_rest() {
+        let mut midi = Midi::new(Vec::new());
+        midi.enable("KeyStep".to_string());
+        midi.enable("nanoKONTROL".to_string());
+        midi.enable("KeyStep".to_string());
+        assert_eq!(midi.enabled(), ["KeyStep", "nanoKONTROL"], "once, in order");
+
+        midi.disable("KeyStep");
+        assert_eq!(midi.enabled(), ["nanoKONTROL"]);
+        assert!(midi.connected().is_empty(), "nothing has been opened");
+    }
+
+    /// The window this closes: a probe round computes what to open, the player unticks one of those ports while the thread
+    /// is still opening them, and its success lands afterwards. Installing it would play a port the card shows as off, and
+    /// nothing would ever take it away again — the liveness check only drops ports the machine stopped reporting.
+    #[test]
+    fn a_probe_result_is_kept_only_while_its_port_is_still_wanted() {
+        let wanted = ["KeyStep".to_string()];
+        assert!(still_wanted(&wanted, "KeyStep"));
+        assert!(!still_wanted(&wanted, "nanoKONTROL"));
+        assert!(!still_wanted(&[], "KeyStep"), "everything off means off");
+    }
 
     /// Offline stand-in for the plan's "listen to the loop" step: nothing in the render may jump hard
     /// Offline stand-in for the plan's "listen to the loop" step: the wrap from step 15 back to step 0 must not jump.

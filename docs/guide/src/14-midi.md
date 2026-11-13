@@ -1,12 +1,14 @@
 # MIDI
 
-takka-acid has one MIDI input. It plays notes, and it can be taught to drive almost every control on the face.
+takka-acid listens to one MIDI input, or to several at once. Each plays notes, and can be taught to drive almost every
+control on the face.
 
-## Choosing a port
+## Choosing ports
 
-`F2`, then unfold **`MIDI IN  [+]`** and click the port. The list ends with `none`, which means *any port*: the app opens
-the first input it finds, which is where a fresh session starts. The choice is remembered across sessions; if the port is
-missing next time, the card says so — `MIDI: none (retrying)` — rather than silently picking a different device.
+`F2`, then unfold **`MIDI IN  [+]`** and click a port's row: `[x]` is a port the app holds open, `[ ]` is one it does not,
+and any number may be on at once. A fresh session starts with the first port the machine reports. The session remembers
+the first port it had open across sessions; if that port is missing next time, the card says so —
+`MIDI: none (retrying)` — rather than silently picking a different device.
 
 ## Playing notes in
 

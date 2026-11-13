@@ -112,6 +112,14 @@ impl Router {
 
     /// Route one message from this port to every device that hears it.
     pub fn on_message(&mut self, bus: &BusState, bytes: &[u8]) {
+        self.on_message_at(bus, bytes, std::time::Instant::now());
+    }
+
+    /// The same, with the arrival time handed in rather than read.
+    ///
+    /// The clock follower reports a tempo only for a stream whose intervals agree, so a test has to choose those intervals;
+    /// production always calls this with `Instant::now()`.
+    pub fn on_message_at(&mut self, bus: &BusState, bytes: &[u8], now: std::time::Instant) {
         // The raw bytes are the ground truth: they are what the keyboard actually sent, before the app reads anything into
         // them. Looking at them is how a player tells a transposed keyboard from a wrong mapping.
         crate::trace::note("midi raw", || {
@@ -124,7 +132,7 @@ impl Router {
         match event {
             // A clock moves the whole rack, not one device: the follower writes the cell and `main` fans it out.
             MidiEvent::Clock => {
-                if let Some(bpm) = self.follow.on_clock(std::time::Instant::now()) {
+                if let Some(bpm) = self.follow.on_clock(now) {
                     self.tempo.set(acid_core::timing::clamp_bpm(bpm));
                 }
             }
@@ -169,6 +177,141 @@ fn channel_of(event: MidiEvent) -> u8 {
 mod tests {
     use super::*;
 
+    /// Two devices and a bus, one slot each. The router is the only thing under test; nothing here opens a port.
+    fn bus_of(filters: Vec<InputFilter>) -> BusState {
+        let slots: Vec<Arc<crate::state::SharedState>> = filters
+            .iter()
+            .map(|_| crate::state::SharedState::new())
+            .collect();
+        BusState {
+            slots,
+            routes: filters,
+        }
+    }
+
+    fn gate(slot: &crate::state::SharedState) -> bool {
+        slot.midi_gate.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    #[test]
+    fn a_note_reaches_every_device_whose_filter_names_its_channel() {
+        let everything = InputFilter::everything();
+        let bus = bus_of(vec![
+            everything.clone(),
+            InputFilter {
+                channel: Channel::One(2),
+                ..everything
+            },
+        ]);
+        let mut router = Router::new("Launchkey MIDI", Arc::new(AtomicF32::new(130.0)));
+        router.on_message(&bus, &[0x92, 60, 100]); // channel 2, note 60
+
+        assert_eq!(
+            bus.slots[0]
+                .midi_velocity
+                .load(std::sync::atomic::Ordering::Relaxed),
+            100
+        );
+        assert_eq!(
+            bus.slots[1]
+                .midi_velocity
+                .load(std::sync::atomic::Ordering::Relaxed),
+            100
+        );
+        assert!((bus.slots[0].midi_hz.get() - bus.slots[1].midi_hz.get()).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_channel_filter_keeps_a_note_off_its_neighbours() {
+        let everything = InputFilter::everything();
+        let bus = bus_of(vec![
+            InputFilter {
+                channel: Channel::One(1),
+                ..everything.clone()
+            },
+            everything,
+        ]);
+        let mut router = Router::new("Launchkey MIDI", Arc::new(AtomicF32::new(130.0)));
+        router.on_message(&bus, &[0x92, 60, 100]); // channel 2
+
+        assert!(!gate(&bus.slots[0]), "device 1 is not on channel 2");
+        assert!(gate(&bus.slots[1]));
+    }
+
+    #[test]
+    fn a_controller_only_device_gets_its_knobs_and_not_its_notes() {
+        let controller = InputFilter {
+            role: Role::ControlOnly,
+            ..InputFilter::everything()
+        };
+        let keys = InputFilter::everything();
+        let bus = bus_of(vec![controller, keys]);
+        let mut router = Router::new("Launchkey MIDI", Arc::new(AtomicF32::new(130.0)));
+
+        router.on_message(&bus, &[0x90, 60, 100]); // a note
+        assert!(!gate(&bus.slots[0]), "a box of knobs must not start a note");
+        assert!(gate(&bus.slots[1]), "the playing device hears it");
+
+        // Volume is a dial with a pickup: the first value only says where the fader is, and the second crosses the knob,
+        // which is the moment it engages. Two messages, one arrived fader.
+        router.on_message(&bus, &[0xB0, 7, 0]);
+        router.on_message(&bus, &[0xB0, 7, 127]);
+        assert!(
+            (bus.slots[0].volume.get() - 1.0).abs() < 1e-3,
+            "the controller-only device's fader still arrives: {}",
+            bus.slots[0].volume.get()
+        );
+    }
+
+    #[test]
+    fn a_port_that_is_not_named_reaches_nothing() {
+        let bus = bus_of(vec![InputFilter {
+            ports: Ports::Named(vec!["nanoKONTROL".into()]),
+            ..InputFilter::everything()
+        }]);
+        let mut router = Router::new("Launchkey MIDI", Arc::new(AtomicF32::new(130.0)));
+        router.on_message(&bus, &[0x90, 60, 100]);
+        assert!(!gate(&bus.slots[0]));
+    }
+
+    #[test]
+    fn one_press_is_one_step_however_many_devices_hear_it() {
+        // The gate is the port's, not the device's: a device that hears the same note-on twice is the same press, and a
+        // second step would be written for a key the player pressed once.
+        let bus = bus_of(vec![InputFilter::everything()]);
+        let mut router = Router::new("Launchkey MIDI", Arc::new(AtomicF32::new(130.0)));
+        router.on_message(&bus, &[0x90, 60, 100]);
+        let first = bus.slots[0]
+            .midi_velocity
+            .load(std::sync::atomic::Ordering::Relaxed);
+        router.on_message(&bus, &[0x90, 60, 100]);
+        assert_eq!(
+            bus.slots[0]
+                .midi_velocity
+                .load(std::sync::atomic::Ordering::Relaxed),
+            first
+        );
+    }
+
+    #[test]
+    fn a_clock_stream_writes_the_rack_tempo_cell() {
+        let bus = bus_of(vec![InputFilter::everything()]);
+        let tempo = Arc::new(AtomicF32::new(130.0));
+        let mut router = Router::new("Launchkey MIDI", Arc::clone(&tempo));
+        // A steady 120 bpm stream, at the times the clock would have arrived: the follower believes a run of agreeing ticks
+        // rather than one interval, so a test must give it the run.
+        let step = std::time::Duration::from_secs_f64(60.0 / (120.0 * 24.0));
+        let start = std::time::Instant::now();
+        for tick in 0..12 {
+            router.on_message_at(&bus, &[0xF8], start + step * tick);
+        }
+
+        let named = tempo.get();
+        assert!(
+            (named - 120.0).abs() < 12.0,
+            "the rack's cell should be near 120 bpm, was {named}"
+        );
+    }
     #[test]
     fn the_factory_device_hears_every_port_and_channel() {
         let filter = InputFilter::everything();
