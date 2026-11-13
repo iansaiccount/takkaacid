@@ -204,6 +204,15 @@ impl Rack {
         &self.devices[self.selected]
     }
 
+    /// The selected device, mutably, for the callers that need its state and its bank at once.
+    ///
+    /// `f(&device.state, &mut device.bank)` is two disjoint field borrows of one `&mut Device`, which the compiler allows;
+    /// `f(rack.state(), rack.bank_mut())` is two borrows of the same `rack`, which it does not.
+    pub fn device_mut(&mut self) -> &mut Device {
+        let index = self.selected;
+        &mut self.devices[index]
+    }
+
     pub fn state(&self) -> &SharedState {
         &self.device().state
     }

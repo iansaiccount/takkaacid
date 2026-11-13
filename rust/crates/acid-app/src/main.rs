@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use acid_app::audio::{self, Rig};
 use acid_app::demo;
+use acid_app::device;
 use acid_app::midi;
 use acid_app::persist;
 use acid_app::state::{self, AudioStatus};
@@ -21,10 +22,9 @@ fn main() -> eframe::Result {
     // Restore the last session. A first run opens on a demo, under the name a new song starts with, and nothing about it
     // is on disk yet — so the first thing the player sees is a line that plays, and a lamp that says "keep me".
     let (saved, first_run) = persist::open(&persist::data_dir());
-    let state = persist::saved_to_shared(&saved);
-    let bank = saved.bank.clone();
+    let rack = device::Rack::from_saved(&saved);
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
-    state.set_pattern_index(bank.current());
+    rack.state().set_pattern_index(rack.bank().current());
     // The MIDI input the last session used, if any: a missing port is reported, never swapped for another.
     let midi_preference = match saved.midi_input.as_deref() {
         Some(name) => midi::ports::PortChoice::Named(name.to_string()),
@@ -41,7 +41,7 @@ fn main() -> eframe::Result {
 
     // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
     let rig = Rig::new({
-        let state = Arc::clone(&state);
+        let state = rack.state_arc();
         move |sample_rate| {
             let state = Arc::clone(&state);
             // Mono out: `Opened::spawn` duplicates every sample to every channel.
@@ -62,9 +62,9 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |_cc| {
             let panel = panel_ui::PanelState {
-                pattern: state.pattern(),
+                pattern: rack.state().pattern(),
                 // The saved session may have been left on another pattern, so the display starts from the bank.
-                pattern_id: PatternBank::id_of(bank.current()),
+                pattern_id: PatternBank::id_of(rack.bank().current()),
                 // The song the last session was working on, if it had a name.
                 songs: panel_ui::SongState {
                     name: song_name.clone(),
@@ -82,9 +82,8 @@ fn main() -> eframe::Result {
             };
             Ok(Box::new(TakkaApp {
                 rig,
-                state,
+                rack,
                 panel,
-                bank,
                 autosave: persist::Autosave::new(),
                 settings_was_open: false,
                 midi: Midi::new(midi_preference),
@@ -97,10 +96,9 @@ fn main() -> eframe::Result {
 
 struct TakkaApp {
     rig: Rig,
-    state: Arc<state::SharedState>,
+    /// The devices, the selection and the transport. Only the selected device's pattern lives in its own `state`.
+    rack: device::Rack,
     panel: panel_ui::PanelState,
-    /// The bank as loaded from disk; only the playing pattern is kept in `state`.
-    bank: PatternBank,
     autosave: persist::Autosave,
     /// Whether the settings card was open last frame, so its device lists are filled on the rising edge and not per frame.
     settings_was_open: bool,
@@ -115,14 +113,29 @@ impl eframe::App for TakkaApp {
     /// Runs every frame, even when the window is hidden: audio supervision lives here.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.rig.poll();
-        let status = self.state.status();
+        // The transport belongs to the rack: the panel asks for a change rather than writing one device's atomic, which the
+        // fan-out below would immediately undo.
+        if let Some(request) = self.panel.transport_request.take() {
+            match request {
+                panel_ui::transport::Request::Play => self.rack.set_playing(true),
+                panel_ui::transport::Request::Stop => self.rack.set_playing(false),
+                panel_ui::transport::Request::NudgeTempo(direction) => {
+                    let next = panel_ui::transport::nudge_tempo(self.rack.tempo_bpm(), direction);
+                    self.rack.set_tempo_bpm(next);
+                }
+            }
+            self.panel.dirty = true;
+        }
+        // A tempo the MIDI thread wrote straight into the cell reaches every device here, every frame.
+        self.rack.sync_transport();
+        let status = self.rack.state().status();
         let text = match &status {
             AudioStatus::Starting => "starting".to_string(),
             AudioStatus::Running { .. } => self.rig.status().to_string(),
             AudioStatus::Failed { reason } => format!("failed: {reason}"),
         };
         if text != self.rig.status() {
-            self.state.set_status(match &status {
+            self.rack.state().set_status(match &status {
                 AudioStatus::Running {
                     device,
                     sample_rate,
@@ -135,18 +148,19 @@ impl eframe::App for TakkaApp {
         }
         // Escape gives up on one thing at a time; the order lives in `ui::dispatch` so it can be tested.
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
-            panel_ui::dispatch::escape(&mut self.panel, &self.state);
+            panel_ui::dispatch::escape(&mut self.panel, self.rack.state());
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
         // `ui::dispatch`). A held key repeats only for the tempo nudges.
         let presses =
             ctx.input(|input| panel_ui::dispatch::presses(&input.events, input.modifiers.shift));
-        let pattern_before = self.bank.current();
+        let pattern_before = self.rack.bank().current();
         for press in presses {
-            panel_ui::dispatch::handle(press, &mut self.panel, &self.state, &mut self.bank);
+            let device = self.rack.device_mut();
+            panel_ui::dispatch::handle(press, &mut self.panel, &device.state, &mut device.bank);
         }
         // The keyboard is deliberate and immediate: a move it made wins over a swap that was waiting for the bar.
-        if self.bank.current() != pattern_before {
+        if self.rack.bank().current() != pattern_before {
             self.pending_pattern = None;
         }
 
@@ -154,33 +168,34 @@ impl eframe::App for TakkaApp {
         // where it lands. A pattern is a bar long: the swap waits for the transport to come round, so cycling with the
         // knob rides the groove instead of restarting it. The readout follows the held selection, so the player can see
         // where they are going before it is heard.
-        if let Some(index) = self.state.take_pattern_request() {
-            if index == self.bank.current() {
+        if let Some(index) = self.rack.state().take_pattern_request() {
+            if index == self.rack.bank().current() {
                 // A fader resting inside the zone it is already on asks for nothing; treating it as a swap would
                 // re-publish the pattern and mark the session unsaved every bar.
                 self.pending_pattern = None;
-                self.state.clear_pattern_selected();
+                self.rack.state().clear_pattern_selected();
             } else {
                 // The selection is what the controller is holding from now on, even though the sound is still the old
                 // pattern: the pickup measures against this, or the next message would look like a hand on the knob.
-                self.state.set_pattern_selected(index);
+                self.rack.state().set_pattern_selected(index);
                 self.pending_pattern = Some(index);
                 self.panel.pattern_id = PatternBank::id_of(index);
             }
         }
         let position = self
-            .state
+            .state()
             .position
             .load(std::sync::atomic::Ordering::Relaxed);
         if let Some(index) = self.pending_pattern
             && panel_ui::pattern_swap::swap_now(
-                self.state.is_playing(),
+                self.rack.state().is_playing(),
                 position,
                 self.last_position,
             )
         {
-            panel_ui::shortcuts::select_pattern(&self.state, &mut self.bank, index);
-            panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
+            let device = self.rack.device_mut();
+            panel_ui::shortcuts::select_pattern(&device.state, &mut device.bank, index);
+            panel_ui::pattern_swap::adopt(&mut self.panel, self.rack.state(), self.rack.bank());
             self.panel.dirty = true;
             self.pending_pattern = None;
         }
@@ -217,8 +232,14 @@ impl eframe::App for TakkaApp {
                 panel_ui::songs::Request::New => {
                     self.save();
                     let saved = persist::new_song();
-                    persist::apply_saved(&saved, &self.state, &mut self.bank);
-                    panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
+                    let device = self.rack.device_mut();
+                    persist::apply_saved(&saved, &device.state, &mut device.bank);
+                    self.rack.set_tempo_bpm(saved.bpm);
+                    panel_ui::pattern_swap::adopt(
+                        &mut self.panel,
+                        self.rack.state(),
+                        self.rack.bank(),
+                    );
                     // A held swap belongs to the song that was playing, not to this one.
                     self.pending_pattern = None;
                     self.panel.songs.name = None;
@@ -305,8 +326,14 @@ impl eframe::App for TakkaApp {
                 panel_ui::songs::Request::LoadDemo(index) => {
                     if let Some(demo) = demo::songs().into_iter().nth(index) {
                         self.save();
-                        persist::apply_saved(&demo.state, &self.state, &mut self.bank);
-                        panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
+                        let device = self.rack.device_mut();
+                        persist::apply_saved(&demo.state, &device.state, &mut device.bank);
+                        self.rack.set_tempo_bpm(demo.state.bpm);
+                        panel_ui::pattern_swap::adopt(
+                            &mut self.panel,
+                            self.rack.state(),
+                            self.rack.bank(),
+                        );
                         self.pending_pattern = None;
                         // A demo is not a file: it arrives as a new song under a name, and nothing of it is on disk until
                         // the player renames and saves it.
@@ -348,7 +375,7 @@ impl eframe::App for TakkaApp {
             self.panel.reprobe_requested = false;
             self.midi.reprobe();
         }
-        self.midi.probe_if_due(Arc::clone(&self.state));
+        self.midi.probe_if_due(self.state_arc());
         // The supervisor's own words, and whether it has given up: the settings card shows both, and nowhere else does.
         let midi_status = midi::supervisor::status_line(
             self.midi.name.as_deref(),
@@ -361,7 +388,7 @@ impl eframe::App for TakkaApp {
         // that gives up 30 s later must all show on the card that is already standing. The port named is the connection,
         // not the preference: on a first run the preference is "any" while a controller is playing.
         if self.panel.settings_open {
-            let status = self.state.status();
+            let status = self.rack.state().status();
             let live = panel_ui::settings::Live {
                 midi_current: self.midi.name.as_deref(),
                 output_current: match &status {
@@ -393,7 +420,7 @@ impl eframe::App for TakkaApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // The panel is the whole surface. Device names used to be written at the bottom of the window and doubled as the
         // output picker; both live in the settings card now, so nothing is painted outside the panel.
-        panel_ui::draw_panel(&mut self.panel, &self.state, ui);
+        panel_ui::draw_panel(&mut self.panel, self.rack.state(), ui);
         if let Some(name) = self.panel.picker.output_choice.take() {
             self.rig.request_device(Some(name));
         }
@@ -401,6 +428,15 @@ impl eframe::App for TakkaApp {
 }
 
 impl TakkaApp {
+    /// The selected device's state, as the panel, the shortcuts and the save file want it.
+    fn state(&self) -> &state::SharedState {
+        self.rack.state()
+    }
+
+    fn state_arc(&self) -> Arc<state::SharedState> {
+        self.rack.state_arc()
+    }
+
     /// Do what the settings card asked for. The folds and CLOSE never arrive here — they are the card's own state — and
     /// every case below is reachable, because `Request` only names the work `main` can do.
     fn apply_settings_request(&mut self, request: panel_ui::settings::Request) {
@@ -423,7 +459,7 @@ impl TakkaApp {
 
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
     fn save(&mut self) {
-        let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
+        let mut saved = persist::shared_to_saved(self.rack.state(), self.rack.bank().clone());
         saved.midi_input = self.midi.preference_name();
         saved.song = self.panel.songs.name.clone();
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
@@ -453,8 +489,10 @@ impl TakkaApp {
             return;
         };
         self.save();
-        persist::apply_saved(&saved, &self.state, &mut self.bank);
-        panel_ui::pattern_swap::adopt(&mut self.panel, &self.state, &self.bank);
+        let device = self.rack.device_mut();
+        persist::apply_saved(&saved, &device.state, &mut device.bank);
+        self.rack.set_tempo_bpm(saved.bpm);
+        panel_ui::pattern_swap::adopt(&mut self.panel, self.rack.state(), self.rack.bank());
         // A held swap belongs to the song that was playing, not to the one just loaded.
         self.pending_pattern = None;
         self.panel.dirty = false;
@@ -504,7 +542,7 @@ impl TakkaApp {
 
     /// The session as it should be written to disk, under `name` when the save is landing in a file.
     fn session_for_disk(&self, name: &str) -> persist::SavedState {
-        let mut saved = persist::shared_to_saved(&self.state, self.bank.clone());
+        let mut saved = persist::shared_to_saved(self.rack.state(), self.rack.bank().clone());
         saved.midi_input = self.midi.preference_name();
         saved.song = Some(name.to_string());
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.

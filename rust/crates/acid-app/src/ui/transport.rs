@@ -7,6 +7,18 @@ use egui::{Rect, Response};
 
 use super::theme;
 
+/// What the transport row asked the player for.
+///
+/// A request rather than a write: the rack owns the transport, and it fans a change out to every device. A row that wrote
+/// the displayed device's own atomic instead would be undone by the next `sync_transport`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Request {
+    Play,
+    Stop,
+    /// One BPM, in the direction of the key.
+    NudgeTempo(i8),
+}
+
 /// One BPM up or down, clamped to the panel's tempo range.
 pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))

@@ -86,6 +86,9 @@ pub struct PanelState {
     pub clear_armed_at: Option<std::time::Instant>,
     /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
     pub save_requested: bool,
+    /// Set by the transport row; consumed by `main`, which owns the rack's transport. A request rather than a write: the
+    /// rack fans a change out to every device, so writing the displayed device's own atomic would be undone by the next sync.
+    pub transport_request: Option<transport::Request>,
     /// The songs card, what it asked for, and the song this session is working on.
     pub songs: SongState,
     /// Where the MIDI-learn flow is: idle, waiting for a knob, or waiting for a controller.
@@ -170,6 +173,7 @@ impl Default for PanelState {
             selected: 0,
             clear_armed_at: None,
             save_requested: false,
+            transport_request: None,
             songs: SongState::default(),
             learn: learn::Step::Idle,
             step_mode: false,

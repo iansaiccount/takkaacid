@@ -822,3 +822,14 @@ fn a_save_writes_in_place_only_when_the_name_has_not_changed() {
     assert_eq!(save_target(None, ""), None);
     assert_eq!(save_target(Some("Acid 1"), "a/b"), same("Acid 1"));
 }
+
+#[test]
+fn a_rack_built_from_a_session_carries_the_session_into_the_mixer() {
+    // `main` hands the bus to the audio thread; a rack of one must publish exactly the session it was built from.
+    let saved = acid_app::persist::SavedState::default();
+    let rack = acid_app::device::Rack::from_saved(&saved);
+    rack.publish();
+    let held = rack.hold();
+    assert_eq!(held.slots.len(), 1);
+    assert_eq!(held.slots[0].tempo_bpm.get(), saved.bpm);
+}

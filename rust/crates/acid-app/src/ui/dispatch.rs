@@ -8,7 +8,7 @@
 use acid_core::bank::PatternBank;
 use eframe::egui::{Event, Key};
 
-use super::{PanelState, learn, selection, shortcuts};
+use super::{PanelState, learn, selection, shortcuts, transport};
 use crate::state::SharedState;
 
 /// One press the panel handles: the key, and whether shift was down.
@@ -81,6 +81,25 @@ pub fn handle(
     let Some(shortcut) = shortcuts::shortcut_for(press.key, press.shift) else {
         return Handled::Nothing;
     };
+    // Three shortcuts are the transport's, and the transport is the rack's: they ask for a change rather than writing one
+    // device's atomic, which the next fan-out would undo.
+    let transport = match shortcut {
+        shortcuts::Shortcut::PlayStop => Some(if shared.is_playing() {
+            transport::Request::Stop
+        } else {
+            transport::Request::Play
+        }),
+        shortcuts::Shortcut::TempoUp => Some(transport::Request::NudgeTempo(1)),
+        shortcuts::Shortcut::TempoDown => Some(transport::Request::NudgeTempo(-1)),
+        shortcuts::Shortcut::NextPattern
+        | shortcuts::Shortcut::PrevPattern
+        | shortcuts::Shortcut::ToggleSettings
+        | shortcuts::Shortcut::ToggleHelp => None,
+    };
+    if let Some(request) = transport {
+        panel.transport_request = Some(request);
+        return Handled::Shortcut(shortcut);
+    }
     shortcuts::apply(shortcut, shared, bank);
     // The settings card is panel state too, and there is room for one card: opening it clears help and songs.
     if matches!(shortcut, shortcuts::Shortcut::ToggleSettings) {

@@ -14,12 +14,14 @@ pub(super) fn draw(
     ui: &mut egui::Ui,
     l: &layout::PanelLayout,
 ) {
-    // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
+    // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time. Both are *requests*: the rack owns
+    // the transport and fans it out to every device, so a row that wrote the displayed device's atomic would be undone by
+    // the next sync.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
     if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {
         let playing = shared.is_playing();
         if switch_key(ui, state, "run", run, "RUN", playing, tips::Control::Run) {
-            shared.set_playing(true);
+            state.transport_request = Some(transport::Request::Play);
             state.dirty = true;
         }
         if switch_key(
@@ -31,10 +33,9 @@ pub(super) fn draw(
             !playing,
             tips::Control::Stop,
         ) {
-            shared.set_playing(false);
+            state.transport_request = Some(transport::Request::Stop);
             state.dirty = true;
         }
-        let bpm = shared.tempo_bpm.get();
         if switch_key(
             ui,
             state,
@@ -44,7 +45,7 @@ pub(super) fn draw(
             false,
             tips::Control::TempoDown,
         ) {
-            shared.tempo_bpm.set(transport::nudge_tempo(bpm, -1));
+            state.transport_request = Some(transport::Request::NudgeTempo(-1));
             state.dirty = true;
         }
         if switch_key(
@@ -56,7 +57,7 @@ pub(super) fn draw(
             false,
             tips::Control::TempoUp,
         ) {
-            shared.tempo_bpm.set(transport::nudge_tempo(bpm, 1));
+            state.transport_request = Some(transport::Request::NudgeTempo(1));
             state.dirty = true;
         }
 

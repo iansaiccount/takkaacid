@@ -93,28 +93,34 @@ fn tempo_nudges_land_on_whole_bpm_within_range() {
 }
 
 #[test]
-fn the_run_button_starts_the_transport() {
+fn the_run_button_asks_for_the_transport() {
+    // The rack owns the transport; the row asks for a change and `main` fans it out. A row that wrote the displayed
+    // device's own atomic would be undone by the next sync.
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     click_transport(&shared, &mut panel, 0);
-    assert!(
-        shared.is_playing(),
-        "RUN must set the shared transport flag"
+    assert_eq!(
+        panel.transport_request,
+        Some(transport::Request::Play),
+        "RUN must ask the rack to start"
     );
+    assert!(!shared.is_playing(), "and must not write the device itself");
+    click_transport(&shared, &mut panel, 1);
+    assert_eq!(panel.transport_request, Some(transport::Request::Stop));
 }
 
 #[test]
-fn the_tempo_buttons_nudge_the_shared_tempo() {
+fn the_tempo_buttons_ask_for_a_nudge() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    let before = shared.tempo_bpm.get();
     click_transport(&shared, &mut panel, 3); // TEMPO +
-    assert!(
-        (shared.tempo_bpm.get() - (before + 1.0)).abs() < 1e-6,
-        "TEMPO + should add one BPM: {} -> {}",
-        before,
-        shared.tempo_bpm.get()
+    assert_eq!(
+        panel.transport_request,
+        Some(transport::Request::NudgeTempo(1))
     );
     click_transport(&shared, &mut panel, 2); // TEMPO −
-    assert!((shared.tempo_bpm.get() - before).abs() < 1e-6);
+    assert_eq!(
+        panel.transport_request,
+        Some(transport::Request::NudgeTempo(-1))
+    );
 }
