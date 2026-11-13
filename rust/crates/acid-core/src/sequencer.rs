@@ -59,12 +59,21 @@ impl Sequencer {
 
     /// Start at step 0. The note sounds on the first sample rendered afterwards.
     pub fn start(&mut self) {
+        self.start_at(0);
+    }
+
+    /// Start on `step` rather than on the downbeat.
+    ///
+    /// A device added while the rack is already running joins on the step the rack is on instead of restarting the bar. It
+    /// is the same start otherwise — the clock is put back on a boundary, and the step it lands on sounds — so a seek is
+    /// never a silent restart. `step` wraps: callers may hand a long-running count, not an index.
+    pub fn start_at(&mut self, step: usize) {
         self.running = true;
-        // The clock kept counting through the stop, so it has to be put back on the downbeat: otherwise the first step
-        // after RUN is whatever fraction of a step the previous run happened to leave, and with swing it can even be the
-        // short half of the pair.
+        // The clock kept counting through the stop, so it has to be put back on a boundary: otherwise the first step after
+        // RUN is whatever fraction of a step the previous run happened to leave, and with swing it can even be the short half
+        // of the pair.
         self.clock.restart();
-        self.position = 0;
+        self.position = step % STEPS_PER_PATTERN;
         self.prev_slide = false;
         self.trigger_pending = true;
         self.gate_close_pending = false;
