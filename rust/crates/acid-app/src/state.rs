@@ -114,6 +114,9 @@ pub struct Parameters {
 #[derive(Debug)]
 pub struct SharedState {
     pub playing: AtomicBool,
+    /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
+    /// sequencer keeps running underneath, so unmuting rejoins on the beat instead of restarting the pattern.
+    pub mute: AtomicBool,
     /// Step the transport is on, `0..16`, published by the audio thread for the LEDs.
     pub position: AtomicUsize,
     pub tempo_bpm: AtomicF32,
@@ -169,6 +172,7 @@ impl SharedState {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             playing: AtomicBool::new(false),
+            mute: AtomicBool::new(false),
             position: AtomicUsize::new(0),
             tempo_bpm: AtomicF32::new(DEFAULT_BPM),
             swing: AtomicF32::new(0.0),
@@ -209,6 +213,14 @@ impl SharedState {
 
     pub fn set_playing(&self, playing: bool) {
         self.playing.store(playing, Ordering::Relaxed);
+    }
+
+    pub fn is_muted(&self) -> bool {
+        self.mute.load(Ordering::Relaxed)
+    }
+
+    pub fn set_mute(&self, muted: bool) {
+        self.mute.store(muted, Ordering::Relaxed);
     }
 
     pub fn toggle_playing(&self) -> bool {
@@ -321,6 +333,16 @@ impl SharedState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_starts_unmuted_and_remembers_being_muted() {
+        let s = SharedState::new();
+        assert!(!s.is_muted(), "a fresh device is audible");
+        s.set_mute(true);
+        assert!(s.is_muted());
+        s.set_mute(false);
+        assert!(!s.is_muted());
+    }
 
     #[test]
     fn playing_toggles_and_reports() {
