@@ -592,16 +592,11 @@ git commit -m "refactor(main): the app runs on a rack of one device"
       — and `main` drains it into `rack.set_playing`/`rack.set_tempo_bpm`. A song load must likewise call
       `rack.set_tempo_bpm(saved.bpm)` after `apply_saved`. Cost if wrong: RUN/STOP reads as broken, and a frame of lag on the
       downbeat.
-- [ ] **Task 6 — `main` runs on a rack of one.** **Not started.** Two findings for whoever takes it:
-      (a) `Rack` owns state and bank together, so the four sites that need both at once — `dispatch::handle`,
-      `shortcuts::select_pattern`, and the three `persist::apply_saved` calls — cannot write
-      `f(self.rack.state(), self.rack.bank_mut())`: two borrows of `self.rack`. Add
-      `Rack::device_mut(&mut self) -> &mut Device` and take `&device.state` / `&mut device.bank` from one `&mut Device`,
-      which Rust allows because they are different fields.
-      (b) `TakkaApp { state, bank }` becomes `TakkaApp { rack }` with `fn state(&self) -> &SharedState` and
-      `fn state_arc(&self) -> Arc<SharedState>` accessors; 24 `self.state`/`self.bank` sites in `main.rs` convert mechanically
-      (`&self.state` → `self.state()`, `self.bank.` → `self.bank().`, `Arc::clone(&self.state)` → `self.state_arc()`). The
-      `Rig` closure keeps rendering device 1 until plan 39 task 7.
+- [x] **Task 6 — `main` runs on a rack of one.** `3591083`. `TakkaApp { rack }`, `state()`/`state_arc()` accessors the selected
+      device, `Rack::device_mut` for the four sites that need state and bank together, and the transport drained from
+      `PanelState::transport_request`. Review found a second bug the plan missed: `SPACE` and the arrow keys wrote the selected
+      device's atomics through `shortcuts::apply`, undone by the same fan-out — `apply` no longer writes transport state, and
+      `dispatch` turns those three into requests. **Plan 38 is complete: the app runs on the rack, one device, unchanged.**
 
 Rulings made while writing this plan, and their cost if wrong:
 
