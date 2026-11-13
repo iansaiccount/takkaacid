@@ -6,7 +6,10 @@ A TB-303-style acid bass synth: a Rust audio engine and an egui/eframe panel. Tw
 - `rust/crates/acid-app` — the panel, the seam between the two threads (`state::SharedState`), MIDI in, and persistence.
   Panel behaviour is tested by driving `draw_panel` through real egui frames in `rust/crates/acid-app/tests/*_live.rs`.
 
-`plans/` holds one plan per round of work, numbered; `EAR_TESTING.md` is how to judge the sound by ear.
+`plans/` holds one plan per round of work, numbered, and one directory per phase: `phase 1/` is the finished rounds,
+`phase 2/` is the round in flight, `future/wishlist.md` is where an idea goes before it earns a round. Each phase directory
+opens with a `00-` overview that says what the phase is and which plan to take next. `EAR_TESTING.md` is how to judge the
+sound by ear.
 
 ## Gates
 
@@ -24,7 +27,7 @@ number without opening an audio device or a window.
 
 ## Planning
 
-Write the plan into `plans/NN-topic.md` before touching code, in the shape plan 30 and plan 31 use: what is wrong today,
+Write the plan into `plans/phase 2/NN-topic.md` before touching code, in the shape plan 30 and plan 31 use: what is wrong today,
 the design, the tests that make it safe, a numbered task list, and non-goals. Progress one task at a time and keep a
 `## Progress` section at the end of the plan current — a task, the test or mutation check that proves it, and any ruling
 you made with what it costs if wrong. A later session resumes from that section and `git log`, not from memory.
