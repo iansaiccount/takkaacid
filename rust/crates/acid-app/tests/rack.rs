@@ -219,3 +219,47 @@ fn a_tempo_written_straight_into_the_cell_reaches_every_device() {
         assert_eq!(device.state.tempo_bpm.get(), 129.0);
     }
 }
+
+#[test]
+fn the_bus_carries_the_route_beside_the_slot() {
+    use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+    rack.publish();
+    let held = rack.hold();
+    assert_eq!(held.routes.len(), held.slots.len());
+    assert_eq!(
+        held.routes[0],
+        InputFilter::everything(),
+        "the factory device hears everything, as it always did"
+    );
+    assert_eq!(
+        held.routes[1],
+        InputFilter::silent(),
+        "a device just added hears nothing"
+    );
+
+    rack.set_inputs(
+        1,
+        InputFilter {
+            ports: Ports::Named(vec!["nanoKONTROL".into()]),
+            channel: Channel::All,
+            role: Role::ControlOnly,
+        },
+    );
+    assert_eq!(
+        rack.hold().routes[1].role,
+        Role::ControlOnly,
+        "setting a filter publishes it"
+    );
+    assert_eq!(rack.inputs(1), Some(&input_filter()));
+    assert_eq!(rack.inputs(9), None);
+}
+
+fn input_filter() -> acid_app::midi::route::InputFilter {
+    acid_app::midi::route::InputFilter {
+        ports: acid_app::midi::route::Ports::Named(vec!["nanoKONTROL".into()]),
+        channel: acid_app::midi::route::Channel::All,
+        role: acid_app::midi::route::Role::ControlOnly,
+    }
+}

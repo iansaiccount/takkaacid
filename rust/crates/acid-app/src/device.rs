@@ -50,6 +50,9 @@ pub struct Device {
     pub state: Arc<SharedState>,
     /// The sixty-four patterns this device is working through.
     pub bank: PatternBank,
+    /// What this device hears: which ports, which channel, and whether it plays notes or only answers controllers. A device
+    /// that has just been added hears nothing until it is given a port.
+    pub inputs: crate::midi::route::InputFilter,
     /// Stable for the device's life: taken from the rack's counter when it is created, never reused and never renumbered.
     pub number: usize,
     /// What the strip and the cards call it. Editable, and distinct from its neighbours.
@@ -62,7 +65,10 @@ impl Device {
         // The same pair `persist::new_song` builds, so a new device and a new song open on the same phrase.
         let mut bank = PatternBank::new_empty();
         bank.replace(0, acid_core::factory::starter());
-        Self::adopted(kind, number, SharedState::new(), bank)
+        let mut device = Self::adopted(kind, number, SharedState::new(), bank);
+        // A device that arrives hearing nothing cannot be layered under a keyboard that is already playing.
+        device.inputs = crate::midi::route::InputFilter::silent();
+        device
     }
 
     /// A device wrapped around state and patterns that already exist — what a session loads.
@@ -80,6 +86,9 @@ impl Device {
             kind,
             number,
             name: Self::default_name(kind, number),
+            // A loaded device hears everything, which is what the factory device does: a session that never opens the device
+            // card cannot tell phase 2 happened.
+            inputs: crate::midi::route::InputFilter::everything(),
             state,
             bank,
         }
@@ -99,6 +108,8 @@ impl Device {
 pub struct BusState {
     /// One entry per device, in rack order. The mixer reconciles its engines against this list and nothing else.
     pub slots: Vec<Arc<SharedState>>,
+    /// One entry per device, in the same order: what each device hears. Read by the MIDI handlers, ignored by the mixer.
+    pub routes: Vec<crate::midi::route::InputFilter>,
 }
 
 /// The rack refused to take another device.
@@ -158,7 +169,10 @@ impl Rack {
             next_number,
             playing: AtomicBool::new(false),
             tempo_bpm: Arc::new(AtomicF32::new(clamp_bpm(tempo_bpm))),
-            bus: Arc::new(ArcSwap::from_pointee(BusState { slots: Vec::new() })),
+            bus: Arc::new(ArcSwap::from_pointee(BusState {
+                slots: Vec::new(),
+                routes: Vec::new(),
+            })),
         };
         rack.sync_transport();
         rack.publish();
@@ -173,12 +187,14 @@ impl Rack {
     /// Publish the device list. Adding or removing a device ends here; a selection does not, because nothing but the panel
     /// draws one. An `ArcSwap::store` never blocks a reader.
     pub fn publish(&self) {
-        let slots = self
-            .devices
-            .iter()
-            .map(|device| Arc::clone(&device.state))
-            .collect();
-        self.bus.store(Arc::new(BusState { slots }));
+        // Built in one pass, so the two lists cannot drift: every reader assumes `routes[i]` belongs to `slots[i]`.
+        let mut slots = Vec::with_capacity(self.devices.len());
+        let mut routes = Vec::with_capacity(self.devices.len());
+        for device in &self.devices {
+            slots.push(Arc::clone(&device.state));
+            routes.push(device.inputs.clone());
+        }
+        self.bus.store(Arc::new(BusState { slots, routes }));
     }
 
     /// What the other threads currently see.
@@ -337,5 +353,20 @@ impl Rack {
             device.state.playing.store(playing, Ordering::Relaxed);
             device.state.tempo_bpm.set(tempo);
         }
+    }
+}
+
+impl Rack {
+    /// What a device hears. Publishes, because the MIDI handlers read it from the bus and not from here.
+    pub fn set_inputs(&mut self, index: usize, inputs: crate::midi::route::InputFilter) {
+        if let Some(device) = self.devices.get_mut(index) {
+            device.inputs = inputs;
+            self.publish();
+        }
+    }
+
+    /// What a device hears, if there is one at that index.
+    pub fn inputs(&self, index: usize) -> Option<&crate::midi::route::InputFilter> {
+        self.devices.get(index).map(|device| &device.inputs)
     }
 }

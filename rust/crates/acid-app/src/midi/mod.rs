@@ -8,5 +8,6 @@ pub mod cc;
 pub mod gate;
 pub mod message;
 pub mod ports;
+pub mod route;
 pub mod supervisor;
 pub mod tempo;
