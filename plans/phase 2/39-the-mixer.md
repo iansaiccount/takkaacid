@@ -3,6 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). One seam, one session: this plan and
 > plan 38 share the bus, and plan 40 shares the `ArcSwap` idiom. Steps use checkbox (`- [ ]`) tracking; each task ends in a
 > green commit.
+>
+> **Review:** every task ends with the review gate in `00-phase-2.md` — the diff is reviewed against this task's **Files** and
+> **Interfaces** blocks, and every finding is actioned, before the commit. No subagents elsewhere: this plan runs inline, in one
+> session, by one pair of hands.
 
 **Goal:** `acid_app::audio::mixer::Mixer` — one cpal stream, one `AudioRenderer` per published device, a mute ramp per
 device, one sum, one master limiter — plus `Engine::start_at` so a device added mid-run joins the transport in phase.
@@ -120,7 +124,7 @@ if it does, use it in the test unchanged.
 Run: `cd rust && cargo test -p acid-core --test seek && cargo test -p acid-core`
 Expected: PASS, and the existing sequencer and clock tests are untouched.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-core/src/sequencer.rs rust/crates/acid-core/src/engine.rs rust/crates/acid-core/tests/seek.rs
@@ -227,7 +231,7 @@ path arrives in task 5 with its test.
 Run: `cd rust && cargo test -p acid-app --test mixer`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/audio/mixer.rs rust/crates/acid-app/src/audio/mod.rs rust/crates/acid-app/tests/mixer.rs
@@ -308,7 +312,7 @@ Read the device's mute state when the slot is built and hand it to `Smooth::new`
 Run: `cd rust && cargo test -p acid-app --test mixer`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/audio/mixer.rs rust/crates/acid-app/tests/mixer.rs
@@ -366,7 +370,7 @@ Run: `cd rust && cargo test -p acid-app --test mixer`
 Expected: PASS. Re-run `one_device_through_the_mixer_is_the_device_it_was`: the master limiter must not change a single device
 that is already under the ceiling.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/audio/mixer.rs rust/crates/acid-app/tests/mixer.rs
@@ -458,7 +462,7 @@ Then break it on purpose: delete the `Arc::ptr_eq` half of the fast path so a le
 `a_rack_that_did_not_change_is_not_rebuilt` FAILS. Restore the line and confirm green again. Record the check in
 `## Progress`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/audio/mixer.rs rust/crates/acid-app/tests/mixer.rs
@@ -537,7 +541,7 @@ while the reference is playing, is seeked to the reference's published `position
 Run: `cd rust && cargo test -p acid-app --test mixer`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/audio/renderer.rs rust/crates/acid-app/src/audio/mixer.rs rust/crates/acid-app/tests/mixer.rs
@@ -579,7 +583,7 @@ cargo fmt --check
 Expected: PASS. `cargo run -p acid-app --bin takka-acid` sounds exactly as it did, and the status line still names the device
 and rate.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/main.rs

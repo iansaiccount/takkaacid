@@ -3,6 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). This plan and plan 39 share one seam —
 > the bus — so a fresh implementer per task would re-derive the interfaces. Steps use checkbox (`- [ ]`) tracking and each
 > task ends in a green commit.
+>
+> **Review:** every task ends with the review gate in `00-phase-2.md` — the diff is reviewed against this task's **Files** and
+> **Interfaces** blocks, and every finding is actioned, before the commit. No subagents elsewhere: this plan runs inline, in one
+> session, by one pair of hands.
 
 **Goal:** `acid_app::device` — a `Device` (its own state, bank, number and name), a `Rack` (the list, the selection, the
 transport and the published bus), and `SharedState::mute` — with `main` running on a rack of one and behaving exactly as it
@@ -83,7 +87,7 @@ written like `is_playing`/`set_playing` with `Ordering::Relaxed`.
 Run: `cd rust && cargo test -p acid-app --lib`
 Expected: PASS, including every existing state test.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/state.rs
@@ -163,7 +167,7 @@ Expected: FAIL — `unresolved import acid_app::device`.
 Run: `cd rust && cargo test -p acid-app --test rack`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/device.rs rust/crates/acid-app/src/lib.rs rust/crates/acid-app/tests/rack.rs
@@ -316,7 +320,7 @@ the end. Every mutating method ends with `self.publish()` — that is the invari
 Run: `cd rust && cargo test -p acid-app --test rack`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/device.rs rust/crates/acid-app/tests/rack.rs
@@ -384,7 +388,7 @@ the store's.
 Run: `cd rust && cargo test -p acid-app --test rack`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/device.rs rust/crates/acid-app/tests/rack.rs
@@ -485,7 +489,7 @@ every `device.state.playing` and `self.tempo_bpm.get()` into every `device.state
 Run: `cd rust && cargo test -p acid-app --test rack`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/device.rs rust/crates/acid-app/tests/rack.rs
@@ -557,7 +561,7 @@ cargo fmt --check
 Expected: PASS — 526 tests plus the new ones, no clippy warning, and `cargo run -p acid-app --bin takka-acid` sounds and
 saves exactly as before (`--midi-map` prints the same table).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A

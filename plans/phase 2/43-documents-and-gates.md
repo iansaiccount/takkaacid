@@ -3,6 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). This plan is short by design: it is the
 > paperwork that keeps phase 2's promises discoverable, plus the two checks the design asked for that no single plan owns.
 > Steps use checkbox (`- [ ]`) tracking; each task ends in a green commit.
+>
+> **Review:** every task ends with the review gate in `00-phase-2.md` — the diff is reviewed against this task's **Files** and
+> **Interfaces** blocks, and every finding is actioned, before the commit. No subagents elsewhere: this plan runs inline, in one
+> session, by one pair of hands.
 
 **Goal:** the help card, the README, `EAR_TESTING.md` and `AGENTS.md` describe the app that phase 2 built — the strip, the
 device card, the keyboard, and what is not saved — and the phase ends with the gates green, the design's mutation checks
@@ -77,7 +81,7 @@ Three additions, in the card's own register (short lines, ASCII, no glyphs):
 Run: `cd rust && cargo test -p acid-app --test help_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/help.rs rust/crates/acid-app/tests/help_live.rs
@@ -108,7 +112,7 @@ After the paragraph that describes the panel, add a short section with these fac
 
 Run the app and check each sentence against what you see. A README claim is a test that only the next reader runs.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add README.md
@@ -133,7 +137,7 @@ Three things a single device cannot reveal, each with what to listen for:
 - **Mute as a gain.** Mute one mid-phrase: it should fade over about a tenth of a second, not cut, and unmuting should return
   it in time — no repeat of the step it was muted on.
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 2: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add EAR_TESTING.md
@@ -158,7 +162,7 @@ handlers, on midir's thread, reading `device::BusState` through its `ArcSwap`. O
 Also, in the code-conventions list, add the device catalogue to the "one catalogue per kind of control" examples, because
 `DeviceKind::ALL` is what the picker's rows derive from.
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 2: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add AGENTS.md
@@ -215,7 +219,7 @@ between 40 and 41, and whether any two plans agreed on a name that they each spe
 
 Land the review's fixes as their own commits, one per item, each with the test that would have caught it.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A

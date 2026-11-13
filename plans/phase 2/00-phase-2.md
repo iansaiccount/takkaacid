@@ -30,8 +30,9 @@ long.
 
 These are not repeated per plan; they are assumed.
 
-- **The three gates are green at every commit.** `cd rust && cargo test --workspace && cargo clippy --workspace
-  --all-targets -- -D warnings && cargo fmt --check`.
+- **The three gates are green at every commit, and every commit is reviewed first.** `cd rust && cargo test --workspace &&
+  cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check`, then the review gate above, then the commit. Not
+  the other way round.
 - **Device 1 behaves exactly as today.** One device, no strip interaction, is the regression every plan re-proves. The
   cheapest expression of this is that the factory rack is indistinguishable from the app before phase 2 in sound, timing and
   saved bytes.
@@ -72,7 +73,28 @@ Rack                                      Mixer
                                            └ Router { port, follow, gate, tempo }
 ```
 
+
 Three readers of `BusState` — the mixer once per block, each port's handler once per message — and one writer, `Rack`.
+
+
+## The review gate
+
+Every plan in this phase runs the same gate, and every task's last step is it. It is not restated per task — a plan that ends a
+task with a bare commit is wrong. Do not skip it because a task looks small; the small ones are where a convention slips.
+
+1. **Gates green.** `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`.
+2. **Review the diff.** Dispatch a fresh reviewer subagent with the task's **Files** and **Interfaces** blocks and the output of
+   `git diff --staged`, and nothing else from this plan — the point is to hear whether the task said what it did. Where the
+   harness exposes no subagent tool, do the same review yourself: read the staged diff top to bottom and answer the three
+   questions as if it were someone else's work.
+3. **The three questions.** Does the diff do what the task said and only that? Does it break a rule in `AGENTS.md`? What does it
+   leave untested, and is that deliberate?
+4. **Action every finding before the commit.** A finding fixed in a later commit has not gated anything. If a finding is wrong,
+   say why in the Progress line and move on — that is an answer, not a skip.
+5. **Then commit,** and put the review's outcome in the task's `## Progress` line: what it found, and what was done about it.
+
+The whole-branch review at the end of the phase (plan 43, task 5) stays, and it answers a different question: what do the seams
+between tasks hide that no single diff showed?
 
 ## Progress
 

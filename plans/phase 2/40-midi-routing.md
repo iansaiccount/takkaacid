@@ -3,6 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). This plan changes a message's shape
 > (`MidiEvent` grows a channel), so a fresh implementer per task would fight its own earlier compile errors. Steps use
 > checkbox (`- [ ]`) tracking; each task ends in a green commit.
+>
+> **Review:** every task ends with the review gate in `00-phase-2.md` — the diff is reviewed against this task's **Files** and
+> **Interfaces** blocks, and every finding is actioned, before the commit. No subagents elsewhere: this plan runs inline, in one
+> session, by one pair of hands.
 
 **Goal:** every MIDI message carries the channel it arrived on, every device has an `InputFilter` (ports, channel, role), one
 `Router` per open port fans a message out to the devices it reaches, the app can hold several ports open at once, and the
@@ -123,7 +127,7 @@ using `..` in the pattern (`MidiEvent::NoteOn { velocity: 0, .. }`), which reads
 Run: `cd rust && cargo test -p acid-app --lib midi && cargo test -p acid-app`
 Expected: PASS. `main`'s handler still compiles because it matches `ControlChange { cc, value }` — add `..` where it needs to.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/midi/message.rs rust/crates/acid-app/src/main.rs
@@ -232,7 +236,7 @@ caller asks the role only about messages that carry notes. One question per func
 Run: `cd rust && cargo test -p acid-app --lib midi::route`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/midi/route.rs rust/crates/acid-app/src/midi/mod.rs
@@ -307,7 +311,7 @@ Run: `cd rust && cargo test -p acid-app --test rack && cargo test -p acid-app --
 Expected: PASS. The mixer ignores `routes` entirely — it is in the same struct because both readers want one truth, not
 because both read all of it.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/device.rs rust/crates/acid-app/tests/rack.rs
@@ -457,7 +461,7 @@ test uses it; do not leave a `pub fn` with no caller.
 Run: `cd rust && cargo test -p acid-app --lib midi`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/midi/route.rs rust/crates/acid-app/src/midi/tempo.rs
@@ -546,7 +550,7 @@ cargo fmt --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A
@@ -612,7 +616,7 @@ Then, with two ports attached if the machine has them: `cargo run -p acid-app --
 same table, and playing a note on a port the device's filter does not name produces silence on that device and nothing in the
 trace beyond the raw bytes.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A

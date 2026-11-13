@@ -3,6 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). This plan is the last piece of UI in the
 > phase and depends on plan 41's request queue and caret; do not start it before 41's gate is green. Steps use checkbox
 > (`- [ ]`) tracking; each task ends in a green commit.
+>
+> **Review:** every task ends with the review gate in `00-phase-2.md` — the diff is reviewed against this task's **Files** and
+> **Interfaces** blocks, and every finding is actioned, before the commit. No subagents elsewhere: this plan runs inline, in one
+> session, by one pair of hands.
 
 **Goal:** `F3` or the caret opens a card for the selected device — its name, its role, the ports it hears, the channel it
 listens on, its MUTE, and a removal that asks twice — and `+` opens a picker that offers every `DeviceKind` there is, with one
@@ -116,7 +120,7 @@ cargo fmt --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A
@@ -229,7 +233,7 @@ rows, and `CLOSE`; it writes nothing to `device_request` in this task — task 3
 Run: `cd rust && cargo test -p acid-app --test device_card_live && cargo test -p acid-app --test devices_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/device_card.rs rust/crates/acid-app/src/ui/mod.rs rust/crates/acid-app/src/ui/strip.rs rust/crates/acid-app/src/ui/shortcuts.rs rust/crates/acid-app/src/ui/dispatch.rs rust/crates/acid-app/tests/device_card_live.rs
@@ -313,7 +317,7 @@ The panel's strip mirror picks the new name up on the next frame, because `main`
 Run: `cd rust && cargo test -p acid-app --test device_card_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/device_card.rs rust/crates/acid-app/src/main.rs rust/crates/acid-app/tests/device_card_live.rs
@@ -418,7 +422,7 @@ so the list is the machine's, read on the click rather than per frame.
 Run: `cd rust && cargo test -p acid-app --test device_card_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/device_card.rs rust/crates/acid-app/src/main.rs rust/crates/acid-app/tests/device_card_live.rs
@@ -495,7 +499,7 @@ A removal does not stop the app, does not touch the file, and does not renumber 
 Run: `cd rust && cargo test -p acid-app --test device_card_live && cargo test -p acid-app --test devices_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/device_card.rs rust/crates/acid-app/src/main.rs rust/crates/acid-app/tests/device_card_live.rs
@@ -589,7 +593,7 @@ device card. `tests/devices_live.rs`'s `the_add_key_asks_for_the_only_kind_of_de
 Run: `cd rust && cargo test -p acid-app --test device_card_live && cargo test -p acid-app --test devices_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A
@@ -628,7 +632,7 @@ Expected: PASS, all three.
 
 Record anything that surprised you in `## Progress`.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A

@@ -25,11 +25,33 @@ cargo fmt --check
 Run it with `cargo run -p acid-app --bin takka-acid`, and `--midi-map` to print what the app makes of every note
 number without opening an audio device or a window.
 
+
+## Review before commit
+
+**No commit is made unreviewed.** A task's last step is: run the gates, review the diff against what the task said it would do,
+action what the review found, and commit in the same breath. A review whose findings land in a later commit has gated nothing;
+a review nobody acted on is worse than no review, because it looks like one.
+
+The reviewer is fresh — a subagent where the harness has one, and otherwise the same three questions asked of the diff by the
+executor wearing a reviewer's hat. It is given the task's **Files** and **Interfaces** blocks and the diff, not the whole plan,
+and it answers:
+
+- **Does the diff do what the task said, and only that?** Extra work smuggled into a commit is a finding.
+- **Does it break a convention in this file?** A second hand-kept list, a `_` arm on a catalogue enum, a font glyph, a lock or an
+  allocation on the audio path, a change to the save file, an `egui::Id` renamed.
+- **What does it leave untested, and is that deliberate?** A missing test is a finding; a deferred one must be in the plan's
+  Progress with the reason.
+
+Findings are fixed before the commit, and the task's `## Progress` line records what the review found and what was done about it.
+The whole-branch review at the end of a phase is not a substitute for these: it catches what the seams between tasks hide, not
+what one commit hid.
+
 ## Planning
 
 Write the plan into `plans/phase 2/NN-topic.md` before touching code, in the shape plan 30 and plan 31 use: what is wrong today,
 the design, the tests that make it safe, a numbered task list, and non-goals. Progress one task at a time and keep a
-`## Progress` section at the end of the plan current — a task, the test or mutation check that proves it, and any ruling
+`## Progress` section at the end of the plan current — a task, the test or mutation check that proves it, what the review found,
+and any ruling
 you made with what it costs if wrong. A later session resumes from that section and `git log`, not from memory.
 
 `.superpowers/` is git-ignored scratch for review ledgers; nothing in it is part of the project.

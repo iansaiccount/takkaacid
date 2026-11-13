@@ -3,6 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). This plan touches `draw_panel`'s body
 > and every layout number, so one session for the whole plan. Steps use checkbox (`- [ ]`) tracking; each task ends in a green
 > commit.
+>
+> **Review:** every task ends with the review gate in `00-phase-2.md` — the diff is reviewed against this task's **Files** and
+> **Interfaces** blocks, and every finding is actioned, before the commit. No subagents elsewhere: this plan runs inline, in one
+> session, by one pair of hands.
 
 **Goal:** a strip band above the top strip, one cell per device (name, play lamp, MUTE, lit border when selected), `+` to add,
 `Ctrl+1..4` to select, a click to select, and a panel that remembers each device's editor — the selected step, step mode, step
@@ -112,7 +116,7 @@ Run: `cd rust && cargo test -p acid-app --lib ui::layout && cargo test -p acid-a
 Expected: PASS. Any live test that hard-codes `560.0` for the screen still works: `layout` scales the design to whatever
 window it is given.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/theme.rs rust/crates/acid-app/src/ui/layout.rs
@@ -197,7 +201,7 @@ Three pure rect helpers (`name_rect`, `lamp_rect`, `mute_rect`) so the geometry 
 Run: `cd rust && cargo test -p acid-app --lib ui::strip`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/strip.rs rust/crates/acid-app/src/ui/mod.rs rust/crates/acid-app/src/ui/panel.rs
@@ -370,7 +374,7 @@ The `match` is written out in full: `Request` is a catalogue enum and a new vari
 Run: `cd rust && cargo test -p acid-app --test devices_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/device.rs rust/crates/acid-app/src/ui/mod.rs rust/crates/acid-app/src/main.rs rust/crates/acid-app/tests/devices_live.rs
@@ -428,7 +432,7 @@ eaten by one. It writes `panel.device_request = Some(Request::Select(index))` an
 Run: `cd rust && cargo test -p acid-app --lib ui::dispatch && cargo test -p acid-app`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/dispatch.rs rust/crates/acid-app/src/main.rs
@@ -535,7 +539,7 @@ drift.
 Run: `cd rust && cargo test -p acid-app --test devices_live && cargo test -p acid-app --test selection_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/mod.rs rust/crates/acid-app/tests/devices_live.rs
@@ -619,7 +623,7 @@ what the player needs to know.
 Run: `cd rust && cargo test -p acid-app --test devices_live`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add rust/crates/acid-app/src/ui/strip.rs rust/crates/acid-app/tests/devices_live.rs
@@ -650,7 +654,7 @@ and any `layout` test that asserted the old band tops literally.
 then switch back and forth and confirm the step you were editing is where you left it. Type a pattern on device 2 and confirm
 device 1's pattern is untouched.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
 git add -A
