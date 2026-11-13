@@ -572,12 +572,36 @@ git commit -m "refactor(main): the app runs on a rack of one device"
 
 ## Progress
 
-- [ ] Task 1 — the mute flag
-- [ ] Task 2 — the device and its kind
-- [ ] Task 3 — the rack, the selection and the bus
-- [ ] Task 4 — names and numbers
-- [ ] Task 5 — one transport over every device
-- [ ] Task 6 — `main` runs on a rack of one
+- [x] **Task 1 — the mute flag.** `af4843b`. `SharedState::mute` + `is_muted`/`set_mute`, Relaxed, tested.
+      Review found nothing; the doc comment records why it is a gain and not a stop, which plan 39 leans on.
+- [x] **Task 2 — the device and its kind.** `e6e32f6`. `DeviceKind` (one-entry catalogue, full `match`), `Device` with
+      `number`/`name`, `Device::new`/`adopted`/`default_name`, `MAX_DEVICES`. `tests/rack.rs` started.
+- [x] **Task 3 — the rack, the selection and the bus.** `4b03b44`. `BusState { slots }`, `AddError`, `RemoveError`, `Rack` with
+      `from_saved`/`from_device`, `select`/`add`/`remove`, `publish`/`hold`. Review found one thing: `publish`'s doc said
+      "every mutation" while `select` deliberately does not publish — comment fixed in the commit.
+      **Ruling:** `add` does *not* take the selection; the panel asks (`Request::Select`), so the rack never moves under a hand
+      that was not asking. Cost if wrong: one extra call at the one place that adds.
+- [x] **Task 4 — names and numbers.** `2d1bde0`. `Rack::rename` trims, falls back to the default, suffixes a collision `(2)` the
+      way `persist::free_song_name` does; numbers are a high-water mark, so a removal frees none. Untested: the out-of-range arm
+      answers `""` and touches nothing — a guard, unreachable from the panel.
+- [x] **Task 5 — one transport over every device.** `8bd7256`. `playing`/`tempo_bpm` on the rack, `sync_transport` fanned out
+      by both setters, by `from_*` and by `add`; `tempo_cell` hands the MIDI thread a clone of the Arc.
+      **Ruling (found by review, blocks 38.6):** `main`'s per-frame `sync_transport()` would undo a press that writes a
+      *device's* atomic, and `ui::row_transport` does exactly that (`shared.set_playing(true)`). The transport row must go
+      through a request — `PanelState::transport_request: Option<ui::transport::Request>` with `Play`/`Stop`/`NudgeTempo(i32)`
+      — and `main` drains it into `rack.set_playing`/`rack.set_tempo_bpm`. A song load must likewise call
+      `rack.set_tempo_bpm(saved.bpm)` after `apply_saved`. Cost if wrong: RUN/STOP reads as broken, and a frame of lag on the
+      downbeat.
+- [ ] **Task 6 — `main` runs on a rack of one.** **Not started.** Two findings for whoever takes it:
+      (a) `Rack` owns state and bank together, so the four sites that need both at once — `dispatch::handle`,
+      `shortcuts::select_pattern`, and the three `persist::apply_saved` calls — cannot write
+      `f(self.rack.state(), self.rack.bank_mut())`: two borrows of `self.rack`. Add
+      `Rack::device_mut(&mut self) -> &mut Device` and take `&device.state` / `&mut device.bank` from one `&mut Device`,
+      which Rust allows because they are different fields.
+      (b) `TakkaApp { state, bank }` becomes `TakkaApp { rack }` with `fn state(&self) -> &SharedState` and
+      `fn state_arc(&self) -> Arc<SharedState>` accessors; 24 `self.state`/`self.bank` sites in `main.rs` convert mechanically
+      (`&self.state` → `self.state()`, `self.bank.` → `self.bank().`, `Arc::clone(&self.state)` → `self.state_arc()`). The
+      `Rig` closure keeps rendering device 1 until plan 39 task 7.
 
 Rulings made while writing this plan, and their cost if wrong:
 
