@@ -627,12 +627,29 @@ git commit -m "refactor(midi): the routing table decides, and main is out of the
 
 ## Progress
 
-- [ ] Task 1 — a message knows its channel
-- [ ] Task 2 — the filter
-- [ ] Task 3 — the filter reaches the bus
-- [ ] Task 4 — the router
-- [ ] Task 5 — several ports at once
-- [ ] Task 6 — the app routes
+- [x] **Task 1 — a message knows its channel.** `39e6575`. `channel` on the three channel messages, `channel()` and
+      `carries_notes()`; `handle` ignores the channel because the routing has already decided. `gate.rs`'s patterns take `..`.
+- [x] **Task 2 — the filter.** `34023c5`. `midi/route.rs`: `Ports`/`Channel`/`Role`, `InputFilter::{everything, silent, hears}`.
+      `hears` deliberately ignores the role — one question per function, and the router asks the role only about note events.
+- [x] **Task 3 — the filter reaches the bus.** `34023c5`. `Device.inputs` (`everything()` for a loaded device, `silent()` for a
+      new one), `BusState.routes` built in the same pass as `slots`, `Rack::set_inputs`/`inputs`. 12 tests in `tests/rack.rs`.
+- [x] **Task 4 — the router.** `34023c5`. One `Router` per port: raw-bytes trace, clock to the tempo cell, CC and notes to every
+      device that hears them, one note gate per port so a duplicate note-on is a duplicate for everyone. Transport bytes are
+      parsed and dropped, exactly as before this plan — a MIDI transport has no rack to reach from midir's thread, and the
+      plan does not pretend otherwise.
+- [ ] **Task 5 — several ports at once.** **Not started.** `main::Midi` becomes `{ enabled: Vec<String>, inputs: Vec<(String,
+      MidiIn)>, .. }`, one connection per enabled port, one supervisor for the app; `ui::settings` turns its MIDI picker into a
+      checkbox list (`Action::TogglePort(String, bool)`, `Rows::ports: Vec<Rect>`), and `tests/settings_live.rs` gains the
+      three-port test the plan gives.
+- [ ] **Task 6 — the app routes.** **Not started.** Each opened port's handler owns
+      `Router::new(name, rack.tempo_cell())` with `Arc::clone(&bus)` captured; the closure becomes
+      `move |_, bytes| router.on_message(&bus.load(), bytes)`; the inline `match event` in `main` goes. `main::save` writes
+      `saved.midi_input` from the first enabled port — the field is one string and stays one until the save format lands.
+- **Ruling:** the router is written and tested but not yet wired. `Router::on_message` has no caller until 40.6, so its
+      behaviour is pinned by the filter tests and by review rather than by an integration test; whoever takes 40.5 should add
+      the `BusState { slots, routes }` routing test the plan specifies before trusting it.
+- **Ruling:** transport bytes (`Start`/`Stop`/`Continue`) stay unhandled, as they were before this plan. Wiring them needs the
+      rack, which the MIDI thread cannot reach; it belongs with the global-transport round in `plans/future/wishlist.md`.
 
 Rulings made while writing this plan, and their cost if wrong:
 
