@@ -112,3 +112,53 @@ fn a_rack_from_a_saved_session_is_the_session_it_was() {
     assert!((rack.state().cutoff.get() - 0.25).abs() < 1e-6);
     assert_eq!(rack.bank().current(), saved.bank.current());
 }
+#[test]
+fn a_device_number_is_never_reused() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second"); // ACID 2
+    rack.add(DeviceKind::Acid).expect("a third"); // ACID 3
+    rack.remove(1).expect("a device may go");
+    let index = rack.add(DeviceKind::Acid).expect("room again");
+    assert_eq!(
+        rack.devices()[index].number,
+        4,
+        "the gap at 2 is not filled"
+    );
+    assert_eq!(rack.devices()[index].name, "ACID 4");
+}
+
+#[test]
+fn renaming_lands_on_one_device_and_keeps_names_distinct() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+
+    assert_eq!(
+        rack.rename(0, "  BASS  "),
+        "BASS",
+        "the typed name is trimmed"
+    );
+    assert_eq!(rack.devices()[0].name, "BASS");
+    assert_eq!(
+        rack.devices()[1].name,
+        "ACID 2",
+        "the neighbour is untouched"
+    );
+
+    assert_eq!(
+        rack.rename(1, "BASS"),
+        "BASS (2)",
+        "a collision is suffixed, not refused"
+    );
+    assert_eq!(rack.devices()[1].name, "BASS (2)");
+
+    assert_eq!(
+        rack.rename(1, "   "),
+        "ACID 2",
+        "blank falls back to the device's own name"
+    );
+    assert_eq!(
+        rack.rename(0, "BASS"),
+        "BASS",
+        "renaming back to your own name is not a collision"
+    );
+}

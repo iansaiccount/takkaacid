@@ -233,4 +233,33 @@ impl Rack {
         self.publish();
         Ok(())
     }
+
+    /// Give a device a name of its own, and answer the name it landed on.
+    ///
+    /// It never fails: a blank falls back to the device's default name, and a name another device already holds is suffixed
+    /// `(2)` — the rule `persist::free_song_name` uses for songs — because two `BASS` cells would make "which one is muted"
+    /// unanswerable. Truncation is the strip's business (`ui::text::fit`), not the store's. An index that is not there
+    /// answers with the empty string and changes nothing.
+    pub fn rename(&mut self, index: usize, typed: &str) -> String {
+        if index >= self.devices.len() {
+            return String::new();
+        }
+        let wanted = match typed.trim() {
+            "" => Device::default_name(self.devices[index].kind, self.devices[index].number),
+            trimmed => trimmed.to_string(),
+        };
+        let mut candidate = wanted.clone();
+        let mut copy = 2;
+        while self
+            .devices
+            .iter()
+            .enumerate()
+            .any(|(other, device)| other != index && device.name == candidate)
+        {
+            candidate = format!("{wanted} ({copy})");
+            copy += 1;
+        }
+        self.devices[index].name.clone_from(&candidate);
+        candidate
+    }
 }
