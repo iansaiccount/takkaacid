@@ -5,6 +5,8 @@
 
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
+
 use acid_core::bank::PatternBank;
 
 use crate::state::SharedState;
@@ -79,5 +81,156 @@ impl Device {
     /// The name a device carries until a hand types one: `ACID 3`.
     pub fn default_name(kind: DeviceKind, number: usize) -> String {
         format!("{} {number}", kind.name())
+    }
+}
+
+/// What the audio callback and the MIDI handlers read: the rack's devices, in rack order.
+///
+/// One published value rather than several atomics, so a reader can never see a half-changed list. `Rack::publish` writes it;
+/// the mixer loads it once per block and each port's router loads it once per message.
+#[derive(Debug)]
+pub struct BusState {
+    /// One entry per device, in rack order. The mixer reconciles its engines against this list and nothing else.
+    pub slots: Vec<Arc<SharedState>>,
+}
+
+/// The rack refused to take another device.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum AddError {
+    /// [`MAX_DEVICES`] is already holding devices.
+    AtCapacity,
+}
+
+/// The rack refused to give up a device.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum RemoveError {
+    /// A rack always holds at least one device: there is nothing to play a pattern on without one.
+    LastDevice,
+    /// There is no device at that index.
+    OutOfRange,
+}
+
+/// A list of devices, the one the panel is showing, and what the other threads read.
+pub struct Rack {
+    devices: Vec<Device>,
+    selected: usize,
+    /// The number the next device will be given. A high-water mark: a removal never frees one, so two devices never share a
+    /// default name and "the one I muted" is still the one that was muted.
+    next_number: usize,
+    bus: Arc<ArcSwap<BusState>>,
+}
+
+impl Rack {
+    /// The session's rack: one device holding the bank and the state the save file carried.
+    pub fn from_saved(saved: &crate::persist::SavedState) -> Self {
+        let device = Device::adopted(
+            DeviceKind::Acid,
+            1,
+            crate::persist::saved_to_shared(saved),
+            saved.bank.clone(),
+        );
+        Self::from_device(device)
+    }
+
+    /// A rack of one device that already belongs to somebody else.
+    pub fn from_device(device: Device) -> Self {
+        let next_number = device.number + 1;
+        let rack = Self {
+            devices: vec![device],
+            selected: 0,
+            next_number,
+            bus: Arc::new(ArcSwap::from_pointee(BusState { slots: Vec::new() })),
+        };
+        rack.publish();
+        rack
+    }
+
+    /// The bus, for the audio thread and the MIDI handlers to hold a clone of.
+    pub fn bus(&self) -> Arc<ArcSwap<BusState>> {
+        Arc::clone(&self.bus)
+    }
+
+    /// Publish the device list. Adding or removing a device ends here; a selection does not, because nothing but the panel
+    /// draws one. An `ArcSwap::store` never blocks a reader.
+    pub fn publish(&self) {
+        let slots = self
+            .devices
+            .iter()
+            .map(|device| Arc::clone(&device.state))
+            .collect();
+        self.bus.store(Arc::new(BusState { slots }));
+    }
+
+    /// What the other threads currently see.
+    pub fn hold(&self) -> Arc<BusState> {
+        self.bus.load_full()
+    }
+
+    pub fn devices(&self) -> &[Device] {
+        &self.devices
+    }
+
+    pub fn selected(&self) -> usize {
+        self.selected
+    }
+
+    /// Show a device. An index that is not there is refused rather than clamped: the caller decides what to show instead.
+    pub fn select(&mut self, index: usize) -> bool {
+        if index >= self.devices.len() {
+            return false;
+        }
+        self.selected = index;
+        true
+    }
+
+    /// The device the panel is showing.
+    pub fn device(&self) -> &Device {
+        &self.devices[self.selected]
+    }
+
+    pub fn state(&self) -> &SharedState {
+        &self.device().state
+    }
+
+    pub fn state_arc(&self) -> Arc<SharedState> {
+        Arc::clone(&self.device().state)
+    }
+
+    pub fn bank(&self) -> &PatternBank {
+        &self.device().bank
+    }
+
+    pub fn bank_mut(&mut self) -> &mut PatternBank {
+        let index = self.selected;
+        &mut self.devices[index].bank
+    }
+
+    /// A new device, numbered from the high-water mark, placed last and published. It does not take the selection: that is
+    /// the panel's request to make, so the rack never moves under a hand that was not asking.
+    pub fn add(&mut self, kind: DeviceKind) -> Result<usize, AddError> {
+        if self.devices.len() >= MAX_DEVICES {
+            return Err(AddError::AtCapacity);
+        }
+        let number = self.next_number;
+        self.next_number += 1;
+        self.devices.push(Device::new(kind, number));
+        self.publish();
+        Ok(self.devices.len() - 1)
+    }
+
+    /// Give up a device. The last one stays, and the selection never points past the end.
+    pub fn remove(&mut self, index: usize) -> Result<(), RemoveError> {
+        if index >= self.devices.len() {
+            return Err(RemoveError::OutOfRange);
+        }
+        if self.devices.len() == 1 {
+            return Err(RemoveError::LastDevice);
+        }
+        self.devices.remove(index);
+        if self.selected >= self.devices.len() {
+            self.selected = self.devices.len() - 1;
+        }
+        self.publish();
+        Ok(())
     }
 }
