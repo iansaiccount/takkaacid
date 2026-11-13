@@ -632,7 +632,7 @@ impl Midi {
                             midi::tempo::follow_clock(&state, bpm);
                         }
                     }
-                    midi::message::MidiEvent::ControlChange { cc, value } => {
+                    midi::message::MidiEvent::ControlChange { cc, value, .. } => {
                         midi::cc::apply_cc(&state, cc, value);
                     }
                     other => {
