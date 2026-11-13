@@ -98,18 +98,20 @@ between tasks hide that no single diff showed?
 
 ## Progress
 
-**Where the phase is: plans 38 and 39 are complete, plan 40 is 5 of 6.** Everything is committed and the tree is green
-(64 test suites, `clippy --all-targets -D warnings` and `fmt --check` clean). A new session resumes by reading the plan named
-below — its `## Progress` section carries every commit, what each task's review found, and the rulings — and by `git log`, not
-by re-deriving anything.
+**Where the phase is: plans 38, 39 and 40 are complete; plan 41 (the strip) is next.** Everything is committed and the tree
+is green (64 test suites, `clippy --all-targets -D warnings` and `fmt --check` clean). A new session resumes by reading the plan
+named below — its `## Progress` section carries every commit, what each task's review found, and the rulings — and by
+`git log`, not by re-deriving anything.
 
 - [x] **38 — the rack** (`plans/phase 2/38-the-rack.md`): `SharedState::mute`, `Device`, `Rack`, `BusState`, `Rack::rename`,
       the rack's transport and fan-out, and `main` running on a rack of one. Commits `af4843b`..`b8e4f82`, `3591083`.
 - [x] **39 — the mixer** (`plans/phase 2/39-the-mixer.md`): `Engine::start_at`, `audio::mixer::Mixer` (slots, reconcile, mute
       ramp, master limiter), `AudioRenderer::seek`, and the `Rig` closure rendering the rack. Commits `ed4a66c`..`784bca2`.
-- [ ] **40 — MIDI routing** (`plans/phase 2/40-midi-routing.md`): tasks 1–5 landed (`39e6575`, `34023c5`, `a19908a`, and task
-      5's commit); **task 6 (wire the router, delete `main`'s inline handler) is next**. Task 5's review ran fresh (`reviewer`
-      subagent, 10 findings, 8 actioned), and its rulings are in that plan's Progress.
+- [x] **40 — MIDI routing** (`plans/phase 2/40-midi-routing.md`): all six tasks landed (`39e6575`, `34023c5`, `a19908a`,
+      `f651c1e`, and task 6's commit). Both reviews ran fresh (`reviewer` subagent): task 5's found 10 (8 actioned), task 6's
+      found 4 (3 actioned, one of them moved into plan 42's task list). One **Important** is deferred and recorded there: the
+      tempo fader (CC 72) is overwritten by the rack fan-out, a defect plan 38 introduced, and it wants its own task before
+      plan 43's gate.
 - [ ] **41 — the strip** (`plans/phase 2/41-the-strip.md`)
 - [ ] **42 — the device card** (`plans/phase 2/42-the-device-card.md`)
 - [ ] **43 — documents and gates** (`plans/phase 2/43-documents-and-gates.md`)

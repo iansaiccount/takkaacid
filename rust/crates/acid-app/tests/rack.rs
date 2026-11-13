@@ -263,3 +263,21 @@ fn input_filter() -> acid_app::midi::route::InputFilter {
         role: acid_app::midi::route::Role::ControlOnly,
     }
 }
+
+/// The seam the MIDI thread depends on: it is handed cells, never the rack. Two routers on two ports must write the same
+/// tempo, and the fan-out must carry it to every device — that is what makes one clock move the whole rack.
+#[test]
+fn a_rack_hands_each_router_the_tempo_cell_it_shares() {
+    let rack = one();
+    let a = rack.tempo_cell();
+    let b = rack.tempo_cell();
+    a.set(144.0);
+    assert_eq!(b.get(), 144.0, "one cell, two handles");
+    assert!(
+        std::sync::Arc::ptr_eq(&a, &b),
+        "a clone of the rack's cell, never a copy of its value"
+    );
+
+    rack.sync_transport();
+    assert_eq!(rack.devices()[0].state.tempo_bpm.get(), 144.0);
+}

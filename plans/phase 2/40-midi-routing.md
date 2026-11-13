@@ -660,10 +660,32 @@ git commit -m "refactor(midi): the routing table decides, and main is out of the
       ports rather than in a test, because constructing a `MidiIn` needs a device (the roster around it is tested). The
       scrolling-list test's rect filter also now rejects a sliver, so an animating scroll-bar handle can no longer be counted
       as a row face.
-- [ ] **Task 6 — the app routes.** **Not started.** Each opened port's handler owns
-      `Router::new(name, rack.tempo_cell())` with `Arc::clone(&bus)` captured; the closure becomes
-      `move |_, bytes| router.on_message(&bus.load(), bytes)`; the inline `match event` in `main` goes. `main::save` writes
-      `saved.midi_input` from the first enabled port — the field is one string and stays one until the save format lands.
+- [x] **Task 6 — the app routes.** `Midi::new(enabled, tempo_cell, bus)` takes the two cells before the rack moves into the
+      app; each opened port's handler is a `Router::new(name, Arc::clone(&tempo))` built inside the probe thread and closed
+      over `Arc::clone(&bus)`, and the closure is `move |_, bytes| router.on_message(&bus.load(), bytes)` — `load`, never
+      `load_full`. The inline `match event` (`port_handler`) is gone, and with it the last thing that opened a port: one caller
+      of `open_named` remains in the workspace. `save`/`session_for_disk` already wrote `midi_input` from the first enabled
+      port (task 5), so the Files block's second half needed nothing. `follow_clock` and `SharedState::external_clock` are
+      deleted: the only writer of the flag went with the inline handler, nothing in the workspace (code, tests, `acid-core`,
+      the guide) ever read it, and a field that always reads `false` is worse than none. `tests/rack.rs` gains
+      `a_rack_hands_each_router_the_tempo_cell_it_shares` — green on arrival, as the plan said it would be: it is a check,
+      not a red test.
+- **Task 6 review** (fresh `reviewer` subagent, 4 findings: 3 actioned, 1 recorded). It found **no code defect in the diff**;
+      it verified parity with the deleted handler for clock, CC and notes, that a followed clock still moves the whole rack
+      through `sync_transport`, that one `Router` and therefore one note gate is built per connection, and that no reader of
+      `external_clock` and no other caller of `follow_clock` existed anywhere. Actioned: a stale comment in `main` still said a
+      fresh session opens "every port" (task 5's ruling made it the first); Review Focus 1's live test through the card had no
+      home, so it is now in `plans/phase 2/42-the-device-card.md` task 4 step 1 — the card that sets a filter is what plan 42
+      builds, and until then the rack-level half in `tests/rack.rs` is the only place it can be pinned.
+- **Deferred (Important), found by task 6's review:** `CcTarget::Tempo` (factory CC 72) writes the *device's* `tempo_bpm`
+      and `sync_transport` overwrites it from the rack cell every frame, so the tempo fader does nothing. It predates this
+      task — plan 38's fan-out did it — and the fix is a `tempo_request` atomic drained by `main` the way `pattern_request`
+      is, which wants its own task in this phase (before plan 43's gate) rather than being smuggled into "the app routes".
+      Cost while it is deferred: a player who teaches or uses the tempo fader gets a control that springs back, and nothing
+      says why.
+- **Deferred (Minor), deliberate:** the probe thread's closure — `Router` over `bus.load()` — is exercised by hand
+      (`--midi-map`, and a note on a port the device's filter does not name produces silence), because constructing a
+      `MidiIn` needs a device. What it hands messages to is covered by six `Router` tests and the roster around it by two.
 - **Ruling (paid in task 5):** the router was written and tested by its filters but had no `on_message` test until task 5
       added six, which is what this ruling asked of whoever took it: task 4 shipped `Router::on_message` with no caller and no
       routing test, and it is exactly the function 40.6 turns into the only message path.

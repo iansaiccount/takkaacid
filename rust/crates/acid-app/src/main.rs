@@ -26,7 +26,7 @@ fn main() -> eframe::Result {
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
     rack.state().set_pattern_index(rack.bank().current());
     // The MIDI inputs the last session had open, if any: a missing port is reported, never swapped for another. A session
-    // that saved no name takes every port the machine reports, filled in on the first probe.
+    // that saved no name opens the first port the machine reports, filled in on the first probe.
     let midi_enabled: Vec<String> = saved.midi_input.clone().into_iter().collect();
     let song_name = saved.song.clone();
     // Copied out before the closure takes its other fields: a `bool` needs no ceremony to travel.
@@ -75,13 +75,17 @@ fn main() -> eframe::Result {
                 scale_knob: panel_ui::scale::scale_position(saved_scale),
                 ..Default::default()
             };
+            // The MIDI side takes the two cells it needs before the rack moves into the app: a router writes the tempo cell
+            // and loads the published bus, and never sees the rack itself.
+            let tempo_cell = rack.tempo_cell();
+            let midi_bus = rack.bus();
             Ok(Box::new(TakkaApp {
                 rig,
                 rack,
                 panel,
                 autosave: persist::Autosave::new(),
                 settings_was_open: false,
-                midi: Midi::new(midi_enabled),
+                midi: Midi::new(midi_enabled, tempo_cell, midi_bus),
                 pending_pattern: None,
                 last_position: 0,
             }))
@@ -368,7 +372,7 @@ impl eframe::App for TakkaApp {
             self.panel.reprobe_requested = false;
             self.midi.reprobe();
         }
-        self.midi.probe_if_due(self.state_arc());
+        self.midi.probe_if_due();
         // The supervisor's own words, and whether it has given up: the settings card shows both, and nowhere else does.
         let connected = self.midi.connected();
         let midi_status = midi::supervisor::status_line(
@@ -433,10 +437,6 @@ impl TakkaApp {
     /// The selected device's state, as the panel, the shortcuts and the save file want it.
     fn state(&self) -> &state::SharedState {
         self.rack.state()
-    }
-
-    fn state_arc(&self) -> Arc<state::SharedState> {
-        self.rack.state_arc()
     }
 
     /// Do what the settings card asked for. The folds and CLOSE never arrive here — they are the card's own state — and
@@ -593,20 +593,31 @@ struct Midi {
     supervisor: midi::supervisor::MidiSupervisor,
     /// The probe in flight, if any: one result per port it tried, and the channel closes when the thread is done.
     pending: Option<std::sync::mpsc::Receiver<ProbeResult>>,
-    /// Whether `enabled` has ever been filled from the machine. A first run fills it with every port the machine reports,
-    /// which is how a rig that works today keeps working; a player who then turns every port off means it, so the fill
-    /// happens once and never again.
+    /// Whether `enabled` has ever been filled from the machine. A session with no saved port opens the first the machine
+    /// reports, which is the one the app opened on its own before it could hold more than one; a player who then turns
+    /// every port off gets silence for the rest of the session, because the fill happens once.
     filled: bool,
+    /// The rack's tempo cell, shared with every router this app opens: an external clock writes it, and the fan-out in
+    /// `logic` carries it to the devices, so one clock moves the whole rack.
+    tempo: Arc<state::AtomicF32>,
+    /// The published rack, for each router to load once per message: a clone of the swap, never a copy of its contents.
+    bus: Arc<arc_swap::ArcSwap<device::BusState>>,
 }
 
 impl Midi {
-    fn new(enabled: Vec<String>) -> Self {
+    fn new(
+        enabled: Vec<String>,
+        tempo: Arc<state::AtomicF32>,
+        bus: Arc<arc_swap::ArcSwap<device::BusState>>,
+    ) -> Self {
         Self {
             filled: !enabled.is_empty(),
             enabled,
             inputs: Vec::new(),
             supervisor: midi::supervisor::MidiSupervisor::new(),
             pending: None,
+            tempo,
+            bus,
         }
     }
 
@@ -636,7 +647,7 @@ impl Midi {
     }
 
     /// Start a probe unless one is already running or the supervisor is waiting.
-    fn probe_if_due(&mut self, state: Arc<state::SharedState>) {
+    fn probe_if_due(&mut self) {
         let now = std::time::Instant::now();
         if self.pending.is_some() || !self.supervisor.should_probe(now) {
             return;
@@ -676,12 +687,20 @@ impl Midi {
         }
         let (tx, rx) = std::sync::mpsc::channel();
         self.pending = Some(rx);
+        // The two cells the MIDI thread needs, cloned once per probe round: the router never sees the rack.
+        let tempo = Arc::clone(&self.tempo);
+        let bus = Arc::clone(&self.bus);
         std::thread::spawn(move || {
             for name in missing {
-                let handler = port_handler(Arc::clone(&state));
-                let result = midi::ports::MidiIn::open_named(&name, handler)
-                    .map(|input| (name.clone(), input))
-                    .map_err(|error| (name, error.to_string()));
+                // One router per connection, because a note gate and a clock follower belong to a port: two ports sharing
+                // an "already down" set would swallow a press on the second keyboard.
+                let bus = Arc::clone(&bus);
+                let mut router = midi::route::Router::new(name.as_str(), Arc::clone(&tempo));
+                let result = midi::ports::MidiIn::open_named(&name, move |_, bytes| {
+                    router.on_message(&bus.load(), bytes)
+                })
+                .map(|input| (name.clone(), input))
+                .map_err(|error| (name, error.to_string()));
                 // A receiver that has gone away means the app is closing: drop the connection and stop opening more.
                 if tx.send(result).is_err() {
                     return;
@@ -750,44 +769,6 @@ impl Midi {
     }
 }
 
-/// The handler one connection runs on midir's thread: it writes atomics and returns, and never blocks.
-///
-/// Until the routing table lands (the next task in this plan) every port's messages go to the selected device's state,
-/// exactly as the single connection did — but the clock follower and the note gate are per connection, so two ports
-/// cannot share an "already down" set and one press on one keyboard cannot swallow a press on the other.
-fn port_handler(state: Arc<state::SharedState>) -> impl FnMut(u64, &[u8]) + Send + 'static {
-    let mut follower = midi::tempo::TempoFollower::new();
-    let mut gate = midi::gate::NoteGate::new();
-    move |_, bytes| {
-        // The raw bytes are the ground truth: they are what the keyboard actually sent, before the app reads anything
-        // into them. Looking at them is how a player tells a transposed keyboard from a wrong mapping.
-        acid_app::trace::note("midi raw", || {
-            let hex: Vec<String> = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
-            format!("{} ({} bytes)", hex.join(" "), bytes.len())
-        });
-        let Some(event) = midi::message::parse(bytes) else {
-            return;
-        };
-        match event {
-            midi::message::MidiEvent::Clock => {
-                if let Some(bpm) = follower.on_clock(std::time::Instant::now()) {
-                    midi::tempo::follow_clock(&state, bpm);
-                }
-            }
-            midi::message::MidiEvent::ControlChange { cc, value, .. } => {
-                midi::cc::apply_cc(&state, cc, value);
-            }
-            other => {
-                // One note-on per press: a note already down is the same note delivered twice, not a second press, and it
-                // must not write a second step.
-                if midi::gate::passes(&mut gate, other) {
-                    midi::message::handle(other, &state);
-                }
-            }
-        }
-    }
-}
-
 /// Print what the app makes of each MIDI note, so a player can compare it with the note they pressed.
 ///
 /// Two names appear per line on purpose. `keyboard` is what the note is called on a keyboard (MIDI 60 is C4); `app` is
@@ -815,11 +796,24 @@ mod tests {
     use std::sync::Arc;
 
     use super::{Midi, still_wanted};
+    /// A `Midi` with no rack behind it: the roster is all these tests touch, and a real `MidiIn` would need a device.
+    fn midi_for_test(enabled: Vec<String>) -> Midi {
+        Midi::new(
+            enabled,
+            Arc::new(acid_app::state::AtomicF32::new(130.0)),
+            Arc::new(arc_swap::ArcSwap::from_pointee(
+                acid_app::device::BusState {
+                    slots: Vec::new(),
+                    routes: Vec::new(),
+                },
+            )),
+        )
+    }
     /// Each port is one entry in a set, and turning one off cannot disturb another. No device is needed: the roster is
     /// bookkeeping, and the connections it drops are only ever the ones it was handed.
     #[test]
     fn ports_are_a_set_and_turning_one_off_leaves_the_rest() {
-        let mut midi = Midi::new(Vec::new());
+        let mut midi = midi_for_test(Vec::new());
         midi.enable("KeyStep".to_string());
         midi.enable("nanoKONTROL".to_string());
         midi.enable("KeyStep".to_string());

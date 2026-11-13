@@ -139,8 +139,6 @@ pub struct SharedState {
     /// How hard the held note was struck, `0..=127`. The audition plays at this velocity, so what the player hears is
     /// what the step will carry.
     pub midi_velocity: AtomicU32,
-    /// True while a MIDI clock is driving the tempo.
-    pub external_clock: AtomicBool,
     /// The computer keyboard's octave offset, `-2..=2`.
     pub octave: AtomicI32,
     /// The controller each learnable knob listens to, in `midi::cc::LEARNABLE` order; `-1` means unmapped.
@@ -190,7 +188,6 @@ impl SharedState {
             midi_gate: AtomicBool::new(false),
             midi_accent: AtomicBool::new(false),
             midi_velocity: AtomicU32::new(u32::from(acid_core::pattern::DEFAULT_VELOCITY)),
-            external_clock: AtomicBool::new(false),
             octave: AtomicI32::new(0),
             cc_map: std::array::from_fn(|slot| {
                 AtomicI32::new(i32::from(crate::midi::cc::DEFAULT_CC[slot]))

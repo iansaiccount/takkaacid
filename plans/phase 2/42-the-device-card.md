@@ -399,6 +399,37 @@ fn the_role_row_switches_between_playing_and_controlling() {
     click(&ctx, &mut panel, &state, rows.role.center());
     assert_eq!(panel.device_request, Some(Request::SetRole(0, acid_app::midi::route::Role::ControlOnly)));
 }
+#[test]
+fn a_device_that_hears_nothing_is_given_one_port_at_a_time() {
+    // Review Focus 1 of plan 40, at the level a player meets it: a device added by `+` arrives silent, so its card opens
+    // with every port unticked, and the first port it is given is exactly that one — never "all of them".
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.strip.selected = 1;
+    panel.device_card.open = Some(1);
+    panel.device_card.ports = vec![
+        ("Launchkey MIDI".into(), false),
+        ("nanoKONTROL".into(), false),
+    ];
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let rows = device_card::rows(
+        device_card::card_rect(acid_app::ui::layout::layout(screen()).panel, s),
+        s,
+        &panel.device_card,
+    );
+    click(&ctx, &mut panel, &state, rows.ports[0].center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetPorts(
+            1,
+            acid_app::midi::route::Ports::Named(vec!["Launchkey MIDI".into()])
+        )),
+        "a new device hears one port because it was given one, not because it hears everything"
+    );
+}
 ```
 
 - [ ] **Step 2: Run to watch them fail**
@@ -415,7 +446,9 @@ ticked, and a port row clicked from `All` produces `Named(everything_except_that
 this one".
 
 When `main` opens a card (`Request::Open`), it calls `Card::offer(name, &device.inputs, midi::ports::list_ports().unwrap_or_default())`
-so the list is the machine's, read on the click rather than per frame.
+so the list is the machine's, read on the click rather than per frame. The device's own filter is what decides which rows are
+ticked, so a device added by `+` opens with every row unticked: that is Review Focus 1 of plan 40, and this card is where a
+player can finally see it.
 
 - [ ] **Step 4: Run the tests**
 
