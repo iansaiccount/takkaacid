@@ -5,11 +5,14 @@
 
 use std::sync::Arc;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use acid_core::timing::clamp_bpm;
 use arc_swap::ArcSwap;
 
 use acid_core::bank::PatternBank;
 
-use crate::state::SharedState;
+use crate::state::{AtomicF32, DEFAULT_BPM, SharedState};
 
 /// The most devices a rack may hold.
 ///
@@ -117,11 +120,17 @@ pub struct Rack {
     /// The number the next device will be given. A high-water mark: a removal never frees one, so two devices never share a
     /// default name and "the one I muted" is still the one that was muted.
     next_number: usize,
+    /// The rack's transport. Every device follows it, so RUN starts them all on one frame — the downbeats coincide rather
+    /// than drifting apart by a block.
+    playing: AtomicBool,
+    /// The rack's tempo, in a cell the MIDI thread holds a clone of: an external clock writes it, and `sync_transport`
+    /// carries it to the devices. Tempo is the rack's; swing stays each device's own.
+    tempo_bpm: Arc<AtomicF32>,
     bus: Arc<ArcSwap<BusState>>,
 }
 
 impl Rack {
-    /// The session's rack: one device holding the bank and the state the save file carried.
+    /// The session's rack: one device holding the bank and the state the save file carried, at the tempo it was saved at.
     pub fn from_saved(saved: &crate::persist::SavedState) -> Self {
         let device = Device::adopted(
             DeviceKind::Acid,
@@ -129,18 +138,25 @@ impl Rack {
             crate::persist::saved_to_shared(saved),
             saved.bank.clone(),
         );
-        Self::from_device(device)
+        Self::with_device(device, saved.bpm)
     }
 
-    /// A rack of one device that already belongs to somebody else.
+    /// A rack of one device that already belongs to somebody else, at the launch tempo.
     pub fn from_device(device: Device) -> Self {
+        Self::with_device(device, DEFAULT_BPM)
+    }
+
+    fn with_device(device: Device, tempo_bpm: f32) -> Self {
         let next_number = device.number + 1;
         let rack = Self {
             devices: vec![device],
             selected: 0,
             next_number,
+            playing: AtomicBool::new(false),
+            tempo_bpm: Arc::new(AtomicF32::new(clamp_bpm(tempo_bpm))),
             bus: Arc::new(ArcSwap::from_pointee(BusState { slots: Vec::new() })),
         };
+        rack.sync_transport();
         rack.publish();
         rack
     }
@@ -214,6 +230,8 @@ impl Rack {
         let number = self.next_number;
         self.next_number += 1;
         self.devices.push(Device::new(kind, number));
+        // A device that arrives while the rack is playing joins the transport rather than sitting silent.
+        self.sync_transport();
         self.publish();
         Ok(self.devices.len() - 1)
     }
@@ -261,5 +279,50 @@ impl Rack {
         }
         self.devices[index].name.clone_from(&candidate);
         candidate
+    }
+
+    /// Whether the rack's transport is running. No device may disagree: the devices' own flags are mirrors of this one.
+    pub fn is_playing(&self) -> bool {
+        self.playing.load(Ordering::Relaxed)
+    }
+
+    /// Start or stop every device, on the same frame. This is what makes the downbeats coincide.
+    pub fn set_playing(&self, playing: bool) {
+        self.playing.store(playing, Ordering::Relaxed);
+        self.sync_transport();
+    }
+
+    pub fn toggle_playing(&self) -> bool {
+        let next = !self.is_playing();
+        self.set_playing(next);
+        next
+    }
+
+    pub fn tempo_bpm(&self) -> f32 {
+        self.tempo_bpm.get()
+    }
+
+    pub fn set_tempo_bpm(&self, bpm: f32) {
+        self.tempo_bpm.set(clamp_bpm(bpm));
+        self.sync_transport();
+    }
+
+    /// The tempo cell, for the MIDI thread's clock follower to write. A clone of the rack's own cell, never a copy of its
+    /// value, so a followed tempo lands where `sync_transport` will find it.
+    pub fn tempo_cell(&self) -> Arc<AtomicF32> {
+        Arc::clone(&self.tempo_bpm)
+    }
+
+    /// Fan the transport out to every device.
+    ///
+    /// Called by both setters and once per frame by `main`, which is how a tempo the MIDI thread wrote straight into the cell
+    /// reaches the devices without the MIDI thread ever touching the rack.
+    pub fn sync_transport(&self) {
+        let playing = self.is_playing();
+        let tempo = self.tempo_bpm.get();
+        for device in &self.devices {
+            device.state.playing.store(playing, Ordering::Relaxed);
+            device.state.tempo_bpm.set(tempo);
+        }
     }
 }

@@ -162,3 +162,60 @@ fn renaming_lands_on_one_device_and_keeps_names_distinct() {
         "renaming back to your own name is not a collision"
     );
 }
+
+#[test]
+fn the_transport_is_the_racks_and_the_devices_follow_it() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+
+    assert!(!rack.is_playing());
+    rack.set_playing(true);
+    assert!(rack.is_playing());
+    for device in rack.devices() {
+        assert!(
+            device.state.is_playing(),
+            "every device starts on the same frame"
+        );
+    }
+    rack.set_playing(false);
+    for device in rack.devices() {
+        assert!(!device.state.is_playing());
+    }
+
+    rack.set_tempo_bpm(5.0);
+    assert_eq!(
+        rack.tempo_bpm(),
+        acid_core::timing::MIN_BPM,
+        "out of range is clamped, not stored"
+    );
+    rack.set_tempo_bpm(141.0);
+    for device in rack.devices() {
+        assert_eq!(device.state.tempo_bpm.get(), 141.0);
+    }
+}
+
+#[test]
+fn a_device_added_while_the_transport_runs_starts_in_it() {
+    let mut rack = one();
+    rack.set_playing(true);
+    rack.set_tempo_bpm(152.0);
+    let index = rack.add(DeviceKind::Acid).expect("a second");
+    let device = &rack.devices()[index];
+    assert!(
+        device.state.is_playing(),
+        "a new device joins the transport, it does not sit silent"
+    );
+    assert_eq!(device.state.tempo_bpm.get(), 152.0);
+}
+
+#[test]
+fn a_tempo_written_straight_into_the_cell_reaches_every_device() {
+    // This is the MIDI thread's path: the clock follower writes the cell, and the next sync carries it.
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+    rack.tempo_cell().set(129.0);
+    rack.sync_transport();
+    for device in rack.devices() {
+        assert_eq!(device.state.tempo_bpm.get(), 129.0);
+    }
+}
