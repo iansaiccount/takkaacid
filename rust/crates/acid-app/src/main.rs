@@ -39,16 +39,13 @@ fn main() -> eframe::Result {
     let saved_density = saved.density.clamp(0.0, 1.0);
     let saved_scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
 
-    // One engine per stream: rebuilt at the device's rate whenever the stream reopens.
-    let rig = Rig::new({
-        let state = rack.state_arc();
-        move |sample_rate| {
-            let state = Arc::clone(&state);
-            // Mono out: `Opened::spawn` duplicates every sample to every channel.
-            let mut renderer =
-                audio::renderer::AudioRenderer::new(sample_rate, 1, state, audio::MAX_BLOCK);
-            Box::new(move |buf: &mut [f32]| renderer.render_mono(buf))
-        }
+    // One mix bus per stream: rebuilt at the device's rate whenever the stream reopens. Every device's engine lives in it, so
+    // the rack can add or remove one without the stream noticing.
+    let bus = rack.bus();
+    let rig = Rig::new(move |sample_rate| {
+        let mut mixer = audio::mixer::Mixer::new(sample_rate, audio::MAX_BLOCK, Arc::clone(&bus));
+        // Mono out: `Opened::spawn` duplicates every sample to every channel.
+        Box::new(move |buf: &mut [f32]| mixer.render_mono(buf))
     });
 
     let options = eframe::NativeOptions {
