@@ -32,6 +32,12 @@ pub struct Palette {
     pub panel: Color32,
     /// Knob bodies, raised key faces and the cards laid over the face.
     pub panel_raised: Color32,
+    /// Ink for captions and pointers drawn on `panel_raised`: a key's label, a knob's pointer line.
+    ///
+    /// The face's ink will not do: it is chosen to read against the face, and a raised control is the *other* family's
+    /// surface in one of the two schemes, so a caption painted in the silkscreen would be near-black on a near-black knob
+    /// the moment the face inverts.
+    pub raised_ink: Color32,
     /// Recessed areas: display wells, knob recesses, the slab's own surround.
     pub well: Color32,
     /// Legends, frames, engraving.
@@ -42,19 +48,26 @@ pub struct Palette {
     pub led_on: Color32,
     /// An unlit LED.
     pub led_off: Color32,
-    /// Accent indicator.
+    /// Accent indicator: ink on the *face*, and on the cream a mark is drawn over.
     pub led_accent: Color32,
+    /// The legend of a lit key, drawn on that key's `panel_raised` face. Not `led_accent`: that one is ink for the face,
+    /// and the two uses are disjoint in the amber scheme — a colour dark enough to read on the amber face is too dark to
+    /// read on a near-black key.
+    pub lit_ink: Color32,
     /// Display digits.
     pub text: Color32,
     /// Step keycap face.
     pub white_key: Color32,
+    /// Ink for lettering and marks on the cream keycap, whose paper does not change between schemes.
+    pub keycap_ink: Color32,
     /// The scrim under a card: the face behind it darkens, never disappears, so the panel still reads as the instrument
     /// rather than as a picture of one. Black in both schemes — it darkens whatever it is laid on.
     pub shade: Color32,
     /// The "you can pick this" colour while a learn is choosing.
     ///
-    /// Cyan against amber: nearly complementary, so it reads as a different kind of light rather than a brighter one of the
-    /// panel's own. Nothing else on the face is this colour, so it cannot be mistaken for a lit key — in either scheme.
+    /// Not one of the panel's own lights, so it cannot be mistaken for a lit key — but it has to be *seen*, and on the
+    /// amber face a cyan would be a hue difference with no luminance step (1.07:1, invisible). Each scheme therefore
+    /// carries its own: cyan on the near-black face, a deep teal on the amber one.
     pub learn_target: Color32,
 }
 
@@ -69,14 +82,17 @@ impl Palette {
 pub const BLACK: Palette = Palette {
     panel: Color32::from_rgb(0x0B, 0x0B, 0x0B),
     panel_raised: Color32::from_rgb(0x19, 0x19, 0x19),
+    raised_ink: Color32::from_rgb(0xFF, 0xC3, 0x00),
     well: Color32::from_rgb(0x04, 0x04, 0x04),
     silkscreen: Color32::from_rgb(0xFF, 0xC3, 0x00),
     silkscreen_dim: Color32::from_rgb(0x7A, 0x5C, 0x00),
     led_on: Color32::from_rgb(0xFF, 0xE0, 0x66),
     led_off: Color32::from_rgb(0x2A, 0x22, 0x08),
     led_accent: Color32::from_rgb(0xFF, 0x95, 0x00),
+    lit_ink: Color32::from_rgb(0xFF, 0x95, 0x00),
     text: Color32::from_rgb(0xF5, 0xF0, 0xE0),
     white_key: Color32::from_rgb(0xE8, 0xE2, 0xD0),
+    keycap_ink: Color32::from_rgb(0x0B, 0x0B, 0x0B),
     shade: Color32::from_black_alpha(90),
     learn_target: Color32::from_rgb(0x3D, 0xE8, 0xF0),
 };
@@ -89,16 +105,23 @@ pub const BLACK: Palette = Palette {
 pub const YELLOW: Palette = Palette {
     panel: Color32::from_rgb(0xFF, 0xC3, 0x00),
     panel_raised: Color32::from_rgb(0x14, 0x10, 0x08),
+    raised_ink: Color32::from_rgb(0xFF, 0xE9, 0xB0),
     well: Color32::from_rgb(0xC9, 0x94, 0x00),
     silkscreen: Color32::from_rgb(0x0B, 0x0B, 0x0B),
-    silkscreen_dim: Color32::from_rgb(0x6B, 0x55, 0x00),
-    led_on: Color32::from_rgb(0xFF, 0xFD, 0xF0),
-    led_off: Color32::from_rgb(0x8A, 0x6A, 0x00),
-    led_accent: Color32::from_rgb(0xB2, 0x3A, 0x00),
+    silkscreen_dim: Color32::from_rgb(0x5C, 0x4A, 0x00),
+    // On a bright face nothing can be both brighter and contrasting, so the lamp rule inverts: a lit lamp is a *mark*
+    // (dark enough to be seen on the amber) and an unlit one is invisible, exactly as black's `#2A2208` almost is on `#040404`.
+    led_on: Color32::from_rgb(0x86, 0x1F, 0x00),
+    led_off: Color32::from_rgb(0xD9, 0xA6, 0x00),
+    // Deep enough to outshout the dim legend: UNSAVED wears this colour and SAVED wears `silkscreen_dim`, and the quieter
+    // of the two must be the one that is not shouting.
+    led_accent: Color32::from_rgb(0x7A, 0x1F, 0x00),
+    lit_ink: Color32::from_rgb(0xFF, 0xC9, 0x7A),
     text: Color32::from_rgb(0x0B, 0x0B, 0x0B),
     white_key: Color32::from_rgb(0xE8, 0xE2, 0xD0),
+    keycap_ink: Color32::from_rgb(0x0B, 0x0B, 0x0B),
     shade: Color32::from_black_alpha(90),
-    learn_target: Color32::from_rgb(0x3D, 0xE8, 0xF0),
+    learn_target: Color32::from_rgb(0x0B, 0x7A, 0x85),
 };
 
 /// The palette a device's face is painted in.
@@ -173,28 +196,72 @@ mod tests {
                 contrast(p.panel, p.silkscreen_dim) > 2.0,
                 "{scheme:?}: a dim legend must still read"
             );
+            // The dim legend is also drawn on the well — a key's border, the knob's unlit scale arc, the strip's shelf —
+            // so it has to be seen there too.
+            assert!(
+                contrast(p.well, p.silkscreen_dim) >= 3.0,
+                "{scheme:?}: the dim legend must read on the well as well as the face"
+            );
             assert!(
                 contrast(p.panel, p.silkscreen) > contrast(p.panel, p.silkscreen_dim),
                 "{scheme:?}: the dim legend must be the quieter of the two"
             );
-            // A lit lamp outshines the face; an unlit one does not.
+            // A lamp is a light on a dark face and a mark on a bright one, so the rule both schemes keep is contrast
+            // against the surface: a lit lamp is seen, an unlit one disappears into the face.
             assert!(
-                luminance(p.led_on) > luminance(p.panel),
-                "{scheme:?}: a lit lamp must be brighter than the face"
+                contrast(p.panel, p.led_on) >= 3.0,
+                "{scheme:?}: a lit lamp must stand out from the face"
             );
             assert!(
-                luminance(p.led_off) < luminance(p.led_on),
-                "{scheme:?}: an unlit lamp is the darker of the pair"
+                contrast(p.panel, p.led_off) < 2.0,
+                "{scheme:?}: an unlit lamp must not shout from the face"
+            );
+            // The knob's lit scale arc is drawn on the well, not the face, and the strip's lamp sits in one.
+            assert!(
+                contrast(p.well, p.led_on) >= 3.0,
+                "{scheme:?}: a lit lamp must stand out from the well too"
             );
             // The display digits read against their own well, not against the face.
             assert!(
                 contrast(p.well, p.text) >= 4.5,
                 "{scheme:?}: display digits need contrast against the well"
             );
+            // Captions and pointers are drawn on a raised control, not on the face, so they need their own ink: the
+            // face's would be a dark amber on a dark knob in the amber scheme.
+            assert!(
+                contrast(p.panel_raised, p.raised_ink) >= 4.5,
+                "{scheme:?}: captions on a raised control need contrast against it"
+            );
+            // A lit key is a raised face with a legend on it, which is a different reading from the accent's on the face.
+            assert!(
+                contrast(p.panel_raised, p.lit_ink) >= 4.5,
+                "{scheme:?}: a lit key's legend needs contrast against its own face"
+            );
+            // The keycap's paper is cream in both schemes, so its lettering is fixed and must be read on its own.
+            assert!(
+                contrast(p.white_key, p.keycap_ink) >= 4.5,
+                "{scheme:?}: a keycap's lettering needs contrast against the cream"
+            );
             // The learn target is a different kind of light, in both schemes.
             assert_ne!(p.learn_target, p.silkscreen);
             assert_ne!(p.learn_target, p.led_on);
+            assert!(
+                contrast(p.panel, p.learn_target) >= 3.0,
+                "{scheme:?}: the learn outline is a cue, not text, but it must still be seen on the face"
+            );
+            // UNSAVED is the one that has to catch the eye, so the dirty colour is the louder of the two labels.
+            assert!(
+                contrast(p.panel, p.led_accent) > contrast(p.panel, p.silkscreen_dim),
+                "{scheme:?}: UNSAVED must not read quieter than SAVED"
+            );
+            // The accent also rings a hovered, unlit key, whose face is a well.
+            assert!(
+                contrast(p.well, p.led_accent) >= 3.0,
+                "{scheme:?}: the hover ring on an unlit key must be seen on the well"
+            );
         }
+        // Two schemes is two palettes: a `palette` that returned one of them twice would satisfy every rule above.
+        assert_ne!(palette(Scheme::Black), palette(Scheme::Yellow));
     }
 
     #[test]
@@ -223,5 +290,11 @@ mod tests {
             c.r() > 200 && c.g() > 150 && c.b() < 80,
             "expected amber, got {c:?}"
         );
+        // The two inks black has always used: legends on a raised control are the silkscreen's amber, and the keycap's
+        // lettering is the panel's near-black. Giving them their own fields must not move a single pixel of this scheme.
+        assert_eq!(BLACK.raised_ink, BLACK.silkscreen);
+        assert_eq!(BLACK.keycap_ink, BLACK.panel);
+        // The accent's two roles were split in this round, not recoloured: a lit key's legend is still the amber it was.
+        assert_eq!(BLACK.lit_ink, BLACK.led_accent);
     }
 }

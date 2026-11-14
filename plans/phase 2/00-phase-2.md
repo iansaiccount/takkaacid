@@ -99,7 +99,7 @@ between tasks hide that no single diff showed?
 
 ## Progress
 
-**Where the phase is: all six plans are complete.** Everything is committed and the tree is green (67 test suites, 623 tests,
+**Where the phase is: all seven plans are complete.** Everything is committed and the tree is green (69 test suites, 648 tests,
 `clippy --all-targets -D warnings` and `fmt --check` clean, `docs/guide/check.sh` ok). A new session resumes by reading a
 plan's `## Progress` section — it carries every commit, what each task's review found, and the rulings — and by `git log`,
 not by re-deriving anything. The next phase's first round is the guide, whose screenshots predate the strip.

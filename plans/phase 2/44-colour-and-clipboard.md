@@ -50,16 +50,19 @@ drawn by hand rather than computed as a byte inverse; and a paste lands immediat
 pub struct Palette {
     pub panel: Color32,        // the face
     pub panel_raised: Color32, // knob bodies, raised key faces, cards
+    pub raised_ink: Color32,   // captions and pointers on `panel_raised`: a key's label, a knob's pointer
     pub well: Color32,         // display wells, knob recesses, the recess behind the face
     pub silkscreen: Color32,   // legends, frames, engraving
     pub silkscreen_dim: Color32,
     pub led_on: Color32,
     pub led_off: Color32,
-    pub led_accent: Color32,
+    pub led_accent: Color32,   // ink for the face
+    pub lit_ink: Color32,      // ink for a lit key's raised face — the accent's second role
     pub text: Color32,         // display digits
     pub white_key: Color32,    // step keycap face
+    pub keycap_ink: Color32,   // lettering and marks on that cream, which does not change between schemes
     pub shade: Color32,        // the scrim under a card — black alpha in both schemes
-    pub learn_target: Color32, // cyan in both: it must never read as one of the panel's own lights
+    pub learn_target: Color32, // each scheme carries its own; never one of the panel's own lights
 }
 
 impl Palette {
@@ -82,16 +85,24 @@ families exchanged:
 |---|---|---|---|
 | `panel` | `#0B0B0B` | `#FFC300` | the largest surface |
 | `panel_raised` | `#191919` | `#141008` | reads as raised on the face; keys and knobs are dark on amber |
+| `raised_ink` | `#FFC300` | `#FFE9B0` | legible on `panel_raised`: a key's caption, a knob's pointer. The face's ink will not do, because a raised control is the other family's surface in one scheme |
 | `well` | `#040404` | `#C99400` | reads as *recessed*: darker than the face in both, by the same perceived step |
 | `silkscreen` | `#FFC300` | `#0B0B0B` | maximum contrast against the face |
-| `silkscreen_dim` | `#7A5C00` | `#4A3A00` | a legend that is there but not shouting |
-| `led_on` | `#FFE066` | `#FFFDF0` | brighter than the face |
-| `led_off` | `#2A2208` | `#8A6A00` | darker than the face |
-| `led_accent` | `#FF9500` | `#B23A00` | a warm second amber that reads as "this one" |
+| `silkscreen_dim` | `#7A5C00` | `#5C4A00` | a legend that is there but not shouting — on the **well** as well as the face, because a key's border, the knob's unlit arc and the strip's shelf are drawn on it (3.2:1 in both schemes) |
+| `led_on` | `#FFE066` | `#861F00` | a lit lamp is **seen**: contrast against the face (and the well its arc is drawn on), not luminance above it |
+| `led_off` | `#2A2208` | `#D9A600` | an unlit lamp is **invisible**: nearly the face's own colour, as black's `#2A2208` nearly is on `#040404` |
+| `led_accent` | `#FF9500` | `#7A1F00` | ink for the **face**: the loud colour, and louder than `silkscreen_dim` on it, because UNSAVED wears it and SAVED wears the dim legend |
+| `lit_ink` | `#FF9500` | `#FFC97A` | ink for a **lit key's raised face**, which is a different reading: a colour dark enough to read on the amber face is too dark to read on a near-black key, so the accent's two roles are two values in the amber scheme |
 | `text` | `#F5F0E0` | `#0B0B0B` | contrasting the well |
 | `white_key` | `#E8E2D0` | `#E8E2D0` | cream stays cream: a keycap is a physical thing |
+| `keycap_ink` | `#0B0B0B` | `#0B0B0B` | legible on that cream, which does not change between schemes |
 | `shade` | `black alpha 90` | `black alpha 90` | darkens whatever is under it |
-| `learn_target` | `#3DE8F0` | `#3DE8F0` | never one of the panel's own lights |
+| `learn_target` | `#3DE8F0` | `#0B7A85` | never one of the panel's own lights, *and* seen: cyan on the amber face is 1.07:1, a hue difference with no luminance step |
+
+On a bright face a lamp is a mark and an unlit lamp is invisible, so the rule a scheme keeps is contrast against the face,
+not luminance above it: nothing can be both brighter than `#FFC300` and contrasting against it (white is 1.57:1 on it,
+while black's `#8A6A00` off-lamp was 3.15:1 — the *off* lamp shouted). The inverse of the dark face, held by the same three
+assertions.
 
 The exact hexes are a starting point; the gate is the **per-scheme invariants**, not the numbers (see the tests).
 
@@ -105,7 +116,7 @@ selected device every frame, exactly as `strip.cells` is. `draw_panel` turns it 
 that draws on the *face*: `panel`, `knob`, `step_key`, `display`, `transport`, `row_knobs`, `save`, `strip` and the face bits
 of `mod.rs` (the help dot, the gear, the switches). **The four cards keep `theme::BLACK`** — help, settings, songs, the device
 card and the picker are painted on `PANEL_RAISED` and read as objects laid over the instrument, not as part of its face.
-`theme::SHADE` is black in both schemes, so a card sits on amber with a dark halo rather than an amber one.
+`Palette::shade` is black in both schemes, so a card sits on amber with a dark halo rather than an amber one.
 
 **The strip is the legend.** `StripCell` gains `scheme`, `main` fills it from the device, and `strip::paint` paints each cell
 in *that cell's* palette: a yellow machine's cell is amber with black lettering even while the panel shows a black one. A hand
@@ -166,7 +177,7 @@ pub fn clipboard(
 ```
 
 - **Copy** takes the pattern on the panel — `shared.pattern()`, which is the one the engine is playing — and the slot label
-  from `panel.pattern_id`, notices `copied A1`, and returns the encoded text. `main` calls `ctx.copy_text` with it.
+  from `bank.current()`, notices `copied B2`, and returns the encoded text. `main` calls `ctx.copy_text` with it.
 - **Paste** decodes the event's text. A pattern is put into the slot on the panel: `PatternBank::replace(bank.current(), …)`
   and `shared.set_pattern(Arc::new(…))` so the engine plays it at the next block, `clear::disarm` because an armed CLEAR was
   armed against the pattern that just went, `panel.dirty = true`, and the notice `pasted A1 into C3`. A clipboard that does
@@ -182,25 +193,27 @@ message and clears itself after a few seconds (`AGENTS.md`: "a message is a noti
 
 | Test | What it pins |
 |---|---|
-| `theme::both_schemes_hold_the_same_reading_rules` | per scheme: the face is the largest surface (Black: `luminance(panel) < 0.02`; Yellow: `> 0.5`), the well is darker than the face, the silkscreen contrasts it, `led_on` outshines the face, `led_off` does not. The two palettes cannot drift apart in legibility. |
-| `theme::silkscreen_inverts_between_the_schemes` | `YELLOW.silkscreen ≈ BLACK.panel` and `YELLOW.panel ≈ BLACK.silkscreen`: the swap the user asked for, held to it. |
+| `theme::both_schemes_hold_the_same_reading_rules` | per scheme: the well sits below the face, the silkscreen contrasts the face ≥ 4.5:1 and the dim legend ≥ 2:1 on the face and ≥ 3:1 on the well and quieter than the full one, `led_on` contrasts the face and the well ≥ 3:1 while `led_off` stays under 2:1 against the face (a lamp is a light on a dark face and a mark on a bright one), the digits contrast the well ≥ 4.5:1, `raised_ink` contrasts `panel_raised` ≥ 4.5:1, `lit_ink` contrasts it ≥ 4.5:1, `keycap_ink` contrasts `white_key` ≥ 4.5:1, `learn_target` is neither the silkscreen nor a lamp and is seen on the face ≥ 3:1, `led_accent` outshouts `silkscreen_dim` on the face and is seen on the well ≥ 3:1 (the unlit key's hover ring). Then, once: the two schemes are not the same palette. (The face's own brightness — dark in one scheme, bright in the other — is `the_face_is_dark_in_one_scheme_and_bright_in_the_other`, not this test.) |
+| `theme::the_two_families_are_exchanged` | `YELLOW.silkscreen == BLACK.panel` and `YELLOW.panel == BLACK.silkscreen`: the swap the user asked for, held to it exactly. |
 | `rack::a_device_carries_its_own_scheme` | `set_scheme` writes one device and leaves its neighbours; a new device is `Black`; the scheme survives a selection change. |
 | `devices_live::the_face_follows_the_device_it_shows` | through real frames: with a yellow device selected the face is filled `YELLOW.panel`; with a black one selected it is `BLACK.panel`. |
 | `devices_live::the_strip_cell_wears_its_own_devices_colours` | cells painted in their own palettes: a yellow cell's face is `YELLOW.panel` while the panel shows the black device. |
 | `device_card_live::a_card_stays_black_over_a_yellow_face` | the card's fill is `BLACK.panel_raised` even when the face behind it is amber — the conversation's decision, pinned. |
 | `device_card_live::the_colour_row_asks_for_the_other_scheme` | the `COLOUR` key shows the current scheme and asks `SetScheme(index, Yellow)`; and back to `Black`. |
-| `clipboard::a_pattern_round_trips` | encode → decode returns the same pattern, every field: `on`, `pitch`, `octave_offset`, `accent`, `slide`, `velocity`. |
+| `clipboard::a_pattern_round_trips_through_the_clipboard` | encode → decode returns the same pattern, every field: `on`, `pitch`, `octave_offset`, `accent`, `slide`, `velocity`. |
 | `clipboard::a_foreign_clipboard_is_refused` | plain text, a JSON object without the magic line, a payload with a version this build does not know, and truncated JSON all decode to `None`. |
-| `clipboard::copying_notices_the_slot_and_returns_the_text` | `Event::Copy` → notice `copied A1`, returned text decodes back to the pattern on the panel. |
-| `clipboard::pasting_lands_the_pattern_and_says_what_it_replaced` | `Event::Paste` → the bank slot and `shared.pattern()` are the clip's, `dirty`, notice `pasted A1 into C3`, and the *other* slots are untouched. |
-| `clipboard::a_paste_of_something_else_says_so` | garbage in, notice out, nothing changed, not dirty. |
+| `clipboard::copying_notices_the_slot_and_returns_the_text` | `Event::Copy` → notice `copied B2`, and the returned text decodes back to the pattern the engine holds, labelled with the panel's slot. |
+| `clipboard::pasting_lands_the_pattern_and_says_what_it_replaced` | `Event::Paste` → the bank slot and `shared.pattern()` are the clip's, `dirty`, notice `pasted A1 into B2`, and the *other* slots are untouched. |
+| `clipboard::a_paste_of_something_else_says_so_and_changes_nothing` | garbage in, notice out, nothing changed, not dirty. |
 | `clipboard::a_focused_field_keeps_the_clipboard` | `typing: true` → neither gesture acts, nothing returned, bank untouched. |
 | `help_live::the_help_card_names_the_devices_and_what_is_not_saved` (extended) | the card names `Ctrl+C` and `Ctrl+V`, so the only manual is not silent about them. |
 
 **Mutations, run at the gate (task 8):**
 
-1. `theme::palette` returns `&BLACK` for both schemes → `the_face_follows_the_device_it_shows` and
-   `both_schemes_hold_the_same_reading_rules` must fail.
+1. `theme::palette` returns `&BLACK` for both schemes → `the_face_follows_the_device_it_shows` must fail, and
+   `both_schemes_hold_the_same_reading_rules` fails too, on its closing `assert_ne!(palette(Black), palette(Yellow))`:
+   every per-scheme rule above it is satisfied twice by the same palette, so that one line is what catches the mutation in
+   the unit test.
 2. `clipboard::decode` ignores `VERSION` → `a_foreign_clipboard_is_refused` must fail.
 3. `dispatch::clipboard`'s paste skips `shared.set_pattern` → `pasting_lands_the_pattern…` must fail (the bank would move and
    the engine would not, which is the bug `PatternBank`'s `stash_current` exists to prevent in the other direction).
@@ -245,15 +258,15 @@ Each task ends with the three gates, the inline review, and a commit.
 |---|---|
 | One plan for two features, numbered 44 in `plans/phase 2/` | Two independent halves in one review gate: a finding in one can delay the other. Accepted — both are small and neither depends on the other's code. |
 | The yellow palette is hand-drawn, not computed | The user asked for the black and yellow "swapped around"; a hand-drawn set can land a shade away from a literal swap. The invariant tests are what is actually promised. |
-| The scheme is in memory only | A colour, like a name, is gone on restart. Stated in `README.md`? No: the save limit already says names and extra devices are not saved, and a colour is part of that sentence's "extra devices" in spirit. If a player expects it to survive, the next round's footnote widens. |
+| The scheme is in memory only | A colour is gone on restart for **every** device, the first one included: `SavedState` does not carry it, so it is not "an extra device" — the first device's colour is lost too. `README.md`'s restart-cost list names it in so many words, so nothing is silent about it. If a player expects it to survive, the next round's footnote widens. |
 | Paste lands immediately, with a notice | A pattern replaced by mistake is gone. The user chose this over a two-click CONFIRM because the pattern being replaced is the one on screen. |
 | The clipboard is text on the OS clipboard | A secret in a clipboard, and a paste from an unrelated app that fails to decode. Both are handled: nothing is written until a copy, and a failed decode says so. |
 
 ## Progress
 
-**The round is done.** Three gates on the whole workspace — `cargo test --workspace` → **68 suites, 639 tests, 0 failed**
-(the count the next round starts from), `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo fmt --check`
-clean — and `docs/guide/check.sh` still `guide: ok`.
+**The round is done.** Three gates on the whole workspace — `cargo test --workspace` → **69 suites, 648 tests, 0 failed**
+(the count the next round starts from: 639 for the round, plus nine added by the two fix passes below), `cargo clippy
+--workspace --all-targets -- -D warnings` clean, `cargo fmt --check` clean — and `docs/guide/check.sh` still `guide: ok`.
 
 - [x] **Task 1 — the palette and the two schemes** (`1ffead6`). `theme::{Palette, BLACK, YELLOW, palette}`, `silkscreen_stroke`
   as a method, and `device::Scheme` with `ALL`/`name`/`next`. The old colour consts stayed as aliases of `BLACK`'s fields for
@@ -334,3 +347,118 @@ Rulings made while building this round, and what they cost if wrong:
 | Paste lands immediately, with a notice (the user's call) | A pattern replaced by mistake is gone; the notice names the slot it went into. |
 | The colour is in memory only | A colour, like a name, is gone on restart. `README.md` says so in the restart-cost list. |
 | The clipboard is text on the OS clipboard | A paste of our own payload into a text field (the papercut above), and a secret of a kind: whatever a hand copied is on the system clipboard until something else is. |
+
+### Round-2 fixes (review round 1)
+
+Three fresh-context reviewers read the round's eight commits. What they found, applied in one batch:
+
+- **A — the amber scheme's ink was unreadable (P0).** The palette had ink for the face (`silkscreen`), a surface for raised
+  controls (`panel_raised`) and cream paper for keycaps (`white_key`), but no ink of its own for the last two: in BLACK the
+  face's ink happened to work on all three, in YELLOW it did not. `Palette` gains `raised_ink` (`panel_raised`'s captions
+  and pointers: a knob's pointer line, `paint_switch`'s caption) and `keycap_ink` (the keycap's border, note, step number
+  and slide arrow). BLACK's two fields are its old colours, pinned by `the_black_scheme_is_the_instrument_it_has_always_been`,
+  so the scheme did not move. The reading rules now hold both inks to 4.5:1.
+- **B — the learn outline was invisible on amber (P1).** `YELLOW.learn_target` is `#0B7A85` instead of the cyan, which sat
+  at 1.07:1 against the amber face — a hue difference with no luminance step. BLACK keeps `#3DE8F0`. Pinned by
+  `contrast(panel, learn_target) >= 3.0` in the shared rules.
+- **C — SAVED read louder than UNSAVED on amber (P2).** `YELLOW.led_accent` is `#7A1F00` (≈6.5:1 on the amber face) where
+  `silkscreen_dim` is 4.5:1, so the dirty label is the loud one. BLACK keeps `#FF9500`. `ui::save`'s doc comment no longer
+  says the colour "takes the amber". Pinned by `contrast(panel, led_accent) > contrast(panel, silkscreen_dim)`.
+- **D — the LED halos were hard-coded to black's lamp (P2).** `display`'s digit halo and `step_key`'s lamp halo were the
+  literal `#FFE066` at alpha 102 and 64; both now derive from the palette's `led_on` at the same alpha, so BLACK's output
+  is byte-identical by construction and YELLOW's halo is not a black-scheme lamp bleeding into an amber panel.
+- **E — the clipboard re-dispatched on logic-only ticks (P1, real data loss).** `run_logic` leaves the last pass's events
+  in `input.events`, and `main` repaints every 200 ms, so a minimised window re-ran the same `Copy`/`Paste` on every tick:
+  a copy kept rewriting the OS clipboard, and a paste kept landing — including in a slot a learned pattern controller had
+  moved the bank to. `dispatch::take_clipboard` **takes** the clipboard events out of the frame (and takes nothing when a
+  text field has the keyboard), and `main` calls it through `input_mut`. `dispatch::clipboard` also answers
+  `Event::PasteImage` with the same notice as text that is not ours, and its doc now says plainly that an *empty* clipboard
+  produces no event at all (`egui-winit` only sends `Paste` for non-empty text).
+- **F — two test gaps.**
+  - The copy test seeded the bank slot and the shared pattern with the *same* pattern, so a copy that read the slot rather
+    than the engine passed. It now sets the shared pattern to a different one and asserts the clip holds that; the mutation
+    (copy from `bank.get(bank.current())`) is caught.
+  - `device_card_live::a_card_stays_black_over_a_yellow_face` was named in this plan's test table and never written. It
+    exists: with an amber face behind an open card, the card's own surface is `BLACK.panel_raised`. Mutation (paint the
+    card from `palette(state.scheme)`) caught.
+- **G — small gaps.**
+  - the COLOUR key's *painted* caption is asserted to read `YELLOW` after the switch, not just the request it asks for;
+  - `rack::a_device_carries_its_own_scheme` re-asserts both devices after `set_scheme(9, …)` — its comment claimed that and
+    nothing checked it;
+  - `device_card`'s rows-inside-the-card test enumerates `scheme` too (it had been omitted by hand from a hand-kept list);
+  - the paste test arms CLEAR first and asserts the paste spends it — the paste's only data-safety behaviour, previously
+    untested. Mutation (drop `clear::disarm`) caught.
+- **the help card** gains `F3: a device's COLOUR key repaints its face`, with `help_live`'s `COLOUR` needle written first
+  and watched failing (RED) before the line.
+
+**The second, final fix pass** actioned what the first one missed, what it introduced, and the two findings the user chose
+to fix now:
+
+- **H — the lit key's hover ring was still the accent (P1; the first pass fixed the legend and missed the ring).**
+  `transport::transport_button` draws its hover ring on the same face its legend sits on, and RUN or STOP is always lit,
+  so on an amber device the ring was `led_accent` at 1.83:1 on `#141008`. It now follows the legend's rule —
+  `if lit { p.lit_ink } else { p.led_accent }` — and `contrast(well, led_accent) >= 3.0` pins the unlit half in the shared
+  rules. `transport_live::a_hovered_key_rings_itself_in_ink_that_reads_on_its_face` reads both halves back from the
+  painted shapes of an amber panel; written first and watched failing on the old code, where the lit STOP key's ring came
+  back `#7A1F00`.
+- **I — the amber dim legend fell to 2.64:1 on the well (P2, introduced by C).** `YELLOW.silkscreen_dim` is `#5C4A00`:
+  5.35:1 on the face — still quieter than the accent's 6.45:1 — and 3.16:1 on the well, where the strip's shelf, the
+  greyed `+`, the knob's unlit arc and an unlit key's border are drawn. Pinned by `contrast(well, silkscreen_dim) >= 3.0`
+  in the shared rules, with BLACK's 3.2:1 already inside it.
+- **J — the lamps read backwards on the amber face (the user's decision: "lit is a mark").** Nothing can be both brighter
+  than `#FFC300` and contrasting it (white is 1.57:1; the `#8A6A00` off-lamp was 3.15:1), so on an amber device the *off*
+  lamp shouted. The rule for a bright face is the inverse of a dark one: `YELLOW.led_on` is `#861F00` (5.9:1 on the face, 3.5:1 on
+  the well, where the knob's lit arc sits) and `YELLOW.led_off` is `#D9A600` (1.38:1 and 1.22:1 — invisible,
+  which is what "off" means there, exactly as `#2A2208` nearly disappears on `#040404`). BLACK keeps `#FFE066`/`#2A2208`
+  byte for byte, and `leds_read_as_on_and_off_in_the_black_scheme` is unchanged. The shared rules replace "`led_on`
+  brighter than the face, `led_off` darker than `led_on`" — which only held for a light on a dark face — with
+  `contrast(panel, led_on) >= 3.0`, `contrast(panel, led_off) < 2.0` and `contrast(well, led_on) >= 3.0`. Every
+  `led_on`/`led_off` use was grepped: they are lamps (the step key's, the strip's, the knob's lit arc, the display's halo)
+  and the greyed `+`, never text a player must read.
+- **K — the key path re-dispatched on a logic-only tick (P1, the user's decision to fix it now).** `main` read
+  `input.events` through `dispatch::presses`, and egui hands a logic-only tick the last pass's events, so a hidden window
+  re-fired the last Space/Enter/arrow every 200 ms: the transport flapped, the selected step toggled, the selection
+  walked. `dispatch::take_presses` now **takes** the presses out of the frame, built on the same `as_press` predicate
+  `presses` uses, and `main` calls it through `input_mut` with the one `typing` value the clipboard uses. `tests/keys.rs`
+  pins it, in a file of its own because it drives events and not frames (`keys_live.rs` is the keyboard through the
+  panel); the clipboard's taking tests stay in `tests/clipboard.rs`. Mutation: making `take_presses` a plain read fails
+  `a_panel_key_is_taken_and_returned_as_a_press` on the "nothing else leaves the frame" assertion. `Escape` is taken the same
+  way, by `dispatch::take_escape` — round 3 found that my first cut had left it a `key_pressed` *read* on the belief that it
+  was a state query and idempotent; it is neither (`key_pressed` counts presses over the same event buffer, and `escape`
+  closes one card per call, so a hidden window would have closed help and then songs), and `tests/keys.rs` pins the take.
+
+**A ruling asked for and given during the fix pass.** C's darker amber `led_accent` has a second use site it did not account
+for: `transport::transport_button` paints a *lit* key's face `panel_raised` and its legend `led_accent`, and RUN or STOP is
+always lit — so on an amber device the running key's label fell to 1.83:1 (it had been 3.16:1, already poor). No single
+colour clears both uses in the amber scheme (≥4.5:1 on `#FFC300` needs luminance < 0.096; ≥4.5:1 on `#141008` needs
+> 0.199), so the accent's two roles are now two values: **`led_accent` is ink on the face (and on cream), `lit_ink` is ink
+on a lit key's raised face.** BLACK's two values are identical (`#FF9500`), so its output is byte-identical; YELLOW's
+`lit_ink` is `#FFC97A`, 12.5:1 on the raised face. Every other `led_accent` use — the SAVED/UNSAVED label, the step LED and
+accent bar, the selected step's border, the strip's caret and cell border — stays on the darker amber, which is correct for
+ink on a face. The strip's MUTE key inherits the fix, because it goes through `transport_button` with its cell's palette.
+The reviewer who ruled on this asked for it, and it is recorded as their decision, not the executor's.
+
+**Accepted, not fixed:**
+
+- **The notice and the paste target come from `bank.current()`, while the display may already name a pending MIDI swap's
+  slot.** With a learned pattern controller holding a new slot for the bar, a paste lands in the slot the engine is still
+  playing and says that slot's name, while the display says the one it is going to. Misinformation, not wrong-slot
+  destruction: the paste replaces the pattern being heard, which is the one the player was about to lose. Fixing it means
+  deciding whether a paste cancels a pending swap, which is a product question this round did not ask.
+- **The drag overlay's contrast** (`ui::mod`: the live pitch printed in the cell while a step is dragged) is already wrong
+  in the black scheme, and is a pre-existing bug outside this round's colour work.
+- **`main::logic`'s remaining wiring.** `TakkaApp` is a binary, so the lines that take the key presses, the Escape and the
+  clipboard events out of `ctx` and hand them to `dispatch` cannot be driven by a test. The behaviour lives in `dispatch` and
+  is covered — `tests/keys.rs` for the presses and the Escape, `tests/clipboard.rs` for the clipboard — and the walk in the
+  app is the evidence for the glue. Making it testable means moving `logic`'s body into a function the binary's tests could
+  call, which is a change to the binary's shape and not to this round.
+- **Two amber-scheme orderings that round 3 measured and neither fix pass touched.** The untitled song label is painted with
+  `gamma_multiply(0.55)`, which *darkens* in gamma space and so raises contrast on a bright face: "SONG untitled" reads
+  8.96:1 on amber against a named song's 5.36:1, i.e. "nothing here yet" outshouts the real name (black goes the right way,
+  1.61 against 3.15). Dimming with alpha instead would let the face do the darkening. And the ring on an *accented and lit*
+  step is 2.81:1 on amber (black 5.08) because the accent and the lit lamp are now the same family of dark red; the accent
+  bar on the keycap still carries the accent at 8.02:1, so the step is not unreadable. Both are cosmetic orderings in a
+  scheme nobody has played for a week; both want a round that can listen and look, not another fix pass.
+- **The greyed `+` at the rack's cap is 1.22:1 on amber** (black 1.30:1), because ruling 1 made `led_off` a colour that
+  disappears into the face. It matches black's own intent — a dead key that says "no room" by being nearly unlit — and the
+  picker's greyed rows are what actually explain the cap.

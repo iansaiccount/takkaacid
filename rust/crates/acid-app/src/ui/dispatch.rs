@@ -73,29 +73,30 @@ pub fn device_key(key: Key) -> Option<usize> {
 /// filtering on `input.modifiers` dropped a ctrl+digit that arrived inside one frame, which made `Ctrl+1..4` dead for
 /// anything faster than a hand (`ui::keys` documents the same rule for the audition keys). A headless run found it.
 pub fn presses(events: &[Event]) -> Vec<KeyPress> {
-    events
-        .iter()
-        .filter_map(|event| match event {
-            Event::Key {
-                key,
-                pressed: true,
-                repeat,
-                modifiers,
-                ..
-            } => {
-                // A key repeats only if it is a tempo nudge; everything else acts once per real press.
-                let allowed = !*repeat || repeats_allowed(*key);
-                (allowed && is_panel_key(*key, modifiers.shift, modifiers.ctrl)).then_some(
-                    KeyPress {
-                        key: *key,
-                        shift: modifiers.shift,
-                        ctrl: modifiers.ctrl,
-                    },
-                )
-            }
-            _ => None,
-        })
-        .collect()
+    events.iter().filter_map(as_press).collect()
+}
+
+/// The press one event carries, if it is one the panel acts on: a key going down, that the panel has a use for, and
+/// either the real press or a repeat the key is allowed.
+fn as_press(event: &Event) -> Option<KeyPress> {
+    match event {
+        Event::Key {
+            key,
+            pressed: true,
+            repeat,
+            modifiers,
+            ..
+        } => {
+            // A key repeats only if it is a tempo nudge; everything else acts once per real press.
+            let allowed = !*repeat || repeats_allowed(*key);
+            (allowed && is_panel_key(*key, modifiers.shift, modifiers.ctrl)).then_some(KeyPress {
+                key: *key,
+                shift: modifiers.shift,
+                ctrl: modifiers.ctrl,
+            })
+        }
+        _ => None,
+    }
 }
 
 /// Resolve one press: the step editor first, then the transport and pattern shortcuts.
@@ -230,6 +231,77 @@ pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
     false
 }
 
+/// Take this frame's key events out of the frame and turn them into presses, leaving every other event for the widgets
+/// that follow. Taking rather than reading is what makes a press happen once: egui leaves the last pass's events in place
+/// for a logic-only tick, so a reader would replay a Space or an Enter every 200 ms while the window is hidden.
+pub fn take_presses(events: &mut Vec<Event>, typing: bool) -> Vec<KeyPress> {
+    // A focused text field's keys are the field's: its space bar is a space, not the transport.
+    if typing {
+        return Vec::new();
+    }
+    let mut taken = Vec::new();
+    events.retain(|event| match as_press(event) {
+        Some(press) => {
+            taken.push(press);
+            false
+        }
+        None => true,
+    });
+    taken
+}
+
+/// Take this frame's Escape press out of the frame, if there is one and no text field has the keyboard.
+///
+/// Escape is *not* a panel key — it is not in `shortcuts`, because what it does depends on what is open rather than on the key
+/// — so `take_presses` does not carry it. It needs taking all the same: `key_pressed` counts presses over the frame's event
+/// buffer, and a logic-only tick is handed the last pass's buffer again, so reading it would close one card per 200 ms — help,
+/// then songs, discarding a name being typed — where one Escape should close one thing and stop.
+pub fn take_escape(events: &mut Vec<Event>, typing: bool) -> bool {
+    // A focused text field uses Escape itself: it gives up the field's focus, and the card stays up.
+    if typing {
+        return false;
+    }
+    let mut pressed = false;
+    events.retain(|event| match event {
+        Event::Key {
+            key: Key::Escape,
+            pressed: true,
+            ..
+        } => {
+            pressed = true;
+            false
+        }
+        _ => true,
+    });
+    pressed
+}
+
+/// Whether an event is one the clipboard answers. The one list: `take_clipboard` takes exactly these, and `clipboard`'s match
+/// holds the arm for each — a new clipboard event added to one and not the other would either be replayed or never answered.
+fn is_clipboard_event(event: &Event) -> bool {
+    matches!(event, Event::Copy | Event::Paste(_) | Event::PasteImage(_))
+}
+
+/// Take this frame's clipboard events out of the frame, leaving every other event for the widgets that follow.
+///
+/// Taking rather than reading is what makes a gesture happen once: egui leaves the last pass's events in place for a
+/// logic-only tick (a minimised window), so a reader would re-dispatch the same paste every 200 ms.
+pub fn take_clipboard(events: &mut Vec<Event>, typing: bool) -> Vec<Event> {
+    // A focused text field reads `Event::Paste` itself, so nothing may be taken out from under it.
+    if typing {
+        return Vec::new();
+    }
+    let mut taken = Vec::new();
+    events.retain(|event| {
+        let clipboard = is_clipboard_event(event);
+        if clipboard {
+            taken.push(event.clone());
+        }
+        !clipboard
+    });
+    taken
+}
+
 /// Answer this frame's clipboard events, and hand back the text `main` should put on the operating system's clipboard.
 ///
 /// Both gestures arrive as *events*, not keys: `egui-winit` intercepts `Ctrl+C` and `Ctrl+V`, pushes `Event::Copy` /
@@ -241,8 +313,10 @@ pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
 /// * **Paste** puts a pattern from the clipboard into the slot on the panel: the bank first, then the engine's `Arc`, because a
 ///   pattern that reached one and not the other is the bug `shortcuts::select_pattern` exists to avoid in the other
 ///   direction. It disarms CLEAR — that arming was against the pattern that just went — marks the session dirty, and notices
-///   `pasted A1 into B2`. A clipboard that is not ours notices `the clipboard has no pattern`, because a `Ctrl+V` that
-///   silently did nothing reads as a broken app.
+///   `pasted A1 into B2`.
+/// * **Silence, when there is nothing to answer.** Text that is not ours, and an image, notice `the clipboard has no
+///   pattern`. An *empty* clipboard produces no event at all — `egui-winit` only sends `Paste` for non-empty text — so the
+///   notice covers everything the event can carry, and a `Ctrl+V` on nothing stays silent.
 ///
 /// `typing` is `ctx.text_edit_focused()`: with a text field's cursor in it — the device card's name — the clipboard belongs to
 /// the field, and the pattern takes nothing.
@@ -290,6 +364,14 @@ pub fn clipboard(
                         ));
                     }
                 }
+            }
+            // An image is a paste of something the instrument has no use for, so it says the same thing as text that is
+            // not ours: silence would read as a broken app.
+            Event::PasteImage(_) => {
+                panel.notice = Some((
+                    "the clipboard has no pattern".to_string(),
+                    std::time::Instant::now(),
+                ));
             }
             _ => {}
         }

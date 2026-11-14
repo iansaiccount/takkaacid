@@ -125,7 +125,9 @@ fn paint_segments(
             );
         };
 
-    let halo = egui::Color32::from_rgba_unmultiplied(0xFF, 0xE0, 0x66, 102); // 40 % LED_ON
+    // 40 % of the palette's lit lamp, not black's: the halo is the lamp bleeding into the glass, so it goes where the lamp goes.
+    let led_on = p.led_on;
+    let halo = egui::Color32::from_rgba_unmultiplied(led_on.r(), led_on.g(), led_on.b(), 102);
     if segments[A] {
         horiz(painter, t + half, thickness * 1.8, halo);
         horiz(painter, t + half, thickness, p.text);

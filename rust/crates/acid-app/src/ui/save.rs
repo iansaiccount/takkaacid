@@ -4,7 +4,8 @@ use eframe::egui::Color32;
 
 use super::theme;
 
-/// The indicator's word and colour. Unsaved is the one that has to catch the eye, so it takes the amber.
+/// The indicator's word and colour. Unsaved is the one that has to catch the eye, so it takes `led_accent` — the palette's
+/// loud colour, chosen to outshout the dim legend (`silkscreen_dim`) that SAVED is written in, in both schemes.
 pub fn state_label(dirty: bool, p: &theme::Palette) -> (&'static str, Color32) {
     if dirty {
         ("UNSAVED", p.led_accent)

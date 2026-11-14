@@ -54,6 +54,7 @@ fn the_help_card_names_the_devices_and_what_is_not_saved() {
 
     for wanted in [
         "F3",
+        "COLOUR",
         "Ctrl+1",
         "Ctrl+C",
         "Ctrl+V",

@@ -32,7 +32,7 @@ pub fn card_button(ui: &mut egui::Ui, id: &str, rect: Rect, label: &str, lit: bo
     transport_button(ui, id, rect, label, lit, &theme::BLACK)
 }
 
-/// A rectangular transport key. `lit` paints the legend in `LED_ACCENT`, the way RUN glows while playing.
+/// A rectangular transport key. `lit` paints the legend in the palette's `lit_ink`, the way RUN glows while playing.
 pub fn transport_button(
     ui: &mut egui::Ui,
     id: &str,
@@ -44,7 +44,9 @@ pub fn transport_button(
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     let scale = key_scale(rect);
     let face = if lit { p.panel_raised } else { p.well };
-    let legend = if lit { p.led_accent } else { p.silkscreen };
+    // A lit key is a raised face and a legend on it, so its legend is `lit_ink`: `led_accent` is ink for the *face*, and in
+    // the amber scheme a colour dark enough to read on amber is too dark to read on a near-black key.
+    let legend = if lit { p.lit_ink } else { p.silkscreen };
 
     let painter = ui.painter();
     painter.rect_filled(rect, 3.0 * scale, face);
@@ -62,10 +64,12 @@ pub fn transport_button(
         legend,
     );
     if response.hovered() {
+        // The ring follows the legend's rule, because it is drawn on the same face: a lit key's is `panel_raised`, where
+        // the face's accent is unreadable in the amber scheme, and an unlit key's well takes the accent.
         painter.rect_stroke(
             rect,
             3.0 * scale,
-            egui::Stroke::new(1.5 * scale, p.led_accent),
+            egui::Stroke::new(1.5 * scale, if lit { p.lit_ink } else { p.led_accent }),
             egui::StrokeKind::Inside,
         );
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

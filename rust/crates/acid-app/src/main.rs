@@ -149,21 +149,25 @@ impl eframe::App for TakkaApp {
                 other => other.clone(),
             });
         }
-        // Escape gives up on one thing at a time; the order lives in `ui::dispatch` so it can be tested.
-        if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+        // Escape gives up on one thing at a time; the order lives in `ui::dispatch` so it can be tested. It is *taken* out of
+        // the frame for the same reason the presses are: `key_pressed` counts presses over the event buffer, and a logic-only
+        // tick is handed the last pass's buffer again, so a read would close one card per 200 ms.
+        let typing = ctx.text_edit_focused();
+        let escape =
+            ctx.input_mut(|input| panel_ui::dispatch::take_escape(&mut input.events, typing));
+        if escape {
             panel_ui::dispatch::escape(&mut self.panel, self.rack.state());
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
         // `ui::dispatch`). A held key repeats only for the tempo nudges.
         //
-        // Nothing here while a text field has the keyboard: the field's letters are letters, and its space bar is a space
-        // rather than the transport. `ui::mod`'s audition keys ask the same question, and both must, or a name typed into a
-        // card plays notes and stops the transport.
-        let presses = if ctx.text_edit_focused() {
-            Vec::new()
-        } else {
-            ctx.input(|input| panel_ui::dispatch::presses(&input.events))
-        };
+        // The presses are *taken* out of the frame, not read: a logic-only tick (a minimised window) is handed the last
+        // pass's events again, and the panel repaints every 200 ms, so a reader would replay the same Space or arrow until
+        // the window came back. Nothing is taken while a text field has the keyboard — the field's letters are letters, and
+        // its space bar is a space rather than the transport. `ui::mod`'s audition keys ask the same question, and both must,
+        // or a name typed into a card plays notes and stops the transport.
+        let presses =
+            ctx.input_mut(|input| panel_ui::dispatch::take_presses(&mut input.events, typing));
         let pattern_before = self.rack.bank().current();
         for press in presses {
             let device = self.rack.device_mut();
@@ -177,19 +181,11 @@ impl eframe::App for TakkaApp {
         // press, so both gestures are answered here. The rule about a focused text field is the one the keys use — the
         // card's name field is a field, and its clipboard is its own — and `dispatch::clipboard` is where the behaviour
         // lives, because `main` is a binary no test can call.
-        let typing = ctx.text_edit_focused();
-        let clip_events: Vec<egui::Event> = if typing {
-            Vec::new()
-        } else {
-            ctx.input(|input| {
-                input
-                    .events
-                    .iter()
-                    .filter(|event| matches!(event, egui::Event::Copy | egui::Event::Paste(_)))
-                    .cloned()
-                    .collect()
-            })
-        };
+        //
+        // The events are *taken*, not read: a logic-only tick (a minimised window) is handed the last pass's events again,
+        // and the panel repaints every 200 ms, so a reader would re-dispatch the same paste until the window came back.
+        let clip_events =
+            ctx.input_mut(|input| panel_ui::dispatch::take_clipboard(&mut input.events, typing));
         let copying = {
             let device = self.rack.device_mut();
             panel_ui::dispatch::clipboard(

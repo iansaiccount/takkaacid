@@ -49,6 +49,36 @@ fn strings(output: &FullOutput) -> Vec<String> {
     said
 }
 
+/// The fill of the smallest shape drawn that covers `bounds` — how a surface's colour is read back off the paint.
+///
+/// Smallest rather than first, because a card is laid over a scrim that covers the whole panel: asking for "the fill under
+/// the card's own keys" has one answer, and it is the card.
+fn fill_around(output: &FullOutput, bounds: Rect) -> Option<eframe::egui::Color32> {
+    use eframe::egui::Shape;
+
+    fn walk(shape: &Shape, bounds: Rect, best: &mut Option<(f32, eframe::egui::Color32)>) {
+        match shape {
+            Shape::Rect(rect)
+                if rect.fill != eframe::egui::Color32::TRANSPARENT
+                    && rect.rect.contains_rect(bounds) =>
+            {
+                let area = rect.rect.width() * rect.rect.height();
+                if best.is_none_or(|(smallest, _)| area < smallest) {
+                    *best = Some((area, rect.fill));
+                }
+            }
+            Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, bounds, best)),
+            _ => {}
+        }
+    }
+
+    let mut best = None;
+    for clipped in &output.shapes {
+        walk(&clipped.shape, bounds, &mut best);
+    }
+    best.map(|(_, fill)| fill)
+}
+
 /// Three frames, as `tests/devices_live.rs` does it: move, press, release. A click is never one frame in egui.
 fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) {
     let button = |pressed: bool| Event::PointerButton {
@@ -1021,12 +1051,48 @@ fn the_colour_row_asks_for_the_other_scheme() {
     // And back: the key asks for the other one whatever this one is.
     panel.device_request = None;
     panel.device_card.scheme = Scheme::Yellow;
-    run(&ctx, &mut panel, &state, vec![]);
+    let said = strings(&run(&ctx, &mut panel, &state, vec![])).join(" ");
+    assert!(
+        said.contains("YELLOW"),
+        "the key prints the scheme the device is on, not a fixed caption: {said}"
+    );
     let rows = card_rows(&panel);
     click(&ctx, &mut panel, &state, rows.scheme.center());
     assert_eq!(
         panel.device_request,
         Some(Request::SetScheme(0, Scheme::Black)),
         "a yellow device's key asks for black"
+    );
+}
+
+/// The conversation's decision, pinned: the face inverts but the cards do not. A card is an object laid over the
+/// instrument rather than part of its face, so it stays black even when everything under it is amber.
+#[test]
+fn a_card_stays_black_over_a_yellow_face() {
+    use acid_app::device::Scheme;
+    use acid_app::ui::theme;
+
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.scheme = Scheme::Yellow;
+    panel.device_card.open = Some(0);
+    let ctx = Context::default();
+    let output = run(&ctx, &mut panel, &state, vec![]);
+
+    assert_eq!(
+        fill_around(&output, acid_app::ui::layout::layout(screen()).panel),
+        Some(theme::YELLOW.panel),
+        "the face behind the card is amber, or this proves nothing"
+    );
+    // The card's own surface: the smallest painted thing that covers its first row and its last key is the card itself, since
+    // its keys are separate shapes and the scrim under it reaches to the panel's edges.
+    let rows = card_rows(&panel);
+    assert_eq!(
+        fill_around(
+            &output,
+            Rect::from_two_pos(rows.name.center(), rows.close.center())
+        ),
+        Some(theme::BLACK.panel_raised),
+        "and the card is the black furniture it has always been"
     );
 }

@@ -728,6 +728,7 @@ mod tests {
             few.all_ports,
             few.channel_down,
             few.channel_up,
+            few.scheme,
             few.mute,
             few.remove,
             few.close,

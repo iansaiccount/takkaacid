@@ -972,7 +972,7 @@ fn paint_switch(
             egui::Align2::CENTER_CENTER,
             label,
             theme::legend(12.0 * scale),
-            p.silkscreen,
+            p.raised_ink,
         );
     }
 }

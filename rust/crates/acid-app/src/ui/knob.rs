@@ -99,7 +99,7 @@ pub fn knob(
             arc_point(center, radius * 0.30, angle),
             arc_point(center, radius * 0.80, angle),
         ],
-        egui::Stroke::new(line, p.silkscreen),
+        egui::Stroke::new(line, p.raised_ink),
     );
     painter.text(
         Pos2::new(rect.center().x, rect.bottom() - label_height / 2.0),

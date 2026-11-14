@@ -96,11 +96,13 @@ pub fn step_key(
     painter.circle_filled(led_center, led_radius * 1.7, p.well);
     let lit = view.current || view.on;
     if lit {
-        // A soft halo, then the core: two concentric circles read as a glowing LED on a dark panel.
+        // A soft halo, then the core: two concentric circles read as a glowing LED on a dark panel. The halo is the
+        // palette's own lamp at 25 %, so it follows the scheme instead of staying black's.
+        let led_on = p.led_on;
         painter.circle_filled(
             led_center,
             led_radius * 1.7,
-            egui::Color32::from_rgba_unmultiplied(0xFF, 0xE0, 0x66, 64),
+            egui::Color32::from_rgba_unmultiplied(led_on.r(), led_on.g(), led_on.b(), 64),
         );
         painter.circle_filled(led_center, led_radius, p.led_on);
     } else {
@@ -118,7 +120,7 @@ pub fn step_key(
     painter.rect_stroke(
         keycap,
         3.0 * s,
-        egui::Stroke::new((1.0 * s).max(1.0), p.panel),
+        egui::Stroke::new((1.0 * s).max(1.0), p.keycap_ink),
         egui::StrokeKind::Inside,
     );
     // While the step is being dragged the panel prints the live pitch in the cell, larger and in silk; a
@@ -129,7 +131,7 @@ pub fn step_key(
             egui::Align2::CENTER_CENTER,
             step_label(step),
             theme::legend(12.0 * s),
-            p.panel,
+            p.keycap_ink,
         );
     }
     // The step number keeps a home in the corner: the note is what you read, the number is what you count.
@@ -138,7 +140,7 @@ pub fn step_key(
         egui::Align2::RIGHT_BOTTOM,
         format!("{}", index + 1),
         theme::legend(8.0 * s),
-        p.panel,
+        p.keycap_ink,
     );
 
     if view.accent {
@@ -162,7 +164,7 @@ pub fn step_key(
         if view.slide_glides {
             let head = 5.0 * s;
             let tip = egui::Pos2::new(keycap.right() - 9.0 * s, keycap.center().y);
-            let stroke = egui::Stroke::new((1.5 * s).max(1.0), p.panel);
+            let stroke = egui::Stroke::new((1.5 * s).max(1.0), p.keycap_ink);
             painter.line_segment([tip - egui::vec2(head, head), tip], stroke);
             painter.line_segment([tip, tip - egui::vec2(head, -head)], stroke);
         }

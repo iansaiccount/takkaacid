@@ -481,6 +481,17 @@ fn a_device_carries_its_own_scheme() {
         "a colour is not a selection"
     );
 
-    // An index the rack does not hold changes nothing and does not panic: the panel may be a frame behind a removal.
-    rack.set_scheme(9, Scheme::Yellow);
+    // An index the rack does not hold changes nothing and does not panic: the panel may be a frame behind a removal. The
+    // scheme is the one device 1 is *not*, so a write that ignored the bounds would change it and be seen.
+    rack.set_scheme(9, Scheme::Black);
+    assert_eq!(
+        rack.devices()[0].scheme,
+        Scheme::Black,
+        "a stale index must not repaint the first device"
+    );
+    assert_eq!(
+        rack.devices()[1].scheme,
+        Scheme::Yellow,
+        "nor the one it was not about"
+    );
 }
