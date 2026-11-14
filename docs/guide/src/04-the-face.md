@@ -2,7 +2,15 @@
 
 ![The panel, a first run](img/first-sound.png)
 
-Six bands, top to bottom. Read them in the order your eye meets them and the whole machine is named.
+Seven bands, top to bottom. Read them in the order your eye meets them and the whole machine is named.
+
+## The strip
+
+![The strip: one cell per device, and the add key](img/strip.png)
+
+The band the panel gained, and the only one that is about the rack rather than about the device on it: a cell per device —
+its name, a lamp while it runs, its `M` mute — the cell the panel is showing outlined, and `+` at the right end to add
+another. [`18-a-rack-of-devices`](18-a-rack-of-devices.md) is that page.
 
 ## The top strip
 
@@ -60,7 +68,7 @@ controller gets taught a control ([`14-midi`](14-midi.md)).
 
 ## The panel is one piece, and it scales
 
-Everything above is drawn on a face designed at 980 × 640 and scaled as a single piece to the window, between 0.65× and
+Everything above is drawn on a face designed at 980 × 670 and scaled as a single piece to the window, between 0.65× and
 1.6× — so a small window shows the same machine, smaller, and a large one shows it larger, never reflowed and never
 rearranged. The screenshots in this book show it at its design size.
 
@@ -68,4 +76,5 @@ Two consequences worth knowing: a window dragged small does not hide controls, i
 did the `STEP` key go" is never "off the edge"; and a knob's sweep is the same 180-pixel pull at any window size — only the
 knob's size changes — so "a third of the way" means the same thing small and large.
 
-[`05-the-three-cards`](05-the-three-cards.md) covers the three cards that open over this face.
+[`05-the-three-cards`](05-the-three-cards.md) covers the cards that open over this face: help, settings, songs and the device
+card.

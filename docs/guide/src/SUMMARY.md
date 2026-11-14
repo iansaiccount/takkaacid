@@ -6,7 +6,9 @@
 - [Installing and running](02-install.md)
 - [Your first sound](03-first-sound.md)
 - [The face](04-the-face.md)
-- [The three cards](05-the-three-cards.md)
+- [The four cards](05-the-three-cards.md)
+- [A rack of devices](18-a-rack-of-devices.md)
+- [A device's card](19-a-devices-card.md)
 
 # Part II — Making a sound
 
@@ -19,6 +21,7 @@
 - [Playing it](09-playing.md)
 - [The performance row](10-performance-row.md)
 - [The bank](11-the-bank.md)
+- [Copying and pasting a pattern](21-copy-and-paste.md)
 
 # Part IV — Keeping and connecting
 

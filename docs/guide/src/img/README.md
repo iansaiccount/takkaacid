@@ -6,50 +6,54 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 
 ## The session they came from
 
-- **App:** built from `fc1d0a4`, the last commit that touched `rust/` (the guide itself was at `7d3cdc4`), on
-  2026-11-09, with `cargo build --release -p acid-app --bin takka-acid`.
-- **Scratch data directory:** `TAKKA_ACID_DATA_DIR=/tmp/takka-guide`, emptied before the first launch, so the session
+- **App:** the working tree at `5670f52`, the last commit that touched `rust/` before this round (the guide is at the
+  commit that added this file), on 2026-11-14, with `cargo build -p acid-app --bin takka-acid`.
+- **Scratch data directory:** `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-45`, emptied before the first launch, so the session
   is a first run — the Slow Acid demo, named "New song", unsaved, pattern `A1`, 118 BPM.
-- **Window:** floated and sized to the design size, 980 × 640 logical pixels, at `(40, 60)` on a single output,
-  `eDP-1` (2880 × 1920 at scale 2). The window was not moved again until the last capture.
-- **Grab:** `grim -s 2 -g "40,60 980x640" NAME.png` — the geometry is the panel in logical pixels, `-s 2` renders it
-  at 1960 × 1280 so the silkscreen stays legible when the page scales it down. `grim -g` takes *logical* pixels and
-  writes `geometry × 2` pixels at that scale; `-s 1` would give a 980 × 640 image whose small text is soft.
-- **Keys:** there is no pointer tool on the capture machine, so the three states that need a click are prose
-  (see below); every state below was reached with a key, sent with Hyprland's own dispatcher:
-
-  ```
-  hyprctl eval 'hl.dispatch(hl.dsp.send_key_state({ mods = "", key = "F1", state = "down" }))'
-  hyprctl eval 'hl.dispatch(hl.dsp.send_key_state({ mods = "", key = "F1", state = "up" }))'
-  ```
-
-  `F1` opens the help card, `Escape` closes it, `F2` opens settings, `space` starts and stops the transport.
+- **Display:** offscreen, `Xvfb :82 -screen 0 2000x1400x24`, with
+  `DISPLAY=:82 WINIT_X11_SCALE_FACTOR=2 LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=`. The window is the design size in
+  logical pixels (980 × 670) and renders at 1960 × 1340, so the silkscreen stays legible when a page scales it down.
+- **Grab:** `import -window <id> NAME.png` — the whole window, which is 1960 × 1340. A crop is a second grab of the same
+  window in the same state, never a cut-out of a finished image, so a picture and its crop cannot disagree:
+  `import -window <id> -crop WxH+X+Y NAME.png`, in pixels of the 1960 × 1340 grab.
+- **Pointer and keys:** `xdotool`, which is what changed from the last edition of this book. The old recipe had no pointer
+  tool, so the cards that need a click were prose; they are pictures now.
+  `xdotool mousemove X Y` and `xdotool click 1`, with X and Y **doubled** from the panel's logical coordinates —
+  `xdotool key F1` for the keys. The button rects are in the layout (`ui/layout.rs`, `ui/strip.rs`, `ui/device_card.rs`);
+  do not read them off a screenshot, because a key's painted label and its hit area are not always where the eye puts them
+  (this round's first attempt clicked `SAVE` six times while believing it was clicking `SONGS`).
 
 ## The images
 
 | Image | State | How it was reached |
 |---|---|---|
-| `img/first-sound.png` | A first run: `UNSAVED` lamp, `SONG New song`, pattern `A1`, 118 BPM, the Slow Acid demo in the step row, transport stopped | launch, wait for the window |
-| `img/help-card.png` | The help card over the panel | `F1` |
-| `img/settings-card.png` | The settings card, both device lists folded | `F2` |
-| `img/running.png` | The transport running, `RUN` lit rather than `STOP` | `space` from the first-sound state |
-| `img/top-strip.png` | The top strip: volume knob, wordmark, `SAVED`/`UNSAVED` lamp, gear, `?`, song name, pattern and tempo readouts | `grim -s 2 -g "40,60 980x76"` |
-| `img/knob-row.png` | The seven tone knobs and their captions | `grim -s 2 -g "40,138 980x232"` |
-| `img/step-row.png` | The sixteen step keys, with the LED row above and the step number in each keycap's corner | `grim -s 2 -g "40,434 980x132"` |
-| `img/switches.png` | `BANK PATTERN MODE CLEAR SAVE SONGS STEP` | `grim -s 2 -g "40,562 980x64"` |
-| `img/transport.png` | `RUN STOP TEMPO - TEMPO + LEARN` | `grim -s 2 -g "40,628 980x54"` |
+| `img/first-sound.png` | a first run: one device in the strip, `UNSAVED`, `SONG New song`, pattern `A1`, the Slow Acid demo, stopped | launch, wait for the window |
+| `img/running.png` | the transport running, `RUN` lit rather than `STOP` | `space` from the first-sound state |
+| `img/help-card.png` | the help card over the panel | `F1` |
+| `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
+| `img/songs-card.png` | the songs card: `New song`, the five demos, an empty `MY SONGS` | click `SONGS` |
+| `img/device-card.png` | the device card for `ACID 1`, `COLOUR BLACK` | `F3` |
+| `img/picker.png` | the picker: the `ACID` row and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
+| `img/two-devices.png` | two devices, `ACID 1` black in the strip, `ACID 2` selected and amber | from the picker, click `ACID`; `F3`; click `COLOUR`; `Escape` |
+| `img/strip.png` | the same strip, cropped: a black cell and an amber one, and `+` | `-crop 1960x76+0+24` in the state above |
+| `img/clipboard-notice.png` | the status line reading `pasted A1 into A2` | `ctrl+c`, `shift+Right`, `ctrl+v`, grabbed within the second, before the notice clears |
+| `img/top-strip.png` | the top strip: volume, wordmark, `SAVED`/`UNSAVED`, gear, `?`, song name, pattern and tempo | `-crop 1960x112+0+92` |
+| `img/knob-row.png` | the seven tone knobs and their captions | `-crop 1960x480+0+200` |
+| `img/step-row.png` | the sixteen step keys, their LEDs and their numbers | `-crop 1960x280+0+792` |
+| `img/switches.png` | `BANK PATTERN MODE CLEAR SAVE SONGS STEP` | `-crop 1960x132+0+1056` |
+| `img/transport.png` | `RUN STOP TEMPO - TEMPO + LEARN` | `-crop 1960x104+0+1192` |
 
-The five crops come from the same window, in the same state as `img/first-sound.png`: a crop is a second grab of the
-same panel, not a cut-out of the first image, so the two cannot disagree about what the panel looked like.
+The five band crops and `strip.png` come from the same session as `first-sound.png` (the strip crop from the two-device
+state, because one cell does not show what a strip is).
 
 ## What is prose on purpose
 
-Three states need a pointer rather than a key — the SONGS card, a settings list unfolded to show its devices, and a
-knob's hover tooltip — and the capture machine has no pointer-injection tool. Those three are described in words in
-`05-the-three-cards`, `06-the-knobs` and `13-settings` instead of being faked with a picture of some other state.
+One state still needs something the capture cannot do: a knob's hover tooltip. It is described in words in
+[`06-the-knobs`](../06-the-knobs.md), not faked with a picture of some other state.
 
 ## Replacing them
 
-Re-run the commands above against a clean `TAKKA_ACID_DATA_DIR`, update the commit and the date in this file, and
-check the crop geometry against the new window position before trusting it. `bash check.sh` proves every image a page
-references still exists; it cannot prove any of them still matches the panel.
+Re-run the commands above against a clean `TAKKA_ACID_DATA_DIR`, update the commit and the date in this file, and check each
+crop against the layout before trusting it — the band geometry is in `ui/layout.rs` and every band is a fraction of the
+panel height. `bash check.sh` proves every image a page references still exists; it cannot prove any of them still matches
+the panel.

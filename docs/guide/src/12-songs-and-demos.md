@@ -15,6 +15,13 @@ click only arms the row — it prints `<name> - click again to replace` — and 
 Every row has a small `x` at its right end. One click turns it into `SURE`; the second deletes the song. The demos have no
 `x`.
 
+## One song, one rack
+
+A song is the first device: its bank, its patch, its tempo and swing, its learned controllers. The other devices in the rack
+— their names, patterns, ports and colours — are not in the file, and a restart brings back one machine. That is the save
+format's limit this round, and the picker says so on its own line: `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`
+([`18-a-rack-of-devices`](18-a-rack-of-devices.md)).
+
 ## What a save does to a name
 
 This is the part worth reading twice, because it is where work is kept or lost. **Saving is manual by default** — the

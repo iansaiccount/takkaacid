@@ -102,7 +102,8 @@ between tasks hide that no single diff showed?
 **Where the phase is: all seven plans are complete.** Everything is committed and the tree is green (69 test suites, 649 tests,
 `clippy --all-targets -D warnings` and `fmt --check` clean, `docs/guide/check.sh` ok). A new session resumes by reading a
 plan's `## Progress` section — it carries every commit, what each task's review found, and the rulings — and by `git log`,
-not by re-deriving anything. The next phase's first round is the guide, whose screenshots predate the strip.
+not by re-deriving anything. The guide now matches the app: plan 45 (`plans/phase 2/45-the-guide.md`) retook every
+screenshot at 2× and gave the strip, the device card, the colour and the clipboard their own pages.
 
 - [x] **38 — the rack** (`plans/phase 2/38-the-rack.md`): `SharedState::mute`, `Device`, `Rack`, `BusState`, `Rack::rename`,
       the rack's transport and fan-out, and `main` running on a rack of one. Commits `af4843b`..`b8e4f82`, `3591083`.

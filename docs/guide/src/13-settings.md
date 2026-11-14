@@ -37,6 +37,9 @@ controller with its cable out can be turned off without plugging it back in. A l
 A fresh session opens the first port the machine reports, and the session remembers the first port it had open: the next
 one asks for that by name, and if it is not there it says so rather than quietly taking a different device.
 
+This card decides which ports are **open**. What each *device* hears among them — which ports, which channel, and whether
+it plays notes or only answers controllers — is on that device's card ([`19-a-devices-card`](19-a-devices-card.md)).
+
 ## `SOUND OUT  [+]`
 
 The same shape for audio: `IN USE:` on the left, and the stream's own words on the right — `48 kHz - <device>` when it is
