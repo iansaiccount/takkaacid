@@ -6,10 +6,12 @@
 use egui::{Color32, FontId};
 
 /// The panel's design size in logical pixels; every layout dimension is a fraction of this.
-pub const DESIGN_SIZE: egui::Vec2 = egui::vec2(980.0, 640.0);
+/// The panel's design size in logical pixels; every layout dimension is a fraction of this. The strip band above the top
+/// strip cost the panel 30 px; every band below it keeps the height it had.
+pub const DESIGN_SIZE: egui::Vec2 = egui::vec2(980.0, 670.0);
 
 /// Default window size — the panel at 1× scale.
-pub const WINDOW_SIZE: [f32; 2] = [980.0, 640.0];
+pub const WINDOW_SIZE: [f32; 2] = [980.0, 670.0];
 
 /// Inset from the panel edge to the first drawn element.
 pub const MARGIN: f32 = 16.0;
