@@ -99,7 +99,7 @@ between tasks hide that no single diff showed?
 
 ## Progress
 
-**Where the phase is: all seven plans are complete.** Everything is committed and the tree is green (69 test suites, 648 tests,
+**Where the phase is: all seven plans are complete.** Everything is committed and the tree is green (69 test suites, 649 tests,
 `clippy --all-targets -D warnings` and `fmt --check` clean, `docs/guide/check.sh` ok). A new session resumes by reading a
 plan's `## Progress` section — it carries every commit, what each task's review found, and the rulings — and by `git log`,
 not by re-deriving anything. The next phase's first round is the guide, whose screenshots predate the strip.
@@ -140,12 +140,16 @@ not by re-deriving anything. The next phase's first round is the guide, whose sc
        step mode and randomise dials. Fixed by keying them by `device.number` (`7e7e933`), with the test that was RED on the
        old code.
 - [x] **44 — colour and the clipboard** (`plans/phase 2/44-colour-and-clipboard.md`): the round that came after the gate, at
-      the user's request. All eight tasks landed (`1ffead6`, `903e6ff`, `e36d668`, `668a9a4`, `058d221`, `b092772`, and this
-      one). `ui::theme` became two palettes plus `device::Scheme`, every face painter takes one, and a device's card row turns
-      its face amber — while the four cards stay black. `Ctrl+C`/`Ctrl+V` copy and paste the pattern on the panel as versioned
-      text on the OS clipboard, so it crosses devices and windows. Reviews inline; four mutations checked (the scheme lookup,
-      two clipboard-header refusals, and a paste that moves the bank but not the engine) and one `git checkout` mistake
-      ledgered. **The whole-round review is still owed** — see the plan's `## Progress`.
+      the user's request. All eight tasks landed (`1ffead6`, `903e6ff`, `e36d668`, `668a9a4`, `058d221`, `b092772`, `909070d`,
+      `3236ba4`). `ui::theme` became two palettes plus `device::Scheme`, every face painter takes one, and a device's card row
+      turns its face amber — while the four cards stay black. `Ctrl+C`/`Ctrl+V` copy and paste the pattern on the panel as
+      versioned text on the OS clipboard, so it crosses devices and windows. **Reviewed by a parent-orchestrated loop, three
+      fresh rounds** (`5670f52` carries both fix passes): round 1 returned three BLOCKs — the amber scheme's ink was
+      1.04–1.24:1 on raised controls and the keycaps, and the clipboard re-dispatched on every logic-only tick — round 2
+      confirmed every finding resolved and found the hover ring the first split missed, and round 3 confirmed both rulings
+      (lamps become marks, keys are taken) and found that `Escape` still replayed. Deferred and recorded in the plan: the
+      notice's slot label during a pending MIDI swap, two amber orderings (the untitled song label, an accented+lit ring at
+      2.81:1), and the pre-existing drag overlay.
 
 **Review mode.** Plans 38-41 ran the review gate *inline* — the executor reading its own staged diff — because `pi-subagents`
 was not loaded in that session. Plan 42 ran it **fresh**: every task from 1 to 6 dispatched a `reviewer` subagent with the
