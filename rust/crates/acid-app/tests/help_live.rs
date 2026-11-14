@@ -52,7 +52,15 @@ fn the_help_card_names_the_devices_and_what_is_not_saved() {
     let ctx = Context::default();
     let said = strings(&run_on(&ctx, &mut panel, &state, vec![])).join(" ");
 
-    for wanted in ["F3", "Ctrl+1", "MUTE", "four devices", "not saved"] {
+    for wanted in [
+        "F3",
+        "Ctrl+1",
+        "Ctrl+C",
+        "Ctrl+V",
+        "MUTE",
+        "four devices",
+        "not saved",
+    ] {
         assert!(
             said.contains(wanted),
             "the help card should mention {wanted}: {said}"

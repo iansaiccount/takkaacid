@@ -45,13 +45,14 @@ that adds one.
   its own ports and channel.
 - **What a restart costs.** `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`: the session file still holds one device — the first
   one's patterns, patch, swing and learned controllers, plus the first MIDI port the app had open — so extra devices, the
-  ports, channel and role any device was given, and every name typed for one, are gone on restart. "Save the whole rack" in
-  `plans/future/wishlist.md` is the round that ends this.
+  ports, channel and role any device was given, the colour scheme it was given, and every name typed for one, are gone on
+  restart. "Save the whole rack" in `plans/future/wishlist.md` is the round that ends this.
 
 ## Features
 
 **The pattern.** Sixteen steps per pattern, 64 patterns in eight banks of eight (`A1`…`H8`). Each step holds a note, an
-octave, a velocity, an accent and a slide.
+octave, a velocity, an accent and a slide. `Ctrl+C` copies the pattern on the panel and `Ctrl+V` pastes it — into another
+slot, another device's pattern, or another window of the app, because the clipboard is text.
 
 **The sound.** Seven tone knobs — waveform, tuning, cutoff, resonance, envelope mod, decay, accent — plus a volume knob.
 Every one of them can be taught to a MIDI controller.

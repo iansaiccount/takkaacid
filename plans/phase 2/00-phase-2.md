@@ -20,11 +20,12 @@ strip of the rest.
 | 41 | [The strip](41-the-strip.md) | the strip band, selection, `PanelEdit`, `Ctrl+1..4`, MUTE | yes, four devices, editable one at a time |
 | 42 | [The device card](42-the-device-card.md) | the device card, the picker, names, routing UI | yes, fully usable |
 | 43 | [Documents and gates](43-documents-and-gates.md) | help, README, the manual listen, the phase gate | yes, documented |
+| 44 | [Colour and the clipboard](44-colour-and-clipboard.md) | a per-device colour scheme, and `Ctrl+C`/`Ctrl+V` for patterns — added after the phase's gate | yes |
 
-Each lands a working, testable app. The order is forced three times: 39 needs 38's bus, 40 needs 38's bus and 39's
 Each lands a working, testable app. The order is forced three times: 39 needs 38's bus, 40 needs 38's `Device` and the bus,
 and 42 needs 41's caret and request queue. Nothing else is ordered by dependency — 43 could be folded into 42 if the phase runs
-long.
+long. Round 44 came afterwards, after the phase's gate, and depends on nothing here: a device's colour scheme and the pattern
+clipboard.
 
 ## Invariants that hold in every plan
 
@@ -136,8 +137,15 @@ not by re-deriving anything. The next phase's first round is the guide, whose sc
       the whole-branch review was a self-review, because `pi-subagents`' only model refused the connection and the
       `claude-code` agent needs its own session. It found one **Important** defect at the 41–42 seam: the panel's per-device
       editor slots were keyed by cell *position*, so removing the first device gave the survivor the removed device's step,
-      step mode and randomise dials. Fixed by keying them by `device.number` (`7e7e933`), with the test that was RED on the
-      old code.
+       step mode and randomise dials. Fixed by keying them by `device.number` (`7e7e933`), with the test that was RED on the
+       old code.
+- [x] **44 — colour and the clipboard** (`plans/phase 2/44-colour-and-clipboard.md`): the round that came after the gate, at
+      the user's request. All eight tasks landed (`1ffead6`, `903e6ff`, `e36d668`, `668a9a4`, `058d221`, `b092772`, and this
+      one). `ui::theme` became two palettes plus `device::Scheme`, every face painter takes one, and a device's card row turns
+      its face amber — while the four cards stay black. `Ctrl+C`/`Ctrl+V` copy and paste the pattern on the panel as versioned
+      text on the OS clipboard, so it crosses devices and windows. Reviews inline; four mutations checked (the scheme lookup,
+      two clipboard-header refusals, and a paste that moves the bank but not the engine) and one `git checkout` mistake
+      ledgered. **The whole-round review is still owed** — see the plan's `## Progress`.
 
 **Review mode.** Plans 38-41 ran the review gate *inline* — the executor reading its own staged diff — because `pi-subagents`
 was not loaded in that session. Plan 42 ran it **fresh**: every task from 1 to 6 dispatched a `reviewer` subagent with the

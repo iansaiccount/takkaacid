@@ -38,6 +38,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "enter: note on or off",
                 "F1 or shift+?: this card, F2: settings, F3: the device card",
                 "Ctrl+1..4: pick the device the panel shows",
+                "Ctrl+C / Ctrl+V: copy or paste the pattern",
                 "hover to read a control; tooltips and autosave are in settings",
             ],
         ),
