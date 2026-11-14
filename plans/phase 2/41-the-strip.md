@@ -388,7 +388,8 @@ git commit -m "feat(ui): the strip mirrors the rack and asks it for changes"
 **Files:**
 - Modify: `rust/crates/acid-app/src/ui/dispatch.rs` (`KeyPress`, `presses`, `handle`, `is_panel_key`, `Handled`)
 - Modify: `rust/crates/acid-app/src/main.rs` (the `presses` call site)
-- Test: `rust/crates/acid-app/src/ui/dispatch.rs` (unit tests)
+- Test: `rust/crates/acid-app/src/ui/dispatch.rs` (unit tests), and `rust/crates/acid-app/tests/settings_live.rs` — its
+  `press` helper calls `presses`, so the signature change reaches it (the plan first missed it)
 
 **Interfaces:**
 - Produces: `KeyPress { key: Key, shift: bool, ctrl: bool }`, `presses(events: &[Event], modifiers: egui::Modifiers) ->
@@ -435,7 +436,7 @@ Expected: PASS.
 - [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
-git add rust/crates/acid-app/src/ui/dispatch.rs rust/crates/acid-app/src/main.rs
+git add rust/crates/acid-app/src/ui/dispatch.rs rust/crates/acid-app/src/main.rs rust/crates/acid-app/tests/settings_live.rs
 git commit -m "feat(ui): ctrl and a digit picks the device the panel shows"
 ```
 
@@ -697,7 +698,21 @@ git commit -m "chore(ui): plan 41's gate, run and used"
       the app can remove a device yet, and recorded here so the card round does not discover it. The mirror allocates a `Vec`
       and a `String` per device per frame; accepted (UI thread, ≤ 4 devices), and noted because its neighbours in `logic` are
       deliberately allocation-free.
-- [ ] Task 4 — `Ctrl+1..4`
+- [x] **Task 4 — `Ctrl+1..4`.** `KeyPress` carries `ctrl`; `presses` takes `egui::Modifiers`; `is_panel_key` answers a ctrl digit
+      before it asks the shortcuts; `device_key` reads a `DEVICE_DIGITS: [Key; MAX_DEVICES]` table, so a five-device rack fails to
+      compile rather than leaving `Ctrl+5` dead; `handle` answers the ctrl digit **first** and returns `Handled::Rack`. A digit
+      past the last device is now a notice ("no device there") rather than a dead key: the keyboard is the only thing that can
+      name an absent cell. `tests/settings_live.rs`'s helper moved to the new `presses` signature — the plan's Files block and
+      `git add` line missed that file.
+- **Task 4 review** (fresh `reviewer` subagent, 1 Important + 4 Minor, all actioned). The Important: the new `handle` branch and
+      `presses`'s ctrl plumbing had *no* test — `device_key` and `is_panel_key` were pinned, so deleting the branch left every
+      suite green. `a_ctrl_digit_asks_the_rack_to_select_that_device` now drives `presses` → `handle` and asserts `Handled::Rack`
+      and `Select(2)`; mutation-checked by disabling the branch (`Nothing` vs `Rack`, then restored). Also actioned: `device_key`
+      derives from `MAX_DEVICES` instead of four hand-copied arms; the refused `Select` says something; the plan's Files/`git add`
+      corrected. **Ruling:** `presses` reads the *frame's* `Modifiers`, not the `Event::Key`'s own — the plan's Interfaces block
+      says so and `ui::keys` documents the opposite for the audition keys. Cost if wrong: a modifier pressed or released inside
+      one frame can be attributed to the wrong press, which would turn a bare digit into a device select. Rare (it needs press
+      and release inside ~16 ms); the `shift` half of it predates this task.
 - [ ] Task 5 — the editor follows the device
 - [ ] Task 6 — the strip says what it looks like
 - [ ] Task 7 — the gate, and the app by hand

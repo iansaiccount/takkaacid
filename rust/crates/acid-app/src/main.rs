@@ -150,7 +150,7 @@ impl eframe::App for TakkaApp {
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
         // `ui::dispatch`). A held key repeats only for the tempo nudges.
         let presses =
-            ctx.input(|input| panel_ui::dispatch::presses(&input.events, input.modifiers.shift));
+            ctx.input(|input| panel_ui::dispatch::presses(&input.events, input.modifiers));
         let pattern_before = self.rack.bank().current();
         for press in presses {
             let device = self.rack.device_mut();
@@ -500,6 +500,10 @@ impl TakkaApp {
                     );
                     // A swap a controller asked for belongs to the device it was asked of, not to the one now on screen.
                     self.pending_pattern = None;
+                } else {
+                    // Only the keyboard can name a device the rack does not hold: `Ctrl+3` on a two-device rack. A cell
+                    // click cannot, because the cell was drawn for a device that was there. Saying so beats a dead key.
+                    self.notice("no device there".to_string());
                 }
             }
             // The index the key was drawn for, not the one on the panel: `SetMute` carries its own.

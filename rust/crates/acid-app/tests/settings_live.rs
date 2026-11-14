@@ -107,7 +107,11 @@ fn press(
             ..Modifiers::default()
         },
     }];
-    for press in dispatch::presses(&events, shift) {
+    let modifiers = Modifiers {
+        shift,
+        ..Modifiers::default()
+    };
+    for press in dispatch::presses(&events, modifiers) {
         dispatch::handle(press, panel, shared, bank);
     }
 }

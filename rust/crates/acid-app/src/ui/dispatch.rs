@@ -9,13 +9,19 @@ use acid_core::bank::PatternBank;
 use eframe::egui::{Event, Key};
 
 use super::{PanelState, learn, selection, shortcuts, transport};
+use crate::device::MAX_DEVICES;
 use crate::state::SharedState;
 
-/// One press the panel handles: the key, and whether shift was down.
+/// One press the panel handles: the key, and which of the modifiers it cares about were down.
+///
+/// Two flags rather than a modifier enum: shift and ctrl mean different things to different keys — shift+arrow moves
+/// through the patterns, ctrl+digit picks a device — and a combination that means nothing today should not need a decision
+/// until something asks for it.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct KeyPress {
     pub key: Key,
     pub shift: bool,
+    pub ctrl: bool,
 }
 
 /// What the panel did with a press.
@@ -29,6 +35,8 @@ pub enum Handled {
     Refused,
     /// Nothing in the panel wanted this key.
     Nothing,
+    /// The rack: `Ctrl` and a digit asked for one of the devices, and `main` answers it after the frame.
+    Rack,
 }
 
 /// Whether holding the key may repeat its action: only the tempo nudges, where a held key is a sweep. A held
@@ -38,12 +46,28 @@ fn repeats_allowed(key: Key) -> bool {
 }
 
 /// Whether the panel has anything to do with this key at all.
-pub fn is_panel_key(key: Key, shift: bool) -> bool {
-    shortcuts::shortcut_for(key, shift).is_some() || selection::edit_key(key, shift).is_some()
+pub fn is_panel_key(key: Key, shift: bool, ctrl: bool) -> bool {
+    (ctrl && device_key(key).is_some())
+        || shortcuts::shortcut_for(key, shift).is_some()
+        || selection::edit_key(key, shift).is_some()
+}
+
+/// The keys `Ctrl` and a digit use, in device order.
+///
+/// `MAX_DEVICES` long, so a rack that grows past four fails to compile here instead of leaving `Ctrl+5` silently dead and
+/// the strip drawing a fifth cell nothing can select.
+const DEVICE_DIGITS: [Key; MAX_DEVICES] = [Key::Num1, Key::Num2, Key::Num3, Key::Num4];
+
+/// The device `Ctrl` and a digit names: the cell's index, and nothing else is a device key.
+///
+/// `Ctrl` is the modifier because `1..4` on their own must stay available to the instrument: a step shortcut that lands on
+/// a digit later should not have to argue with this.
+pub fn device_key(key: Key) -> Option<usize> {
+    DEVICE_DIGITS.iter().position(|digit| *digit == key)
 }
 
 /// The presses in this frame's events, in the order egui saw them.
-pub fn presses(events: &[Event], shift: bool) -> Vec<KeyPress> {
+pub fn presses(events: &[Event], modifiers: egui::Modifiers) -> Vec<KeyPress> {
     events
         .iter()
         .filter_map(|event| match event {
@@ -55,7 +79,13 @@ pub fn presses(events: &[Event], shift: bool) -> Vec<KeyPress> {
             } => {
                 // A key repeats only if it is a tempo nudge; everything else acts once per real press.
                 let allowed = !*repeat || repeats_allowed(*key);
-                (allowed && is_panel_key(*key, shift)).then_some(KeyPress { key: *key, shift })
+                (allowed && is_panel_key(*key, modifiers.shift, modifiers.ctrl)).then_some(
+                    KeyPress {
+                        key: *key,
+                        shift: modifiers.shift,
+                        ctrl: modifiers.ctrl,
+                    },
+                )
             }
             _ => None,
         })
@@ -69,6 +99,14 @@ pub fn handle(
     shared: &SharedState,
     bank: &mut PatternBank,
 ) -> Handled {
+    // A ctrl digit picks the device the panel shows, and is answered before the step editor: it is not a step edit. The
+    // order is a decision, written down in the plan, so a step shortcut that ever lands on a digit has to argue with it.
+    if press.ctrl
+        && let Some(index) = device_key(press.key)
+    {
+        panel.device_request = Some(crate::device::Request::Select(index));
+        return Handled::Rack;
+    }
     match selection::dispatch(press.key, press.shift, panel, shared) {
         selection::Press::Applied => {
             // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
@@ -195,6 +233,7 @@ mod tests {
             KeyPress {
                 key: Key::ArrowRight,
                 shift: false,
+                ctrl: false,
             },
             &mut panel,
             &shared,
@@ -225,6 +264,7 @@ mod tests {
             KeyPress {
                 key: Key::ArrowRight,
                 shift: true,
+                ctrl: false,
             },
             &mut panel,
             &shared,
@@ -253,6 +293,7 @@ mod tests {
             KeyPress {
                 key: Key::ArrowRight,
                 shift: true,
+                ctrl: false,
             },
             &mut panel,
             &shared,
@@ -281,6 +322,7 @@ mod tests {
                 KeyPress {
                     key: Key::Enter,
                     shift: false,
+                    ctrl: false,
                 },
                 &mut panel,
                 &shared,
@@ -300,6 +342,7 @@ mod tests {
                 KeyPress {
                     key: Key::Space,
                     shift: false,
+                    ctrl: false,
                 },
                 &mut panel,
                 &shared,
@@ -312,6 +355,7 @@ mod tests {
                 KeyPress {
                     key: Key::Questionmark,
                     shift: true,
+                    ctrl: false,
                 },
                 &mut panel,
                 &shared,
@@ -332,6 +376,7 @@ mod tests {
                 KeyPress {
                     key: Key::B,
                     shift: false,
+                    ctrl: false,
                 },
                 &mut panel,
                 &shared,
@@ -349,7 +394,10 @@ mod tests {
             key_event(Key::ArrowUp, false, true),
             key_event(Key::ArrowRight, false, true),
         ];
-        let pressed: Vec<Key> = presses(&events, false).iter().map(|p| p.key).collect();
+        let pressed: Vec<Key> = presses(&events, Modifiers::NONE)
+            .iter()
+            .map(|p| p.key)
+            .collect();
         assert_eq!(pressed, vec![Key::ArrowUp], "only the tempo nudge repeats");
     }
 
@@ -360,7 +408,10 @@ mod tests {
             key_event(Key::Enter, false, false),
             key_event(Key::F1, false, false),
         ];
-        let pressed: Vec<Key> = presses(&events, false).iter().map(|p| p.key).collect();
+        let pressed: Vec<Key> = presses(&events, Modifiers::NONE)
+            .iter()
+            .map(|p| p.key)
+            .collect();
         assert_eq!(pressed, vec![Key::Enter, Key::F1], "B is an audition key");
     }
 
@@ -368,15 +419,16 @@ mod tests {
     fn shift_travels_with_the_press_it_arrived_on() {
         let events = vec![key_event(Key::ArrowUp, true, false)];
         assert_eq!(
-            presses(&events, true),
+            presses(&events, Modifiers::SHIFT),
             vec![KeyPress {
                 key: Key::ArrowUp,
-                shift: true
+                shift: true,
+                ctrl: false
             }]
         );
         // `?` is only the help key with shift, so an unshifted one is not the panel's.
         let events = vec![key_event(Key::Questionmark, false, false)];
-        assert!(presses(&events, false).is_empty());
+        assert!(presses(&events, Modifiers::NONE).is_empty());
     }
 
     #[test]
@@ -397,7 +449,16 @@ mod tests {
             (Key::ArrowUp, true),
         ] {
             assert_eq!(
-                handle(KeyPress { key, shift }, &mut panel, &shared, &mut bank),
+                handle(
+                    KeyPress {
+                        key,
+                        shift,
+                        ctrl: false
+                    },
+                    &mut panel,
+                    &shared,
+                    &mut bank
+                ),
                 Handled::Refused,
                 "{key:?}"
             );
@@ -410,13 +471,62 @@ mod tests {
             handle(
                 KeyPress {
                     key: Key::Space,
-                    shift: false
+                    shift: false,
+                    ctrl: false
                 },
                 &mut panel,
                 &shared,
                 &mut bank
             ),
             Handled::Shortcut(shortcuts::Shortcut::PlayStop)
+        );
+    }
+
+    #[test]
+    fn ctrl_and_a_digit_asks_for_a_device() {
+        // The table is `MAX_DEVICES` long, so a rack that grows needs a digit named before it compiles.
+        assert_eq!(device_key(DEVICE_DIGITS[0]), Some(0));
+        assert_eq!(
+            device_key(DEVICE_DIGITS[MAX_DEVICES - 1]),
+            Some(MAX_DEVICES - 1)
+        );
+        assert_eq!(device_key(Key::Num5), None, "not every key is a device");
+        assert_eq!(device_key(Key::ArrowUp), None);
+    }
+
+    #[test]
+    fn a_ctrl_digit_is_a_panel_key_and_a_bare_digit_is_not() {
+        assert!(is_panel_key(Key::Num2, false, true));
+        assert!(!is_panel_key(Key::Num2, false, false));
+        assert!(
+            !is_panel_key(Key::Num5, false, true),
+            "a digit past the last device is not the panel's"
+        );
+    }
+
+    #[test]
+    fn a_ctrl_digit_asks_the_rack_to_select_that_device() {
+        // The whole path, not just the table: `presses` must collect the press and `handle` must answer it before the step
+        // editor does. Delete the branch in `handle` and this fails while the two tests above still pass.
+        let events = vec![key_event(Key::Num3, false, false)];
+        let pressed = presses(&events, Modifiers::CTRL);
+        assert_eq!(pressed.len(), 1, "a ctrl digit is the panel's");
+        assert!(pressed[0].ctrl, "and the ctrl travels with the press");
+
+        let mut panel = PanelState::default();
+        assert_eq!(
+            handle(
+                pressed[0],
+                &mut panel,
+                &lit_shared(),
+                &mut PatternBank::factory()
+            ),
+            Handled::Rack
+        );
+        assert_eq!(
+            panel.device_request,
+            Some(crate::device::Request::Select(2)),
+            "the third digit is the third device"
         );
     }
 }
