@@ -255,11 +255,16 @@ hoverable control in this repo has a tip), and `ui/help.rs` (one line, so the he
 **Files:**
 - Modify: `rust/crates/acid-app/src/ui/device_card.rs`
 - Modify: `rust/crates/acid-app/src/main.rs` (`device::Request::Rename` arm: write the answer back into the card)
+- Modify: `rust/crates/acid-app/src/ui/mod.rs` and `rust/crates/acid-app/src/ui/selection.rs` (a focused text field owns the
+  keyboard: the audition keys and the step editor must not read a letter typed into the name as a note)
 - Test: `rust/crates/acid-app/tests/device_card_live.rs`
 
 **Interfaces:**
-- Produces: the `name` row draws an `egui::TextEdit` bound to `card.name`; the moment the field loses focus or the player presses
-  Enter, the card writes `Request::Rename(open, card.name.clone())`. This task's test adds
+- Produces: the `name` row draws an `egui::TextEdit` bound to `card.name`, and **Enter** — and only Enter — writes
+  `Request::Rename(open, card.name.clone())`. Not focus loss: `device_request` is one slot, so a click that dismisses the card
+  cannot carry both a Rename and a Close, and a dismissal that silently renames cannot be taken back. (The ruling below said
+  "or focus loss" on the premise that the songs card behaves that way; it does not — it reads its field when SAVE is clicked.
+  The field keeps the typed text while the card stands, and the caption says `NAME (ENTER)`.) This task's test adds
   `use acid_app::device::Request;` and `use acid_app::ui::device_card;` to the test file's imports, and a `click` helper copied
   from `tests/devices_live.rs` — an integration test may not import another test file's helpers, and a shared
   `tests/common/mod.rs` is a bigger change than the duplication.
@@ -331,7 +336,7 @@ Expected: PASS.
 - [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
-git add rust/crates/acid-app/src/ui/device_card.rs rust/crates/acid-app/src/main.rs rust/crates/acid-app/tests/device_card_live.rs
+git add -A
 git commit -m "feat(ui): a device can be renamed from its card"
 ```
 
@@ -666,7 +671,8 @@ Expected: PASS, all three.
 `cargo run -p acid-app --bin takka-acid`, then:
 
 1. `+` → the picker → the `ACID` row. A second cell appears, selected, and hears nothing.
-2. `F3` on it: name it `BASS`, switch it to `CTRL` (it stops playing notes), tick the controller's port only.
+2. `F3` on it: name it `BASS` — then again `BASS`, which must land as `BASS (2)`, because Review Focus 1 is a store answer and
+   nothing else proves it — switch it to `CTRL` (it stops playing notes), tick the controller's port only.
 3. Play a key: only `ACID 1` sounds. Turn the controller's cutoff knob: `BASS`'s cutoff moves, `ACID 1`'s does not.
 4. `Ctrl+1`, `Ctrl+2` to move between them; edit a step on each; confirm they are separate patterns.
 5. Mute `BASS`, unmute it mid-bar, and confirm it is in time rather than restarting.
@@ -729,7 +735,29 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
       two `line_segment` calls would leave every test green — reading that back would mean teaching `devices_live.rs`'s
       `painted()` to collect `Shape::LineSegment`); and `paint`'s stale-index close, which `devices_live.rs` covers one
       layer up (`a_selection_past_the_end_is_clamped_rather_than_panicking`).
-- [ ] Task 3 — the name field
+- [x] Task 3 — the name field. The `name` row is now a `TextEdit` in a display well (`theme::WELL` + silkscreen stroke, the
+      idiom `ui::display` uses for the readouts), Enter asks `Request::Rename`, and `main` writes `Rack::rename`'s answer back
+      into the field so a collision reads `BASS (2)` on the card (Review Focus 1). **Review: fresh `reviewer` subagent.**
+      Eleven findings, all actioned — one of them a **BLOCK** the commit would not have shipped without:
+      (1) **BLOCK — the field was not modal for the panel's global key readers.** Typing `BASS` with shift held wrote four
+      notes into the selected step and dirtied the session, Backspace in STEP mode emptied a step, and Space stopped the
+      transport, because `play_computer_keys` and `dispatch::presses` read raw input events regardless of focus. Both now
+      ask egui's `text_edit_focused()` (not `wants_keyboard_input`, which is also true for a focused button), pinned by
+      `typing_into_the_name_field_writes_no_step_and_stops_no_transport` — which fails when the guard is disabled, checked by
+      mutation. This also fixes the songs card's field, which had the same hole.
+      (2) **Enter only, not focus loss** — the plan's Interfaces line and its ruling row both said "loses focus or presses
+      Enter"; both are rewritten above. `device_request` is one slot, so a click that dismisses the card cannot carry a
+      Rename and a Close at once, and a dismissal that silently renames cannot be taken back. The plan's premise ("the songs
+      card behaves the same way") is false, and that is now written into the plan instead of being inherited.
+      (3) the caption reads `NAME (ENTER)`: a field has no tooltip, and the card is not dismissed by clicking away from the
+      field, so nothing else tells a player what applies the name.
+      Nits: a stale "plan 42 task 3" comment in `main`; the card title is now fitted with `ui::text::fit` (a name is never
+      truncated in the store, so a long one spilled past the face); task 7's journey now renames a device `BASS` twice, which
+      is the only thing that exercises the dedupe.
+      **Files outside the plan's block:** `ui/mod.rs` and `ui/selection.rs` (the focus gate and the step editor's refusal),
+      both added to the block above. **Deliberately untested:** `main`'s `Rename` write-back (`main.rs`, binary), named here as
+      the plan's "Deliberately untested" paragraph asks — task 7's journey is what walks it; and `presses`' focus gate, which
+      lives only in `main::logic` (the `draw_panel` half is pinned by the typing test).
 - [ ] Task 4 — the routing rows
 - [ ] Task 5 — removing a device, twice
 - [ ] Task 6 — the picker and the footnote
@@ -754,6 +782,6 @@ Rulings made while writing this plan, and their cost if wrong:
 | `DeviceKind::enabled(count)` decides greying for both the strip's `+` and the picker's rows | Two rules for one question would be the bug AGENTS.md warns about; the cost is that `DeviceKind` now knows about a rack size. |
 | `Ports::All` is a ticked row rather than a separate mode | A player who unticks every port gets `Named(vec![])`, which is "silent" — the same state a new device starts in, so it is reachable and explainable. |
 | The footnote names both losses in one line | One more line on a small card. The alternative is a player losing a name with no warning, which the design calls an anti-goal. |
-| The name field confirms on Enter or focus loss | A player who types and clicks elsewhere gets the rename. Accepted: the songs card behaves the same way, and two cards disagreeing would be worse. |
+| The name field confirms on **Enter only** | Amended in task 3: the original row said "or focus loss" on the premise that the songs card behaves that way, and it does not — it reads its field when SAVE is clicked. A click that dismisses the card cannot also carry the rename in `device_request`, which is one slot. The cost if wrong: a player types a name and clicks the card's own face, and the field keeps the text but the rack keeps the old name until Enter — the caption says `NAME (ENTER)` for that reason. |
 | A rename does not mark the session dirty | Names are not in the save format (`SavedState` has no device name), so `dirty` would light the SAVE lamp and trigger an autosave write for a file whose bytes do not change — the same reason `Add` does not dirty the session. The cost if wrong: a player renames a device, sees the lamp stay dark, and restarts expecting the name to have been kept. The picker's footnote is what tells them it was not. |
 | A removal marks the session dirty only when it takes the **first** device | A save writes the first device, so removing any other changes nothing about what the file would hold. The cost if wrong: a player removes the third device, the lamp stays dark, and a restart brings the device list back — which is what the footnote already promises. |

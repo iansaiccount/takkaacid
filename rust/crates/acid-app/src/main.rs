@@ -154,7 +154,15 @@ impl eframe::App for TakkaApp {
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
         // `ui::dispatch`). A held key repeats only for the tempo nudges.
-        let presses = ctx.input(|input| panel_ui::dispatch::presses(&input.events));
+        //
+        // Nothing here while a text field has the keyboard: the field's letters are letters, and its space bar is a space
+        // rather than the transport. `ui::mod`'s audition keys ask the same question, and both must, or a name typed into a
+        // card plays notes and stops the transport.
+        let presses = if ctx.text_edit_focused() {
+            Vec::new()
+        } else {
+            ctx.input(|input| panel_ui::dispatch::presses(&input.events))
+        };
         let pattern_before = self.rack.bank().current();
         for press in presses {
             let device = self.rack.device_mut();
@@ -553,9 +561,13 @@ impl TakkaApp {
             },
             // The name is the rack's to decide: it trims, falls back to `ACID <number>`, and suffixes a collision. The
             // panel shows the answer, never the typed string, so a `BASS` typed twice reads `BASS (2)` on the card.
-            // The card's name field is written back with the landed answer in plan 42 task 3.
             device::Request::Rename(index, typed) => {
-                self.rack.rename(index, &typed);
+                let landed = self.rack.rename(index, &typed);
+                // The card shows what the store answered, never what was typed: `BASS` typed twice lands as `BASS (2)`, and
+                // a field that kept saying `BASS` would look like a rename that did nothing.
+                if self.panel.device_card.open == Some(index) {
+                    self.panel.device_card.name = landed;
+                }
             }
             // A routing edit replaces one field of the device's filter and keeps the other two: the filter is the only
             // scope a message is filtered by, so nothing else may be rewritten on the way.

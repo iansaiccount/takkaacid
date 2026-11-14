@@ -170,6 +170,100 @@ fn a_click_outside_the_card_closes_it_rather_than_pressing_the_panel() {
     assert_eq!(panel.selected, 0, "the step under the shade was not edited");
 }
 
+/// The name row is a text field: the hand types, Enter asks the rack, and the card shows whatever the store answered — which
+/// is why the answer is written back into the field rather than left as the typed string (`BASS` typed twice is `BASS (2)`).
+#[test]
+fn typing_a_name_and_confirming_asks_the_rack_to_rename_the_device() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.strip.selected = 1;
+    panel.device_card.open = Some(1);
+    panel.device_card.name = "BASS".into();
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let rows = device_card::rows(
+        device_card::card_rect(layout(screen()).panel, s),
+        s,
+        &panel.device_card,
+    );
+    // Clicking the field, moving the caret to the end, typing, and pressing Enter: the card asks for the name it now holds.
+    // The End key is the panel's business only through the field, which is why a text edit behind a card has to be modal.
+    click(&ctx, &mut panel, &state, rows.name.center());
+    run(
+        &ctx,
+        &mut panel,
+        &state,
+        vec![Event::Key {
+            key: Key::End,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::default(),
+        }],
+    );
+    run(&ctx, &mut panel, &state, vec![Event::Text(" 2".into())]);
+    run(
+        &ctx,
+        &mut panel,
+        &state,
+        vec![Event::Key {
+            key: Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::default(),
+        }],
+    );
+    assert_eq!(
+        panel.device_request,
+        Some(Request::Rename(1, "BASS 2".into()))
+    );
+}
+
+/// Confirming is Enter, and only Enter: a click that puts the card away is a dismissal, not a rename. The typed string stays
+/// in the field while the card is open, so a hand that clicks the card's own face has lost nothing.
+#[test]
+fn a_click_away_from_the_field_does_not_rename_anything() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    panel.device_card.name = "BASS".into();
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let rows = device_card::rows(
+        device_card::card_rect(layout(screen()).panel, s),
+        s,
+        &panel.device_card,
+    );
+    click(&ctx, &mut panel, &state, rows.name.center());
+    run(
+        &ctx,
+        &mut panel,
+        &state,
+        vec![Event::Key {
+            key: Key::End,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::default(),
+        }],
+    );
+    run(&ctx, &mut panel, &state, vec![Event::Text(" 2".into())]);
+    panel.device_request = None;
+
+    // The card's own face still takes the click, and the text is still there afterwards.
+    click(&ctx, &mut panel, &state, rows.role.center());
+    assert_eq!(panel.device_request, None, "no rename on a focus loss");
+    assert_eq!(
+        panel.device_card.name, "BASS 2",
+        "and the typed name remains"
+    );
+}
+
 /// A card is dismissed by CLOSE, Escape, or a click outside it — never by a click on one of its own rows. The rows that do
 /// not answer yet must not be dismissal targets either: a player aiming at MUTE must not lose the card instead.
 #[test]
@@ -229,4 +323,121 @@ fn opening_another_card_puts_the_device_card_away() {
     press(Key::F1, &mut panel);
     assert!(panel.help_visible);
     assert_eq!(panel.device_card.open, None);
+}
+
+/// The card covers the panel, so it is modal for the keyboard too: Enter confirms the name field, and Enter is also the step
+/// editor's key. Without the refusal a rename would toggle a step the player cannot see, and mark the session unsaved for it.
+#[test]
+fn enter_on_an_open_card_does_not_edit_the_step_behind_it() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    let before = *state.pattern();
+    let mut bank = acid_core::bank::PatternBank::new_empty();
+
+    // The step editor's own keys, and the plain arrows: the selected step and the selection behind the card do not move.
+    for (key, shift) in [
+        (Key::Enter, false),
+        (Key::ArrowRight, false),
+        (Key::ArrowUp, true),
+    ] {
+        assert_eq!(
+            dispatch::handle(
+                dispatch::KeyPress {
+                    key,
+                    shift,
+                    ctrl: false
+                },
+                &mut panel,
+                &state,
+                &mut bank
+            ),
+            dispatch::Handled::Refused,
+            "{key:?} with shift {shift}"
+        );
+    }
+    assert_eq!(
+        *state.pattern(),
+        before,
+        "nothing behind the card was edited"
+    );
+    assert_eq!(panel.selected, 0, "and the selection did not move");
+    assert!(!panel.dirty);
+
+    // The shortcuts that stop the transport and close the card still reach them: refusing every key would trap a player
+    // behind a card that the keyboard cannot dismiss.
+    assert_eq!(
+        dispatch::handle(
+            dispatch::KeyPress {
+                key: Key::Space,
+                shift: false,
+                ctrl: false
+            },
+            &mut panel,
+            &state,
+            &mut bank
+        ),
+        dispatch::Handled::Shortcut(acid_app::ui::shortcuts::Shortcut::PlayStop)
+    );
+}
+
+/// A focused field owns the keyboard. A real keyboard sends the key *and* the text, so typing a capital into the name field
+/// used to write a step (shift held), play a note, and mark the session unsaved — and with STEP mode on, Backspace emptied
+/// the selected step instead of deleting a letter. The panel's key readers ask egui whether something is being typed into.
+#[test]
+fn typing_into_the_name_field_writes_no_step_and_stops_no_transport() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    // The worst case: every pitch key writes a step, and Backspace empties one.
+    panel.step_mode = true;
+    panel.dirty = false;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let rows = device_card::rows(
+        device_card::card_rect(layout(screen()).panel, s),
+        s,
+        &panel.device_card,
+    );
+    click(&ctx, &mut panel, &state, rows.name.center());
+    let before = *state.pattern();
+    panel.dirty = false;
+
+    let key = |key: Key, shift: bool| Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers {
+            shift,
+            ..Modifiers::default()
+        },
+    };
+    run(
+        &ctx,
+        &mut panel,
+        &state,
+        vec![key(Key::A, true), Event::Text("A".into())],
+    );
+    assert_eq!(*state.pattern(), before, "a letter is not a step");
+    assert!(!panel.dirty, "and typing a name is not an unsaved edit");
+    assert_eq!(panel.selected, 0, "and the border did not walk");
+    assert!(
+        panel.device_card.name.ends_with('A'),
+        "the field took the letter: {:?}",
+        panel.device_card.name
+    );
+
+    run(&ctx, &mut panel, &state, vec![key(Key::Backspace, false)]);
+    assert_eq!(
+        *state.pattern(),
+        before,
+        "backspace in a field deletes a letter, not a step"
+    );
+    assert_eq!(
+        panel.transport_request, None,
+        "and nothing here asked the rack to start or stop"
+    );
 }

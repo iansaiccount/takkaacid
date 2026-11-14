@@ -52,13 +52,16 @@ impl Press {
     }
 }
 
-/// Apply one key to the selected step. Both cards cover the panel and are modal, so while either is up the step
-/// editor refuses its keys instead of letting them fall through to the transport behind it.
+/// Apply one key to the selected step. Every card covers the panel and is modal, so while one is up the step editor
+/// refuses its keys instead of letting them fall through to the transport behind it.
+///
+/// The device card is in the list for a reason of its own: its name field confirms on Enter, and Enter is also the step
+/// editor's key, so without this a rename would toggle a step the player cannot see.
 pub fn dispatch(key: Key, shift: bool, panel: &mut PanelState, shared: &SharedState) -> Press {
     let Some(edit) = edit_key(key, shift) else {
         return Press::NotOurs;
     };
-    if panel.help_visible || panel.settings_open {
+    if panel.help_visible || panel.settings_open || panel.device_card.open.is_some() {
         return Press::Refused;
     }
     let index = panel.selected.min(STEPS_PER_PATTERN - 1);

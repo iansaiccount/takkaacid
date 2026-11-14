@@ -354,6 +354,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         learn::cancel(shared);
     }
     let window = ui.max_rect();
+    // A focused text field owns the keyboard, and the panel's audition keys are not an exception: with the cursor in the
+    // device card's name field, `A` and shift+`A` are a letter and a capital, not a note and a step. The device card is the
+    // first field on the face that a player types a *name* into, which is what made this reachable.
     play_computer_keys(shared, ui, state);
 
     // Every MIDI note still waiting while the panel is editing (step mode, or shift held) belongs to the selected
@@ -822,8 +825,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 /// at its repeat rate, and a press the platform repeats (which egui may not flag) writes nothing because the key is
 /// already in [`PanelState::placed`].
 fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelState) {
+    // A focused text field owns every key on the keyboard: `wants_keyboard_input` is egui's own answer to "is something
+    // being typed into", and it is asked here rather than at the call site so a later keyboard reader cannot forget it.
+    // Without it, typing a capital into the device card's name field wrote a step and marked the session unsaved.
+    if ui.ctx().text_edit_focused() {
+        return;
+    }
     use std::sync::atomic::Ordering;
-
     let octave = shared.octave.load(Ordering::Relaxed);
     ui.input(|input| {
         // A window that lost the focus will never deliver the releases for what was held, so forget them rather than

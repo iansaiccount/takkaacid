@@ -9,7 +9,7 @@
 
 use eframe::egui::{self, Align2, Pos2, Rect};
 
-use super::{PanelState, modal, theme, transport};
+use super::{PanelState, modal, text, theme, transport};
 use crate::device::Request;
 use crate::midi::route::{Channel, InputFilter, Role};
 
@@ -215,23 +215,67 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
             theme::silkscreen_stroke(s),
             egui::StrokeKind::Inside,
         );
+        // The title is the device's name, and a name is never truncated in the store (`Rack::rename` leaves that to the face
+        // too), so it is fitted here: a long name ends in the one ellipsis the bundled font has, inside the card.
+        let font = theme::legend(13.0 * s);
+        let title = text::fit(
+            painter,
+            &title,
+            font.clone(),
+            face.width() - 2.0 * PADDING * s,
+        );
         painter.text(
             Pos2::new(face.left() + PADDING * s, face.top() + PADDING * s),
             Align2::LEFT_TOP,
             title,
-            theme::legend(13.0 * s),
+            font,
             theme::SILKSCREEN,
         );
     }
 
     let card = state.device_card.clone();
     for (caption, rect, value) in [
-        ("NAME", rows.name, card.name.clone()),
         ("ROLE", rows.role, role_label(card.role).to_string()),
         ("PORTS", rows.all_ports, "ALL PORTS".to_string()),
         ("CHANNEL", rows.channel_down, channel_label(card.channel)),
     ] {
         caption_row(ui.painter(), caption, rect, &value, s);
+    }
+    // The name is the one row that is a field rather than a caption. It is a widget, so it is registered after the face and
+    // takes the clicks that land on it; Enter is what asks the rack, because a click that dismisses the card must not also
+    // rename a device — you cannot take a rename back.
+    // The caption says Enter because nothing else can: a field has no tooltip, and the card is not dismissed by clicking
+    // away from it, so a player who types and clicks the face would otherwise never learn what applies the name.
+    caption_row(ui.painter(), "NAME (ENTER)", rows.name, "", s);
+    // The field sits in a display well: the pattern and tempo readouts wear the same one, so a name that can be typed into
+    // reads as a readout of the device rather than as loose text on the card's face.
+    {
+        let painter = ui.painter();
+        painter.rect_filled(rows.name, 3.0 * s, theme::WELL);
+        painter.rect_stroke(
+            rows.name,
+            3.0 * s,
+            theme::silkscreen_stroke(s),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let field = ui.put(
+        rows.name,
+        egui::TextEdit::singleline(&mut state.device_card.name)
+            .id(ui.scope_id().with("device-card-name"))
+            .hint_text("device name")
+            .frame(egui::Frame::NONE)
+            .text_color(theme::TEXT)
+            .align(egui::Align2::LEFT_CENTER)
+            .font(theme::legend(12.0 * s))
+            .margin(egui::Margin::symmetric(6, 2))
+            .desired_width(rows.name.width()),
+    );
+    if field.lost_focus()
+        && ui.input(|input| input.key_pressed(egui::Key::Enter))
+        && let Some(open) = state.device_card.open
+    {
+        state.device_request = Some(Request::Rename(open, state.device_card.name.clone()));
     }
     for (index, port) in card.ports.iter().enumerate() {
         let Some(rect) = rows.ports.get(index) else {
