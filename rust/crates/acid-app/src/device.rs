@@ -135,6 +135,20 @@ pub enum RemoveError {
     OutOfRange,
 }
 
+/// What the panel asks the rack to do.
+///
+/// The panel paints and asks; `main` owns the list and answers. A catalogue: `main`'s drain matches it in full, so a new
+/// request fails to compile where a decision is owed.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Request {
+    /// Show this device on the panel.
+    Select(usize),
+    /// Mute or unmute this device — the index the key was drawn for, never the selected one.
+    SetMute(usize, bool),
+    /// Add a device of this kind.
+    Add(DeviceKind),
+}
+
 /// A list of devices, the one the panel is showing, and what the other threads read.
 pub struct Rack {
     devices: Vec<Device>,

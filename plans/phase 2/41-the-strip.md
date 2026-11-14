@@ -679,6 +679,7 @@ Rulings made while writing this plan, and their cost if wrong:
 |---|---|
 | The strip is its own band, not a seventh `BANDS` entry | `paint_panel`'s "every band" loops keep their meaning; the strip draws its own well. A future band would have to choose which list it belongs to. |
 | `PanelEdit` is nine fields, not the whole `PanelState` | A field added later that is *not* a mirror and *not* in `PanelEdit` silently resets on every device switch. The swap's test names them; a new one needs a line there. |
+| One request queue, `PanelState::device_request`, not a second one on `Strip` | Task 2's Interfaces block gave `Strip` its own `request`; the spec and tasks 3–4 put the queue on `PanelState`. One queue is the only shape that cannot have two answers pending at once. The strip's tests assert on `panel.device_request`. |
 | A learn in progress is cancelled by a device switch | Teaching a control on device 1 and then looking at device 2 costs the player a re-click on `LEARN`. The alternative teaches the wrong device. |
 | `KeyPress` carries both modifiers rather than a new enum | `shift` and `ctrl` can both be true; a `Modifier` enum would have to say what shift+ctrl means before anything needs it. |
 | `Ctrl+digit` is dispatched before the step editor | The number keys are not step keys today, so nothing is taken from anything. If a step shortcut ever lands on `Num1`, this order decides — and the order is written down here so it is a decision, not an accident. |

@@ -24,6 +24,7 @@ pub mod settings;
 pub mod shortcuts;
 pub mod songs;
 pub mod step_key;
+pub mod strip;
 pub mod switches;
 pub mod text;
 pub mod tips;
@@ -123,6 +124,12 @@ pub struct PanelState {
     /// when the hand lets go. Anything that sets `scale` from outside — a song load, a restart — must set this too, or
     /// the next frame snaps the scale back to where the knob was; [`PanelState::set_scale`] is the way to do it.
     pub scale_knob: f32,
+    /// The strip: one cell per device, and which of them is on the panel. `main` fills it from the rack every frame, the
+    /// way `pattern` is filled from the device's state, because the panel paints and never owns the list.
+    pub strip: strip::Strip,
+    /// Set by the strip and by `Ctrl+1..4`, drained by `main` after the frame. The panel cannot reach the rack, so asking
+    /// is the only way it can select a device, mute one or add one.
+    pub device_request: Option<crate::device::Request>,
 }
 
 /// The songs card and everything it asked for.
@@ -185,6 +192,8 @@ impl Default for PanelState {
             density: randomise::DEFAULT_DENSITY,
             scale: scale::Scale::default(),
             scale_knob: scale::scale_position(scale::Scale::default()),
+            strip: strip::Strip::default(),
+            device_request: None,
         }
     }
 }
@@ -270,6 +279,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     state.position = shared.position.load(std::sync::atomic::Ordering::Relaxed);
     state.volume = shared.volume.get();
     panel::paint_panel(ui.painter(), &l);
+    // The strip sits on the face and asks for what a click meant; `main` answers after the frame.
+    strip::paint(ui, state, l.strip, s);
 
     display::paint_display(
         ui.painter(),
