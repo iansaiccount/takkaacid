@@ -729,7 +729,12 @@ git commit -m "chore(ui): plan 41's gate, run and used"
       fails on the step. Not covered by a test: `placed` (the step-mode keys) and `last_pitch`/`last_octave` travel in the slot
       but nothing asserts it — the swap moves the whole struct, so a missing field would be a compile error at `save_edit`, and
       the nine are named there.
-- [ ] Task 6 — the strip says what it looks like
+- [x] **Task 6 — the strip says what it looks like.** `tests/devices_live.rs` reads the paints back: a stroked rect within a pixel
+      of the selected cell and none at its neighbour, and the lamp read by **colour** — `LED_ON` for the running device, `LED_OFF`
+      for the stopped one (the lamp is drawn either way; only its colour is the state). Green on arrival, because task 2 painted
+      the border and the lamp; the plan expected red here and this is why. Mutation-checked: removing the `if selected` stroke
+      fails the border assertion. The greyed `+` at the cap is **not** covered: at four devices the key is painted `LED_OFF`, and
+      a test would need to read a stroke's colour — recorded so the next hand knows the gap.
 - [ ] Task 7 — the gate, and the app by hand
 
 Rulings made while writing this plan, and their cost if wrong:

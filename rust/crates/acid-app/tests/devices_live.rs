@@ -145,3 +145,84 @@ fn looking_at_the_other_device_and_back_keeps_the_step_you_were_on() {
     assert!(panel.step_mode);
     assert!((panel.density - 0.75).abs() < 1e-6);
 }
+
+/// Every filled rectangle and every stroked one egui drew: a cell's face, its lamp, its border. A circle counts as filled,
+/// because that is how the lamp is drawn — the face may not use a font glyph for it.
+fn painted(output: &FullOutput) -> (Vec<(Rect, eframe::egui::Color32)>, Vec<Rect>) {
+    use eframe::egui::Shape;
+
+    fn walk(
+        shape: &Shape,
+        filled: &mut Vec<(Rect, eframe::egui::Color32)>,
+        stroked: &mut Vec<Rect>,
+    ) {
+        match shape {
+            Shape::Rect(rect) if rect.fill != eframe::egui::Color32::TRANSPARENT => {
+                filled.push((rect.rect, rect.fill))
+            }
+            Shape::Rect(rect) => stroked.push(rect.rect),
+            Shape::Circle(circle) => filled.push((
+                Rect::from_center_size(
+                    circle.center,
+                    vec2(circle.radius * 2.0, circle.radius * 2.0),
+                ),
+                circle.fill,
+            )),
+            Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, filled, stroked)),
+            _ => {}
+        }
+    }
+
+    let mut filled = Vec::new();
+    let mut stroked = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut filled, &mut stroked);
+    }
+    (filled, stroked)
+}
+
+/// The selected cell wears the accent border and its neighbour does not; a running device's lamp is lit and a stopped one's
+/// is dark. Both are painter shapes, so both are read back from what was drawn rather than from any private state.
+#[test]
+fn the_selected_cell_wears_the_accent_and_the_running_one_lights_its_lamp() {
+    let state = SharedState::new();
+    let mut panel = panel_of(&[("ACID 1", false, false), ("BASS", true, false)]);
+    panel.strip.selected = 1;
+    let ctx = Context::default();
+    let output = run(&ctx, &mut panel, &state, vec![]);
+
+    let cells = strip_cells(layout(screen()).strip, 2);
+    let (filled, stroked) = painted(&output);
+
+    // The border is stroked inside the cell, so it is a rect within a pixel of the cell's own bounds.
+    let outlined = |cell: Rect| {
+        stroked.iter().any(|rect| {
+            (rect.left() - cell.left()).abs() < 2.0
+                && (rect.width() - cell.width()).abs() < 2.0
+                && (rect.height() - cell.height()).abs() < 2.0
+        })
+    };
+    assert!(outlined(cells[1]), "the selected cell's border is drawn");
+    assert!(!outlined(cells[0]), "and its neighbour's is not");
+
+    // The lamp is drawn either way — it is the *colour* that says whether that device is playing — and it is the only small
+    // filled shape inside a cell: the face and the MUTE key are much wider.
+    let lamp = |cell: Rect| {
+        filled
+            .iter()
+            .find(|(rect, _)| {
+                rect.width() < 20.0 && rect.width() > 2.0 && cell.contains_rect(*rect)
+            })
+            .map(|(_, colour)| *colour)
+    };
+    assert_eq!(
+        lamp(cells[1]),
+        Some(acid_app::ui::theme::LED_ON),
+        "a running device's lamp is lit"
+    );
+    assert_eq!(
+        lamp(cells[0]),
+        Some(acid_app::ui::theme::LED_OFF),
+        "and a stopped one's is dark"
+    );
+}
