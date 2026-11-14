@@ -439,3 +439,19 @@ fn a_rack_hands_each_router_the_tempo_cell_it_shares() {
     rack.sync_transport();
     assert_eq!(rack.devices()[0].state.tempo_bpm.get(), 144.0);
 }
+
+/// The scheme catalogue: two entries, the first the instrument's own face, and a toggle that is the whole of the mapping.
+#[test]
+fn the_scheme_catalogue_is_black_then_yellow_and_toggles() {
+    use acid_app::device::Scheme;
+
+    assert_eq!(Scheme::ALL, [Scheme::Black, Scheme::Yellow]);
+    assert_eq!(Scheme::default(), Scheme::Black, "a new device is black");
+    assert_eq!(Scheme::Black.name(), "BLACK");
+    assert_eq!(Scheme::Yellow.name(), "YELLOW");
+    for scheme in Scheme::ALL {
+        assert_eq!(scheme.next().next(), scheme, "{scheme:?} toggles back");
+        assert_ne!(scheme.next(), scheme, "{scheme:?} asks for the other one");
+        assert!(scheme.name().is_ascii(), "{scheme:?} is a panel caption");
+    }
+}

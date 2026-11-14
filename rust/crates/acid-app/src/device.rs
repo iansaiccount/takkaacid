@@ -54,6 +54,40 @@ impl DeviceKind {
     }
 }
 
+/// Which way round a device paints its face — its own, so four machines are told apart at a glance, not the rack's.
+///
+/// A catalogue: `match`es over it are written out in full, so a third scheme fails to compile wherever a decision is owed.
+/// The colours themselves are `ui::theme`'s (`theme::palette`), because they are a painter's business and this is not.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum Scheme {
+    /// The face the instrument has always had: near-black slab, amber silkscreen.
+    #[default]
+    Black,
+    /// The same two families exchanged: an amber face, near-black engraving.
+    Yellow,
+}
+
+impl Scheme {
+    /// Every scheme there is, in the order the card offers them.
+    pub const ALL: [Scheme; 2] = [Scheme::Black, Scheme::Yellow];
+
+    /// The caption on the card's key.
+    pub fn name(self) -> &'static str {
+        match self {
+            Scheme::Black => "BLACK",
+            Scheme::Yellow => "YELLOW",
+        }
+    }
+
+    /// What a click on the card's key asks for: the other one. Two schemes, so this is the whole of the mapping.
+    pub fn next(self) -> Scheme {
+        match self {
+            Scheme::Black => Scheme::Yellow,
+            Scheme::Yellow => Scheme::Black,
+        }
+    }
+}
+
 /// One machine: its own sound, its own patterns, its own identity.
 pub struct Device {
     pub kind: DeviceKind,
