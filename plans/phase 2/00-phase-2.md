@@ -98,8 +98,8 @@ between tasks hide that no single diff showed?
 
 ## Progress
 
-**Where the phase is: plans 38-41 are complete; plan 42 (the device card) is next.** Everything is committed and the tree
-is green (64 test suites, `clippy --all-targets -D warnings` and `fmt --check` clean). A new session resumes by reading the plan
+**Where the phase is: plans 38-42 are complete; plan 43 (documents and gates) is next.** Everything is committed and the tree
+is green (66 test suites, `clippy --all-targets -D warnings` and `fmt --check` clean). A new session resumes by reading the plan
 named below — its `## Progress` section carries every commit, what each task's review found, and the rulings — and by
 `git log`, not by re-deriving anything.
 
@@ -119,11 +119,22 @@ named below — its `## Progress` section carries every commit, what each task's
       keeps the step, the step mode and the randomise dials. Reviewed fresh for tasks 3–4 (17 findings, all actioned); the
       headless run found one more (a ctrl+digit dropped when its modifier arrived in the same frame) and task 3's review found
       a data-loss path (`+` then SAVE would have written the new device over the open song).
-- [ ] **42 — the device card** (`plans/phase 2/42-the-device-card.md`)
+- [x] **42 — the device card** (`plans/phase 2/42-the-device-card.md`): all seven tasks landed (`9f4193c`, `4b12efe`,
+      `cff9a0c`, `33018b7`, `92ab20c`, `44e89c6`, and this one). `F3` or the strip's caret opens a card for the selected
+      device — name field, ROLE, one ticked key per machine port with `ALL PORTS`, a channel stepper, MUTE, and a REMOVE that
+      asks twice — and the strip's `+` opens a picker over `DeviceKind::ALL` with the footnote that names and extra devices are
+      not saved yet. Every review ran fresh (`reviewer` subagent): task 1 found 4 (all actioned), task 2 nine (all), task 3
+      eleven (all) including a **BLOCK** — a focused name field did not stop the panel's audition keys, so typing `BASS` wrote
+      four steps and Space stopped the transport — task 4 eight (all) including a port click silently dropping an unplugged
+      controller from the filter, task 5 five (all), task 6 six (all) including the one-card rule going one-way again. The
+      by-hand journey (task 7) walked the whole spec on Xvfb; the only claims left unproved by eye are the sound ones.
 - [ ] **43 — documents and gates** (`plans/phase 2/43-documents-and-gates.md`)
 
-**Review mode.** The twelve commits so far ran the review gate *inline* — the executor reading its own staged diff — because
-`pi-subagents` was not loaded in that session, so no `subagent` tool could be dispatched. It still caught five real defects
-(a wrong doc comment, two transport-write bugs, a device whose engine had no pattern, and a mutation check that did not fire).
-Every commit from here should dispatch a fresh reviewer if the tool is available; the plan's Review Focus sections are written
-for exactly that brief. Record in each Progress line which mode the gate ran in.
+**Review mode.** Plans 38-41 ran the review gate *inline* — the executor reading its own staged diff — because `pi-subagents`
+was not loaded in that session. Plan 42 ran it **fresh**: every task from 1 to 6 dispatched a `reviewer` subagent with the
+task's Files/Interfaces blocks and the staged diff, and 43 findings were found and actioned across the six, three of them
+blocks that would have shipped a destructive or contradictory state (typing into the name field editing the pattern; a port
+click dropping an unplugged controller; the one-card rule going one-way). The lesson worth carrying into plan 43: the inline
+gate found five real defects over twelve commits, and the fresh gate found nine over the same number of files — the difference
+is that a fresh reader asks "what would break this?" about code it did not just write. Task 7's diff (documents only) ran
+inline, and each task's Progress line names which mode ran.

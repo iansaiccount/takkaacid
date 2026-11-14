@@ -817,7 +817,29 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
       Xvfb walkthrough is the evidence — four devices, greyed row, "four devices is the limit", picker closed), and the strip's
       `+` greyness, which is a paint colour no helper here can read (the mutation `let full = false` survives the suite), same
       class as `ALL PORTS`' lit colour in task 4.
-- [ ] Task 7 — the gate and the journey
+- [x] Task 7 — the gate and the journey. Three gates green (66 suites, clippy `-D warnings` clean, `fmt --check` clean). The
+      journey walked on a private X display (`Xvfb :94`, a fresh `XDG_DATA_HOME`, the real binary, `xdotool` clicks 2.5 s
+      apart), and every visual claim the spec makes checked:
+      1. `+` → picker → `ACID` row: a second cell appears, selected, and its card opens with every port unticked (it hears
+         nothing) — the plan-40 Review Focus 1 state, now visible.
+      2. `F3` on it: named `BASS` (the strip cell followed on the next frame — the store's answer, not the typed string). A
+         rename of the *other* device to `BASS` would land as `BASS (2)`: the dedupe is `Rack::rename`'s and pinned in
+         `tests/rack.rs`; walked only as far as one collision-free rename here, because the by-hand path needs two devices
+         with the same name and the store test already proves the suffix.
+      3. `ROLE` → `CTRL ONLY`, the controller's one port ticked. (Sound — "only ACID 1 sounds", "BASS's cutoff moves and ACID
+         1's does not" — is the operator's to judge by ear, per the brief; the routing itself was proved by
+         `Router::on_message`'s tests in plan 40.)
+      4. `Ctrl+1`/`Ctrl+2` moved the panel; `ctrl`-click on BASS's step 1 emptied it, and `Ctrl+1` showed ACID 1's step 1
+         still lit. Two devices, two patterns. (A plain click only *selects* — `edit::gesture_from_input` says so — which cost
+         one wrong inference while walking.)
+      5. Muting BASS lit that cell's `M` and left ACID 1's dark; the mid-bar unmute is a sound judgement, left to the ear.
+      6. `F3` → `REMOVE` → `CONFIRM?` → BASS gone, the card closed, `ACID 1` kept its number and its name.
+      7. Restart: one cell, `ACID 1`, `+` free — names and extra devices gone, exactly as the footnote says.
+      **Surprised by:** the armed and unarmed faces of the card's keys are hard to tell apart at 1× (`ALL PORTS` lit vs unlit
+      is a face-tone and text-hue difference only). Not fixed — it is `transport_button`'s idiom everywhere on the face, and
+      a tick's `[x]`/`[ ]` carries the state that matters here; recorded in case a later round wants a stronger "lit" state.
+      **Review:** the diff is this plan and the phase overview only, so the gate ran inline (the thin case the phase overview
+      allows) rather than through a subagent.
 
 ### Deliberately untested
 
