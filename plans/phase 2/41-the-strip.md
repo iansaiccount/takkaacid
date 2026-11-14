@@ -720,7 +720,15 @@ git commit -m "chore(ui): plan 41's gate, run and used"
       already documented — and `a_ctrl_digit_asks_the_rack_to_select_that_device` builds a ctrl event rather than passing a
       frame's modifiers. The plan's Interfaces block said otherwise; the device it was protecting (a bare digit becoming a
       select) is still protected, because a bare digit's event carries no ctrl.
-- [ ] Task 5 — the editor follows the device
+- [x] **Task 5 — the editor follows the device.** `PanelEdit` (nine fields) with `PanelState::{save_edit, load_edit}`, `focused` and
+      `edit_slots`, and the swap at the top of `draw_panel`: truncate the slots to the strip's count, save the outgoing device,
+      load the incoming one's. A device the panel has never shown gets `PanelEdit::of_defaults()` (built from
+      `PanelState::default`, so the two cannot drift) **except** for `pattern_id`, which keeps what `main` has just pointed the
+      display at — that is that device's bank, not a default. A switch also cancels a learn in progress, because a learn belongs
+      to the device it was started on. Mutation-checked: disable the swap and `looking_at_the_other_device_and_back_keeps_the_step_you_were_on`
+      fails on the step. Not covered by a test: `placed` (the step-mode keys) and `last_pitch`/`last_octave` travel in the slot
+      but nothing asserts it — the swap moves the whole struct, so a missing field would be a compile error at `save_edit`, and
+      the nine are named there.
 - [ ] Task 6 — the strip says what it looks like
 - [ ] Task 7 — the gate, and the app by hand
 

@@ -114,3 +114,34 @@ fn a_selection_past_the_end_is_clamped_rather_than_panicking() {
     run(&ctx, &mut panel, &state, vec![]);
     assert_eq!(panel.strip.selected, 0);
 }
+
+/// The plan's headline: the editor is not a mirror, so looking at the other device and back must keep the step the hand was
+/// on, the step mode and the randomise dials — and a device the panel has never shown starts on its own first step.
+#[test]
+fn looking_at_the_other_device_and_back_keeps_the_step_you_were_on() {
+    let state = SharedState::new();
+    let mut panel = panel_of(&[("ACID 1", true, false), ("BASS", true, false)]);
+    panel.selected = 4;
+    panel.step_mode = true;
+    panel.density = 0.75;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    // The rack has moved the selection; the panel has not caught up yet.
+    panel.strip.selected = 1;
+    run(&ctx, &mut panel, &state, vec![]);
+    assert_eq!(panel.focused, 1);
+    assert_eq!(
+        panel.selected, 0,
+        "a device the panel has never edited starts on step 1"
+    );
+    assert!(!panel.step_mode);
+    assert!((panel.density - acid_app::ui::randomise::DEFAULT_DENSITY).abs() < 1e-6);
+
+    panel.strip.selected = 0;
+    run(&ctx, &mut panel, &state, vec![]);
+    assert_eq!(panel.focused, 0);
+    assert_eq!(panel.selected, 4, "the step the hand was on came back");
+    assert!(panel.step_mode);
+    assert!((panel.density - 0.75).abs() < 1e-6);
+}

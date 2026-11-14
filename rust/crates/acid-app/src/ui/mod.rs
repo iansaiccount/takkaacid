@@ -130,6 +130,11 @@ pub struct PanelState {
     /// Set by the strip and by `Ctrl+1..4`, drained by `main` after the frame. The panel cannot reach the rack, so asking
     /// is the only way it can select a device, mute one or add one.
     pub device_request: Option<crate::device::Request>,
+    /// The device the flat editor fields currently hold. Follows `strip.selected` a frame later, through the swap below.
+    pub focused: usize,
+    /// One editor per device: written when a switch leaves a device, read when one arrives, so looking away and back keeps
+    /// the step, the step mode and the randomise dials.
+    pub edit_slots: Vec<PanelEdit>,
 }
 
 /// The songs card and everything it asked for.
@@ -194,6 +199,8 @@ impl Default for PanelState {
             scale_knob: scale::scale_position(scale::Scale::default()),
             strip: strip::Strip::default(),
             device_request: None,
+            focused: 0,
+            edit_slots: Vec::new(),
         }
     }
 }
@@ -230,6 +237,62 @@ impl PanelState {
     }
 }
 
+/// What the panel remembers about one device while another is displayed.
+///
+/// Exactly the fields that are *not* re-read from `SharedState` every frame: `knobs`, `volume`, `pattern`, `tempo`,
+/// `playing` and `position` are mirrors and need no slot. A field added later that is neither a mirror nor here will reset
+/// on every device switch, which is why the test names all nine.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PanelEdit {
+    pub pattern_id: PatternId,
+    pub selected: usize,
+    pub step_mode: bool,
+    pub placed: Vec<egui::Key>,
+    pub last_pitch: Pitch,
+    pub last_octave: i8,
+    pub density: f32,
+    pub scale: scale::Scale,
+    pub scale_knob: f32,
+}
+
+impl PanelEdit {
+    /// The editor a device the panel has never shown starts with: the panel's own defaults, taken from `PanelState::default`
+    /// so the two cannot drift apart.
+    pub fn of_defaults() -> Self {
+        let mut fresh = PanelState::default();
+        fresh.save_edit()
+    }
+}
+
+impl PanelState {
+    /// Take the flat editor fields into a slot — the outgoing half of a device switch.
+    pub fn save_edit(&mut self) -> PanelEdit {
+        PanelEdit {
+            pattern_id: self.pattern_id,
+            selected: self.selected,
+            step_mode: self.step_mode,
+            placed: self.placed.clone(),
+            last_pitch: self.last_pitch,
+            last_octave: self.last_octave,
+            density: self.density,
+            scale: self.scale,
+            scale_knob: self.scale_knob,
+        }
+    }
+
+    /// Put a slot back into the flat fields — the incoming half of a device switch.
+    pub fn load_edit(&mut self, edit: PanelEdit) {
+        self.pattern_id = edit.pattern_id;
+        self.selected = edit.selected;
+        self.step_mode = edit.step_mode;
+        self.placed = edit.placed;
+        self.last_pitch = edit.last_pitch;
+        self.last_octave = edit.last_octave;
+        self.density = edit.density;
+        self.scale = edit.scale;
+        self.scale_knob = edit.scale_knob;
+    }
+}
 /// Paint the whole panel into `ui`: face, displays, knobs, step keys, switches and transport legends.
 ///
 /// Painting uses absolute rects from `layout`, so the panel lands in the same place whatever the Ui's own
@@ -241,6 +304,29 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         .strip
         .selected
         .min(state.strip.cells.len().saturating_sub(1));
+    // The strip is a mirror, so the device under the editor can change between frames: save the outgoing device's editor and
+    // load the incoming one's. A device the panel has never shown starts on its own first step with the panel's defaults —
+    // but keeps the pattern `main` has just pointed the display at, because that is that device's bank, not a default.
+    state.edit_slots.truncate(state.strip.cells.len().max(1));
+    if state.strip.selected != state.focused {
+        let leaving = state.save_edit();
+        if state.edit_slots.len() <= state.focused {
+            state.edit_slots.resize(state.focused + 1, leaving.clone());
+        }
+        state.edit_slots[state.focused] = leaving;
+        state.focused = state.strip.selected;
+        let arriving = match state.edit_slots.get(state.focused) {
+            Some(edit) => edit.clone(),
+            None => PanelEdit {
+                pattern_id: state.pattern_id,
+                ..PanelEdit::of_defaults()
+            },
+        };
+        state.load_edit(arriving);
+        // A learn belongs to the device it was started on: switching away cancels it rather than teaching the neighbour.
+        state.learn = learn::Step::Idle;
+        learn::cancel(shared);
+    }
     let window = ui.max_rect();
     play_computer_keys(shared, ui, state);
 
