@@ -735,7 +735,19 @@ git commit -m "chore(ui): plan 41's gate, run and used"
       the border and the lamp; the plan expected red here and this is why. Mutation-checked: removing the `if selected` stroke
       fails the border assertion. The greyed `+` at the cap is **not** covered: at four devices the key is painted `LED_OFF`, and
       a test would need to read a stroke's colour — recorded so the next hand knows the gap.
-- [ ] Task 7 — the gate, and the app by hand
+- [x] **Task 7 — the gate, and the app by hand.** The three gates are green at every commit above (65 suites, clippy
+      `-D warnings`, `fmt --check`). The app was run on a private `Xvfb :97` display with an isolated `XDG_DATA_HOME` and driven
+      with `xdotool`; `import -window` gave the screenshots. What the run showed: the panel at 980×670 with the strip above it;
+      `+` adds `ACID 2`, selects it and says so; a cell click moves the selection and the panel to that device; MUTE on the
+      *non-selected* cell lights that cell's `M` and leaves the selection alone; `Ctrl+1..4` moves the selection; and — task 5's
+      headline — step 5 on `ACID 1`, then `Ctrl+2` and two steps right on `ACID 2`, then `Ctrl+1`, comes back to step 5. The run
+      also found a real defect in task 4 (`presses` filtered on the frame's modifiers, so a ctrl+digit delivered inside one frame
+      was dropped), fixed in `69188ee` and re-verified with the same keystroke.
+- **Task 7, what the headless run does not cover:** the sound (it never started the transport — that is `EAR_TESTING.md` and the
+      player's ears), the greyed `+` at four devices, and the device *card* the spec puts a caret on (plan 42). The recipe is
+      worth keeping: `Xvfb :97 -screen 0 1280x800x24`, app launched with `DISPLAY=:97 LIBGL_ALWAYS_SOFTWARE=1
+      XDG_DATA_HOME=/tmp/… WAYLAND_DISPLAY=`, `xdotool windowfocus` then `mousemove --window <id> x y click 1`, and **2.5 s**
+      between an action and an `import -window` — a shorter wait sometimes returns the pre-action frame.
 
 Rulings made while writing this plan, and their cost if wrong:
 

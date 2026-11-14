@@ -98,7 +98,7 @@ between tasks hide that no single diff showed?
 
 ## Progress
 
-**Where the phase is: plans 38, 39 and 40 are complete; plan 41 (the strip) is next.** Everything is committed and the tree
+**Where the phase is: plans 38-41 are complete; plan 42 (the device card) is next.** Everything is committed and the tree
 is green (64 test suites, `clippy --all-targets -D warnings` and `fmt --check` clean). A new session resumes by reading the plan
 named below — its `## Progress` section carries every commit, what each task's review found, and the rulings — and by
 `git log`, not by re-deriving anything.
@@ -113,7 +113,12 @@ named below — its `## Progress` section carries every commit, what each task's
       8's found 4 (all actioned). Tasks 7 and 8 fixed what task 6's review turned up — the tempo fader did nothing because the
       rack's fan-out overwrote it — ending with one tempo cell that the rack, every device and every MIDI port share, so a
       knob moves at the next audio block and cannot be undone by a frame.
-- [ ] **41 — the strip** (`plans/phase 2/41-the-strip.md`)
+- [x] **41 — the strip** (`plans/phase 2/41-the-strip.md`): all seven tasks landed (`9b60dd9`, `85ab8c1`, `c3f560b`, `ebd394b`,
+      `69188ee`, `dc5bd45`, `d48e5bf`). A strip band with one cell per device (name, play lamp, MUTE, accent on the selected
+      one, `+`), `Ctrl+1..4`, the panel's mirror and request queue, and a `PanelEdit` per device so switching away and back
+      keeps the step, the step mode and the randomise dials. Reviewed fresh for tasks 3–4 (17 findings, all actioned); the
+      headless run found one more (a ctrl+digit dropped when its modifier arrived in the same frame) and task 3's review found
+      a data-loss path (`+` then SAVE would have written the new device over the open song).
 - [ ] **42 — the device card** (`plans/phase 2/42-the-device-card.md`)
 - [ ] **43 — documents and gates** (`plans/phase 2/43-documents-and-gates.md`)
 
