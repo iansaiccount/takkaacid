@@ -19,6 +19,8 @@ pub enum Shortcut {
     NextPattern,
     PrevPattern,
     ToggleSettings,
+    /// The device card for the device on the panel: its name, its route and its removal.
+    ToggleDeviceCard,
     ToggleHelp,
 }
 
@@ -33,6 +35,7 @@ pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
         (Key::ArrowLeft, true) => Some(Shortcut::PrevPattern),
         (Key::F1, _) => Some(Shortcut::ToggleHelp),
         (Key::F2, _) => Some(Shortcut::ToggleSettings),
+        (Key::F3, _) => Some(Shortcut::ToggleDeviceCard),
         (Key::Questionmark, true) => Some(Shortcut::ToggleHelp),
         _ => None,
     }
@@ -78,7 +81,7 @@ pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) ->
             true
         }
         // Both cards are panel state, so `handle` toggles them; nothing here touches the shared state.
-        Shortcut::ToggleHelp | Shortcut::ToggleSettings => false,
+        Shortcut::ToggleHelp | Shortcut::ToggleSettings | Shortcut::ToggleDeviceCard => false,
     }
 }
 

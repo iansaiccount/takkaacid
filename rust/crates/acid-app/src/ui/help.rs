@@ -36,7 +36,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "backspace: rest, shift+note: write where you are",
                 "shift+up / down: note up or down",
                 "enter: note on or off",
-                "F1 or shift+?: this card, F2: settings",
+                "F1 or shift+?: this card, F2: settings, F3: the device card",
                 "hover to read a control; tooltips and autosave are in settings",
             ],
         ),

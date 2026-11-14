@@ -219,10 +219,14 @@ Expected: FAIL — `no module named device_card`.
 
 - [ ] **Step 3: Write the shell**
 
-`card_rect` is centred over the panel, as tall as the rows need and no taller, in the shape `ui::settings::card_rect` already
-uses. `rows` returns one rect per row; the ports list has one rect per port and is allowed to grow, because there are never
-more than a handful. `paint` draws the shade (`theme::SHADE`) over the panel, the card face, the title `DEVICE <name>`, the
-rows, and `CLOSE`; it writes nothing to `device_request` in this task — task 3 starts that.
+`card_rect` is centred over the panel, wide enough for a name and a port list, and as tall as the room the rows are laid out in
+— the face `paint` draws is as tall as the rows actually reach, so a card with two ports is shorter than the rect. `rows`
+returns one rect per row; the ports list has one rect per port and is allowed to grow, because there are never more than a
+handful. `paint` draws the shade (`theme::SHADE`) over the panel, the card face, the title `DEVICE <name>`, the rows, and
+`CLOSE`. It writes `Request::Close` and nothing else: CLOSE and a click outside the card are its own lifetime, and the four
+rows that change a device wait for tasks 3-5. Leaving `Close` unsent would make it a variant nothing sends and a
+permanently dead arm in `main`'s drain — as it is, `main` answers it by dropping the mirror, so the card cannot show a name
+that belongs to another device.
 
 `F3` goes through `dispatch::handle` the way `F2` does: `shortcuts::apply` does not touch the panel, so the toggle lives in
 `dispatch`, next to the settings toggle, and honours the one-card rule. The caret on the selected cell writes
@@ -236,9 +240,13 @@ Expected: PASS.
 - [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
-git add rust/crates/acid-app/src/ui/device_card.rs rust/crates/acid-app/src/ui/mod.rs rust/crates/acid-app/src/ui/strip.rs rust/crates/acid-app/src/ui/shortcuts.rs rust/crates/acid-app/src/ui/dispatch.rs rust/crates/acid-app/tests/device_card_live.rs
+git add -A
 git commit -m "feat(ui): F3 opens a card for the device on the panel"
 ```
+
+Step 2 also lands three files the block above does not name, and the reason is in the Progress line: `main.rs` (the `Open`
+answer and the rising-edge fill, without which the caret is a dead key), `ui/tips.rs` (`Control::DeviceCaret`, because every
+hoverable control in this repo has a tip), and `ui/help.rs` (one line, so the help card still names every key).
 
 ---
 
@@ -679,7 +687,7 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
 
 ## Progress
 
-- [x] Task 1 — the request queue grows. Commit 1 of the plan: `device::Request` carries all twelve answers a card can give
+- [x] Task 1 — the request queue grows. `9f4193c`: `device::Request` carries all twelve answers a card can give
       (`Open`, `Close`, `OpenPicker`, `Rename`, `SetRole`, `SetPorts`, `SetChannel`, `AskRemove`, `ConfirmRemove` added), and
       `main`'s drain answers the ones that have a rack answer: `Rename` → `Rack::rename`, the three routing edits each
       replacing one field of the device's `InputFilter` and publishing it, `ConfirmRemove` → `Rack::remove` with
@@ -693,7 +701,34 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
       `renaming_lands_on_one_device_and_keeps_names_distinct`. (3) `apply_device_request`'s doc comment still said "select a
       device, mute one, or add one". (4) the `Rename` arm's deferred write-back was unmarked. Task 1 adds **no test**:
       `tests/rack.rs` already pins the rename chain, and the new arms are reachable only from the binary.
-- [ ] Task 2 — the card's shell
+- [x] Task 2 — the card's shell. `ui/device_card.rs` (Card/`offer`/`card_rect`/`rows`/`paint`), `PanelState::device_card`
+      with `open_device_card`/`close_device_card` as the only way in and out, `F3` → `Shortcut::ToggleDeviceCard` in
+      `dispatch`, the caret on the strip's selected cell → `Request::Open`, and the card painted last in `draw_panel`.
+      **Review: fresh `reviewer` subagent.** Nine findings (3 should-fix, 6 nits), all actioned:
+      (1) **the one-card rule was one-way** — F3 closed settings/help/songs but F2/F1 left the device card standing, which is
+      two shades over one face and a live card hidden under another two keystrokes away; both arms now call
+      `close_device_card`, and `opening_another_card_puts_the_device_card_away` pins it.
+      (2) **a click on the card's own rows dismissed it** — only CLOSE was registered after the shield, so a player aiming at
+      MUTE (dead until task 4) lost the card; the face is now its own click target, pinned by
+      `a_click_on_one_of_the_cards_own_rows_leaves_it_standing`.
+      (3) the Progress and step-5 `git add` list (this entry).
+      Nits: `caret_rect` wore the name's old doc line; `escape`'s new doc claimed "the paint order backwards" while help and
+      songs were already inverted (the doc now says so rather than pretending); the help card did not name `F3`; two doc
+      claims in the new file were not what the code does and one assertion pinned nothing (the test now bounds the key row by
+      its neighbours); and `Default` on `Channel`/`Role` was reverted — `Card`'s default is written out, so `midi::route`
+      gained no "the permissive one" default for a UI mirror.
+      **Deviations from the task's Files block, all recorded above:** `main.rs` (`Open` → `open_device_card`, `Close` →
+      drop the mirror, and the rising-edge fill of the card's mirror in `card_filled: Option<usize>`, the shape
+      `settings_was_open` already uses, so F3 and the caret are one path and no blank card is ever painted), `midi/route.rs`
+      (`Ports::holds`, so a tick and the router's filter cannot disagree — `hears` now delegates to it), `ui/tips.rs`
+      (`Control::DeviceCaret`, appended at index 29 so no existing position moves), `ui/help.rs` (one line). `Rows` gained
+      `all_ports`, which the plan's Interfaces block omits and task 4's `ALL PORTS` row needs. The port list passed to
+      `offer` is `Vec::new()`: the machine's ports arrive with the rows that show them, which is task 4's `main.rs` line.
+      **Deliberately untested:** `main`'s `Open`/`Close` arms and the fill (`card_filled`, the `armed_remove` reset) — the
+      binary again, and task 7's journey is what walks them; the caret's *strokes* (its hit area is tested, so deleting the
+      two `line_segment` calls would leave every test green — reading that back would mean teaching `devices_live.rs`'s
+      `painted()` to collect `Shape::LineSegment`); and `paint`'s stale-index close, which `devices_live.rs` covers one
+      layer up (`a_selection_past_the_end_is_clamped_rather_than_panicking`).
 - [ ] Task 3 — the name field
 - [ ] Task 4 — the routing rows
 - [ ] Task 5 — removing a device, twice

@@ -2,6 +2,7 @@
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
 pub mod clear;
 pub mod controls;
+pub mod device_card;
 pub mod dispatch;
 pub mod display;
 pub mod edit;
@@ -130,6 +131,9 @@ pub struct PanelState {
     /// Set by the strip and by `Ctrl+1..4`, drained by `main` after the frame. The panel cannot reach the rack, so asking
     /// is the only way it can select a device, mute one or add one.
     pub device_request: Option<crate::device::Request>,
+    /// The device card: which device it is about and what `main` last read into it. One card at a time with help, songs
+    /// and settings — `open_device_card` is the only way in, so the rule cannot be forgotten at one of the three.
+    pub device_card: device_card::Card,
     /// The device the flat editor fields currently hold. Follows `strip.selected` a frame later, through the swap below.
     pub focused: usize,
     /// One editor per device: written when a switch leaves a device, read when one arrives, so looking away and back keeps
@@ -199,6 +203,7 @@ impl Default for PanelState {
             scale_knob: scale::scale_position(scale::Scale::default()),
             strip: strip::Strip::default(),
             device_request: None,
+            device_card: device_card::Card::default(),
             focused: 0,
             edit_slots: Vec::new(),
         }
@@ -212,6 +217,27 @@ impl PanelState {
     /// Say something on the status line. It survives the card that asked for it, and it clears itself.
     pub fn notify(&mut self, message: impl Into<String>) {
         self.notice = Some((message.into(), std::time::Instant::now()));
+    }
+
+    /// Show the device card for `index`, and put every other card away: there is room for one, and this one is painted over
+    /// the panel last.
+    ///
+    /// F3, the caret on the strip's selected cell and `main`'s `Request::Open` all arrive here, so the one-card rule cannot
+    /// be remembered at two of the three and forgotten at the last.
+    pub fn open_device_card(&mut self, index: usize) {
+        self.device_card.open = Some(index);
+        self.settings_open = false;
+        self.help_visible = false;
+        self.songs.card = None;
+    }
+
+    /// Put the device card away, mirror and all: its name, its route and its arming are readings of one device, and none of
+    /// them may be shown against the next one.
+    ///
+    /// F3, Escape, the card's CLOSE key and its shield all arrive here, and would otherwise be four places that have to
+    /// remember to clear the same seven fields.
+    pub fn close_device_card(&mut self) {
+        self.device_card = device_card::Card::default();
     }
 
     /// The notice still worth showing at `now`, if any.
@@ -779,6 +805,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             None => {}
         }
     }
+    // The device card is the last thing painted, so nothing draws over it. It is here rather than inside the settings
+    // card's `draw_settings` because it is not a fold of anything: it is a card about one device, and it is the only
+    // place a device's name, route and removal can be changed.
+    device_card::paint(ui, state, l.panel, s);
 }
 
 /// The computer keyboard plays through the same route as a MIDI keyboard, so both share one voice.

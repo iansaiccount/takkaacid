@@ -138,19 +138,23 @@ pub fn handle(
         shortcuts::Shortcut::NextPattern
         | shortcuts::Shortcut::PrevPattern
         | shortcuts::Shortcut::ToggleSettings
-        | shortcuts::Shortcut::ToggleHelp => None,
+        | shortcuts::Shortcut::ToggleHelp
+        | shortcuts::Shortcut::ToggleDeviceCard => None,
     };
     if let Some(request) = transport {
         panel.transport_request = Some(request);
         return Handled::Shortcut(shortcut);
     }
     shortcuts::apply(shortcut, shared, bank);
-    // The settings card is panel state too, and there is room for one card: opening it clears help and songs.
+    // The settings card is panel state too, and there is room for one card: opening it clears the other three. The device
+    // card goes the same way it came — through `close_device_card`, so its mirror cannot outlive it — and the rule is
+    // symmetric because a one-way rule is a state two keystrokes away, not a corner.
     if matches!(shortcut, shortcuts::Shortcut::ToggleSettings) {
         panel.settings_open = !panel.settings_open;
         if panel.settings_open {
             panel.help_visible = false;
             panel.songs.card = None;
+            panel.close_device_card();
         }
     }
     // The help card is panel state, so it is toggled here rather than in `apply` — and it follows the same one-card rule
@@ -160,6 +164,17 @@ pub fn handle(
         panel.help_visible = !panel.help_visible;
         if panel.help_visible {
             panel.settings_open = false;
+            panel.close_device_card();
+        }
+    }
+    // The device card is the last thing painted, so it is the first thing Escape gives up on; opening it puts the other
+    // three away, because there is room for one card and this one is over the top.
+    if matches!(shortcut, shortcuts::Shortcut::ToggleDeviceCard) {
+        if panel.device_card.open.is_some() {
+            panel.close_device_card();
+        } else {
+            let selected = panel.strip.selected;
+            panel.open_device_card(selected);
         }
     }
     // The selection names a position in the pattern on screen and the display names the pattern itself, so a new pattern
@@ -173,12 +188,17 @@ pub fn handle(
     Handled::Shortcut(shortcut)
 }
 
-/// Escape gives up on one thing at a time, nearest the player's hand first: the settings card, then help, then the songs
-/// card, then a learn in progress. Returns whether there was anything to close.
+/// Escape gives up on one thing at a time: the device card first, because it is painted over everything; then the
+/// settings card, then help, then the songs card, then a learn in progress. Returns whether there was anything to close.
 ///
-/// It lives here rather than in `main` because the order is the behaviour — settings first is what stops Escape closing a
-/// card hidden behind help — and `main` is a binary no test can call.
+/// The topmost card first is the rule; the songs card is the exception already — it is painted over help but closed after
+/// it — and the device card is the one card that needed the rule to hold, because it is the one a hand opens by accident.
+/// It lives here rather than in `main` because the order is the behaviour, and `main` is a binary no test can call.
 pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
+    if panel.device_card.open.is_some() {
+        panel.close_device_card();
+        return true;
+    }
     if panel.settings_open {
         panel.settings_open = false;
         return true;

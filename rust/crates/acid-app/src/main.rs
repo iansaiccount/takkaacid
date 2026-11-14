@@ -85,6 +85,7 @@ fn main() -> eframe::Result {
                 panel,
                 autosave: persist::Autosave::new(),
                 settings_was_open: false,
+                card_filled: None,
                 midi: Midi::new(midi_enabled, tempo_cell, midi_bus),
                 pending_pattern: None,
                 last_position: 0,
@@ -101,6 +102,10 @@ struct TakkaApp {
     autosave: persist::Autosave,
     /// Whether the settings card was open last frame, so its device lists are filled on the rising edge and not per frame.
     settings_was_open: bool,
+    /// Which device the card's mirror was filled for, or `None` while it is closed. The card's name and route are a reading
+    /// of the rack and its port list costs a round trip, so it is read the frame the card opens — whichever of the caret
+    /// and F3 opened it — and not again while it stands.
+    card_filled: Option<usize>,
     midi: Midi,
     /// A pattern a learned controller asked for, waiting for the bar to come round.
     pending_pattern: Option<usize>,
@@ -359,6 +364,21 @@ impl eframe::App for TakkaApp {
             );
         }
         self.settings_was_open = self.panel.settings_open;
+        // The device card's mirror is a reading of one device, so it is filled the frame the card opens and not per frame:
+        // the name and the route come off the rack, and the machine's port list is a round trip. Whichever of the caret and
+        // F3 opened it, this is the one place that reads — the open flag is compared, not the click that set it.
+        if self.panel.device_card.open != self.card_filled {
+            if let Some(index) = self.panel.device_card.open
+                && let Some(device) = self.rack.devices().get(index)
+            {
+                // The port rows and the list they are drawn from arrive with the rows themselves; the name and the route
+                // are what the card can show today.
+                self.panel
+                    .device_card
+                    .offer(&device.name, &device.inputs, Vec::new());
+            }
+            self.card_filled = self.panel.device_card.open;
+        }
         if let Some(request) = self.panel.settings_request.take() {
             self.apply_settings_request(request);
         }
@@ -571,9 +591,17 @@ impl TakkaApp {
                 }
                 Err(device::RemoveError::OutOfRange) => {}
             },
-            // Waiting for the card: these are the panel's own, so the arms land with it.
-            device::Request::Open(_) => {} // plan 42 task 2 fills this
-            device::Request::Close => {}   // plan 42 task 2 fills this
+            // The caret on the selected cell asks for this. The fill — the device's name, its route and the machine's
+            // ports — happens below, on the frame the card opens, whichever of the two opened it.
+            device::Request::Open(index) => {
+                if index < self.rack.devices().len() {
+                    self.panel.open_device_card(index);
+                }
+            }
+            // The card's CLOSE key and its shield call this. `open` is a flag the card could clear itself, but the mirror it
+            // is about is `main`'s reading of a device, so closing drops both in the one place that filled them.
+            device::Request::Close => self.panel.close_device_card(),
+            // Still waiting for their tasks: the picker (task 6) and the first half of REMOVE (task 5).
             device::Request::OpenPicker => {} // plan 42 task 6 fills this
             device::Request::AskRemove(_) => {} // plan 42 task 5 fills this
         }

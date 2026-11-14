@@ -65,11 +65,14 @@ pub enum Control {
     DeviceMute,
     /// The strip's `+`: another device in the rack.
     DeviceAdd,
+    /// The caret on the selected cell: the way into that device's card. Appended, so no existing position in the table
+    /// moves — the cell says which device is on the panel, and the caret says how to open it, which are two questions.
+    DeviceCaret,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 29] = [
+    pub const ALL: [Control; 30] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -99,6 +102,7 @@ impl Control {
         Control::DeviceCell,
         Control::DeviceMute,
         Control::DeviceAdd,
+        Control::DeviceCaret,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -133,6 +137,7 @@ impl Control {
             Control::DeviceCell => TIPS[26],
             Control::DeviceMute => TIPS[27],
             Control::DeviceAdd => TIPS[28],
+            Control::DeviceCaret => TIPS[29],
         }
     }
 
@@ -154,7 +159,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 29] = [
+const TIPS: [Tip; 30] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -299,6 +304,11 @@ const TIPS: [Tip; 29] = [
         title: "ADD DEVICE",
         what: "Another machine in the rack, up to four. Names and the rack are not saved yet.",
         shortcut: None,
+    },
+    Tip {
+        title: "DEVICE CARD",
+        what: "The device you are looking at: its name, what it hears, and the way to remove it.",
+        shortcut: Some("F3: the same, from the keyboard"),
     },
 ];
 

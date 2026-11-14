@@ -52,11 +52,22 @@ pub fn mute_rect(cell: Rect) -> Rect {
     )
 }
 
-/// The name: everything from the cell's left edge to the lamp. A long name is cut by `text::fit` and never in the store.
+/// The caret at the selected cell's left end, before the name: the way into that device's card. Two strokes, not a font
+/// glyph, and the space is reserved on every cell so a name never shifts when the selection moves.
+pub fn caret_rect(cell: Rect) -> Rect {
+    let pad = cell.height() * PAD;
+    let width = pad * 2.0;
+    Rect::from_min_max(
+        Pos2::new(cell.left() + pad * 0.5, cell.top() + pad * 1.5),
+        Pos2::new(cell.left() + pad * 0.5 + width, cell.bottom() - pad * 1.5),
+    )
+}
+
+/// The name: everything from the caret to the lamp. A long name is cut by `text::fit` and never in the store.
 pub fn name_rect(cell: Rect) -> Rect {
     let pad = cell.height() * PAD;
     Rect::from_min_max(
-        Pos2::new(cell.left() + pad * 1.5, cell.top()),
+        Pos2::new(caret_rect(cell).right() + pad * 0.5, cell.top()),
         Pos2::new(lamp_rect(cell).left() - pad, cell.bottom()),
     )
 }
@@ -149,6 +160,27 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
             // The index it was drawn for, not the selected one: muting the device on the panel when another was clicked
             // is the bug this carries the index to avoid.
             state.device_request = Some(Request::SetMute(index, !cell.muted));
+        }
+        if selected {
+            // The caret is drawn and registered after the cell's own hit area, so a click on the pixels they share is the
+            // caret's: a later widget wins a hit-test tie. It writes `Open`, not `Select` — the device is already on the
+            // panel, and what the click asks for is its card.
+            let caret = caret_rect(cell_rect);
+            let stroke = egui::Stroke::new(1.5 * s, theme::LED_ACCENT);
+            let middle = Pos2::new(caret.right(), caret.center().y);
+            ui.painter()
+                .line_segment([caret.left_top(), middle], stroke);
+            ui.painter()
+                .line_segment([middle, caret.left_bottom()], stroke);
+            let response = ui.interact(
+                caret,
+                ui.scope_id().with(format!("device-caret-{index}")),
+                Sense::click(),
+            );
+            tips::hover(&response, state.tooltips, tips::Control::DeviceCaret);
+            if response.clicked() {
+                state.device_request = Some(Request::Open(index));
+            }
         }
     }
 

@@ -22,6 +22,17 @@ pub enum Ports {
     Named(Vec<String>),
 }
 
+impl Ports {
+    /// Whether this set holds `port`. The one place "does this device hear this port" is answered: the router's filter and
+    /// the device card's ticks both come here, so a tick can never disagree with what the filter does.
+    pub fn holds(&self, port: &str) -> bool {
+        match self {
+            Ports::All => true,
+            Ports::Named(names) => names.iter().any(|name| name == port),
+        }
+    }
+}
+
 /// Which channel on those ports.
 ///
 /// The store is `0..=15`; the device card shows `1..=16`.
@@ -73,10 +84,7 @@ impl InputFilter {
     /// The role is deliberately not consulted: a controller-only device still receives its knobs. The caller asks the role
     /// only about messages that carry notes.
     pub fn hears(&self, port: &str, channel: u8) -> bool {
-        let port_ok = match &self.ports {
-            Ports::All => true,
-            Ports::Named(names) => names.iter().any(|name| name == port),
-        };
+        let port_ok = self.ports.holds(port);
         let channel_ok = match self.channel {
             Channel::All => true,
             Channel::One(only) => only == channel,
