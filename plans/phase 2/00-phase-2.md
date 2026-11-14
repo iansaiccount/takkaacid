@@ -98,10 +98,10 @@ between tasks hide that no single diff showed?
 
 ## Progress
 
-**Where the phase is: plans 38-42 are complete; plan 43 (documents and gates) is next.** Everything is committed and the tree
-is green (66 test suites, `clippy --all-targets -D warnings` and `fmt --check` clean). A new session resumes by reading the plan
-named below — its `## Progress` section carries every commit, what each task's review found, and the rulings — and by
-`git log`, not by re-deriving anything.
+**Where the phase is: all six plans are complete.** Everything is committed and the tree is green (67 test suites, 623 tests,
+`clippy --all-targets -D warnings` and `fmt --check` clean, `docs/guide/check.sh` ok). A new session resumes by reading a
+plan's `## Progress` section — it carries every commit, what each task's review found, and the rulings — and by `git log`,
+not by re-deriving anything. The next phase's first round is the guide, whose screenshots predate the strip.
 
 - [x] **38 — the rack** (`plans/phase 2/38-the-rack.md`): `SharedState::mute`, `Device`, `Rack`, `BusState`, `Rack::rename`,
       the rack's transport and fan-out, and `main` running on a rack of one. Commits `af4843b`..`b8e4f82`, `3591083`.
@@ -128,7 +128,16 @@ named below — its `## Progress` section carries every commit, what each task's
       four steps and Space stopped the transport — task 4 eight (all) including a port click silently dropping an unplugged
       controller from the filter, task 5 five (all), task 6 six (all) including the one-card rule going one-way again. The
       by-hand journey (task 7) walked the whole spec on Xvfb; the only claims left unproved by eye are the sound ones.
-- [ ] **43 — documents and gates** (`plans/phase 2/43-documents-and-gates.md`)
+- [x] **43 — documents and gates** (`plans/phase 2/43-documents-and-gates.md`): all five tasks landed (`b19846c`, `6fc669f`,
+      `27ac3af`, `30d0e9c`, `f04e57f`, plus the gate's own `a35c461`, `7e7e933`, `58ced28`). The help card, the README, an
+      ear-test section for two machines and `AGENTS.md`'s third thread; the phase gate (67 suites, 623 tests); and both of
+      plan 39's mutation checks **survived** the suite as it stood — re-pinned after watching each one fail, which meant
+      rewriting the mute test whose "audible" assertion compared two different time windows. Tasks 1-4 were reviewed inline;
+      the whole-branch review was a self-review, because `pi-subagents`' only model refused the connection and the
+      `claude-code` agent needs its own session. It found one **Important** defect at the 41–42 seam: the panel's per-device
+      editor slots were keyed by cell *position*, so removing the first device gave the survivor the removed device's step,
+      step mode and randomise dials. Fixed by keying them by `device.number` (`7e7e933`), with the test that was RED on the
+      old code.
 
 **Review mode.** Plans 38-41 ran the review gate *inline* — the executor reading its own staged diff — because `pi-subagents`
 was not loaded in that session. Plan 42 ran it **fresh**: every task from 1 to 6 dispatched a `reviewer` subagent with the
@@ -138,3 +147,10 @@ click dropping an unplugged controller; the one-card rule going one-way). The le
 gate found five real defects over twelve commits, and the fresh gate found nine over the same number of files — the difference
 is that a fresh reader asks "what would break this?" about code it did not just write. Task 7's diff (documents only) ran
 inline, and each task's Progress line names which mode ran.
+
+**Plan 43's review mode.** Its four document tasks ran inline, as its header asked. The whole-branch review it was supposed to
+dispatch could not be fresh: `pi-subagents` is loaded now, but its only model is `qwen/qwen3.8-27b` and the run came back
+`ECONNREFUSED`, while `claude-code` (external CLI) wants an interactive session it cannot have here. It ran as a self-review
+and still earned its keep — the defect it found was in plan 41's own feature, at the seam with plan 42's removal, and no
+per-task diff could have shown it. What that says for the next phase is not "self-review is enough": the fresh reviewer is
+worth the spend, and a harness whose only model is unreachable cannot supply one.

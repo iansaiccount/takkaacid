@@ -230,16 +230,86 @@ git commit -m "chore(phase 2): the phase's gate, its mutation checks and its rev
 
 ## Progress
 
-- [ ] Task 1 — the help card
-- [ ] Task 2 — the README
-- [ ] Task 3 — judging two machines by ear
-- [ ] Task 4 — `AGENTS.md` names the bus
-- [ ] Task 5 — the gate, the checks and the review
+**The phase is done.** Three gates on the whole workspace: `cargo test --workspace` → **67 suites, 623 tests, 0 failed** (the
+number the next phase starts from), `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo fmt --check` clean.
+`docs/guide/check.sh` → `guide: ok`.
+
+- [x] **Task 1 — the help card.** `tests/help_live.rs` is new: the card's words are read back off the paint of a real frame,
+  so a line that stops being drawn fails the test even though `help_sections()` still contains it. The card gained
+  `Ctrl+1..4: pick the device the panel shows`, `the strip: click picks a device; M is its MUTE; + adds one` and
+  `four devices; names and extra devices are not saved yet`, and lost a claim phase 2 made false (`one voice` became `each
+  device is one voice`). Commits `b19846c`, `6fc669f` (the by-eye check in task 2 caught the card saying `MUTE` where the
+  strip draws `M`). Review (inline): the plan's `tests/help_live.rs` did not exist — the card's content test was and stays
+  `help.rs`'s own `mod tests`; and `strings()` is now copied a third time across test binaries, kept as a copy because a
+  shared `tests/` module would reach outside this task's Files block.
+- [x] **Task 2 — the README.** A `## Up to four machines` section between "What it is" and "Features", the "one voice"
+  opener qualified, the MIDI feature bullet rewritten (`Which ports are open is the settings card's; which of them a device
+  hears, and on what channel, is on that device's card`), and the save limit stated as a cost with its wishlist entry named.
+  Commit `27ac3af`, which also carries the one-sentence disclosure at the top of the guide (`docs/guide/src/01-what-it-is.md`)
+  that Review Focus 3 asks for — no task owned it. Review (inline): the app was walked under `Xvfb :77` (`LIBGL_ALWAYS_SOFTWARE=1`,
+  `xdotool`, `import -window`) and every sentence checked against what it drew — the strip, the picker and its footnote, the
+  card's rows, `CTRL ONLY`, `Ctrl+2` moving the selection, the new help lines. That walk found two things: the strip's mute
+  key is captioned `M` (not `MUTE`), and `MUTE_MS` is **10 ms**, not the tenth of a second task 3's text assumed.
+- [x] **Task 3 — judging two machines by ear.** `## Two machines, and what one cannot show you`: phase, shuffle per device,
+  and mute as a gain. Commit `30d0e9c`. Review (inline): the plan's "a flam means the seek is a step or more out" reads as
+  the pair being in phase, and it is not — a scratch `Mixer` run (120 BPM, a join 720 samples into a 6000-sample step, four
+  steps of per-sample positions) showed the second device **720 samples behind and staying there**, because
+  `Sequencer::start_at` restarts the clock rather than taking the reference's phase inside the step. The bullet now states
+  that as the limit it is, with the measurement in it. `58ced28` also corrected "the device on the panel" to the rack's step,
+  which is the first published device's.
+- [x] **Task 4 — `AGENTS.md` names the bus.** The `device::BusState` sentence landed in the "two threads" paragraph, which
+  therefore had to become `Three threads, two rules` — a paragraph titled for two threads that then describes three is the
+  kind of stale count this file exists to prevent. `device::DeviceKind` joined the catalogue list. Commit `f04e57f`.
+- [x] **Task 5 — the gate, the checks and the review.** Both of plan 39's mutation checks originally **survived**; both were
+  re-pinned in `a35c461` after watching each fail (the mix path in `tests/no_alloc.rs` reports 1000 allocations in 1000
+  blocks with the fast path gone; the rewritten mute test reports a mix that moved by 8.8e-5). `tests/persist.rs` passes with
+  no edit and `--midi-map` prints its unchanged 89-line table. The whole-branch review found **one Important code defect** —
+  a removed device handed its editor to the survivor — fixed in `7e7e933` with the test that was RED on the old code.
+
+**Review mode.** Tasks 1-4 were reviewed inline, as this plan's header says: one pair of hands, the three questions asked of
+the staged diff. The whole-branch review was meant to be fresh. `pi-subagents` is loaded, but its only model
+(`qwen/qwen3.8-27b`) refused the connection, and the `claude-code` agent needs its own interactive session. So:
+`Final review: self-review (no subagent tool)`. A self-review by the author is weaker than a fresh reader, and this round is
+the evidence: it took a second pass over the *seam* to find the editor-slot bug, which no per-task diff showed.
+
+### What the whole-branch review found
+
+The three questions it was given, answered in order: the 38-39 seam (bus, transport, mute) held — one writer, readers that
+only load, a fast path now pinned by an allocation count; the 40-41 seam (routing, selection, request queues) **did not** —
+the editor slots were keyed by position; and the plans agreed on every name except three drifts, two of them in this plan.
+
+- **Critical:** none.
+- **Important — a removed device handed its editor to the survivor.** `PanelState::edit_slots` was a `Vec<PanelEdit>` indexed
+  by cell position, and `focused` was a position, so removing the first device (the normal two-click `REMOVE` on the device
+  on the panel) gave the survivor the removed device's selected step, step mode and randomise dials — none of which live in
+  the device. Fixed by keying both by `device.number`, which never moves (`StripCell::number`): a removal now leaves the
+  survivor on its own editor, and a device that is gone keeps no slot. The test is
+  `removing_the_first_device_does_not_hand_its_editor_to_the_survivor` (RED before the fix: `left: 4, right: 0`), and the
+  same removal was walked in the app — after removing `ACID 1`, `ACID 2` came up on step 1.
+- **Important — the two mutations plan 39 asked for did not pin what they claimed.** Detail in the ruling below and in
+  `a35c461`.
+- **Minor — `EAR_TESTING.md` said the join follows "the device on the panel".** It follows the first *published* device's
+  step. `58ced28`.
+- **Minor (deferred) — `state.rs` still calls `SharedState` "the seam between the two threads"**, while the MIDI handlers
+  are a third writer. Left as it is: that sentence is about the panel and the audio callback, and `AGENTS.md` now says
+  three threads.
+- **Minor (deferred) — the save limit is told three times**, not twice: the picker's footnote, the `+` key's hover tip, and
+  the README. The tooltip stays — it is what a hand meets before opening the picker.
+- **Minor (deferred) — plan 39's test name drift**: the plan says `a_rack_that_did_not_change_is_not_rebuilt`, the code says
+  `a_steady_rack_rebuilds_no_engine`. A plan is the record of the round that wrote it; it is not reworded.
+- **Declined to judge:** the sound claims — whether the mute fade clicks, whether a joining device flams — are
+  `EAR_TESTING.md`'s to settle with ears, and this session has none. What can be said without them is in that file, with the
+  measurement behind the one claim that could be measured.
 
 Rulings made while writing this plan, and their cost if wrong:
 
 | Ruling | Cost if wrong |
 |---|---|
-| The guide is not rebuilt in this phase | Every screenshot is 30 px of layout out of date, and the strip is missing from all of them. Accepted: the guide round is 18 pages and would double the phase. |
-| The save limit is stated twice (footnote and README) and nowhere else | A player who reads neither is surprised once, on restart. A third telling would be noise. |
+| The guide is not rebuilt in this phase | Every screenshot is 30 px of layout out of date, and the strip is missing from all of them. Accepted: the guide round is 18 pages and would double the phase. One sentence at the top of the guide says so, added under Review Focus 3 because no task owned it. |
+| The save limit is stated twice (footnote and README) and nowhere else | **Wrong as written**: the `+` key's hover tip states it too (`ui/tips.rs`), so it is three. The tooltip is kept — a hand hovering `+` needs it before the picker opens. A player who reads none of them is surprised once, on restart. |
 | `EAR_TESTING.md` gets a section rather than a new file | The document exists to judge the sound; two machines is a way of judging the sound. |
+| Task 3's ear text contradicts its own measurement | It did: the plan says a flam means the seek is a step out, and the seek is *one step* of alignment, not phase. The section states the limit instead. Cost if wrong: a listener hears the flam the code guarantees and reports it as a bug — which, for the next round, it is. |
+| `AGENTS.md`'s "Two threads, two rules" became "Three threads, two rules" | `00-phase-2.md`'s invariants still say "Two threads". The two documents differ in wording; the rule is the same. |
+| Plan 39's mutations were re-pinned in plan 43's files, not plan 39's | The mix path's allocation belongs in `tests/no_alloc.rs` (the only binary with a counting allocator) and the mute test in `tests/mixer.rs`. Plan 39's own file now under-describes its tests; this Progress section is where that is said. |
+| The whole-branch review was a self-review | The author's blind spot is the seam this round found last. A fresh reader would have found the editor-slot bug in one pass; it took a targeted second pass here. Cost if wrong: a defect of the same class ships, and the next phase's first review finds it. |
+| A test's "audible" assertion compared two time windows | It passed whatever the mute did. Rewritten to twin two identical racks. Cost if wrong: a mute that stops muting has to break the *step* comparison as well as the window one. |
