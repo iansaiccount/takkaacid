@@ -77,13 +77,14 @@ Everything above judges one voice. Phase 2 put up to four devices in one window 
 shuffle each, and a mute that is a gain rather than a stop. Three things only a second device can reveal. Add one with `+`,
 pick the `ACID` row, and press `RUN`.
 
-- **Phase.** Add the second device while the transport is running. The mixer seeks it to the step the device on the panel
-  is on, so it comes in on that step rather than at the top of the bar. What you want to hear is a *doubled attack*: two
-  machines saying the same thing at the same moment. What this round does **not** fix is where inside the step the join
-  lands — the seek aligns the step, not the sample — so the pair can be up to a step apart and stays there until the next
-  join or stop. Adding just after a step boundary is near-invisible; adding near the end of a step is a flam that does not
-  go away. Measured on a 120 BPM rack that joined 720 samples into a 6000-sample step, the second device stayed 15 ms
-  behind. So the ear's job is not "is it perfect" but "how far out, and does it stay out".
+- **Phase.** Add the second device while the transport is running. The mixer seeks it to the step the rack is on — the
+  first device's published step, which every other device mirrors — so it comes in on that step rather than at the top of
+  the bar. What you want to hear is a *doubled attack*: two machines saying the same thing at the same moment. What this
+  round does **not** fix is where inside the step the join lands — the seek aligns the step, not the sample — so the pair
+  can be up to a step apart and stays there until the next join or stop. Adding just after a step boundary is
+  near-invisible; adding near the end of a step is a flam that does not go away. Measured on a 120 BPM rack that joined
+  720 samples into a 6000-sample step, the second device stayed 15 ms behind. So the ear's job is not "is it perfect" but
+  "how far out, and does it stay out".
 - **Shuffle, per device.** Turn one device's `SHUFFLE` up and leave the other straight (the knob writes the device the
   panel is showing, so `Ctrl+1`/`Ctrl+2` is how you move between them). You should hear one machine lurching and the other
   not, *without* either of them drifting out of the bar. If the pair drifts apart, the tempo is being read twice instead of
