@@ -37,6 +37,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "shift+up / down: note up or down",
                 "enter: note on or off",
                 "F1 or shift+?: this card, F2: settings, F3: the device card",
+                "Ctrl+1..4: pick the device the panel shows",
                 "hover to read a control; tooltips and autosave are in settings",
             ],
         ),
@@ -56,7 +57,9 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
             &[
                 "the top strip names the song; F2 or the gear opens settings",
                 "settings: tooltips, autosave, MIDI in, sound out",
-                "one voice: MIDI and the keyboard share it",
+                "each device is one voice: MIDI and the keyboard share it",
+                "the strip: pick a device there, MUTE silences it, + adds one",
+                "four devices; names and extra devices are not saved yet",
                 "SAVED / UNSAVED sits by the wordmark",
                 "saved on exit and 2 s after a change",
                 "SONGS: new, save, save a copy, import, export, load, delete",
