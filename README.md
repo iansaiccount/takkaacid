@@ -15,15 +15,38 @@ gates: `cargo test --workspace`, `cargo clippy --all-targets -- -D warnings`, `c
 
 ## What it is
 
-One voice, sixteen steps, and the four knobs that make the sound: the oscillator's wave, the filter's cutoff and
+One device is one voice, sixteen steps, and the four knobs that make the sound: the oscillator's wave, the filter's cutoff and
 resonance, the envelope's decay, and how much the accent pushes through. It is not a sampler and not a workstation; it is
-the box that plays one line well.
+the box that plays one line well — and one window holds up to four of them.
 
 - **Engine** (`rust/crates/acid-core`, no UI, no allocation in the audio callback): saw, square, sine and triangle
   oscillator; a resonant ladder low-pass filter; an envelope with accent-modulated decay; glide/slide; a soft limiter and
   a drive stage; 40–300 BPM with swing.
 - **Panel** (`rust/crates/acid-app`, egui/eframe): painted to look like a 303 — silkscreen legends, lit keys, a chasing
   step row — with the seven tone knobs, a performance row, and a transport row.
+
+## Up to four machines
+
+The window holds up to four devices. Each one is a whole 303 — its own pattern bank, its own shuffle, its own MIDI inputs
+and its own name — and a strip above the panel is the whole rack: a cell per device with its name and its play lamp, the
+cell the panel is showing outlined, a `M` key at the right end of each — that device's mute — and a `+` at the far right
+that adds one.
+
+- **Adding, picking, muting.** The strip's `+` opens a picker of the kinds a device can be (one today, `ACID`), and every
+  row of it is greyed once the rack holds four. Click a cell, or press `Ctrl+1` to `Ctrl+4`, to put that device on the
+  panel. The `M` at a cell's right end mutes that device without stopping it — a 10 ms fade, not a cut — so a device that
+  was running mutes late and unmutes back in time.
+- **One card per device.** `F3` opens the card for the device on the panel: its name, whether it plays what it hears or only
+  answers controllers, which ports it hears and on which channel, its mute, and its removal (`REMOVE` asks twice).
+- **One transport, one clock.** `RUN`/`STOP` and the tempo belong to the rack and every device follows them; a device added
+  while the transport is running joins on the step the others are on, not at the top of the bar. Swing and the performance
+  row are per device.
+- **MIDI learn is per device**, so the same controller number can drive a knob on two devices at once, and each device has
+  its own ports and channel.
+- **What a restart costs.** `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`: the session file still holds one device — the first
+  one's patterns, patch, swing and learned controllers, plus the first MIDI port the app had open — so extra devices, the
+  ports, channel and role any device was given, and every name typed for one, are gone on restart. "Save the whole rack" in
+  `plans/future/wishlist.md` is the round that ends this.
 
 ## Features
 
@@ -38,8 +61,9 @@ and a scale.
 
 **Transport.** Run/stop, tempo in 40–300 BPM, swing, and a step LED that chases the audio rather than the wall clock.
 
-**MIDI.** Port choice in settings; notes with velocity; every control learnable, with pickup on the dials; a pattern
-selector that waits for the bar; and an external clock for the tempo.
+**MIDI.** Which ports are open is the settings card's; which of them a device hears, and on what channel, is on that
+device's card; notes with velocity; every control learnable, with pickup on the dials; a pattern selector that waits for
+the bar; and an external clock for the tempo.
 
 **Keeping your work.** A session file and a library of named songs, with a songs card to save, copy, import, export, load
 and delete them.
