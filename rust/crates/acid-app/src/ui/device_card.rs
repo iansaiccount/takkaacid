@@ -10,7 +10,7 @@
 
 use eframe::egui::{self, Align2, Pos2, Rect};
 
-use super::{PanelState, modal, text, theme, tips, transport};
+use super::{PanelState, clear, modal, text, theme, tips, transport};
 use crate::device::Request;
 use crate::midi::route::{Channel, InputFilter, Ports, Role};
 
@@ -47,8 +47,9 @@ pub struct Card {
     pub ports: Vec<(String, bool)>,
     /// The channel the device listens on, in the store's numbering (`0..=15`, shown as `1..=16`).
     pub channel: Channel,
-    /// Whether REMOVE is waiting for its second click.
-    pub armed_remove: bool,
+    /// When REMOVE was first clicked: the same two-click switch `PanelState::clear_armed_at` is, and spent the same way. `None`
+    /// means the key says `REMOVE`; a fresh `Some` means it says `CONFIRM?` and the next click asks the rack.
+    pub armed_remove: Option<std::time::Instant>,
 }
 
 impl Default for Card {
@@ -62,7 +63,7 @@ impl Default for Card {
             role: Role::PlayAndControl,
             ports: Vec::new(),
             channel: Channel::All,
-            armed_remove: false,
+            armed_remove: None,
         }
     }
 }
@@ -73,7 +74,7 @@ impl Card {
     /// round trip. `armed_remove` falls back to disarmed: the arming belongs to one opening, never to the next.
     pub fn offer(&mut self, name: &str, inputs: &InputFilter, ports: Vec<String>) {
         self.name = name.to_string();
-        self.armed_remove = false;
+        self.armed_remove = None;
         self.ports = ports.into_iter().map(|port| (port, false)).collect();
         // A port the filter names but the machine no longer reports keeps its row. Unplugging a controller must not quietly
         // drop it from the filter the next time any tick is clicked — the click rebuilds the whole set — and a player has to
@@ -205,6 +206,11 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
 
     let area = card_rect(panel, s);
     let rows = rows(area, s, &state.device_card);
+    // What this frame's clicks asked for. It is one slot, so a frame can only mean one thing; the card collects it here and
+    // writes it once, at the end, so that "any other key puts the arming away" can be one rule rather than eight.
+    let mut asked: Option<Request> = None;
+    // One clock reading for the frame: the arming window is measured against the same instant the click is answered at.
+    let now = std::time::Instant::now();
     let shield = modal::shield(ui, ui.max_rect(), "device-card-shield");
     let face = Rect::from_min_size(
         area.min,
@@ -294,7 +300,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         && ui.input(|input| input.key_pressed(egui::Key::Enter))
         && let Some(open) = state.device_card.open
     {
-        state.device_request = Some(Request::Rename(open, state.device_card.name.clone()));
+        asked = Some(Request::Rename(open, state.device_card.name.clone()));
     }
 
     // ROLE: what the device does with what it hears. `CTRL ONLY` is the switched-on state, because it is the one that
@@ -308,7 +314,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         role == Role::ControlOnly,
     );
     if role_key.clicked() {
-        state.device_request = Some(Request::SetRole(index, next_role(role)));
+        asked = Some(Request::SetRole(index, next_role(role)));
     }
 
     // PORTS: `ALL PORTS` is the factory filter and the way back to it; each row below is one of the machine's ports with the
@@ -325,7 +331,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         all_ticked,
     );
     if all_ports.clicked() {
-        state.device_request = Some(Request::SetPorts(index, Ports::All));
+        asked = Some(Request::SetPorts(index, Ports::All));
     }
     for port_index in 0..state.device_card.ports.len() {
         let Some(rect) = rows.ports.get(port_index).copied() else {
@@ -351,7 +357,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         );
         if key.clicked() {
             let next = toggled(&state.device_card.ports, port_index);
-            state.device_request = Some(Request::SetPorts(index, next));
+            asked = Some(Request::SetPorts(index, next));
         }
     }
 
@@ -365,7 +371,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         false,
     );
     if down.clicked() {
-        state.device_request = Some(Request::SetChannel(index, prev_channel(channel)));
+        asked = Some(Request::SetChannel(index, prev_channel(channel)));
     }
     ui.painter().text(
         Pos2::new(
@@ -379,7 +385,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     );
     let up = transport::transport_button(ui, "device-card-channel-up", rows.channel_up, "+", false);
     if up.clicked() {
-        state.device_request = Some(Request::SetChannel(index, next_channel(channel)));
+        asked = Some(Request::SetChannel(index, next_channel(channel)));
     }
 
     // MUTE: this device's own mute, read from the strip's mirror of the rack — the panel's only reading of it.
@@ -387,14 +393,47 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     let mute =
         transport::transport_button(ui, "device-card-mute", rows.mute, mute_label(muted), muted);
     if mute.clicked() {
-        state.device_request = Some(Request::SetMute(index, !muted));
+        asked = Some(Request::SetMute(index, !muted));
     }
     tips::hover(&mute, state.tooltips, tips::Control::DeviceMute);
 
-    // CLOSE is the card's own lifetime; REMOVE is the next task's key.
+    // REMOVE: the second key on the face that takes two clicks, and the same two-click rule as CLEAR — `clear::click` is
+    // the one place "is this armed?" is answered, so a pause longer than the window makes the next click a question again
+    // rather than an answer.
+    let armed = clear::is_armed(state.device_card.armed_remove, now);
+    let remove = transport::transport_button(
+        ui,
+        "device-card-remove",
+        rows.remove,
+        if armed { "CONFIRM?" } else { "REMOVE" },
+        armed,
+    );
+    if remove.clicked() {
+        match clear::click(state.device_card.armed_remove, now) {
+            clear::Click::Armed => {
+                state.device_card.armed_remove = Some(now);
+                asked = Some(Request::AskRemove(index));
+            }
+            clear::Click::Cleared => {
+                state.device_card.armed_remove = None;
+                asked = Some(Request::ConfirmRemove(index));
+            }
+        }
+    }
+
+    // CLOSE is the card's own lifetime.
     let close = transport::transport_button(ui, "device-card-close", rows.close, "CLOSE", false);
     if shield.clicked() || close.clicked() {
-        state.device_request = Some(Request::Close);
+        asked = Some(Request::Close);
+    }
+
+    // One write, and the arming's one rule: any other key on the card answers a different question, so it puts the question
+    // away. A click that asked nothing leaves whatever the frame already held — a strip cell's click must survive the card.
+    if let Some(request) = asked {
+        if !matches!(request, Request::AskRemove(_) | Request::ConfirmRemove(_)) {
+            state.device_card.armed_remove = None;
+        }
+        state.device_request = Some(request);
     }
 }
 

@@ -110,6 +110,9 @@ pub fn handle(
     if press.ctrl
         && let Some(index) = device_key(press.key)
     {
+        // A switch changes what the panel is showing, so a card about the device it was showing goes with it: the card is
+        // a reading of one device, and a reading of the one you just left is a card about nothing.
+        panel.close_device_card();
         panel.device_request = Some(crate::device::Request::Select(index));
         return Handled::Rack;
     }

@@ -495,8 +495,9 @@ git commit -m "feat(ui): a device's ports, channel and role live on its card"
 
 **Interfaces:**
 - Produces: `remove` asks `Request::AskRemove(open)` on the first click and `Request::ConfirmRemove(open)` on the second, with
-  `card.armed_remove` as the switch — the same shape as `PanelState::clear_armed_at`, and disarmed by anything else the card
-  does. `Rack::remove`'s `LastDevice` refusal becomes a notice.
+  `card.armed_remove` as the switch — `Option<Instant>`, the same shape as `PanelState::clear_armed_at` (the sketch here said
+  `bool`, which cannot expire), answered by `clear::click`/`clear::is_armed` so REMOVE and CLEAR share one two-click rule — and
+  disarmed by any other key on the card. `Rack::remove`'s `LastDevice` refusal becomes a notice.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -530,15 +531,17 @@ Expected: FAIL — `no field armed_remove`, or nothing is requested.
 
 - [ ] **Step 3: Arm, confirm, and refuse the last one**
 
-The armed key reads `REMOVE` then `CONFIRM?` in `theme::LED_ACCENT` while armed, goes unarmed after `PanelState::NOTICE_FOR`,
-and any other click on the card disarms it. `main`'s `ConfirmRemove` arm:
+The armed key reads `REMOVE` then `CONFIRM?` in `theme::LED_ACCENT` while armed, goes unarmed after `clear::ARM_SECONDS` (the
+window CLEAR already uses — not `NOTICE_FOR`, because "how long a click window is open" and "how long a notice shows" are two
+questions), and any other key on the card disarms it. A frame's click is collected in one `Option<Request>` and written once at
+the end of `paint`, because that is the one place "any other key disarms" can live. `main`'s `ConfirmRemove` arm:
 
 ```rust
 device::Request::ConfirmRemove(index) => {
     match self.rack.remove(index) {
         Ok(()) => {
-            self.panel.device_card.open = None;
-            self.panel.dirty = true;
+            // The card was about a device that is gone, and its mirror goes with it.
+            self.panel.close_device_card();
         }
         Err(device::RemoveError::LastDevice) => self.notice("the last device cannot go".to_string()),
         Err(device::RemoveError::OutOfRange) => {}
@@ -557,7 +560,7 @@ Expected: PASS.
 - [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
 
 ```bash
-git add rust/crates/acid-app/src/ui/device_card.rs rust/crates/acid-app/src/main.rs rust/crates/acid-app/tests/device_card_live.rs
+git add -A
 git commit -m "feat(ui): removing a device asks twice, and the last one stays"
 ```
 
@@ -779,7 +782,22 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
       `DeviceMute` tip; and two stale doc lines. **Deliberately untested:** `main`'s `list_ports()` fill and the per-frame
       `route_from` (binary, named in "Deliberately untested" below); `ALL PORTS`' lit colour, which would need
       `devices_live.rs`'s `painted()` walker, and whose *behaviour* (the `SetPorts(All)` request) is pinned.
-- [ ] Task 5 — removing a device, twice
+- [x] Task 5 — removing a device, twice. REMOVE → `CONFIRM?` (armed in `LED_ACCENT`) → the removal, or the last-device notice;
+      `clear::click`/`clear::is_armed` are the one two-click rule, so the card and the CLEAR key cannot disagree about what
+      "armed" means. `main`'s `ConfirmRemove` now closes the card through `close_device_card()` (mirror and all) and keeps
+      task 1's `index == 0` dirty guard. **Review: fresh `reviewer` subagent.** Five findings (1 should-fix, 4 nits), all
+      actioned: the plan's Step 3 still said `NOTICE_FOR`/`bool`/`git add <three files>` and now says
+      `clear::ARM_SECONDS`/`Option<Instant>`/`git add -A`, with a ruling row below; Step 3 said "any other *click*" and the
+      code says "any other *key*" (the plan is now the code's words, and the expiry bounds what a stray click could leave
+      armed); a comment justified the write-once request with a strip click that the shield makes impossible (it now names
+      the keyboard `Select`); the `CONFIRM?` label was untested and now has `the_armed_remove_key_says_so` (the file gained
+      `settings_live.rs`'s `strings` walker, which task 6's footnote test needs anyway); and the stale-arming test could have
+      passed vacuously if `checked_sub` returned `None`.
+      **One seam the nit pointed at, fixed here:** a keyboard device switch (`Ctrl+2`) while the card was open left the card
+      about the device you had just left. `dispatch`'s ctrl-digit branch now closes the card with the switch, pinned by
+      `switching_device_from_the_keyboard_closes_the_card`. **Deliberately untested:** `main`'s `AskRemove` arm (which does
+      nothing on purpose: the arming is the card's own state) and the `close_device_card()` on the successful-removal path —
+      binary, and task 7's journey step 6 is what walks them.
 - [ ] Task 6 — the picker and the footnote
 - [ ] Task 7 — the gate and the journey
 
@@ -805,6 +823,7 @@ Rulings made while writing this plan, and their cost if wrong:
 | `DeviceKind::enabled(count)` decides greying for both the strip's `+` and the picker's rows | Two rules for one question would be the bug AGENTS.md warns about; the cost is that `DeviceKind` now knows about a rack size. |
 | `Ports::All` is a ticked row rather than a separate mode | A player who unticks every port gets `Named(vec![])`, which is "silent" — the same state a new device starts in, so it is reachable and explainable. |
 | The channel stepper wraps through `ANY` (`One(15)` up → `ANY`, `One(0)` down → `ANY`) | The plan's `(n + 1) % 16` would make `ANY` unreachable once left, which is a one-way door in the middle of the card. The cost if wrong: channel 16 is one key further from channel 1 than it would be if the stepper wrapped around the channels instead. |
+| REMOVE and CLEAR share one two-click rule (`clear::click`, `clear::ARM_SECONDS`) | One arming question answered in one place, so the two keys cannot disagree about what "armed" means. The cost if wrong: the removal question is open for 3 s rather than the 4 s the plan first named — short enough that a slow second click asks again instead of removing, which is the safe direction. |
 | A port the machine stops reporting keeps its row | A click on any port row rebuilds the whole `Ports::Named` from the rows, so the alternative silently drops an unplugged controller from the filter the moment a *different* port is routed. The cost if wrong: a cable no longer plugged in keeps a ticked row on the card until it is unticked. |
 | The footnote names both losses in one line | One more line on a small card. The alternative is a player losing a name with no warning, which the design calls an anti-goal. |
 | The name field confirms on **Enter only** | Amended in task 3: the original row said "or focus loss" on the premise that the songs card behaves that way, and it does not — it reads its field when SAVE is clicked. A click that dismisses the card cannot also carry the rename in `device_request`, which is one slot. The cost if wrong: a player types a name and clicks the card's own face, and the field keeps the text but the rack keeps the old name until Enter — the caption says `NAME (ENTER)` for that reason. |

@@ -5,13 +5,20 @@ use acid_app::state::SharedState;
 use acid_app::ui::layout::{layout, strip_cells};
 use acid_app::ui::strip::{StripCell, caret_rect};
 use acid_app::ui::{PanelState, device_card, dispatch, draw_panel};
-use eframe::egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
+use eframe::egui::{
+    Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2,
+};
 
 fn screen() -> Rect {
     Rect::from_min_size(Pos2::ZERO, vec2(980.0, 670.0))
 }
 
-fn run(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: Vec<Event>) {
+fn run(
+    ctx: &Context,
+    panel: &mut PanelState,
+    shared: &SharedState,
+    events: Vec<Event>,
+) -> FullOutput {
     let input = RawInput {
         screen_rect: Some(screen()),
         events,
@@ -19,6 +26,27 @@ fn run(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: Vec<
     };
     let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
     output.textures_delta.clear();
+    output
+}
+
+/// Every line of text the frame drew, in paint order. Copied from `settings_live.rs`, which needs it for the same reason:
+/// a card's own words are part of what it says, and `CONFIRM?` is the only feedback the first REMOVE click gives.
+fn strings(output: &FullOutput) -> Vec<String> {
+    use eframe::egui::Shape;
+
+    fn walk(shape: &Shape, said: &mut Vec<String>) {
+        match shape {
+            Shape::Text(text) => said.push(text.galley.text().to_string()),
+            Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, said)),
+            _ => {}
+        }
+    }
+
+    let mut said = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut said);
+    }
+    said
 }
 
 /// Three frames, as `tests/devices_live.rs` does it: move, press, release. A click is never one frame in egui.
@@ -676,5 +704,137 @@ fn the_mute_key_on_the_card_asks_for_the_device_it_is_about() {
         panel.device_request,
         Some(Request::SetMute(1, false)),
         "a muted device's key asks to unmute it"
+    );
+}
+
+/// Removing a device has no undo, so it takes two clicks the way CLEAR does: the first asks nothing of the rack, the second
+/// asks for the removal.
+#[test]
+fn the_remove_key_asks_twice_before_it_asks_the_rack() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.strip.selected = 1;
+    panel.device_card.open = Some(1);
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.remove.center());
+    assert_eq!(panel.device_request, Some(Request::AskRemove(1)));
+    assert!(
+        panel.device_card.armed_remove.is_some(),
+        "and the card says so"
+    );
+
+    panel.device_request = None;
+    run(&ctx, &mut panel, &state, vec![]);
+    click(&ctx, &mut panel, &state, rows.remove.center());
+    assert_eq!(panel.device_request, Some(Request::ConfirmRemove(1)));
+    assert_eq!(
+        panel.device_card.armed_remove, None,
+        "and the question is spent by its own answer"
+    );
+}
+
+/// Any other key on the card answers a different question, so it puts the arming away: a hand that has moved on to the
+/// channel stepper is not confirming a removal.
+#[test]
+fn any_other_key_on_the_card_disarms_the_removal() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.remove.center());
+    assert!(panel.device_card.armed_remove.is_some());
+
+    panel.device_request = None;
+    click(&ctx, &mut panel, &state, rows.channel_up.center());
+    assert_eq!(
+        panel.device_card.armed_remove, None,
+        "the arming is put away by the next key"
+    );
+
+    panel.device_request = None;
+    click(&ctx, &mut panel, &state, rows.remove.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::AskRemove(0)),
+        "so the next REMOVE asks again rather than removing"
+    );
+}
+
+/// An arming is a question asked a moment ago, not a standing permission: one older than the two-click window is spent, so a
+/// REMOVE clicked after a pause asks again.
+#[test]
+fn an_old_arming_is_spent_and_the_next_click_asks_again() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    let stale = std::time::Instant::now().checked_sub(std::time::Duration::from_secs_f32(
+        acid_app::ui::clear::ARM_SECONDS + 1.0,
+    ));
+    assert!(
+        stale.is_some(),
+        "the test needs an instant to look back from"
+    );
+    panel.device_card.armed_remove = stale;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.remove.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::AskRemove(0)),
+        "a stale question is not an answer"
+    );
+}
+
+/// The first click's only feedback is the key itself: `REMOVE` becomes `CONFIRM?`, in the accent colour, or a player cannot
+/// tell a question from a key that did nothing.
+#[test]
+fn the_armed_remove_key_says_so() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    let ctx = Context::default();
+    let before = strings(&run(&ctx, &mut panel, &state, vec![]));
+    assert!(before.iter().any(|said| said == "REMOVE"), "{before:?}");
+    assert!(!before.iter().any(|said| said == "CONFIRM?"), "{before:?}");
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.remove.center());
+    let armed = strings(&run(&ctx, &mut panel, &state, vec![]));
+    assert!(armed.iter().any(|said| said == "CONFIRM?"), "{armed:?}");
+}
+
+/// The keyboard can still switch devices while the card is up, and a card about the device you just left is a card about
+/// nothing: the switch puts it away.
+#[test]
+fn switching_device_from_the_keyboard_closes_the_card() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let mut bank = acid_core::bank::PatternBank::new_empty();
+    dispatch::handle(
+        dispatch::KeyPress {
+            key: Key::Num2,
+            shift: false,
+            ctrl: true,
+        },
+        &mut panel,
+        &state,
+        &mut bank,
+    );
+    assert_eq!(panel.device_request, Some(Request::Select(1)));
+    assert_eq!(
+        panel.device_card.open, None,
+        "the card went with the device"
     );
 }

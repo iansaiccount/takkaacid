@@ -606,12 +606,19 @@ impl TakkaApp {
                     if index == 0 {
                         self.panel.dirty = true;
                     }
+                    // The card was about a device that is gone — and so is its mirror, which has to go with it or the next
+                    // frame paints a name, a route and a removal for an index that is not there.
+                    self.panel.close_device_card();
                 }
                 Err(device::RemoveError::LastDevice) => {
                     self.notice("the last device cannot go".to_string())
                 }
                 Err(device::RemoveError::OutOfRange) => {}
             },
+            // The question is the card's own state — `armed_remove` is the two-click switch CLEAR uses — so there is nothing
+            // for the rack to do with the first click. The request is still sent, so the queue names everything the card can
+            // say and `main`'s drain stays the whole catalogue of it.
+            device::Request::AskRemove(_) => {}
             // The caret on the selected cell asks for this. The fill — the device's name, its route and the machine's
             // ports — happens below, on the frame the card opens, whichever of the two opened it.
             device::Request::Open(index) => {
@@ -622,9 +629,8 @@ impl TakkaApp {
             // The card's CLOSE key and its shield call this. `open` is a flag the card could clear itself, but the mirror it
             // is about is `main`'s reading of a device, so closing drops both in the one place that filled them.
             device::Request::Close => self.panel.close_device_card(),
-            // Still waiting for their tasks: the picker (task 6) and the first half of REMOVE (task 5).
+            // Still waiting for its task: the picker (task 6).
             device::Request::OpenPicker => {} // plan 42 task 6 fills this
-            device::Request::AskRemove(_) => {} // plan 42 task 5 fills this
         }
     }
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
