@@ -462,11 +462,15 @@ impl eframe::App for TakkaApp {
                 // The panel's per-device editor slots are keyed by this, so a removal cannot hand one device's step,
                 // step mode and randomise dials to its neighbour.
                 number: device.number,
+                // Each cell wears its own device's colours: the strip is the legend of the rack.
+                scheme: device.scheme,
                 running: device.state.is_playing(),
                 muted: device.state.is_muted(),
             })
             .collect();
         self.panel.strip.selected = self.rack.selected();
+        // And the face is the selected device's: the panel paints one machine at a time, in that machine's colours.
+        self.panel.scheme = self.rack.device().scheme;
     }
 
     /// Closing the window is one last chance to keep whatever the user just did.

@@ -16,6 +16,8 @@ pub struct StripCell {
     /// The device's number, which is stable for its life and never reused. The cell's *position* moves when a device
     /// before it is removed; anything the panel keeps per device — the editor slots — is keyed by this, not by the index.
     pub number: usize,
+    /// Which way round that device paints its face. The cell wears it, so the strip reads as the legend of what is where.
+    pub scheme: crate::device::Scheme,
     /// That device's transport, not the rack's: one lamp per machine.
     pub running: bool,
     pub muted: bool,
@@ -100,9 +102,15 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &
             continue;
         };
         let selected = index == state.strip.selected;
+        // This cell's own palette: a cell wears its device's colours, so an amber machine is amber in the strip even while
+        // the panel below shows a black one. The shelf above is the face's, because it is part of the face.
+        let p = theme::palette(cell.scheme);
         {
             let painter = ui.painter();
-            painter.rect_filled(cell_rect, 3.0 * s, p.panel_raised);
+            // The cell is a miniature of *its* face: filled with the face colour and lettered with that scheme's silkscreen,
+            // so a yellow device reads as an amber chip with black letters. A raised chip would vanish, because the amber
+            // scheme's legends are near-black — and a cell that cannot be read is not a legend.
+            painter.rect_filled(cell_rect, 3.0 * s, p.panel);
             if selected {
                 painter.rect_stroke(
                     cell_rect,

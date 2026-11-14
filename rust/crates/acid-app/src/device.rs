@@ -102,6 +102,9 @@ pub struct Device {
     pub number: usize,
     /// What the strip and the cards call it. Editable, and distinct from its neighbours.
     pub name: String,
+    /// Which way round this device paints its face. In memory only, like the name: the save file is frozen at 9 this phase,
+    /// so a colour is gone on restart until the round that saves the whole rack.
+    pub scheme: Scheme,
 }
 
 impl Device {
@@ -138,6 +141,7 @@ impl Device {
             kind,
             number,
             name: Self::default_name(kind, number),
+            scheme: Scheme::Black,
             // A loaded device hears everything, which is what the factory device does: a session that never opens the device
             // card cannot tell phase 2 happened.
             inputs: crate::midi::route::InputFilter::everything(),
@@ -468,5 +472,15 @@ impl Rack {
     /// What a device hears, if there is one at that index.
     pub fn inputs(&self, index: usize) -> Option<&crate::midi::route::InputFilter> {
         self.devices.get(index).map(|device| &device.inputs)
+    }
+
+    /// Which way round a device paints its face, if there is one at that index.
+    ///
+    /// Nothing to publish: the audio thread and the MIDI handlers cannot see a colour, so the bus has no field for it and no
+    /// reader has to be told.
+    pub fn set_scheme(&mut self, index: usize, scheme: Scheme) {
+        if let Some(device) = self.devices.get_mut(index) {
+            device.scheme = scheme;
+        }
     }
 }

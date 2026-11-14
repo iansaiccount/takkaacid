@@ -129,6 +129,9 @@ pub struct PanelState {
     /// The strip: one cell per device, and which of them is on the panel. `main` fills it from the rack every frame, the
     /// way `pattern` is filled from the device's state, because the panel paints and never owns the list.
     pub strip: strip::Strip,
+    /// Which way round to paint the face: the selected device's scheme, filled by `main` every frame the way the strip is.
+    /// The four cards ignore it — they are furniture, and stay black whatever the face does.
+    pub scheme: crate::device::Scheme,
     /// Set by the strip and by `Ctrl+1..4`, drained by `main` after the frame. The panel cannot reach the rack, so asking
     /// is the only way it can select a device, mute one or add one.
     pub device_request: Option<crate::device::Request>,
@@ -209,6 +212,7 @@ impl Default for PanelState {
             scale: scale::Scale::default(),
             scale_knob: scale::scale_position(scale::Scale::default()),
             strip: strip::Strip::default(),
+            scheme: crate::device::Scheme::Black,
             device_request: None,
             device_card: device_card::Card::default(),
             device_picker: device_card::Picker::default(),
@@ -413,9 +417,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     let l = layout::layout(window);
     let s = layout::scale(window);
-    // The face's palette. One scheme for now (`BLACK`): the device's own arrives with `PanelState::scheme`, and every card
-    // keeps `BLACK` whatever the face does.
-    let p = &theme::BLACK;
+    // The face's palette, from the device on the panel. The cards stay `BLACK`: they are furniture laid over the face, not
+    // part of it, and an amber card over an amber face would read as a second instrument.
+    let p = theme::palette(state.scheme);
     // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
     state.pattern = shared.pattern();
     state.playing = shared.is_playing();

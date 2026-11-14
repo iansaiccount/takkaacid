@@ -455,3 +455,32 @@ fn the_scheme_catalogue_is_black_then_yellow_and_toggles() {
         assert!(scheme.name().is_ascii(), "{scheme:?} is a panel caption");
     }
 }
+
+/// A colour belongs to a machine: setting one leaves its neighbours alone, survives a selection change, and a device that
+/// has just arrived is the instrument's own black.
+#[test]
+fn a_device_carries_its_own_scheme() {
+    use acid_app::device::Scheme;
+
+    let mut rack = Rack::from_saved(&persist::SavedState::default());
+    rack.add(DeviceKind::Acid).expect("room for a second");
+    assert_eq!(
+        rack.devices()[1].scheme,
+        Scheme::Black,
+        "a new device is black"
+    );
+
+    rack.set_scheme(1, Scheme::Yellow);
+    assert_eq!(rack.devices()[1].scheme, Scheme::Yellow);
+    assert_eq!(rack.devices()[0].scheme, Scheme::Black, "and only that one");
+
+    rack.select(0);
+    assert_eq!(
+        rack.devices()[1].scheme,
+        Scheme::Yellow,
+        "a colour is not a selection"
+    );
+
+    // An index the rack does not hold changes nothing and does not panic: the panel may be a frame behind a removal.
+    rack.set_scheme(9, Scheme::Yellow);
+}

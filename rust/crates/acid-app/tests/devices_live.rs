@@ -38,6 +38,7 @@ fn panel_of(names: &[(&str, bool, bool)]) -> PanelState {
             name: (*name).to_string(),
             // Numbers are stable for a device's life and are not the cell's position: `panel_of` hands them out in order.
             number: index + 1,
+            scheme: acid_app::device::Scheme::Black,
             running: *running,
             muted: *muted,
         })
@@ -267,5 +268,78 @@ fn removing_the_first_device_does_not_hand_its_editor_to_the_survivor() {
     assert!(
         (panel.density - acid_app::ui::randomise::DEFAULT_DENSITY).abs() < 1e-6,
         "and its own randomise dials, not the removed device's"
+    );
+}
+
+/// The face is the selected device's, read back off the paint: an amber slab when it asks for yellow, the near-black one when
+/// it does not. This is the test task 2 could not write — nothing proved a painter *used* the palette it was handed.
+#[test]
+fn the_face_follows_the_device_it_shows() {
+    use acid_app::device::Scheme;
+    use acid_app::ui::{layout::layout, theme};
+
+    let state = SharedState::new();
+    let mut panel = panel_of(&[("ACID 1", false, false), ("BASS", false, false)]);
+    let ctx = Context::default();
+    let face = layout(screen()).panel;
+    let face_fill = |output: &FullOutput| {
+        painted(output)
+            .0
+            .into_iter()
+            .find(|(rect, _)| {
+                (rect.left() - face.left()).abs() < 1.0 && (rect.width() - face.width()).abs() < 1.0
+            })
+            .map(|(_, colour)| colour)
+    };
+
+    panel.scheme = Scheme::Black;
+    let output = run(&ctx, &mut panel, &state, vec![]);
+    assert_eq!(
+        face_fill(&output),
+        Some(theme::BLACK.panel),
+        "a black device paints the face it has always had"
+    );
+
+    panel.scheme = Scheme::Yellow;
+    let output = run(&ctx, &mut panel, &state, vec![]);
+    assert_eq!(
+        face_fill(&output),
+        Some(theme::YELLOW.panel),
+        "and a yellow one turns the face amber"
+    );
+}
+
+/// Each strip cell wears its own device's colours, so the strip says which machine is which before a hand clicks one.
+#[test]
+fn the_strip_cell_wears_its_own_devices_colours() {
+    use acid_app::device::Scheme;
+    use acid_app::ui::{layout, theme};
+
+    let state = SharedState::new();
+    let mut panel = panel_of(&[("ACID 1", false, false), ("BASS", false, false)]);
+    panel.scheme = Scheme::Black;
+    panel.strip.cells[1].scheme = Scheme::Yellow;
+    let ctx = Context::default();
+    let output = run(&ctx, &mut panel, &state, vec![]);
+
+    let cells = layout::strip_cells(layout::layout(screen()).strip, 2);
+    let (filled, _) = painted(&output);
+    let cell_fill = |cell: Rect| {
+        filled
+            .iter()
+            .find(|(rect, _)| {
+                (rect.left() - cell.left()).abs() < 1.0 && (rect.width() - cell.width()).abs() < 1.0
+            })
+            .map(|(_, colour)| *colour)
+    };
+    assert_eq!(
+        cell_fill(cells[0]),
+        Some(theme::BLACK.panel),
+        "the black device's cell is a miniature of the face it has always had"
+    );
+    assert_eq!(
+        cell_fill(cells[1]),
+        Some(theme::YELLOW.panel),
+        "and the yellow device's cell is amber, whatever the panel is showing"
     );
 }
