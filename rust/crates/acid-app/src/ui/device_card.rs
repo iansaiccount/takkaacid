@@ -48,6 +48,9 @@ pub struct Card {
     pub ports: Vec<(String, bool)>,
     /// The channel the device listens on, in the store's numbering (`0..=15`, shown as `1..=16`).
     pub channel: Channel,
+    /// Which way round the device paints its face. A reading like the route: the key shows this, and a click on it asks the
+    /// rack for `next()`.
+    pub scheme: crate::device::Scheme,
     /// When REMOVE was first clicked: the same two-click switch `PanelState::clear_armed_at` is, and spent the same way. `None`
     /// means the key says `REMOVE`; a fresh `Some` means it says `CONFIRM?` and the next click asks the rack.
     pub armed_remove: Option<std::time::Instant>,
@@ -64,6 +67,7 @@ impl Default for Card {
             role: Role::PlayAndControl,
             ports: Vec::new(),
             channel: Channel::All,
+            scheme: crate::device::Scheme::Black,
             armed_remove: None,
         }
     }
@@ -101,6 +105,12 @@ impl Card {
         for (port, heard) in &mut self.ports {
             *heard = inputs.ports.holds(port);
         }
+    }
+
+    /// The card's reading of the device's colour. Not part of a route, but a reading all the same: the key shows what the rack
+    /// holds, so a click that changes it moves the key on the next frame and not before.
+    pub fn scheme_from(&mut self, scheme: crate::device::Scheme) {
+        self.scheme = scheme;
     }
 }
 
@@ -271,6 +281,8 @@ pub struct Rows {
     pub ports: Vec<Rect>,
     pub channel_down: Rect,
     pub channel_up: Rect,
+    /// The `COLOUR` key: which way round the device paints its face, and a click asks for the other one.
+    pub scheme: Rect,
     pub mute: Rect,
     pub remove: Rect,
     pub close: Rect,
@@ -303,6 +315,10 @@ pub fn rows(card_area: Rect, s: f32, card: &Card) -> Rows {
         Pos2::new(channel_down.right() + 96.0 * s, y),
         egui::vec2(30.0 * s, ROW * s),
     );
+    y += (ROW + GAP) * s;
+
+    // COLOUR: one key, captioned with the scheme the device is on, because there are two and the row already says which.
+    let scheme = row(y, width * 0.45);
     y += (ROW + GAP) * s + PADDING * s;
 
     let mute = row(y, 66.0 * s);
@@ -322,6 +338,7 @@ pub fn rows(card_area: Rect, s: f32, card: &Card) -> Rows {
         ports,
         channel_down,
         channel_up,
+        scheme,
         mute,
         remove,
         close,
@@ -402,6 +419,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         ("ROLE", rows.role),
         ("PORTS", rows.all_ports),
         ("CHANNEL", rows.channel_down),
+        ("COLOUR", rows.scheme),
     ] {
         caption(ui.painter(), text, rect, s);
     }
@@ -525,6 +543,21 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     let up = transport::card_button(ui, "device-card-channel-up", rows.channel_up, "+", false);
     if up.clicked() {
         asked = Some(Request::SetChannel(index, next_channel(channel)));
+    }
+
+    // COLOUR: which way round the device paints its face. One key showing the scheme it is on — there are two, and the row
+    // already says which — and a click asks for the other one. Lit for yellow, so a machine that will turn the face amber
+    // says so before you switch to it.
+    let scheme = state.device_card.scheme;
+    let colour = transport::card_button(
+        ui,
+        "device-card-colour",
+        rows.scheme,
+        scheme.name(),
+        scheme == crate::device::Scheme::Yellow,
+    );
+    if colour.clicked() {
+        asked = Some(Request::SetScheme(index, scheme.next()));
     }
 
     // MUTE: this device's own mute, read from the strip's mirror of the rack — the panel's only reading of it.

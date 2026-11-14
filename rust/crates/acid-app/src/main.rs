@@ -395,6 +395,9 @@ impl eframe::App for TakkaApp {
             && let Some(device) = self.rack.devices().get(index)
         {
             self.panel.device_card.route_from(&device.inputs);
+            // The scheme is a reading of the same device, refreshed the same way: the key on the card shows what the rack
+            // holds, so a click on it moves the key on the next frame and not before.
+            self.panel.device_card.scheme_from(device.scheme);
         }
         if let Some(request) = self.panel.settings_request.take() {
             self.apply_settings_request(request);
@@ -605,6 +608,8 @@ impl TakkaApp {
                     self.rack.set_inputs(index, inputs);
                 }
             }
+            // A colour is the panel's business alone: nothing on the bus carries it, so nothing is published.
+            device::Request::SetScheme(index, scheme) => self.rack.set_scheme(index, scheme),
             // The last device cannot go, and the panel cannot see the rack, so the refusal is said here.
             device::Request::ConfirmRemove(index) => match self.rack.remove(index) {
                 Ok(()) => {

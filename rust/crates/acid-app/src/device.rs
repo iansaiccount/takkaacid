@@ -212,6 +212,8 @@ pub enum Request {
     SetPorts(usize, crate::midi::route::Ports),
     /// Which channel on those ports.
     SetChannel(usize, crate::midi::route::Channel),
+    /// Which way round this device paints its face. The card's `COLOUR` key asks for the other scheme.
+    SetScheme(usize, Scheme),
     /// The REMOVE key: arm it. Nothing goes until the second click.
     AskRemove(usize),
     /// The second click on REMOVE: this device may go, unless it is the last one.

@@ -991,3 +991,42 @@ fn opening_a_card_puts_the_picker_away() {
     assert_eq!(panel.device_card.open, Some(0));
     assert!(!panel.device_picker.open, "F3 put the picker away");
 }
+
+/// The COLOUR row is one key showing the scheme the device is on, and it asks for the other one — two schemes, so the row
+/// that says which one is also the row that flips it.
+#[test]
+fn the_colour_row_asks_for_the_other_scheme() {
+    use acid_app::device::Scheme;
+
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    panel.device_card.scheme = Scheme::Black;
+    let ctx = Context::default();
+    let said = strings(&run(&ctx, &mut panel, &state, vec![])).join(" ");
+    assert!(said.contains("COLOUR"), "the row needs its caption: {said}");
+    assert!(
+        said.contains("BLACK"),
+        "and shows the scheme it is on: {said}"
+    );
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.scheme.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetScheme(0, Scheme::Yellow)),
+        "a black device's key asks for yellow"
+    );
+
+    // And back: the key asks for the other one whatever this one is.
+    panel.device_request = None;
+    panel.device_card.scheme = Scheme::Yellow;
+    run(&ctx, &mut panel, &state, vec![]);
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.scheme.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetScheme(0, Scheme::Black)),
+        "a yellow device's key asks for black"
+    );
+}
