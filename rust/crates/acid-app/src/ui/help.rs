@@ -100,11 +100,11 @@ pub const CARD_INSET: f32 = 4.0;
 /// Draw the card inside `panel`, scaled. Everything is sized from `scale`, so it fits at 0.65x and 1.6x.
 pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
     let card = card_rect(panel, scale);
-    painter.rect_filled(card, 6.0 * scale, theme::PANEL_RAISED);
+    painter.rect_filled(card, 6.0 * scale, theme::BLACK.panel_raised);
     painter.rect_stroke(
         card,
         6.0 * scale,
-        theme::silkscreen_stroke(scale),
+        theme::BLACK.silkscreen_stroke(scale),
         eframe::egui::StrokeKind::Inside,
     );
 
@@ -121,7 +121,7 @@ pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
             Align2::LEFT_TOP,
             heading,
             theme::legend(heading_size),
-            theme::SILKSCREEN,
+            theme::BLACK.silkscreen,
         );
         y += heading_size + line_height * 0.4;
         for line in lines {
@@ -130,7 +130,7 @@ pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
                 Align2::LEFT_TOP,
                 line,
                 theme::legend(body_size),
-                theme::TEXT,
+                theme::BLACK.text,
             );
             y += line_height;
         }

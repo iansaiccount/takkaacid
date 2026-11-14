@@ -226,12 +226,12 @@ fn the_selected_cell_wears_the_accent_and_the_running_one_lights_its_lamp() {
     };
     assert_eq!(
         lamp(cells[1]),
-        Some(acid_app::ui::theme::LED_ON),
+        Some(acid_app::ui::theme::BLACK.led_on),
         "a running device's lamp is lit"
     );
     assert_eq!(
         lamp(cells[0]),
-        Some(acid_app::ui::theme::LED_OFF),
+        Some(acid_app::ui::theme::BLACK.led_off),
         "and a stopped one's is dark"
     );
 }

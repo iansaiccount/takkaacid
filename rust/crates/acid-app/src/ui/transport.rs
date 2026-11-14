@@ -26,6 +26,12 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
 
 /// Cells in the transport row: RUN, STOP, TEMPO −, TEMPO +, VOLUME.
 pub const TRANSPORT_CELLS: usize = 5;
+/// A key on one of the cards. Every card is painted in the black scheme whatever the face behind it does, so this is the one
+/// place that says so — a card that took the face's palette would go amber over an amber device.
+pub fn card_button(ui: &mut egui::Ui, id: &str, rect: Rect, label: &str, lit: bool) -> Response {
+    transport_button(ui, id, rect, label, lit, &theme::BLACK)
+}
+
 /// A rectangular transport key. `lit` paints the legend in `LED_ACCENT`, the way RUN glows while playing.
 pub fn transport_button(
     ui: &mut egui::Ui,
@@ -33,26 +39,19 @@ pub fn transport_button(
     rect: Rect,
     label: &str,
     lit: bool,
+    p: &theme::Palette,
 ) -> Response {
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     let scale = key_scale(rect);
-    let face = if lit {
-        theme::PANEL_RAISED
-    } else {
-        theme::WELL
-    };
-    let legend = if lit {
-        theme::LED_ACCENT
-    } else {
-        theme::SILKSCREEN
-    };
+    let face = if lit { p.panel_raised } else { p.well };
+    let legend = if lit { p.led_accent } else { p.silkscreen };
 
     let painter = ui.painter();
     painter.rect_filled(rect, 3.0 * scale, face);
     painter.rect_stroke(
         rect,
         3.0 * scale,
-        theme::silkscreen_stroke(scale),
+        p.silkscreen_stroke(scale),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -66,7 +65,7 @@ pub fn transport_button(
         painter.rect_stroke(
             rect,
             3.0 * scale,
-            egui::Stroke::new(1.5 * scale, theme::LED_ACCENT),
+            egui::Stroke::new(1.5 * scale, p.led_accent),
             egui::StrokeKind::Inside,
         );
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

@@ -53,6 +53,7 @@ pub fn knob(
     label: &str,
     value: &mut f32,
     diameter: f32,
+    p: &theme::Palette,
 ) -> Response {
     let label_height = (diameter * 0.22).max(10.0);
     let (rect, _) = ui.allocate_exact_size(
@@ -81,19 +82,16 @@ pub fn knob(
     let painter = ui.painter();
     let radius = diameter / 2.0;
     let line = (radius * 0.12).max(2.0);
-    painter.circle_filled(center, radius, theme::WELL);
-    painter.circle_filled(center, radius * 0.86, theme::PANEL_RAISED);
-    painter.circle_stroke(center, radius * 0.58, egui::Stroke::new(line, theme::PANEL));
+    painter.circle_filled(center, radius, p.well);
+    painter.circle_filled(center, radius * 0.86, p.panel_raised);
+    painter.circle_stroke(center, radius * 0.58, egui::Stroke::new(line, p.panel));
     painter.add(egui::Shape::line(
         arc_points(center, radius * 0.95, 1.0),
-        theme::silkscreen_stroke(line * 0.8),
+        p.silkscreen_stroke(line * 0.8),
     ));
     let lit = arc_points(center, radius * 0.95, *value);
     if lit.len() > 1 {
-        painter.add(egui::Shape::line(
-            lit,
-            egui::Stroke::new(line, theme::LED_ON),
-        ));
+        painter.add(egui::Shape::line(lit, egui::Stroke::new(line, p.led_on)));
     }
     let angle = angle_for(*value);
     painter.line_segment(
@@ -101,14 +99,14 @@ pub fn knob(
             arc_point(center, radius * 0.30, angle),
             arc_point(center, radius * 0.80, angle),
         ],
-        egui::Stroke::new(line, theme::SILKSCREEN),
+        egui::Stroke::new(line, p.silkscreen),
     );
     painter.text(
         Pos2::new(rect.center().x, rect.bottom() - label_height / 2.0),
         egui::Align2::CENTER_CENTER,
         label,
         theme::legend(label_height * 0.8),
-        theme::SILKSCREEN,
+        p.silkscreen,
     );
     response
 }
@@ -190,6 +188,7 @@ mod tests {
                     "TUNING",
                     &mut value,
                     diameter,
+                    &theme::BLACK,
                 );
             });
             output.textures_delta.clear();

@@ -195,11 +195,11 @@ pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f
     let shield = modal::shield(ui, ui.max_rect(), "device-picker-shield");
     {
         let painter = ui.painter();
-        painter.rect_filled(area, 6.0 * s, theme::PANEL_RAISED);
+        painter.rect_filled(area, 6.0 * s, theme::BLACK.panel_raised);
         painter.rect_stroke(
             area,
             6.0 * s,
-            theme::silkscreen_stroke(s),
+            theme::BLACK.silkscreen_stroke(s),
             egui::StrokeKind::Inside,
         );
         painter.text(
@@ -207,7 +207,7 @@ pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f
             Align2::LEFT_TOP,
             "ADD DEVICE",
             theme::legend(13.0 * s),
-            theme::SILKSCREEN,
+            theme::BLACK.silkscreen,
         );
     }
 
@@ -220,7 +220,7 @@ pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f
         // A greyed row is the unlit face: recessed and plain instead of raised and amber. It still answers a click, so the
         // refusal is `Rack::add`'s to say — the same reason the strip's `+` stays clickable at the cap.
         let fits = kind.enabled(count);
-        if transport::transport_button(
+        if transport::card_button(
             ui,
             &format!("device-picker-kind-{index}"),
             rect,
@@ -242,10 +242,10 @@ pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f
         Align2::LEFT_CENTER,
         NOT_SAVED,
         theme::legend(10.0 * s),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
 
-    if transport::transport_button(ui, "device-picker-close", rows.close, "CLOSE", false).clicked()
+    if transport::card_button(ui, "device-picker-close", rows.close, "CLOSE", false).clicked()
         || shield.clicked()
     {
         // Closing is this card's own state and says nothing to the rack: it has no mirror to drop.
@@ -370,11 +370,11 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     };
     {
         let painter = ui.painter();
-        painter.rect_filled(face, 6.0 * s, theme::PANEL_RAISED);
+        painter.rect_filled(face, 6.0 * s, theme::BLACK.panel_raised);
         painter.rect_stroke(
             face,
             6.0 * s,
-            theme::silkscreen_stroke(s),
+            theme::BLACK.silkscreen_stroke(s),
             egui::StrokeKind::Inside,
         );
         // The title is the device's name, and a name is never truncated in the store (`Rack::rename` leaves that to the face
@@ -391,7 +391,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
             Align2::LEFT_TOP,
             title,
             font,
-            theme::SILKSCREEN,
+            theme::BLACK.silkscreen,
         );
     }
 
@@ -415,11 +415,11 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     // reads as a readout of the device rather than as loose text on the card's face.
     {
         let painter = ui.painter();
-        painter.rect_filled(rows.name, 3.0 * s, theme::WELL);
+        painter.rect_filled(rows.name, 3.0 * s, theme::BLACK.well);
         painter.rect_stroke(
             rows.name,
             3.0 * s,
-            theme::silkscreen_stroke(s),
+            theme::BLACK.silkscreen_stroke(s),
             egui::StrokeKind::Inside,
         );
     }
@@ -429,7 +429,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
             .id(ui.scope_id().with("device-card-name"))
             .hint_text("device name")
             .frame(egui::Frame::NONE)
-            .text_color(theme::TEXT)
+            .text_color(theme::BLACK.text)
             .align(egui::Align2::LEFT_CENTER)
             .font(theme::legend(12.0 * s))
             .margin(egui::Margin::symmetric(6, 2))
@@ -445,7 +445,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     // ROLE: what the device does with what it hears. `CTRL ONLY` is the switched-on state, because it is the one that
     // changes what the panel does — a controller-only device stops answering the keyboard with notes.
     let role = state.device_card.role;
-    let role_key = transport::transport_button(
+    let role_key = transport::card_button(
         ui,
         "device-card-role",
         rows.role,
@@ -462,7 +462,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     // reported says nothing about whether a device hears everything, and lighting the key would claim it does.
     let all_ticked = !state.device_card.ports.is_empty()
         && state.device_card.ports.iter().all(|(_, heard)| *heard);
-    let all_ports = transport::transport_button(
+    let all_ports = transport::card_button(
         ui,
         "device-card-all-ports",
         rows.all_ports,
@@ -487,7 +487,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
                 text::fit(ui.painter(), &label, font, rect.width() - 8.0 * s),
             )
         };
-        let key = transport::transport_button(
+        let key = transport::card_button(
             ui,
             &format!("device-card-port-{port_index}"),
             rect,
@@ -502,7 +502,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
 
     // CHANNEL: two keys with the value between them, because the face may not use a triangle from a system font.
     let channel = state.device_card.channel;
-    let down = transport::transport_button(
+    let down = transport::card_button(
         ui,
         "device-card-channel-down",
         rows.channel_down,
@@ -520,17 +520,16 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         Align2::LEFT_CENTER,
         channel_label(channel),
         theme::legend(11.0 * s),
-        theme::SILKSCREEN,
+        theme::BLACK.silkscreen,
     );
-    let up = transport::transport_button(ui, "device-card-channel-up", rows.channel_up, "+", false);
+    let up = transport::card_button(ui, "device-card-channel-up", rows.channel_up, "+", false);
     if up.clicked() {
         asked = Some(Request::SetChannel(index, next_channel(channel)));
     }
 
     // MUTE: this device's own mute, read from the strip's mirror of the rack — the panel's only reading of it.
     let muted = device_muted(&state.strip, index);
-    let mute =
-        transport::transport_button(ui, "device-card-mute", rows.mute, mute_label(muted), muted);
+    let mute = transport::card_button(ui, "device-card-mute", rows.mute, mute_label(muted), muted);
     if mute.clicked() {
         asked = Some(Request::SetMute(index, !muted));
     }
@@ -540,7 +539,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     // the one place "is this armed?" is answered, so a pause longer than the window makes the next click a question again
     // rather than an answer.
     let armed = clear::is_armed(state.device_card.armed_remove, now);
-    let remove = transport::transport_button(
+    let remove = transport::card_button(
         ui,
         "device-card-remove",
         rows.remove,
@@ -561,7 +560,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     }
 
     // CLOSE is the card's own lifetime.
-    let close = transport::transport_button(ui, "device-card-close", rows.close, "CLOSE", false);
+    let close = transport::card_button(ui, "device-card-close", rows.close, "CLOSE", false);
     if shield.clicked() || close.clicked() {
         asked = Some(Request::Close);
     }
@@ -593,7 +592,7 @@ fn caption(painter: &egui::Painter, caption: &str, control: Rect, s: f32) {
         Align2::LEFT_CENTER,
         caption,
         theme::legend(10.0 * s),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
 }
 

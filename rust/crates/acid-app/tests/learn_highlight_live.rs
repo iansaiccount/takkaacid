@@ -49,7 +49,7 @@ fn learn_strokes(output: &eframe::egui::FullOutput) -> usize {
         .shapes
         .iter()
         .filter(|clipped| {
-            matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.stroke.color == theme::LEARN_TARGET)
+            matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.stroke.color == theme::BLACK.learn_target)
         })
         .count()
 }
@@ -123,8 +123,12 @@ fn the_picked_control_keeps_its_border_while_listening() {
 #[test]
 fn the_pick_colour_is_not_one_of_the_panels_own_lights() {
     // It has to read as a different kind of light: far from amber, and never used for a lit key.
-    let learn = theme::LEARN_TARGET;
-    for own in [theme::SILKSCREEN, theme::LED_ON, theme::LED_ACCENT] {
+    let learn = theme::BLACK.learn_target;
+    for own in [
+        theme::BLACK.silkscreen,
+        theme::BLACK.led_on,
+        theme::BLACK.led_accent,
+    ] {
         let distance = (i32::from(learn.r()) - i32::from(own.r())).abs()
             + (i32::from(learn.g()) - i32::from(own.g())).abs()
             + (i32::from(learn.b()) - i32::from(own.b())).abs();

@@ -12,6 +12,6 @@ use super::theme;
 /// Dim `window` and register the dismissal click over it. The answer is that click: what counts as outside the card is
 /// the caller's business, because only the card knows where its own rows are.
 pub fn shield(ui: &mut Ui, window: Rect, id: &str) -> Response {
-    ui.painter().rect_filled(window, 0.0, theme::SHADE);
+    ui.painter().rect_filled(window, 0.0, theme::BLACK.shade);
     ui.interact(window, ui.scope_id().with(id), egui::Sense::click())
 }

@@ -5,7 +5,7 @@ use eframe::egui;
 use crate::midi;
 use crate::state::SharedState;
 
-use super::{PanelState, learn, tips, transport};
+use super::{PanelState, learn, theme, tips, transport};
 
 /// A click on a control that can be taught, while a learn is choosing.
 ///
@@ -27,6 +27,18 @@ pub(super) fn learn_pick(
         state.learn = learn::choose(control, shared);
     }
 }
+/// A panel key, as a row describes it: what it says, whether it is lit, and the help that follows it.
+///
+/// A value because the caller that draws a key already knows these five things together, and passing them one at a time made
+/// this helper's signature longer than the row it serves.
+pub(super) struct Key<'a> {
+    pub id: &'a str,
+    pub rect: egui::Rect,
+    pub label: &'a str,
+    pub lit: bool,
+    pub control: tips::Control,
+}
+
 /// A panel button with its hover help attached: draw it, explain it, and say whether it was clicked.
 ///
 /// One helper for every button, so the tip follows the control that was actually drawn — the CLEAR key reads `CLEAR?`
@@ -34,14 +46,11 @@ pub(super) fn learn_pick(
 pub(super) fn switch_key(
     ui: &mut egui::Ui,
     state: &PanelState,
-    id: &str,
-    rect: egui::Rect,
-    label: &str,
-    lit: bool,
-    control: tips::Control,
+    key: Key<'_>,
+    p: &theme::Palette,
 ) -> bool {
-    let response = transport::transport_button(ui, id, rect, label, lit);
+    let response = transport::transport_button(ui, key.id, key.rect, key.label, key.lit, p);
     let clicked = response.clicked();
-    tips::hover(&response, state.tooltips, control);
+    tips::hover(&response, state.tooltips, key.control);
     clicked
 }

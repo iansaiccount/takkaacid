@@ -76,7 +76,7 @@ pub fn name_rect(cell: Rect) -> Rect {
 }
 
 /// Paint the band, and record what a click asked for in `state.device_request`.
-pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
+pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &theme::Palette) {
     if area.height() <= 0.0 {
         return;
     }
@@ -84,10 +84,10 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
     // part of the top strip.
     {
         let painter = ui.painter();
-        painter.rect_filled(area, 4.0 * s, theme::WELL);
+        painter.rect_filled(area, 4.0 * s, p.well);
         painter.line_segment(
             [area.left_bottom(), area.right_bottom()],
-            theme::silkscreen_stroke(s),
+            p.silkscreen_stroke(s),
         );
     }
 
@@ -102,12 +102,12 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
         let selected = index == state.strip.selected;
         {
             let painter = ui.painter();
-            painter.rect_filled(cell_rect, 3.0 * s, theme::PANEL_RAISED);
+            painter.rect_filled(cell_rect, 3.0 * s, p.panel_raised);
             if selected {
                 painter.rect_stroke(
                     cell_rect,
                     3.0 * s,
-                    egui::Stroke::new(1.5 * s, theme::LED_ACCENT),
+                    egui::Stroke::new(1.5 * s, p.led_accent),
                     egui::StrokeKind::Inside,
                 );
             }
@@ -123,20 +123,16 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
                 name,
                 font.clone(),
                 if selected {
-                    theme::SILKSCREEN
+                    p.silkscreen
                 } else {
-                    theme::SILKSCREEN_DIM
+                    p.silkscreen_dim
                 },
             );
             let lamp = lamp_rect(cell_rect);
             painter.circle_filled(
                 lamp.center(),
                 lamp.width() * 0.5,
-                if cell.running {
-                    theme::LED_ON
-                } else {
-                    theme::LED_OFF
-                },
+                if cell.running { p.led_on } else { p.led_off },
             );
         }
 
@@ -157,6 +153,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
             mute_rect(cell_rect),
             "M",
             cell.muted,
+            p,
         );
         tips::hover(&mute, state.tooltips, tips::Control::DeviceMute);
         if mute.clicked() {
@@ -169,7 +166,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
             // caret's: a later widget wins a hit-test tie. It writes `Open`, not `Select` — the device is already on the
             // panel, and what the click asks for is its card.
             let caret = caret_rect(cell_rect);
-            let stroke = egui::Stroke::new(1.5 * s, theme::LED_ACCENT);
+            let stroke = egui::Stroke::new(1.5 * s, p.led_accent);
             let middle = Pos2::new(caret.right(), caret.center().y);
             ui.painter()
                 .line_segment([caret.left_top(), middle], stroke);
@@ -187,22 +184,18 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
         }
     }
 
-    paint_add(ui, state, area, s);
+    paint_add(ui, state, area, s, p);
 }
 
 /// The `+` at the strip's right wall: two strokes, greyed at the cap. It stays clickable when the rack is full — the
 /// refusal is `Rack::add`'s to say, and a dead key would say nothing at all.
-fn paint_add(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
+fn paint_add(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &theme::Palette) {
     let add = layout::strip_add_rect(area);
     // The cap is the catalogue's answer, not a second comparison here: `+` greys when no kind can be added.
     let full = !DeviceKind::ALL
         .iter()
         .any(|kind| kind.enabled(state.strip.cells.len()));
-    let colour = if full {
-        theme::LED_OFF
-    } else {
-        theme::SILKSCREEN_DIM
-    };
+    let colour = if full { p.led_off } else { p.silkscreen_dim };
     {
         let painter = ui.painter();
         let arm = add.width().min(add.height()) * 0.28;

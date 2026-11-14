@@ -302,11 +302,11 @@ pub fn paint(
     let card = card_rect(panel, scale);
     {
         let painter = ui.painter();
-        painter.rect_filled(card, 6.0 * scale, theme::PANEL_RAISED);
+        painter.rect_filled(card, 6.0 * scale, theme::BLACK.panel_raised);
         painter.rect_stroke(
             card,
             6.0 * scale,
-            theme::silkscreen_stroke(scale),
+            theme::BLACK.silkscreen_stroke(scale),
             egui::StrokeKind::Inside,
         );
     }
@@ -320,12 +320,12 @@ pub fn paint(
         Align2::LEFT_TOP,
         "SETTINGS",
         theme::legend(13.0 * scale),
-        theme::SILKSCREEN,
+        theme::BLACK.silkscreen,
     );
 
     // The two switches are the controls the deleted TIPS and AUTO keys were, so they explain themselves the way those
     // keys did — the tip follows the control that was actually drawn, and is silent when help is off.
-    let tooltips_switch = transport::transport_button(
+    let tooltips_switch = transport::card_button(
         ui,
         "settings-tooltips",
         rows.tooltips,
@@ -336,7 +336,7 @@ pub fn paint(
     if tooltips_switch.clicked() {
         request = Some(Click::Ask(Request::Tooltips));
     }
-    let autosave_switch = transport::transport_button(
+    let autosave_switch = transport::card_button(
         ui,
         "settings-autosave",
         rows.autosave,
@@ -349,7 +349,7 @@ pub fn paint(
     }
 
     // MIDI IN: the fold, the device in use named above it, then the ports themselves, scrolling if there are many.
-    if transport::transport_button(
+    if transport::card_button(
         ui,
         "settings-midi-fold",
         rows.midi_header,
@@ -365,7 +365,7 @@ pub fn paint(
         Align2::LEFT_TOP,
         current_line(&settings.midi_current),
         theme::legend(10.0 * scale),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
     ui.painter().text(
         Pos2::new(card.right() - padding, rows.midi_header.bottom()),
@@ -373,9 +373,9 @@ pub fn paint(
         &settings.midi_status,
         theme::legend(10.0 * scale),
         if settings.midi_given_up {
-            theme::LED_ACCENT
+            theme::BLACK.led_accent
         } else {
-            theme::SILKSCREEN_DIM
+            theme::BLACK.silkscreen_dim
         },
     );
     // Every port is its own row with its own tick: what the player turns on is a set, not a choice, and a port the machine
@@ -395,13 +395,13 @@ pub fn paint(
         request = Some(Click::Ask(clicked));
     }
     if let Some(retry) = rows.retry
-        && transport::transport_button(ui, "settings-retry", retry, "RETRY", true).clicked()
+        && transport::card_button(ui, "settings-retry", retry, "RETRY", true).clicked()
     {
         request = Some(Click::Ask(Request::Retry));
     }
 
     // SOUND OUT: the same shape. No `none` row: an audio stream needs a device to land on.
-    if transport::transport_button(
+    if transport::card_button(
         ui,
         "settings-sound-fold",
         rows.sound_header,
@@ -417,7 +417,7 @@ pub fn paint(
         Align2::LEFT_TOP,
         output_line(settings.output_current.as_deref()),
         theme::legend(10.0 * scale),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
     // The stream's own words, beside the output in use. This is the card's half of what the deleted bottom line said:
     // a machine with a busy or hot-unplugged device looks healthy on the face and is silent, so it must say so here.
@@ -427,9 +427,9 @@ pub fn paint(
         &settings.audio_status,
         theme::legend(10.0 * scale),
         if audio_status::is_failed(&settings.audio_status) {
-            theme::LED_ACCENT
+            theme::BLACK.led_accent
         } else {
-            theme::SILKSCREEN_DIM
+            theme::BLACK.silkscreen_dim
         },
     );
     if settings.sound_open
@@ -451,7 +451,7 @@ pub fn paint(
         request = Some(Click::Ask(clicked));
     }
 
-    if transport::transport_button(ui, "settings-close", rows.close, "CLOSE", false).clicked() {
+    if transport::card_button(ui, "settings-close", rows.close, "CLOSE", false).clicked() {
         request = Some(Click::Own(Own::Close));
     }
     request
@@ -532,14 +532,8 @@ fn scrollable(
                 // of `area`, so `area.width()` ran every row underneath it.
                 let rect = Rect::from_min_size(top_left, egui::vec2(row_width, ROW * scale));
                 ui.allocate_space(rect.size());
-                if transport::transport_button(
-                    ui,
-                    &format!("settings-row-{index}"),
-                    rect,
-                    &label,
-                    lit,
-                )
-                .clicked()
+                if transport::card_button(ui, &format!("settings-row-{index}"), rect, &label, lit)
+                    .clicked()
                 {
                     request = Some(asked);
                 }

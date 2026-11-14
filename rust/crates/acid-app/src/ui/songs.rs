@@ -59,11 +59,11 @@ pub fn paint(
 ) -> Option<Request> {
     let card = panel.shrink(theme::MARGIN * scale);
     let painter = ui.painter();
-    painter.rect_filled(card, 6.0 * scale, theme::PANEL_RAISED);
+    painter.rect_filled(card, 6.0 * scale, theme::BLACK.panel_raised);
     painter.rect_stroke(
         card,
         6.0 * scale,
-        theme::silkscreen_stroke(scale),
+        theme::BLACK.silkscreen_stroke(scale),
         egui::StrokeKind::Inside,
     );
 
@@ -79,7 +79,7 @@ pub fn paint(
         egui::Align2::LEFT_TOP,
         "SONGS",
         theme::legend(13.0 * scale),
-        theme::SILKSCREEN,
+        theme::BLACK.silkscreen,
     );
     // What the card is about, on the card: the song the session is on and whether it is on disk. A player who opened the
     // card to save should not have to work out which song they are saving. The name is the session's, not the file's, so a
@@ -90,7 +90,7 @@ pub fn paint(
         egui::Align2::RIGHT_TOP,
         now,
         theme::legend(10.0 * scale),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
     // The field holds the song's name, so SAVE keeps the song current, or writes it under a name that is not taken; SAVE A
     // COPY always makes a new file. There is no third button: renaming is saving under another name.
@@ -121,13 +121,13 @@ pub fn paint(
     // A blank field still saves the song the session is on. With nothing open there is nothing to save and nothing to copy:
     // SAVE puts the cursor in the field rather than dying quietly, which is what a player would expect of a save button.
     let can_save = typed.is_some() || songs.open.is_some();
-    if transport::transport_button(ui, "song-save", save_rect, "SAVE", can_save).clicked() {
+    if transport::card_button(ui, "song-save", save_rect, "SAVE", can_save).clicked() {
         match save_name(songs) {
             Some(name) => request = Some(Request::Save(name)),
             None => ui.memory_mut(|memory| memory.request_focus(field_id)),
         }
     }
-    if transport::transport_button(
+    if transport::card_button(
         ui,
         "song-save-copy",
         copy_rect,
@@ -194,7 +194,7 @@ pub fn paint(
             egui::vec2(width * 0.14, row_height),
         );
         let label = if delete_armed { "SURE" } else { "x" };
-        if transport::transport_button(
+        if transport::card_button(
             ui,
             &format!("song-delete-{index}"),
             cross,
@@ -222,14 +222,14 @@ pub fn paint(
     );
     let new_armed = songs.load_armed.as_deref() == Some(NEW_KEY);
     let new_label = if new_armed { "SURE?" } else { "NEW" };
-    if transport::transport_button(ui, "song-new", new_rect, new_label, new_armed).clicked() {
+    if transport::card_button(ui, "song-new", new_rect, new_label, new_armed).clicked() {
         request = guarded_load(songs, NEW_KEY.to_string(), Request::New, session_dirty);
     }
     let import_rect = Rect::from_min_size(
         egui::Pos2::new(new_rect.right() + padding, bottom),
         egui::vec2(96.0 * scale, row_height),
     );
-    if transport::transport_button(ui, "song-import", import_rect, "IMPORT", false).clicked() {
+    if transport::card_button(ui, "song-import", import_rect, "IMPORT", false).clicked() {
         request = Some(Request::Import);
     }
     let export_rect = Rect::from_min_size(
@@ -237,14 +237,14 @@ pub fn paint(
         egui::vec2(96.0 * scale, row_height),
     );
     let can_export = songs.open.is_some() || typed.is_some();
-    if transport::transport_button(ui, "song-export", export_rect, "EXPORT", can_export).clicked() {
+    if transport::card_button(ui, "song-export", export_rect, "EXPORT", can_export).clicked() {
         request = Some(Request::Export);
     }
     let close = Rect::from_min_size(
         egui::Pos2::new(card.right() - padding - 90.0 * scale, bottom),
         egui::vec2(90.0 * scale, row_height),
     );
-    if transport::transport_button(ui, "song-close", close, "CLOSE", false).clicked() {
+    if transport::card_button(ui, "song-close", close, "CLOSE", false).clicked() {
         request = Some(Request::Close);
     }
 
@@ -254,7 +254,7 @@ pub fn paint(
             egui::Align2::LEFT_CENTER,
             message,
             theme::legend(10.0 * scale),
-            theme::SILKSCREEN_DIM,
+            theme::BLACK.silkscreen_dim,
         );
     }
 
@@ -268,7 +268,7 @@ fn section(ui: &mut Ui, scale: f32, title: &str, left: f32, y: &mut f32) {
         egui::Align2::LEFT_TOP,
         title,
         theme::legend(10.0 * scale),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
     *y += 15.0 * scale;
 }
@@ -287,7 +287,7 @@ fn load_row(
     } else {
         name.to_string()
     };
-    transport::transport_button(ui, id, row, &label, armed).clicked()
+    transport::card_button(ui, id, row, &label, armed).clicked()
 }
 
 /// Arm or carry out a load. Replacing a session that is not on disk takes two clicks, the way deleting a file does.

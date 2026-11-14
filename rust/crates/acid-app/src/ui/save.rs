@@ -5,11 +5,11 @@ use eframe::egui::Color32;
 use super::theme;
 
 /// The indicator's word and colour. Unsaved is the one that has to catch the eye, so it takes the amber.
-pub fn state_label(dirty: bool) -> (&'static str, Color32) {
+pub fn state_label(dirty: bool, p: &theme::Palette) -> (&'static str, Color32) {
     if dirty {
-        ("UNSAVED", theme::LED_ACCENT)
+        ("UNSAVED", p.led_accent)
     } else {
-        ("SAVED", theme::SILKSCREEN_DIM)
+        ("SAVED", p.silkscreen_dim)
     }
 }
 
@@ -19,11 +19,11 @@ mod tests {
 
     #[test]
     fn the_label_says_unsaved_only_while_something_is_dirty() {
-        assert_eq!(state_label(true).0, "UNSAVED");
-        assert_eq!(state_label(false).0, "SAVED");
+        assert_eq!(state_label(true, &theme::BLACK).0, "UNSAVED");
+        assert_eq!(state_label(false, &theme::BLACK).0, "SAVED");
         assert_ne!(
-            state_label(true).1,
-            state_label(false).1,
+            state_label(true, &theme::BLACK).1,
+            state_label(false, &theme::BLACK).1,
             "the two must not look alike"
         );
     }

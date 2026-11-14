@@ -109,41 +109,9 @@ pub fn palette(scheme: crate::device::Scheme) -> &'static Palette {
     }
 }
 
-// The one palette's colours under their old names, while the painters are moved over one file at a time. Removed when the
-// last of them takes a `Palette`; `BLACK` and `YELLOW` are the names afterwards.
-/// Panel face — near black, never pure black.
-pub const PANEL: Color32 = BLACK.panel;
-/// Knob bodies and raised button faces.
-pub const PANEL_RAISED: Color32 = BLACK.panel_raised;
-/// Recessed areas: display wells, knob recesses.
-pub const WELL: Color32 = BLACK.well;
-/// Legends, frames, engraving.
-pub const SILKSCREEN: Color32 = BLACK.silkscreen;
-/// Secondary legends and unlit step numbers.
-pub const SILKSCREEN_DIM: Color32 = BLACK.silkscreen_dim;
-/// A lit LED's core.
-pub const LED_ON: Color32 = BLACK.led_on;
-/// The scrim under a card.
-pub const SHADE: Color32 = BLACK.shade;
-/// Accent indicator.
-pub const LED_ACCENT: Color32 = BLACK.led_accent;
-/// An unlit LED.
-pub const LED_OFF: Color32 = BLACK.led_off;
-/// Display digits.
-pub const TEXT: Color32 = BLACK.text;
-/// Step keycap face.
-pub const WHITE_KEY: Color32 = BLACK.white_key;
-/// The "you can pick this" colour while a learn is choosing.
-pub const LEARN_TARGET: Color32 = BLACK.learn_target;
-
 /// The silkscreen font at a given size.
 pub fn legend(size: f32) -> FontId {
     FontId::new(size, egui::FontFamily::Proportional)
-}
-
-/// An engraving stroke in the black scheme: amber-dim, never pure white, never a shadow.
-pub fn silkscreen_stroke(width: f32) -> egui::Stroke {
-    BLACK.silkscreen_stroke(width)
 }
 
 /// Rec. 709 relative luminance in `0.0..=1.0`, computed on linearised sRGB so dark colours separate
