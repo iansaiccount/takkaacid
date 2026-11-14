@@ -3,8 +3,10 @@
 use acid_app::audio::MAX_BLOCK;
 use acid_app::audio::mixer::Mixer;
 use acid_app::audio::renderer::AudioRenderer;
-use acid_app::device::{DeviceKind, Rack};
+use acid_app::device::{BusState, DeviceKind, Rack};
+use acid_app::midi::route::InputFilter;
 use acid_app::persist;
+use acid_app::state::SharedState;
 use acid_core::pattern::STEPS_PER_PATTERN as STEPS;
 
 fn rack_of(n: usize) -> Rack {
@@ -72,35 +74,54 @@ fn two_devices_sum_to_something_louder_than_one() {
 
 #[test]
 fn unmuting_a_running_device_is_audible_and_it_kept_time_meanwhile() {
-    let rack = rack_of(2);
-    let b = std::sync::Arc::clone(&rack.devices()[1].state);
-    rack.set_playing(true);
-    b.set_mute(true);
+    // Two racks built the same way render the same samples, so the only difference between these mixes is the mute.
+    // Comparing one mixer against itself across two windows proved nothing: the pattern moved on between them, so any
+    // difference satisfied the assertion — which is how a mutation that muted nothing survived this test.
+    let loud = rack_of(2);
+    let quiet = rack_of(2);
+    for rack in [&loud, &quiet] {
+        rack.set_playing(true);
+    }
+    quiet.devices()[1].state.set_mute(true);
+    let loud_b = std::sync::Arc::clone(&loud.devices()[1].state);
+    let quiet_b = std::sync::Arc::clone(&quiet.devices()[1].state);
 
-    let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
+    let mut loud_mixer = Mixer::new(48_000.0, MAX_BLOCK, loud.bus());
+    let mut quiet_mixer = Mixer::new(48_000.0, MAX_BLOCK, quiet.bus());
+    // The ramp is 10 ms, so render past it before listening: what is measured is the mute, not the fade into it.
     let mut out = vec![0.0; 4_096];
-    // The ramp is 10 ms, so the first blocks still carry the tail of device B. Render past it before listening.
     for _ in 0..8 {
-        mixer.render_mono(&mut out);
+        loud_mixer.render_mono(&mut out);
+        quiet_mixer.render_mono(&mut out);
     }
-    let before = b.position.load(std::sync::atomic::Ordering::Relaxed);
-    let with_b_muted = out.clone();
 
-    b.set_mute(false);
+    let before = quiet_b.position.load(std::sync::atomic::Ordering::Relaxed);
+    let mut with_b = vec![0.0; 4_096];
+    let mut without_b = vec![0.0; 4_096];
     for _ in 0..8 {
-        mixer.render_mono(&mut out);
+        loud_mixer.render_mono(&mut with_b);
+        quiet_mixer.render_mono(&mut without_b);
     }
+    let difference = with_b
+        .iter()
+        .zip(&without_b)
+        .fold(0.0f32, |most, pair| most.max((pair.0 - pair.1).abs()));
     assert!(
-        out.iter()
-            .zip(&with_b_muted)
-            .any(|(loud, quiet)| (loud - quiet).abs() > 1e-3),
-        "unmuting a running device must be audible"
+        difference > 1e-3,
+        "muting a running device must be audible: over the same window the mix moved by only {difference}"
     );
 
-    let after = b.position.load(std::sync::atomic::Ordering::Relaxed);
+    // Mute is a gain, not a stop: the muted device's clock is the audible one's, step for step, over the same eight
+    // blocks — so unmuting rejoins in time instead of repeating the step it was muted on.
+    let a = quiet_b.position.load(std::sync::atomic::Ordering::Relaxed);
     assert_ne!(
-        before, after,
+        before, a,
         "a muted device keeps counting steps so unmuting rejoins in time"
+    );
+    assert_eq!(
+        loud_b.position.load(std::sync::atomic::Ordering::Relaxed),
+        a,
+        "the muted device must be on the same step as the audible one it is twinned with"
     );
 }
 
@@ -151,6 +172,34 @@ fn a_steady_rack_rebuilds_no_engine() {
         mixer.render_mono(&mut out);
     }
     assert_eq!(mixer.rebuilds(), built, "a steady rack reuses its engines");
+}
+
+#[test]
+fn a_bus_of_the_same_length_with_a_different_device_is_not_treated_as_unchanged() {
+    // `Rack` never swaps a device in place — `add` and `remove` both change the length — so this is the one bus that the
+    // fast path must not mistake for "nothing changed": the same count, with one device that is not the one before. It is
+    // the `Arc::ptr_eq` half of the fast path, and a mutation that drops it survives every other test here.
+    let rack = rack_of(2);
+    let published = rack.bus();
+    let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, std::sync::Arc::clone(&published));
+    let mut out = vec![0.0; 256];
+    mixer.render_mono(&mut out);
+    assert_eq!(mixer.rebuilds(), 2, "each device is built once");
+
+    let kept = std::sync::Arc::clone(&rack.devices()[1].state);
+    let routes = vec![InputFilter::everything(); 2];
+    published.store(std::sync::Arc::new(BusState {
+        slots: vec![SharedState::new(), kept],
+        routes,
+    }));
+    mixer.render_mono(&mut out);
+
+    assert_eq!(mixer.slots(), 2);
+    assert_eq!(
+        mixer.rebuilds(),
+        3,
+        "the swapped-in device needs its own engine; the one that stayed keeps the engine it had"
+    );
 }
 
 #[test]
