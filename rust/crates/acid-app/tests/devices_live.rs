@@ -33,8 +33,11 @@ fn panel_of(names: &[(&str, bool, bool)]) -> PanelState {
     let mut panel = PanelState::default();
     panel.strip.cells = names
         .iter()
-        .map(|(name, running, muted)| StripCell {
+        .enumerate()
+        .map(|(index, (name, running, muted))| StripCell {
             name: (*name).to_string(),
+            // Numbers are stable for a device's life and are not the cell's position: `panel_of` hands them out in order.
+            number: index + 1,
             running: *running,
             muted: *muted,
         })
@@ -125,16 +128,18 @@ fn a_selection_past_the_end_is_clamped_rather_than_panicking() {
 fn looking_at_the_other_device_and_back_keeps_the_step_you_were_on() {
     let state = SharedState::new();
     let mut panel = panel_of(&[("ACID 1", true, false), ("BASS", true, false)]);
+    let ctx = Context::default();
+    // One frame with nothing on it yet: the panel's first switch is from no device to device 1, which lays that
+    // device's editor down from a default. The hand's work starts after it, as it does in the app.
+    run(&ctx, &mut panel, &state, vec![]);
     panel.selected = 4;
     panel.step_mode = true;
     panel.density = 0.75;
-    let ctx = Context::default();
-    run(&ctx, &mut panel, &state, vec![]);
 
     // The rack has moved the selection; the panel has not caught up yet.
     panel.strip.selected = 1;
     run(&ctx, &mut panel, &state, vec![]);
-    assert_eq!(panel.focused, 1);
+    assert_eq!(panel.focused, Some(2), "the panel is on BASS's editor");
     assert_eq!(
         panel.selected, 0,
         "a device the panel has never edited starts on step 1"
@@ -144,7 +149,7 @@ fn looking_at_the_other_device_and_back_keeps_the_step_you_were_on() {
 
     panel.strip.selected = 0;
     run(&ctx, &mut panel, &state, vec![]);
-    assert_eq!(panel.focused, 0);
+    assert_eq!(panel.focused, Some(1), "and back on ACID 1's");
     assert_eq!(panel.selected, 4, "the step the hand was on came back");
     assert!(panel.step_mode);
     assert!((panel.density - 0.75).abs() < 1e-6);
@@ -228,5 +233,39 @@ fn the_selected_cell_wears_the_accent_and_the_running_one_lights_its_lamp() {
         lamp(cells[0]),
         Some(acid_app::ui::theme::LED_OFF),
         "and a stopped one's is dark"
+    );
+}
+
+/// Removing a device is `main`'s, and the panel learns of it only through the mirror shrinking by one. The editor slots
+/// are per device, so the survivor must not inherit the removed device's step, step mode and randomise dials: identity is
+/// the device's number, which never moves, not the cell's position, which does.
+#[test]
+fn removing_the_first_device_does_not_hand_its_editor_to_the_survivor() {
+    let state = SharedState::new();
+    let mut panel = panel_of(&[("ACID 1", false, false), ("BASS", false, false)]);
+    let ctx = Context::default();
+    // The first frame settles device 1's editor from a default; what the hand does comes after it.
+    run(&ctx, &mut panel, &state, vec![]);
+    // Device 1's editor, made distinguishable from a fresh one in every field it keeps.
+    panel.selected = 4;
+    panel.step_mode = true;
+    panel.set_density(0.2);
+    // Visit device 2, so that its editor is a slot of its own rather than a default worked out on arrival, then come back.
+    panel.strip.selected = 1;
+    run(&ctx, &mut panel, &state, vec![]);
+    panel.strip.selected = 0;
+    run(&ctx, &mut panel, &state, vec![]);
+    assert_eq!(panel.selected, 4, "device 1 kept the step it was on");
+
+    // `main` removes the device on the panel and refills the mirror with what is left; `BASS` is now the only cell.
+    panel.strip.cells.remove(0);
+    panel.strip.selected = 0;
+    run(&ctx, &mut panel, &state, vec![]);
+
+    assert_eq!(panel.selected, 0, "the survivor starts on its own step");
+    assert!(!panel.step_mode, "and its own step mode");
+    assert!(
+        (panel.density - acid_app::ui::randomise::DEFAULT_DENSITY).abs() < 1e-6,
+        "and its own randomise dials, not the removed device's"
     );
 }

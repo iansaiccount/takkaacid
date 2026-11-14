@@ -459,6 +459,9 @@ impl eframe::App for TakkaApp {
             .iter()
             .map(|device| panel_ui::strip::StripCell {
                 name: device.name.clone(),
+                // The panel's per-device editor slots are keyed by this, so a removal cannot hand one device's step,
+                // step mode and randomise dials to its neighbour.
+                number: device.number,
                 running: device.state.is_playing(),
                 muted: device.state.is_muted(),
             })

@@ -13,6 +13,9 @@ use crate::device::{DeviceKind, Request};
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StripCell {
     pub name: String,
+    /// The device's number, which is stable for its life and never reused. The cell's *position* moves when a device
+    /// before it is removed; anything the panel keeps per device — the editor slots — is keyed by this, not by the index.
+    pub number: usize,
     /// That device's transport, not the rack's: one lamp per machine.
     pub running: bool,
     pub muted: bool,

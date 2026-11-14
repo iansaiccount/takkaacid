@@ -33,6 +33,7 @@ pub mod tips;
 pub mod theme;
 pub mod transport;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
@@ -137,11 +138,14 @@ pub struct PanelState {
     /// The picker: whether the card that offers the kinds of device is up. The strip's `+` asks for it and `main` opens it;
     /// it closes itself, because nothing on it is a reading of the machine.
     pub device_picker: device_card::Picker,
-    /// The device the flat editor fields currently hold. Follows `strip.selected` a frame later, through the swap below.
-    pub focused: usize,
-    /// One editor per device: written when a switch leaves a device, read when one arrives, so looking away and back keeps
-    /// the step, the step mode and the randomise dials.
-    pub edit_slots: Vec<PanelEdit>,
+    /// The device whose editor the flat fields currently hold, by its number — the identity that does not move when a
+    /// device before it is removed. `None` until the first frame shows one.
+    pub focused: Option<usize>,
+    /// One editor per device, keyed by that device's number: written when a switch leaves a device, read when one
+    /// arrives, so looking away and back keeps the step, the step mode and the randomise dials. Keyed by number rather
+    /// than by position because the position is exactly what a removal moves: a survivor would otherwise inherit the
+    /// removed device's editor. A device that is gone has its slot dropped on the next frame.
+    pub edit_slots: BTreeMap<usize, PanelEdit>,
 }
 
 /// The songs card and everything it asked for.
@@ -208,8 +212,8 @@ impl Default for PanelState {
             device_request: None,
             device_card: device_card::Card::default(),
             device_picker: device_card::Picker::default(),
-            focused: 0,
-            edit_slots: Vec::new(),
+            focused: None,
+            edit_slots: BTreeMap::new(),
         }
     }
 }
@@ -344,17 +348,29 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         .selected
         .min(state.strip.cells.len().saturating_sub(1));
     // The strip is a mirror, so the device under the editor can change between frames: save the outgoing device's editor and
-    // load the incoming one's. A device the panel has never shown starts on its own first step with the panel's defaults —
-    // but keeps the pattern `main` has just pointed the display at, because that is that device's bank, not a default.
-    state.edit_slots.truncate(state.strip.cells.len().max(1));
-    if state.strip.selected != state.focused {
-        let leaving = state.save_edit();
-        if state.edit_slots.len() <= state.focused {
-            state.edit_slots.resize(state.focused + 1, leaving.clone());
+    // load the incoming one's. Both are keyed by the device's *number*, because a removal moves every later device's
+    // position and would otherwise hand the survivor the removed device's step, step mode and randomise dials. A device the
+    // panel has never shown starts on its own first step with the panel's defaults — but keeps the pattern `main` has just
+    // pointed the display at, because that is that device's bank, not a default.
+    let showing = state
+        .strip
+        .cells
+        .get(state.strip.selected)
+        .map(|cell| cell.number);
+    // A device that is gone keeps no editor: the map is bounded by the rack, and a number is never reused.
+    let present: Vec<usize> = state.strip.cells.iter().map(|cell| cell.number).collect();
+    state
+        .edit_slots
+        .retain(|number, _| present.contains(number));
+    if let Some(showing) = showing
+        && state.focused != Some(showing)
+    {
+        if let Some(leaving) = state.focused {
+            let edited = state.save_edit();
+            state.edit_slots.insert(leaving, edited);
         }
-        state.edit_slots[state.focused] = leaving;
-        state.focused = state.strip.selected;
-        let arriving = match state.edit_slots.get(state.focused) {
+        state.focused = Some(showing);
+        let arriving = match state.edit_slots.get(&showing) {
             Some(edit) => edit.clone(),
             None => PanelEdit {
                 pattern_id: state.pattern_id,
