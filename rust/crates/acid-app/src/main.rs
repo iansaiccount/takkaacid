@@ -477,7 +477,8 @@ impl TakkaApp {
         }
     }
 
-    /// Answer the strip: select a device, mute one, or add one.
+    /// Answer a device request: select, mute, add, rename, route or remove one. The four arms that wait for the device
+    /// card are marked and do nothing yet.
     ///
     /// The match is written out in full because `Request` is a catalogue — a new request must fail to compile here — and
     /// because `Rack::add`'s refusal has to be said somewhere: the panel cannot see the rack, so `main` is the only place
@@ -530,6 +531,51 @@ impl TakkaApp {
                     self.notice("four devices is the limit".to_string())
                 }
             },
+            // The name is the rack's to decide: it trims, falls back to `ACID <number>`, and suffixes a collision. The
+            // panel shows the answer, never the typed string, so a `BASS` typed twice reads `BASS (2)` on the card.
+            // The card's name field is written back with the landed answer in plan 42 task 3.
+            device::Request::Rename(index, typed) => {
+                self.rack.rename(index, &typed);
+            }
+            // A routing edit replaces one field of the device's filter and keeps the other two: the filter is the only
+            // scope a message is filtered by, so nothing else may be rewritten on the way.
+            device::Request::SetRole(index, role) => {
+                if let Some(mut inputs) = self.rack.inputs(index).cloned() {
+                    inputs.role = role;
+                    self.rack.set_inputs(index, inputs);
+                }
+            }
+            device::Request::SetPorts(index, ports) => {
+                if let Some(mut inputs) = self.rack.inputs(index).cloned() {
+                    inputs.ports = ports;
+                    self.rack.set_inputs(index, inputs);
+                }
+            }
+            device::Request::SetChannel(index, channel) => {
+                if let Some(mut inputs) = self.rack.inputs(index).cloned() {
+                    inputs.channel = channel;
+                    self.rack.set_inputs(index, inputs);
+                }
+            }
+            // The last device cannot go, and the panel cannot see the rack, so the refusal is said here.
+            device::Request::ConfirmRemove(index) => match self.rack.remove(index) {
+                Ok(()) => {
+                    // A save writes the first device, so only losing *that* one changes what the file would hold; a
+                    // survivor keeps its number and its name, and nothing else a save reads has moved.
+                    if index == 0 {
+                        self.panel.dirty = true;
+                    }
+                }
+                Err(device::RemoveError::LastDevice) => {
+                    self.notice("the last device cannot go".to_string())
+                }
+                Err(device::RemoveError::OutOfRange) => {}
+            },
+            // Waiting for the card: these are the panel's own, so the arms land with it.
+            device::Request::Open(_) => {} // plan 42 task 2 fills this
+            device::Request::Close => {}   // plan 42 task 2 fills this
+            device::Request::OpenPicker => {} // plan 42 task 6 fills this
+            device::Request::AskRemove(_) => {} // plan 42 task 5 fills this
         }
     }
     /// Write the session, keeping the other 63 patterns from the bank as loaded.

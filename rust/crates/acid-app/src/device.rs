@@ -145,8 +145,28 @@ pub enum Request {
     Select(usize),
     /// Mute or unmute this device — the index the key was drawn for, never the selected one.
     SetMute(usize, bool),
+    /// Open this device's card. A request rather than panel state for the same reason the settings card's lists are: what
+    /// a card shows is a reading of the machine, and `main` is the only thing allowed to take that reading.
+    Open(usize),
+    /// Close whichever card is open.
+    Close,
     /// Add a device of this kind.
     Add(DeviceKind),
+    /// The `+` was clicked: offer the kinds there are. Nothing is added until a row is clicked.
+    OpenPicker,
+    /// Rename this device. The panel asks with what was typed and shows what the rack answers: a collision lands as
+    /// `BASS (2)`, and the panel must display the store's answer, not the hand's.
+    Rename(usize, String),
+    /// Whether this device plays what it hears, or only answers controllers.
+    SetRole(usize, crate::midi::route::Role),
+    /// Which of the opened ports may address this device.
+    SetPorts(usize, crate::midi::route::Ports),
+    /// Which channel on those ports.
+    SetChannel(usize, crate::midi::route::Channel),
+    /// The REMOVE key: arm it. Nothing goes until the second click.
+    AskRemove(usize),
+    /// The second click on REMOVE: this device may go, unless it is the last one.
+    ConfirmRemove(usize),
 }
 
 /// A list of devices, the one the panel is showing, and what the other threads read.

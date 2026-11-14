@@ -297,7 +297,7 @@ Expected: FAIL — nothing is requested.
 - [ ] **Step 3: Draw the field and ask**
 
 `egui::TextEdit::singleline(&mut card.name)` in `rows.name`, with `ui.scope_builder` clipped to the card. Confirm on
-`response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))` — the pattern the songs card already uses. In `main`'s
+`response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))` — the idiom the songs card does *not* use, so it is this card's own. In `main`'s
 `Rename` arm, write the landed name back:
 
 ```rust
@@ -305,10 +305,13 @@ device::Request::Rename(index, typed) => {
     let landed = self.rack.rename(index, &typed);
     if self.panel.device_card.open == Some(index) {
         self.panel.device_card.name = landed;
-    }
-    self.panel.dirty = true;
 }
 ```
+
+Two corrections to the sketch above, both settled in task 1 and recorded in the ruling table: there is **no**
+`self.panel.dirty = true` (names are not in the save format, so a rename changes no byte on disk), and `self.notify` is
+`self.notice`. The songs card does **not** confirm its name on Enter — it reads the field when SAVE is clicked — so the
+`lost_focus()` idiom is this card's own and must not be justified by citing that one.
 
 The panel's strip mirror picks the new name up on the next frame, because `main` fills it from the rack.
 
@@ -518,7 +521,7 @@ device::Request::ConfirmRemove(index) => {
             self.panel.device_card.open = None;
             self.panel.dirty = true;
         }
-        Err(device::RemoveError::LastDevice) => self.notify("the last device cannot go"),
+        Err(device::RemoveError::LastDevice) => self.notice("the last device cannot go".to_string()),
         Err(device::RemoveError::OutOfRange) => {}
     }
 }
@@ -676,13 +679,37 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
 
 ## Progress
 
-- [ ] Task 1 — the request queue grows
+- [x] Task 1 — the request queue grows. Commit 1 of the plan: `device::Request` carries all twelve answers a card can give
+      (`Open`, `Close`, `OpenPicker`, `Rename`, `SetRole`, `SetPorts`, `SetChannel`, `AskRemove`, `ConfirmRemove` added), and
+      `main`'s drain answers the ones that have a rack answer: `Rename` → `Rack::rename`, the three routing edits each
+      replacing one field of the device's `InputFilter` and publishing it, `ConfirmRemove` → `Rack::remove` with
+      `LastDevice` as a notice. `Open`/`Close`/`OpenPicker`/`AskRemove` and Rename's write-back are marked stubs, not
+      `todo!()`. **Review: fresh `reviewer` subagent.** Four findings, all actioned: (1) P1 — `ConfirmRemove` marked the
+      session dirty for *every* removal, so removing a non-first device flipped the SAVE lamp and triggered an autosave
+      write for a file that would not change; now `if index == 0`, because a save writes the first device and only losing
+      that one changes what the file would hold. (2) P1 — the commit's only new behaviour is `main`'s drain, which a binary
+      cannot be tested from, so this entry is the record AGENTS.md asks for (see "Deliberately untested" below); the
+      reviewer also confirmed the dropped Step 1 test was a strict subset of `tests/rack.rs`'s
+      `renaming_lands_on_one_device_and_keeps_names_distinct`. (3) `apply_device_request`'s doc comment still said "select a
+      device, mute one, or add one". (4) the `Rename` arm's deferred write-back was unmarked. Task 1 adds **no test**:
+      `tests/rack.rs` already pins the rename chain, and the new arms are reachable only from the binary.
 - [ ] Task 2 — the card's shell
 - [ ] Task 3 — the name field
 - [ ] Task 4 — the routing rows
 - [ ] Task 5 — removing a device, twice
 - [ ] Task 6 — the picker and the footnote
 - [ ] Task 7 — the gate and the journey
+
+### Deliberately untested
+
+`main`'s `apply_device_request` arms for `Rename`, `SetRole`, `SetPorts`, `SetChannel` and `ConfirmRemove` (task 1) cannot be
+tested from this repo: `main` is a binary and cannot be called, which is true of every arm that was already there and is why
+`ui::dispatch` and the rack live in the library. Three things stand in for a test, and each is named here rather than trusted:
+every one of those arms is a two-line fold over a `Rack` method that `tests/rack.rs` and `midi/route.rs`'s own tests already
+pin; tasks 2-6 assert the *requests* those arms receive through `draw_panel` in `tests/device_card_live.rs`; and task 7's
+by-hand journey is the only thing that walks `main`'s answers — the rename landing as `BASS (2)`, the removal asking twice,
+the last-device refusal. A reviewer of task 2-6 should say which arm looks unexercised rather than assume the journey covers
+it.
 
 Rulings made while writing this plan, and their cost if wrong:
 
@@ -693,3 +720,5 @@ Rulings made while writing this plan, and their cost if wrong:
 | `Ports::All` is a ticked row rather than a separate mode | A player who unticks every port gets `Named(vec![])`, which is "silent" — the same state a new device starts in, so it is reachable and explainable. |
 | The footnote names both losses in one line | One more line on a small card. The alternative is a player losing a name with no warning, which the design calls an anti-goal. |
 | The name field confirms on Enter or focus loss | A player who types and clicks elsewhere gets the rename. Accepted: the songs card behaves the same way, and two cards disagreeing would be worse. |
+| A rename does not mark the session dirty | Names are not in the save format (`SavedState` has no device name), so `dirty` would light the SAVE lamp and trigger an autosave write for a file whose bytes do not change — the same reason `Add` does not dirty the session. The cost if wrong: a player renames a device, sees the lamp stay dark, and restarts expecting the name to have been kept. The picker's footnote is what tells them it was not. |
+| A removal marks the session dirty only when it takes the **first** device | A save writes the first device, so removing any other changes nothing about what the file would hold. The cost if wrong: a player removes the third device, the lamp stays dark, and a restart brings the device list back — which is what the footnote already promises. |
