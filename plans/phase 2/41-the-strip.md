@@ -665,9 +665,38 @@ git commit -m "chore(ui): plan 41's gate, run and used"
 
 ## Progress
 
-- [ ] Task 1 — the strip band
-- [ ] Task 2 — the strip draws itself
-- [ ] Task 3 — the mirror and the requests
+- [x] **Task 1 — the strip band.** `9b60dd9`. `DESIGN_SIZE` 980x670; the six inherited bands moved down 30 px with their heights;
+      `layout` gains `strip`, `strip_cells`/`strip_add_rect`, and `band_of` as the one place the inset arithmetic lives. One
+      existing test changed (the aspect assertion hard-coded 980/640). Self-reviewed: geometry only.
+- [x] **Task 2 — the strip draws itself.** `85ab8c1`. `ui/strip.rs` with `StripCell`/`Strip`, the three rect helpers and `paint`;
+      `strip::paint` is called from `draw_panel` right after the face (a strip that is never painted is not a deliverable, so
+      the call moved up from task 3). `device::Request` (`Select`/`SetMute`/`Add`) and `PanelState::{strip, device_request}`
+      land here — task 2's own Interfaces block needs the request type, and task 2's `Strip.request` was a second queue the
+      spec does not have (ruling below). `tips::Control` gains `DEVICE`/`MUTE`/`ADD DEVICE`, appended. `panel.rs` needed no
+      change: it paints the face and the strip paints its own well on top. Self-reviewed: painting and geometry.
+- [x] **Task 3 — the mirror and the requests.** `main` fills `panel.strip` at the *end* of `logic` (after every drain that could
+      change the rack), and `TakkaApp::ui` drains `panel.device_request` straight after `draw_panel` — one `take`, one full
+      `match`. `draw_panel` clamps `strip.selected` before anything draws. Tests: `tests/devices_live.rs` (4; the three the
+      plan gives plus the clamp). Not tested here: `main`'s drain, because it lives in the binary — task 7's hand-run is its
+      coverage.
+- **Task 3 review** (fresh `reviewer` subagent, 7 findings: 1 Critical, 2 Important, 4 Minor/nit; all actioned). The Critical
+      one was a data-loss path this commit made reachable: `save`/`session_for_disk` built the session from the *selected*
+      device, and nothing until now could move the selection — so `+` then SAVE would have rewritten the open song with the
+      new device's single starter pattern. The session now comes from `Rack::saved_device()`, which is the first device by
+      definition (the spec's rule, and the frozen format), with `a_session_saves_the_first_device_whatever_is_selected` in
+      `tests/rack.rs` pinning it; `Add` no longer marks the session dirty, because nothing on disk changed. Important two:
+      `Select`/`Add` ran `pattern_swap::adopt`, which zeroes `panel.selected` at drain time — *after* the frame — so task 5's
+      `save_edit` would have stored the leaving device at step 1 and its own test could not see it; that is now
+      `pattern_swap::follow` (`adopt` = `follow` + `selected = 0`), which sets what a switch changes and leaves the step alone.
+      Important three: a controller's held pattern swap (`pending_pattern`) belonged to the device it was asked of, so a
+      switch now clears it — the same line `main` already uses for "a held swap belongs to the device that asked".
+      Also actioned: the mirror moved to the end of `logic` so the list the painter drew and the list a click is answered
+      against cannot differ by a removal in the same frame; a blank line. Recorded, not done: `PanelState::focused` is task
+      5's field (the plan's task 3 Interfaces block lists it, but nothing in task 3 needs it); `SetMute`/`Select` index by
+      position, so plan 42's remove path will want `Device::number` as the durable identity — accepted now because nothing in
+      the app can remove a device yet, and recorded here so the card round does not discover it. The mirror allocates a `Vec`
+      and a `String` per device per frame; accepted (UI thread, ≤ 4 devices), and noted because its neighbours in `logic` are
+      deliberately allocation-free.
 - [ ] Task 4 — `Ctrl+1..4`
 - [ ] Task 5 — the editor follows the device
 - [ ] Task 6 — the strip says what it looks like

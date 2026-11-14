@@ -235,6 +235,12 @@ impl PanelState {
 /// Painting uses absolute rects from `layout`, so the panel lands in the same place whatever the Ui's own
 /// cursor is doing. Returns nothing: Phase 07 wires the controls to the engine.
 pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::Ui) {
+    // `main` owns the rack and may have removed a device since it filled the mirror, so the count the strip draws is
+    // derived here rather than trusted: the panel may be one frame behind, and it must not be one index out of bounds.
+    state.strip.selected = state
+        .strip
+        .selected
+        .min(state.strip.cells.len().saturating_sub(1));
     let window = ui.max_rect();
     play_computer_keys(shared, ui, state);
 

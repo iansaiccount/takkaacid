@@ -25,17 +25,26 @@ pub fn swap_now(playing: bool, position: usize, last_position: usize) -> bool {
 
 /// Adopt the bank's current pattern into the panel and the engine.
 ///
-/// One path for a keyboard move, a learned controller and a song load: the panel's copy, the display, the engine's index,
-/// the step selection and an armed CLEAR all belong to "which pattern is on screen", and letting three call sites each
-/// remember that is how they drift apart.
-pub fn adopt(panel: &mut PanelState, shared: &SharedState, bank: &PatternBank) {
+/// One path for a keyboard move, a learned controller, a song load and a device switch: the panel's copy, the display, the
+/// engine's index and an armed CLEAR all belong to "which pattern is on screen", and letting four call sites each remember
+/// that is how they drift apart.
+///
+/// The step the hand is on is *not* one of those things: this leaves `selected` alone, because a device switch must not
+/// throw away the step its editor was on before the swap that puts it back (`draw_panel`'s `save_edit`/`load_edit`) has
+/// run. A real pattern change is [`adopt`], which starts at the first step.
+pub fn follow(panel: &mut PanelState, shared: &SharedState, bank: &PatternBank) {
     let index = bank.current();
     panel.pattern = shared.pattern();
     panel.pattern_id = PatternBank::id_of(index);
     shared.set_pattern_index(index);
     shared.clear_pattern_selected();
-    panel.selected = 0;
     super::clear::disarm(panel);
+}
+
+/// [`follow`] and start at the first step: what a *pattern* change does, never a device switch.
+pub fn adopt(panel: &mut PanelState, shared: &SharedState, bank: &PatternBank) {
+    follow(panel, shared, bank);
+    panel.selected = 0;
 }
 
 #[cfg(test)]

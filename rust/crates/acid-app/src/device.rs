@@ -254,6 +254,15 @@ impl Rack {
         &mut self.devices[index]
     }
 
+    /// The device a session saves: the first one, always.
+    ///
+    /// The save file is one device (the spec's rule, and the frozen format), and devices beyond the first live in memory
+    /// until the save-the-rack round. A save must not follow the selection, or adding a device and saving would rewrite the
+    /// open song with the new device's single starter pattern.
+    pub fn saved_device(&self) -> &Device {
+        &self.devices[0]
+    }
+
     pub fn state(&self) -> &SharedState {
         &self.device().state
     }

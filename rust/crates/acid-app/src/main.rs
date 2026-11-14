@@ -414,6 +414,20 @@ impl eframe::App for TakkaApp {
         {
             self.save();
         }
+        // The strip is a mirror like `pattern` is: what the rack holds, copied for the painter. Filled last, after every
+        // drain in this frame that could change the rack, so the list the panel draws and the list a click is answered
+        // against are the same list.
+        self.panel.strip.cells = self
+            .rack
+            .devices()
+            .iter()
+            .map(|device| panel_ui::strip::StripCell {
+                name: device.name.clone(),
+                running: device.state.is_playing(),
+                muted: device.state.is_muted(),
+            })
+            .collect();
+        self.panel.strip.selected = self.rack.selected();
     }
 
     /// Closing the window is one last chance to keep whatever the user just did.
@@ -425,6 +439,7 @@ impl eframe::App for TakkaApp {
         // The panel is the whole surface. Device names used to be written at the bottom of the window and doubled as the
         // output picker; both live in the settings card now, so nothing is painted outside the panel.
         panel_ui::draw_panel(&mut self.panel, self.rack.state(), ui);
+        self.apply_device_request();
         if let Some(name) = self.panel.picker.output_choice.take() {
             self.rig.request_device(Some(name));
         }
@@ -463,9 +478,61 @@ impl TakkaApp {
         }
     }
 
+    /// Answer the strip: select a device, mute one, or add one.
+    ///
+    /// The match is written out in full because `Request` is a catalogue — a new request must fail to compile here — and
+    /// because `Rack::add`'s refusal has to be said somewhere: the panel cannot see the rack, so `main` is the only place
+    /// that can tell the player the rack is full.
+    fn apply_device_request(&mut self) {
+        let Some(request) = self.panel.device_request.take() else {
+            return;
+        };
+        match request {
+            device::Request::Select(index) => {
+                if self.rack.select(index) {
+                    // The display follows the device's own bank, but not its pattern's first step: the step the hand was
+                    // on comes back from this panel's edit slots in `draw_panel` on the next frame, so resetting it here
+                    // would save the *leaving* device at step 1.
+                    panel_ui::pattern_swap::follow(
+                        &mut self.panel,
+                        self.rack.state(),
+                        self.rack.bank(),
+                    );
+                    // A swap a controller asked for belongs to the device it was asked of, not to the one now on screen.
+                    self.pending_pattern = None;
+                }
+            }
+            // The index the key was drawn for, not the one on the panel: `SetMute` carries its own.
+            device::Request::SetMute(index, muted) => {
+                if let Some(device) = self.rack.devices().get(index) {
+                    device.state.set_mute(muted);
+                }
+            }
+            device::Request::Add(kind) => match self.rack.add(kind) {
+                Ok(index) => {
+                    self.rack.select(index);
+                    panel_ui::pattern_swap::follow(
+                        &mut self.panel,
+                        self.rack.state(),
+                        self.rack.bank(),
+                    );
+                    // A held swap belonged to the device that was on screen, not to the new one.
+                    self.pending_pattern = None;
+                    let name = self.rack.device().name.clone();
+                    // Nothing on disk changed: the session saves the first device, and a device added here is not in the
+                    // save format yet.
+                    self.notice(format!("added {name}"));
+                }
+                Err(device::AddError::AtCapacity) => {
+                    self.notice("four devices is the limit".to_string())
+                }
+            },
+        }
+    }
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
     fn save(&mut self) {
-        let mut saved = persist::shared_to_saved(self.rack.state(), self.rack.bank().clone());
+        let first = self.rack.saved_device();
+        let mut saved = persist::shared_to_saved(&first.state, first.bank.clone());
         // One name is all the save file holds until the format lands: the first port the player turned on.
         saved.midi_input = self.midi.enabled().first().cloned();
         saved.song = self.panel.songs.name.clone();
@@ -551,7 +618,8 @@ impl TakkaApp {
 
     /// The session as it should be written to disk, under `name` when the save is landing in a file.
     fn session_for_disk(&self, name: &str) -> persist::SavedState {
-        let mut saved = persist::shared_to_saved(self.rack.state(), self.rack.bank().clone());
+        let first = self.rack.saved_device();
+        let mut saved = persist::shared_to_saved(&first.state, first.bank.clone());
         saved.midi_input = self.midi.enabled().first().cloned();
         saved.song = Some(name.to_string());
         // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
