@@ -623,6 +623,121 @@ git add -A
 git commit -m "refactor(midi): the routing table decides, and main is out of the message path"
 ```
 
+### Task 7: the tempo fader moves the rack, not one device
+
+Task 6's review found this and the previous commit records it as deferred. It is task 7 because it belongs to this round: the
+routing table is what delivers a CC to a device, and this is the one message whose meaning is the rack's.
+
+**What is wrong today.** `midi::cc::apply_cc`'s `CcTarget::Tempo` arm writes the *device's* `tempo_bpm`, and `main::logic`
+calls `Rack::sync_transport` every frame, which writes the *rack's* cell into every device. A learned tempo fader therefore
+moves one device's tempo for less than a frame and the fan-out puts it back: factory CC 72 does nothing at all, silently, and
+so does any learned tempo controller. It predates this plan — the fan-out came with plan 38.
+
+**Root cause.** Tempo is the rack's: one cell (`Rack::tempo_bpm`) that the MIDI thread already holds a clone of for the
+clock. The CC path writes a device's copy of it instead, and `apply_cc` has no way to reach the rack — its signature is
+frozen by this plan's Global Constraints.
+
+**Design.** The carrier is an atomic on the device that heard the message, and the router drains it. `SharedState::tempo_request`
+holds `-1.0` when nothing is pending; the Tempo arm writes it, and `Router::on_message`'s CC arm takes it and writes the rack's
+cell — in the same message, because the router already holds that cell for the clock. This is the `pattern_request` shape, and
+it keeps `main` out of the message path.
+
+The Tempo arm still writes the device's own `tempo_bpm` as well, at the same value. The pickup measures the knob against that
+copy (`cc::knob_value`), and a fader that outran a frame would otherwise lose the knob it is on — the tolerance is two and a
+half of 128 steps. The two writes agree, and the fan-out writes the same value back to every device on the next frame.
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/state.rs` (`AtomicF32::swap`, `SharedState::tempo_request`, `request_tempo`, `take_tempo_request`)
+- Modify: `rust/crates/acid-app/src/midi/cc.rs` (the `CcTarget::Tempo` arm, and the module doc's claim about "the same atomics
+  the mouse writes")
+- Modify: `rust/crates/acid-app/src/midi/route.rs` (the CC arm drains the request)
+- Test: the three files' own test modules, and `rust/crates/acid-app/tests/rack.rs` — the router, the rack's cell and the
+  fan-out joined the way `main` joins them, which is the smallest frame in which this bug is visible
+
+**Interfaces:**
+- Produces:
+  ```rust
+  impl AtomicF32 { pub fn swap(&self, value: f32) -> f32; }
+  impl SharedState {
+      /// Record the tempo a learned controller asked for; the router carries it to the rack's cell.
+      pub fn request_tempo(&self, bpm: f32);
+      /// `None` when nothing is pending.
+      pub fn take_tempo_request(&self) -> Option<f32>;
+  }
+  ```
+
+- [ ] **Step 1: Write the failing tests**
+
+In `cc.rs`'s test module:
+
+```rust
+#[test]
+fn a_tempo_fader_asks_the_rack_and_a_parked_one_does_not() {
+    // The bug this pins: the fader wrote one device's tempo and the rack's fan-out put it back, so CC 72 did nothing.
+    let s = SharedState::new();
+    assert!(apply_cc(&s, 72, 0));
+    assert_eq!(
+        s.take_tempo_request(),
+        None,
+        "a fader that has not reached the knob asks for nothing"
+    );
+
+    reach(&s, 72);
+    assert_eq!(s.take_tempo_request(), Some(MAX_BPM));
+    assert_eq!(s.take_tempo_request(), None, "a request is taken once");
+}
+```
+
+In `route.rs`'s test module:
+
+```rust
+#[test]
+fn a_tempo_fader_moves_the_rack_not_one_device() {
+    let bus = bus_of(vec![InputFilter::everything()]);
+    let tempo = Arc::new(AtomicF32::new(130.0));
+    let mut router = Router::new("Launchkey MIDI", Arc::clone(&tempo));
+
+    // CC 72 is the factory tempo controller, and it takes pickup: the fader is swept up to the knob before it may turn it.
+    router.on_message(&bus, &[0xB0, 72, 0]);
+    assert_eq!(tempo.get(), 130.0, "a parked fader leaves the tempo alone");
+    router.on_message(&bus, &[0xB0, 72, 127]);
+
+    assert_eq!(tempo.get(), acid_core::timing::MAX_BPM, "the rack's cell moved");
+    assert_eq!(
+        bus.slots[0].take_tempo_request(),
+        None,
+        "the router drained the request in the same message"
+    );
+}
+```
+
+- [ ] **Step 2: Run to watch them fail**
+
+Run: `cd rust && cargo test -p acid-app --lib midi`
+Expected: FAIL — no method `take_tempo_request`, and the rack's cell never moves.
+
+- [ ] **Step 3: Add the carrier, the drain and the request**
+
+`AtomicF32::swap` is the same relaxed swap on the bits. `tempo_request` starts at `-1.0`; `request_tempo` stores,
+`take_tempo_request` swaps in `-1.0` and answers `None` for anything not positive, so a tempo of `0` can never be mistaken
+for "nothing pending". The router drains inside its existing CC loop, right after `apply_cc`, so a message costs one swap per
+device that hears it and no second pass over the bus.
+
+- [ ] **Step 4: Run the tests and the gate**
+
+Run: `cd rust && cargo test -p acid-app --lib midi && cargo test --workspace`
+Then the three gates. Expected: PASS.
+
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
+
+```bash
+git add -A
+git commit -m "fix(midi): a learned tempo fader moves the rack, not one device"
+```
+
+**Non-goal:** the tempo keys and the tempo knob already go through `Rack::set_tempo_bpm` and are untouched, and the fan-out's
+≤ 200 ms latency for a followed clock is plan 38's design — this task makes the fader land in the same cell, not sooner.
+
 ---
 
 ## Progress
@@ -677,15 +792,31 @@ git commit -m "refactor(midi): the routing table decides, and main is out of the
       fresh session opens "every port" (task 5's ruling made it the first); Review Focus 1's live test through the card had no
       home, so it is now in `plans/phase 2/42-the-device-card.md` task 4 step 1 — the card that sets a filter is what plan 42
       builds, and until then the rack-level half in `tests/rack.rs` is the only place it can be pinned.
-- **Deferred (Important), found by task 6's review:** `CcTarget::Tempo` (factory CC 72) writes the *device's* `tempo_bpm`
-      and `sync_transport` overwrites it from the rack cell every frame, so the tempo fader does nothing. It predates this
-      task — plan 38's fan-out did it — and the fix is a `tempo_request` atomic drained by `main` the way `pattern_request`
-      is, which wants its own task in this phase (before plan 43's gate) rather than being smuggled into "the app routes".
-      Cost while it is deferred: a player who teaches or uses the tempo fader gets a control that springs back, and nothing
-      says why.
+- **Fixed by task 7:** `CcTarget::Tempo` (factory CC 72) used to write the *device's* `tempo_bpm`, which `sync_transport`
+      overwrote from the rack cell every frame, so the fader did nothing. The Tempo arm now also leaves a request and the
+      router carries it to the rack's cell in the same message. See task 7's own entry below.
 - **Deferred (Minor), deliberate:** the probe thread's closure — `Router` over `bus.load()` — is exercised by hand
       (`--midi-map`, and a note on a port the device's filter does not name produces silence), because constructing a
       `MidiIn` needs a device. What it hands messages to is covered by six `Router` tests and the roster around it by two.
+- [x] **Task 7 — the tempo fader.** `SharedState::tempo_request` (`-1.0` when nothing is pending) with `request_tempo` and
+      `take_tempo_request` (a positive tempo only, so no real tempo can be mistaken for "nothing"), written by
+      `CcTarget::Tempo` **and** the device's own `tempo_bpm`; the router takes it in the same CC iteration and writes the
+      rack's cell, so `sync_transport` carries it to every device instead of undoing it. Removal-checked: delete the request
+      and three tests fail with `130.0` where `300.0` belongs (the cc unit test, the router test and the rack-level one).
+      New tests: the parked-fader-and-request case and the `-1.0`/take-once semantics in `cc.rs`, three in `route.rs` (one
+      device, two devices hearing one fader, and a tempo learned onto another controller), and two in `tests/rack.rs` (the
+      router + rack cell + fan-out joined the way `main` joins them, and a fan-out *between* two fader messages).
+- **Task 7 review** (fresh `reviewer` subagent, 5 findings, all Minor, all actioned). It confirmed the Interfaces block
+      exactly, no convention break, no lock or allocation added on the MIDI path, the sentinel safe (`MIN_BPM` is 40, so
+      nothing real is ≤ 0), no pending request able to outlive its own message, and that removing the fix fails the new
+      tests. Actioned: the Files block now names `tests/rack.rs`; a test that a fan-out between two fader messages leaves the
+      tempo where the fader put it; the two-device and learned-controller cases; a blank line.
+- **Ruling (task 7): the device's `tempo_bpm` is a mirror, and it is written twice for one message.** The fader writes it
+      and the router writes the rack's cell; if `main`'s fan-out ran between those two writes it could put the *old* cell into
+      the mirror for one frame, and a fader that moved more than the pickup's 2.5/128 would lose the knob until it crossed
+      again. Closing that would mean the pickup reading the rack's cell instead of the device's — a change to what
+      `SharedState` is. Cost if wrong: a fast sweep can stall for a frame and needs a re-cross; the cell — the thing the
+      engine follows — is always right, and the test above pins that a fan-out does not undo the fader.
 - **Ruling (paid in task 5):** the router was written and tested by its filters but had no `on_message` test until task 5
       added six, which is what this ruling asked of whoever took it: task 4 shipped `Router::on_message` with no caller and no
       routing test, and it is exactly the function 40.6 turns into the only message path.
@@ -705,3 +836,5 @@ Rulings made while writing this plan, and their cost if wrong:
 | An unplugged port keeps its card row, marked `(missing)` (task 5) | The list can carry a name the machine does not report. Without the row, the only way to turn a gone port off is to plug the cable back in. |
 | A song load adds its saved port to the set instead of replacing it (task 5) | A song that named one port leaves the player's others enabled. Replacing would drop controllers the file cannot name. |
 | `Router::on_message_at` takes the arrival time (task 5) | One public method whose only caller is a test. The alternative is a clock test that sleeps through a real-time stream and flakes on a loaded machine. |
+| A tempo CC leaves a request and the router carries it to the rack's cell (task 7) | A `pub` `apply_cc` called without a router leaves a request on that device that fires on its next routed CC. Today the router is its only caller and drains in the same iteration. |
+| The device's `tempo_bpm` is written twice for one fader message (task 7) | A fan-out landing between the two writes can put the old cell into the mirror for a frame, and a fast sweep loses the pin until it crosses the knob again. The cell — what the engine follows — is always right. |

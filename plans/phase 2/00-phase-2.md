@@ -107,11 +107,11 @@ named below — its `## Progress` section carries every commit, what each task's
       the rack's transport and fan-out, and `main` running on a rack of one. Commits `af4843b`..`b8e4f82`, `3591083`.
 - [x] **39 — the mixer** (`plans/phase 2/39-the-mixer.md`): `Engine::start_at`, `audio::mixer::Mixer` (slots, reconcile, mute
       ramp, master limiter), `AudioRenderer::seek`, and the `Rig` closure rendering the rack. Commits `ed4a66c`..`784bca2`.
-- [x] **40 — MIDI routing** (`plans/phase 2/40-midi-routing.md`): all six tasks landed (`39e6575`, `34023c5`, `a19908a`,
-      `f651c1e`, and task 6's commit). Both reviews ran fresh (`reviewer` subagent): task 5's found 10 (8 actioned), task 6's
-      found 4 (3 actioned, one of them moved into plan 42's task list). One **Important** is deferred and recorded there: the
-      tempo fader (CC 72) is overwritten by the rack fan-out, a defect plan 38 introduced, and it wants its own task before
-      plan 43's gate.
+- [x] **40 — MIDI routing** (`plans/phase 2/40-midi-routing.md`): all seven tasks landed (`39e6575`, `34023c5`, `a19908a`,
+      `f651c1e`, `a9af620`, and task 7's commit). Every review ran fresh (`reviewer` subagent): task 5's found 10 (8 actioned),
+      task 6's found 4 (3 actioned, one of them moved into plan 42's task list), task 7's found 5 (all actioned). Task 7 also
+      fixed what task 6's review turned up: the tempo fader (CC 72) was overwritten by the rack fan-out, a defect plan 38
+      introduced.
 - [ ] **41 — the strip** (`plans/phase 2/41-the-strip.md`)
 - [ ] **42 — the device card** (`plans/phase 2/42-the-device-card.md`)
 - [ ] **43 — documents and gates** (`plans/phase 2/43-documents-and-gates.md`)

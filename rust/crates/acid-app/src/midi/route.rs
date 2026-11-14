@@ -142,6 +142,12 @@ impl Router {
                 for (slot, filter) in bus.slots.iter().zip(&bus.routes) {
                     if filter.hears(&self.port, channel) {
                         crate::midi::cc::apply_cc(slot, cc, value);
+                        // A CC learned to the tempo cannot write what it drives: tempo is the rack's, and the message
+                        // landed on a device the fan-out would overwrite. The request lands in the cell the whole rack
+                        // follows, in this message, because the router already holds that cell for the clock.
+                        if let Some(bpm) = slot.take_tempo_request() {
+                            self.tempo.set(bpm);
+                        }
                     }
                 }
             }
@@ -312,6 +318,67 @@ mod tests {
             "the rack's cell should be near 120 bpm, was {named}"
         );
     }
+
+    /// The message whose meaning is the rack's: a learned tempo fader is delivered to a device, but the tempo is the
+    /// rack's, so the router is what carries the request into the cell every device follows.
+    #[test]
+    fn a_tempo_fader_moves_the_rack_not_one_device() {
+        let bus = bus_of(vec![InputFilter::everything()]);
+        let tempo = Arc::new(AtomicF32::new(130.0));
+        let mut router = Router::new("Launchkey MIDI", Arc::clone(&tempo));
+
+        // CC 72 is the factory tempo controller, and it takes pickup: the fader is swept up to the knob before it may
+        // turn it, so the first message only says where the hand is.
+        router.on_message(&bus, &[0xB0, 72, 0]);
+        assert_eq!(tempo.get(), 130.0, "a parked fader leaves the tempo alone");
+        router.on_message(&bus, &[0xB0, 72, 127]);
+
+        assert_eq!(
+            tempo.get(),
+            acid_core::timing::MAX_BPM,
+            "the rack's cell moved"
+        );
+        assert_eq!(
+            bus.slots[0].take_tempo_request(),
+            None,
+            "the router drained the request in the same message"
+        );
+    }
+
+    /// Two devices hearing one fader is one tempo: each asks, each is taken in its own turn, and the rack's cell is the
+    /// only thing they agree on.
+    #[test]
+    fn two_devices_hearing_one_tempo_fader_leave_nothing_pending() {
+        let bus = bus_of(vec![InputFilter::everything(), InputFilter::everything()]);
+        let tempo = Arc::new(AtomicF32::new(130.0));
+        let mut router = Router::new("Launchkey MIDI", Arc::clone(&tempo));
+
+        router.on_message(&bus, &[0xB0, 72, 0]);
+        router.on_message(&bus, &[0xB0, 72, 127]);
+
+        assert_eq!(tempo.get(), acid_core::timing::MAX_BPM);
+        for slot in &bus.slots {
+            assert_eq!(slot.take_tempo_request(), None, "every request was taken");
+        }
+    }
+
+    /// The drain is not a CC-72 special case: it asks each device what that device just asked for, so a tempo learned onto
+    /// a different controller reaches the rack the same way.
+    #[test]
+    fn a_tempo_learned_onto_another_controller_still_reaches_the_rack() {
+        use crate::midi::cc::{CcTarget, set_cc};
+
+        let bus = bus_of(vec![InputFilter::everything()]);
+        let tempo = Arc::new(AtomicF32::new(130.0));
+        let mut router = Router::new("Launchkey MIDI", Arc::clone(&tempo));
+        set_cc(&bus.slots[0], CcTarget::Tempo, 22);
+
+        router.on_message(&bus, &[0xB0, 22, 0]);
+        router.on_message(&bus, &[0xB0, 22, 127]);
+
+        assert_eq!(tempo.get(), acid_core::timing::MAX_BPM);
+    }
+
     #[test]
     fn the_factory_device_hears_every_port_and_channel() {
         let filter = InputFilter::everything();

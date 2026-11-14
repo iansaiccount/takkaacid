@@ -220,6 +220,65 @@ fn a_tempo_written_straight_into_the_cell_reaches_every_device() {
     }
 }
 
+/// The bug this pins, joined the way `main` joins the parts: a fader learned to the tempo wrote one device's `tempo_bpm`,
+/// and the next `sync_transport` put the rack's value back — so factory CC 72 did nothing at all. One router, the rack's
+/// own bus and tempo cell, and the tempo has to arrive in the cell the fan-out reads.
+#[test]
+fn a_tempo_fader_on_a_router_moves_the_rack_and_its_devices() {
+    use acid_app::midi::route::Router;
+
+    let rack = one();
+    let bus = rack.bus();
+    let mut router = Router::new("Launchkey MIDI", rack.tempo_cell());
+
+    // CC 72 takes pickup: the first message says where the fader is, and the sweep up to the knob is what turns it.
+    router.on_message(&bus.load(), &[0xB0, 72, 0]);
+    assert_eq!(
+        rack.tempo_bpm(),
+        acid_core::timing::DEFAULT_BPM,
+        "a parked fader leaves the tempo alone"
+    );
+    router.on_message(&bus.load(), &[0xB0, 72, 127]);
+
+    assert_eq!(
+        rack.tempo_bpm(),
+        acid_core::timing::MAX_BPM,
+        "the fader lands in the rack's cell, which is what the fan-out reads"
+    );
+    rack.sync_transport();
+    assert_eq!(
+        rack.devices()[0].state.tempo_bpm.get(),
+        acid_core::timing::MAX_BPM,
+        "and every device follows it"
+    );
+}
+
+/// The frame between two messages: `main`'s fan-out writes the rack's cell into every device every frame, so the cell is
+/// what makes a fader's next message agree with itself. A fan-out in the middle of a sweep must not undo it.
+#[test]
+fn a_fan_out_between_two_fader_messages_leaves_the_tempo_where_the_fader_put_it() {
+    use acid_app::midi::route::Router;
+
+    let rack = one();
+    let bus = rack.bus();
+    let mut router = Router::new("Launchkey MIDI", rack.tempo_cell());
+
+    router.on_message(&bus.load(), &[0xB0, 72, 0]);
+    router.on_message(&bus.load(), &[0xB0, 72, 127]);
+    rack.sync_transport();
+    router.on_message(&bus.load(), &[0xB0, 72, 127]);
+
+    assert_eq!(
+        rack.tempo_bpm(),
+        acid_core::timing::MAX_BPM,
+        "a fan-out is a mirror being rewritten, not a second opinion"
+    );
+    assert_eq!(
+        rack.devices()[0].state.tempo_bpm.get(),
+        acid_core::timing::MAX_BPM
+    );
+}
+
 #[test]
 fn the_bus_carries_the_route_beside_the_slot() {
     use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
