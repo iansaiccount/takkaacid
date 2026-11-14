@@ -173,6 +173,36 @@ impl eframe::App for TakkaApp {
         if self.rack.bank().current() != pattern_before {
             self.pending_pattern = None;
         }
+        // The clipboard, which is not a key: egui-winit turns Ctrl+C/Ctrl+V into Copy/Paste events and never delivers the
+        // press, so both gestures are answered here. The rule about a focused text field is the one the keys use — the
+        // card's name field is a field, and its clipboard is its own — and `dispatch::clipboard` is where the behaviour
+        // lives, because `main` is a binary no test can call.
+        let typing = ctx.text_edit_focused();
+        let clip_events: Vec<egui::Event> = if typing {
+            Vec::new()
+        } else {
+            ctx.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .filter(|event| matches!(event, egui::Event::Copy | egui::Event::Paste(_)))
+                    .cloned()
+                    .collect()
+            })
+        };
+        let copying = {
+            let device = self.rack.device_mut();
+            panel_ui::dispatch::clipboard(
+                &clip_events,
+                typing,
+                &mut self.panel,
+                &device.state,
+                &mut device.bank,
+            )
+        };
+        if let Some(text) = copying {
+            ctx.copy_text(text);
+        }
 
         // A learned pattern controller cannot move the bank from the MIDI thread, so it leaves a request and this is
         // where it lands. A pattern is a bar long: the swap waits for the transport to come round, so cycling with the

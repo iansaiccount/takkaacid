@@ -230,6 +230,73 @@ pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
     false
 }
 
+/// Answer this frame's clipboard events, and hand back the text `main` should put on the operating system's clipboard.
+///
+/// Both gestures arrive as *events*, not keys: `egui-winit` intercepts `Ctrl+C` and `Ctrl+V`, pushes `Event::Copy` /
+/// `Event::Paste(text)` and never delivers the key press, so `shortcuts` has nothing to say about them and this sits beside
+/// `escape` for the same reason — `main` is a binary, and the behaviour has to be testable.
+///
+/// * **Copy** takes the pattern on the panel (the one the engine is playing) and the slot label with it, notices
+///   `copied B2`, and returns the clipboard text.
+/// * **Paste** puts a pattern from the clipboard into the slot on the panel: the bank first, then the engine's `Arc`, because a
+///   pattern that reached one and not the other is the bug `shortcuts::select_pattern` exists to avoid in the other
+///   direction. It disarms CLEAR — that arming was against the pattern that just went — marks the session dirty, and notices
+///   `pasted A1 into B2`. A clipboard that is not ours notices `the clipboard has no pattern`, because a `Ctrl+V` that
+///   silently did nothing reads as a broken app.
+///
+/// `typing` is `ctx.text_edit_focused()`: with a text field's cursor in it — the device card's name — the clipboard belongs to
+/// the field, and the pattern takes nothing.
+pub fn clipboard(
+    events: &[Event],
+    typing: bool,
+    panel: &mut PanelState,
+    shared: &SharedState,
+    bank: &mut PatternBank,
+) -> Option<String> {
+    if typing {
+        return None;
+    }
+    let mut out = None;
+    for event in events {
+        match event {
+            Event::Copy => {
+                let slot = PatternBank::id_of(bank.current()).to_string();
+                let clip = crate::clipboard::Clip::Pattern {
+                    pattern: *shared.pattern(),
+                    from: Some(slot.clone()),
+                };
+                panel.notice = Some((format!("copied {slot}"), std::time::Instant::now()));
+                out = Some(crate::clipboard::encode(&clip));
+            }
+            Event::Paste(text) => {
+                let slot = PatternBank::id_of(bank.current()).to_string();
+                match crate::clipboard::decode(text) {
+                    Some(crate::clipboard::Clip::Pattern { pattern, from }) => {
+                        bank.replace(bank.current(), pattern);
+                        shared.set_pattern(std::sync::Arc::new(pattern));
+                        // The arming was against the pattern that just went.
+                        super::clear::disarm(panel);
+                        panel.dirty = true;
+                        let from = from.unwrap_or_else(|| "a pattern".to_string());
+                        panel.notice = Some((
+                            format!("pasted {from} into {slot}"),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                    None => {
+                        panel.notice = Some((
+                            "the clipboard has no pattern".to_string(),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
