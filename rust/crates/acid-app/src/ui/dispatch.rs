@@ -67,7 +67,12 @@ pub fn device_key(key: Key) -> Option<usize> {
 }
 
 /// The presses in this frame's events, in the order egui saw them.
-pub fn presses(events: &[Event], modifiers: egui::Modifiers) -> Vec<KeyPress> {
+///
+/// The modifiers come from the *event*, not from the frame's input state. The event carries the modifier that was down at
+/// the moment of the press, so a key pressed in the same frame its modifier went down is still that key with that modifier;
+/// filtering on `input.modifiers` dropped a ctrl+digit that arrived inside one frame, which made `Ctrl+1..4` dead for
+/// anything faster than a hand (`ui::keys` documents the same rule for the audition keys). A headless run found it.
+pub fn presses(events: &[Event]) -> Vec<KeyPress> {
     events
         .iter()
         .filter_map(|event| match event {
@@ -75,6 +80,7 @@ pub fn presses(events: &[Event], modifiers: egui::Modifiers) -> Vec<KeyPress> {
                 key,
                 pressed: true,
                 repeat,
+                modifiers,
                 ..
             } => {
                 // A key repeats only if it is a tempo nudge; everything else acts once per real press.
@@ -394,10 +400,7 @@ mod tests {
             key_event(Key::ArrowUp, false, true),
             key_event(Key::ArrowRight, false, true),
         ];
-        let pressed: Vec<Key> = presses(&events, Modifiers::NONE)
-            .iter()
-            .map(|p| p.key)
-            .collect();
+        let pressed: Vec<Key> = presses(&events).iter().map(|p| p.key).collect();
         assert_eq!(pressed, vec![Key::ArrowUp], "only the tempo nudge repeats");
     }
 
@@ -408,10 +411,7 @@ mod tests {
             key_event(Key::Enter, false, false),
             key_event(Key::F1, false, false),
         ];
-        let pressed: Vec<Key> = presses(&events, Modifiers::NONE)
-            .iter()
-            .map(|p| p.key)
-            .collect();
+        let pressed: Vec<Key> = presses(&events).iter().map(|p| p.key).collect();
         assert_eq!(pressed, vec![Key::Enter, Key::F1], "B is an audition key");
     }
 
@@ -419,7 +419,7 @@ mod tests {
     fn shift_travels_with_the_press_it_arrived_on() {
         let events = vec![key_event(Key::ArrowUp, true, false)];
         assert_eq!(
-            presses(&events, Modifiers::SHIFT),
+            presses(&events),
             vec![KeyPress {
                 key: Key::ArrowUp,
                 shift: true,
@@ -428,7 +428,7 @@ mod tests {
         );
         // `?` is only the help key with shift, so an unshifted one is not the panel's.
         let events = vec![key_event(Key::Questionmark, false, false)];
-        assert!(presses(&events, Modifiers::NONE).is_empty());
+        assert!(presses(&events).is_empty());
     }
 
     #[test]
@@ -508,8 +508,17 @@ mod tests {
     fn a_ctrl_digit_asks_the_rack_to_select_that_device() {
         // The whole path, not just the table: `presses` must collect the press and `handle` must answer it before the step
         // editor does. Delete the branch in `handle` and this fails while the two tests above still pass.
-        let events = vec![key_event(Key::Num3, false, false)];
-        let pressed = presses(&events, Modifiers::CTRL);
+        let events = vec![Event::Key {
+            key: Key::Num3,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers {
+                ctrl: true,
+                ..Modifiers::NONE
+            },
+        }];
+        let pressed = presses(&events);
         assert_eq!(pressed.len(), 1, "a ctrl digit is the panel's");
         assert!(pressed[0].ctrl, "and the ctrl travels with the press");
 

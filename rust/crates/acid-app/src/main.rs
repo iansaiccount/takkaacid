@@ -149,8 +149,7 @@ impl eframe::App for TakkaApp {
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
         // `ui::dispatch`). A held key repeats only for the tempo nudges.
-        let presses =
-            ctx.input(|input| panel_ui::dispatch::presses(&input.events, input.modifiers));
+        let presses = ctx.input(|input| panel_ui::dispatch::presses(&input.events));
         let pattern_before = self.rack.bank().current();
         for press in presses {
             let device = self.rack.device_mut();

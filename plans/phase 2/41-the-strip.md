@@ -713,6 +713,13 @@ git commit -m "chore(ui): plan 41's gate, run and used"
       says so and `ui::keys` documents the opposite for the audition keys. Cost if wrong: a modifier pressed or released inside
       one frame can be attributed to the wrong press, which would turn a bare digit into a device select. Rare (it needs press
       and release inside ~16 ms); the `shift` half of it predates this task.
+- **Task 4 follow-up, found by the headless run (task 7 step 2, done early):** that ruling was wrong, and the run proved it.
+      `xdotool` delivers ctrl and the digit inside one frame, `presses` filtered on `input.modifiers` (still without ctrl), and
+      `Ctrl+1..4` did nothing — with the ctrl held from a previous frame the same keys selected the device. So `presses` now
+      takes no modifiers argument at all and reads them from each `Event::Key` — one source of truth, the event's, as `ui::keys`
+      already documented — and `a_ctrl_digit_asks_the_rack_to_select_that_device` builds a ctrl event rather than passing a
+      frame's modifiers. The plan's Interfaces block said otherwise; the device it was protecting (a bare digit becoming a
+      select) is still protected, because a bare digit's event carries no ctrl.
 - [ ] Task 5 — the editor follows the device
 - [ ] Task 6 — the strip says what it looks like
 - [ ] Task 7 — the gate, and the app by hand
