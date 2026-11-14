@@ -60,10 +60,11 @@ you made with what it costs if wrong. A later session resumes from that section 
 
 **One catalogue per kind of control.** A control's identity — its slot, caption, learn target and the atomic it
 drives — lives in one module: `crate::knobs::Knob` for the seven tone knobs, `ui::scale::Scale`, `ui::switches::Switch`,
-`ui::tips::Control`, `midi::cc::CcTarget` for what a controller can drive. The one mapping that crosses two of them, a
-knob's hover help, is `ui::tips::Control::for_knob`, kept with the tip table so the catalogue names no view type. Derive
-orders and lengths from those catalogues (`Knob::ALL.len()`, `LEARNABLE` built from `Knob::ALL`) instead of writing a second
-positional list; the two bugs this repo has already paid for were both a hand-kept second list.
+`ui::tips::Control`, `midi::cc::CcTarget` for what a controller can drive, and `device::DeviceKind` for the kinds the
+picker offers and the strip's `+` greys at. The one mapping that crosses two of them, a knob's hover help, is
+`ui::tips::Control::for_knob`, kept with the tip table so the catalogue names no view type. Derive orders and lengths
+from those catalogues (`Knob::ALL.len()`, `LEARNABLE` built from `Knob::ALL`) instead of writing a second positional
+list; the two bugs this repo has already paid for were both a hand-kept second list.
 
 **No `_` arm on a catalogue enum.** A `match` over one of those enums is written out in full, so adding a variant fails to
 compile where a decision is needed. `_` is for genuinely open input (a `u8` controller number), never for a catalogue.
@@ -89,9 +90,11 @@ the handler.
 clears itself; nothing the panel says should ever need dismissing, and nothing it says should die with the card that
 caused it.
 
-**Two threads, two rules.** The panel writes atomics on `SharedState`; the audio callback reads them and allocates
-nothing. Never hold a lock across the audio path, and never read the engine's pattern from the UI thread without going
-through the `ArcSwap`.
+**Three threads, two rules.** The panel — and the MIDI handlers, on midir's thread — write atomics on `SharedState`; the
+audio callback reads them and allocates nothing. Never hold a lock across the audio path, and never read the engine's
+pattern from the UI thread without going through the `ArcSwap`. `device::BusState` is the one thing both readers share:
+`Rack::publish` writes it, the mixer loads it once per block and each port's `Router` loads it once per message, and
+neither may lock or allocate around it.
 
 **No font glyphs.** Everything on the face is an egui shape or ASCII text from the bundled font. A symbol drawn with a
 character from a system font renders as a box on some machines.
