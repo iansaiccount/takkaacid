@@ -255,19 +255,24 @@ fn a_click_away_from_the_field_does_not_rename_anything() {
     run(&ctx, &mut panel, &state, vec![Event::Text(" 2".into())]);
     panel.device_request = None;
 
-    // The card's own face still takes the click, and the text is still there afterwards.
+    // Clicking another row takes the focus away — and that row answers for itself, which is the point: the focus loss
+    // itself asks for nothing, so the rename has not happened and the field still holds what was typed.
     click(&ctx, &mut panel, &state, rows.role.center());
-    assert_eq!(panel.device_request, None, "no rename on a focus loss");
+    assert!(
+        !matches!(panel.device_request, Some(Request::Rename(..))),
+        "a focus loss is not a rename: {:?}",
+        panel.device_request
+    );
     assert_eq!(
         panel.device_card.name, "BASS 2",
         "and the typed name remains"
     );
 }
 
-/// A card is dismissed by CLOSE, Escape, or a click outside it — never by a click on one of its own rows. The rows that do
-/// not answer yet must not be dismissal targets either: a player aiming at MUTE must not lose the card instead.
+/// A card is dismissed by CLOSE, Escape or a click outside it, never by a click on one of its own rows: a row answers for
+/// itself, and a player aiming at MUTE must not lose the card instead.
 #[test]
-fn a_click_on_one_of_the_cards_own_rows_leaves_it_standing() {
+fn a_click_on_one_of_the_cards_own_rows_answers_and_leaves_it_standing() {
     let state = SharedState::new();
     let mut panel = two_device_panel();
     panel.device_card.open = Some(0);
@@ -283,12 +288,17 @@ fn a_click_on_one_of_the_cards_own_rows_leaves_it_standing() {
     for at in [rows.mute.center(), rows.role.center(), rows.name.center()] {
         panel.device_request = None;
         click(&ctx, &mut panel, &state, at);
+        assert_ne!(
+            panel.device_request,
+            Some(Request::Close),
+            "a click on a row is the row's, not a dismissal: {at:?}"
+        );
         assert_eq!(
-            panel.device_request, None,
-            "nothing was asked for at {at:?}"
+            panel.device_card.open,
+            Some(0),
+            "and the card is still up: {at:?}"
         );
     }
-    assert_eq!(panel.device_card.open, Some(0), "and the card is still up");
 }
 
 /// One card at a time, both ways round: the device card puts the others away, and F2 or F1 puts the device card away.
@@ -439,5 +449,232 @@ fn typing_into_the_name_field_writes_no_step_and_stops_no_transport() {
     assert_eq!(
         panel.transport_request, None,
         "and nothing here asked the rack to start or stop"
+    );
+}
+
+fn open_card(panel: &mut PanelState, index: usize, ports: &[(&str, bool)]) {
+    panel.device_card.open = Some(index);
+    panel.device_card.ports = ports
+        .iter()
+        .map(|(name, heard)| ((*name).to_string(), *heard))
+        .collect();
+}
+
+fn card_rows(panel: &PanelState) -> device_card::Rows {
+    let s = acid_app::ui::layout::scale(screen());
+    device_card::rows(
+        device_card::card_rect(layout(screen()).panel, s),
+        s,
+        &panel.device_card,
+    )
+}
+
+/// Every row on the card is a request, and the port rows are a set: ticking one adds it to the ones the device already hears,
+/// and the answer is in the machine's port order rather than the order they were ticked in.
+#[test]
+fn a_port_row_ticks_and_unticks_and_asks_for_the_new_set() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    open_card(
+        &mut panel,
+        1,
+        &[("Launchkey MIDI", true), ("nanoKONTROL", false)],
+    );
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.ports[1].center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetPorts(
+            1,
+            acid_app::midi::route::Ports::Named(vec![
+                "Launchkey MIDI".into(),
+                "nanoKONTROL".into()
+            ])
+        )),
+        "ticking a port adds it to the set the device already hears"
+    );
+
+    // What `main`'s `route_from` writes back once the request lands: both ports ticked. The panel never applies a request
+    // itself, so the mirror is what `main` would have made of it — and the next click must build on that, not on the click
+    // before it.
+    panel.device_card.ports[1].1 = true;
+    panel.device_request = None;
+    click(&ctx, &mut panel, &state, rows.ports[0].center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetPorts(
+            1,
+            acid_app::midi::route::Ports::Named(vec!["nanoKONTROL".into()])
+        )),
+        "unticking one leaves the other"
+    );
+
+    // Everything ticked, and one row clicked: the set is everything *but* that one, which is what "I do not want this one"
+    // means when the device hears every port. This is the case `toggled`'s arithmetic exists for.
+    open_card(
+        &mut panel,
+        1,
+        &[("Launchkey MIDI", true), ("nanoKONTROL", true)],
+    );
+    panel.device_request = None;
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.ports[0].center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetPorts(
+            1,
+            acid_app::midi::route::Ports::Named(vec!["nanoKONTROL".into()])
+        )),
+        "a row clicked from ALL PORTS leaves every other port"
+    );
+}
+
+/// A device added by `+` arrives hearing nothing, and the first port it is given is exactly that one — never "all of them".
+#[test]
+fn a_device_that_hears_nothing_is_given_one_port_at_a_time() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    open_card(
+        &mut panel,
+        1,
+        &[("Launchkey MIDI", false), ("nanoKONTROL", false)],
+    );
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.ports[0].center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetPorts(
+            1,
+            acid_app::midi::route::Ports::Named(vec!["Launchkey MIDI".into()])
+        )),
+        "a new device hears one port because it was given one, not because it hears everything"
+    );
+}
+
+/// `ALL PORTS` is the way back to the factory filter, so a player who has routed a device to one controller can undo it.
+#[test]
+fn the_all_ports_row_asks_for_every_port() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    open_card(&mut panel, 0, &[("Launchkey MIDI", false)]);
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.all_ports.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetPorts(0, acid_app::midi::route::Ports::All))
+    );
+}
+
+/// The channel stepper walks the store's `0..=15`, and the card shows it as `1..=16`. Past `ANY` comes channel 1, and the
+/// step past the last channel is `ANY` again, so leaving `ANY` is never a one-way door.
+#[test]
+fn the_channel_stepper_walks_from_any_channel_into_one_two_three() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    panel.device_card.channel = acid_app::midi::route::Channel::All;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.channel_up.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetChannel(
+            0,
+            acid_app::midi::route::Channel::One(0)
+        )),
+        "past ANY comes channel 1, which the store calls 0"
+    );
+
+    // Up from the last channel is `ANY`, and down from channel 1 is `ANY` too: the stepper wraps through `ANY` rather than
+    // around the sixteen channels, or a player who left `ANY` could never get back to it.
+    use acid_app::midi::route::Channel;
+    for (stored, up, down) in [
+        (0u8, Some(Channel::One(1)), Some(Channel::All)),
+        (7, Some(Channel::One(8)), Some(Channel::One(6))),
+        (15, Some(Channel::All), Some(Channel::One(14))),
+    ] {
+        panel.device_card.channel = Channel::One(stored);
+        panel.device_request = None;
+        let rows = card_rows(&panel);
+        click(&ctx, &mut panel, &state, rows.channel_up.center());
+        assert_eq!(
+            panel.device_request,
+            up.map(|next| Request::SetChannel(0, next)),
+            "up from channel {}",
+            stored + 1
+        );
+
+        panel.device_request = None;
+        click(&ctx, &mut panel, &state, rows.channel_down.center());
+        assert_eq!(
+            panel.device_request,
+            down.map(|next| Request::SetChannel(0, next)),
+            "down from channel {}",
+            stored + 1
+        );
+    }
+}
+
+/// The role row switches between playing what the device hears and only answering controllers.
+#[test]
+fn the_role_row_switches_between_playing_and_controlling() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.open = Some(0);
+    panel.device_card.role = acid_app::midi::route::Role::PlayAndControl;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.role.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetRole(
+            0,
+            acid_app::midi::route::Role::ControlOnly
+        ))
+    );
+
+    panel.device_card.role = acid_app::midi::route::Role::ControlOnly;
+    panel.device_request = None;
+    click(&ctx, &mut panel, &state, rows.role.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetRole(
+            0,
+            acid_app::midi::route::Role::PlayAndControl
+        )),
+        "and back again"
+    );
+}
+
+/// The MUTE key on the card mutes the device the card is about — not the device on the panel, and not the one the click
+/// passed on its way there.
+#[test]
+fn the_mute_key_on_the_card_asks_for_the_device_it_is_about() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.strip.cells[1].muted = true;
+    panel.device_card.open = Some(1);
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let rows = card_rows(&panel);
+    click(&ctx, &mut panel, &state, rows.mute.center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetMute(1, false)),
+        "a muted device's key asks to unmute it"
     );
 }

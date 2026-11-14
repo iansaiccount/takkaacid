@@ -35,7 +35,7 @@ pub fn transport_button(
     lit: bool,
 ) -> Response {
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
-    let scale = (rect.height() / 44.0).clamp(0.65, 1.6);
+    let scale = key_scale(rect);
     let face = if lit {
         theme::PANEL_RAISED
     } else {
@@ -59,7 +59,7 @@ pub fn transport_button(
         rect.center(),
         egui::Align2::CENTER_CENTER,
         label,
-        theme::legend(13.0 * scale),
+        key_font(rect),
         legend,
     );
     if response.hovered() {
@@ -72,4 +72,16 @@ pub fn transport_button(
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     response
+}
+
+/// A key's own scale, from its height: the corner radius, the stroke and the legend all follow it.
+fn key_scale(rect: Rect) -> f32 {
+    (rect.height() / 44.0).clamp(0.65, 1.6)
+}
+
+/// The font a key's caption is drawn at. Public because a card that fits a label into a key — a port's name belongs to the
+/// machine and can be as long as it likes — has to measure with the font that will draw it, and a second spelling of this
+/// arithmetic would drift from this one.
+pub fn key_font(rect: Rect) -> egui::FontId {
+    theme::legend(13.0 * key_scale(rect))
 }

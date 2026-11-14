@@ -1,17 +1,18 @@
 //! The device card: one device's name, its role, the ports it hears, its channel, its MUTE and its removal, over the panel.
 //!
-//! The card paints and asks. It holds no device state of its own except what is being typed: `main` fills the mirror the
-//! frame the card opens (`Card::offer`, from the rack and the machine's port list) and answers every row through
-//! `PanelState::device_request`, because what a card shows is a reading of the machine and the panel does not own the rack.
+//! The card paints and asks. It holds no device state of its own except what is being typed: `main` fills it the frame it
+//! opens (`Card::offer`, from the rack and the machine's port list — a round trip, so not per frame) and re-reads the *route*
+//! every frame (`Card::route_from`, which costs nothing), and every row answers through `PanelState::device_request`, because
+//! what a card shows is a reading of the machine and the panel does not own the rack.
 //!
 //! One card at a time: opening this one puts help, songs and settings away (`PanelState::open_device_card`), and it is
 //! painted last, so nothing draws over it.
 
 use eframe::egui::{self, Align2, Pos2, Rect};
 
-use super::{PanelState, modal, text, theme, transport};
+use super::{PanelState, modal, text, theme, tips, transport};
 use crate::device::Request;
-use crate::midi::route::{Channel, InputFilter, Role};
+use crate::midi::route::{Channel, InputFilter, Ports, Role};
 
 /// The card's padding, row height, gap and title, in design pixels: the settings card's own measurements, so the two cards
 /// read as the same object.
@@ -72,16 +73,32 @@ impl Card {
     /// round trip. `armed_remove` falls back to disarmed: the arming belongs to one opening, never to the next.
     pub fn offer(&mut self, name: &str, inputs: &InputFilter, ports: Vec<String>) {
         self.name = name.to_string();
+        self.armed_remove = false;
+        self.ports = ports.into_iter().map(|port| (port, false)).collect();
+        // A port the filter names but the machine no longer reports keeps its row. Unplugging a controller must not quietly
+        // drop it from the filter the next time any tick is clicked — the click rebuilds the whole set — and a player has to
+        // be able to see what the device is still listening for, and to untick it.
+        if let Ports::Named(named) = &inputs.ports {
+            for port in named {
+                if !self.ports.iter().any(|(listed, _)| listed == port) {
+                    self.ports.push((port.clone(), false));
+                }
+            }
+        }
+        self.route_from(inputs);
+    }
+
+    /// Adopt the route the rack holds: the role, the channel, and one tick per port the card is showing.
+    ///
+    /// `paint` reads the tick from here and asks; nothing on the card remembers a tick the filter does not hold, so a
+    /// reopened card cannot show a tick that was never set (Review Focus 2). `main` calls this every frame while the card
+    /// is open — it costs no allocation and no port enumeration — and `offer` calls it when the card opens.
+    pub fn route_from(&mut self, inputs: &InputFilter) {
         self.role = inputs.role;
         self.channel = inputs.channel;
-        self.armed_remove = false;
-        self.ports = ports
-            .into_iter()
-            .map(|port| {
-                let heard = inputs.ports.holds(&port);
-                (port, heard)
-            })
-            .collect();
+        for (port, heard) in &mut self.ports {
+            *heard = inputs.ports.holds(port);
+        }
     }
 }
 
@@ -194,8 +211,8 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         egui::vec2(area.width(), rows.close.bottom() + PADDING * s - area.top()),
     );
     // The face is registered after the shade and swallows a click on it: a card is dismissed by CLOSE, Escape or a click
-    // outside it, never by a click on one of its own rows — the rows that do not answer yet must not be dismissal targets
-    // either, or a player aiming at MUTE loses the card.
+    // outside it, never by a click on one of its own rows, or a player aiming at a key that misses it by a pixel would lose
+    // the card.
     let _face = ui.interact(
         face,
         ui.scope_id().with("device-card-face"),
@@ -233,20 +250,22 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         );
     }
 
-    let card = state.device_card.clone();
-    for (caption, rect, value) in [
-        ("ROLE", rows.role, role_label(card.role).to_string()),
-        ("PORTS", rows.all_ports, "ALL PORTS".to_string()),
-        ("CHANNEL", rows.channel_down, channel_label(card.channel)),
+    // Every row's caption lives in the label column; the controls themselves are widgets, registered below so they win
+    // the clicks that land on them.
+    for (text, rect) in [
+        ("NAME (ENTER)", rows.name),
+        ("ROLE", rows.role),
+        ("PORTS", rows.all_ports),
+        ("CHANNEL", rows.channel_down),
     ] {
-        caption_row(ui.painter(), caption, rect, &value, s);
+        caption(ui.painter(), text, rect, s);
     }
-    // The name is the one row that is a field rather than a caption. It is a widget, so it is registered after the face and
+
+    // The name is the one row that is a field rather than a key. It is a widget, so it is registered after the face and
     // takes the clicks that land on it; Enter is what asks the rack, because a click that dismisses the card must not also
-    // rename a device — you cannot take a rename back.
-    // The caption says Enter because nothing else can: a field has no tooltip, and the card is not dismissed by clicking
-    // away from it, so a player who types and clicks the face would otherwise never learn what applies the name.
-    caption_row(ui.painter(), "NAME (ENTER)", rows.name, "", s);
+    // rename a device — you cannot take a rename back. The caption says Enter because nothing else can: a field has no
+    // tooltip, and clicking the card's own face keeps the card up, so a player would otherwise never learn what applies it.
+    //
     // The field sits in a display well: the pattern and tempo readouts wear the same one, so a name that can be typed into
     // reads as a readout of the device rather than as loose text on the card's face.
     {
@@ -277,23 +296,102 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     {
         state.device_request = Some(Request::Rename(open, state.device_card.name.clone()));
     }
-    for (index, port) in card.ports.iter().enumerate() {
-        let Some(rect) = rows.ports.get(index) else {
+
+    // ROLE: what the device does with what it hears. `CTRL ONLY` is the switched-on state, because it is the one that
+    // changes what the panel does — a controller-only device stops answering the keyboard with notes.
+    let role = state.device_card.role;
+    let role_key = transport::transport_button(
+        ui,
+        "device-card-role",
+        rows.role,
+        role_label(role),
+        role == Role::ControlOnly,
+    );
+    if role_key.clicked() {
+        state.device_request = Some(Request::SetRole(index, next_role(role)));
+    }
+
+    // PORTS: `ALL PORTS` is the factory filter and the way back to it; each row below is one of the machine's ports with the
+    // tick the device's own `Ports` gives it, so nothing here remembers a tick the filter does not hold.
+    // `ALL PORTS` is lit only when there is something to hear and this device hears all of it: a machine with no ports
+    // reported says nothing about whether a device hears everything, and lighting the key would claim it does.
+    let all_ticked = !state.device_card.ports.is_empty()
+        && state.device_card.ports.iter().all(|(_, heard)| *heard);
+    let all_ports = transport::transport_button(
+        ui,
+        "device-card-all-ports",
+        rows.all_ports,
+        "ALL PORTS",
+        all_ticked,
+    );
+    if all_ports.clicked() {
+        state.device_request = Some(Request::SetPorts(index, Ports::All));
+    }
+    for port_index in 0..state.device_card.ports.len() {
+        let Some(rect) = rows.ports.get(port_index).copied() else {
             break;
         };
-        let tick = if port.1 { "[x]" } else { "[ ]" };
-        caption_row(ui.painter(), "", *rect, &format!("{tick} {}", port.0), s);
+        let (heard, label) = {
+            let (port, heard) = &state.device_card.ports[port_index];
+            // Fitted, because a port's name is the machine's and can be as long as it likes: a DAW's forwarding name
+            // overran the row and spilled onto the shade. The font is the one the key will draw it in.
+            let label = format!("{} {port}", if *heard { "[x]" } else { "[ ]" });
+            let font = transport::key_font(rect);
+            (
+                *heard,
+                text::fit(ui.painter(), &label, font, rect.width() - 8.0 * s),
+            )
+        };
+        let key = transport::transport_button(
+            ui,
+            &format!("device-card-port-{port_index}"),
+            rect,
+            &label,
+            heard,
+        );
+        if key.clicked() {
+            let next = toggled(&state.device_card.ports, port_index);
+            state.device_request = Some(Request::SetPorts(index, next));
+        }
     }
-    caption_row(
-        ui.painter(),
-        "",
-        rows.mute,
-        mute_label(device_muted(&state.strip, index)),
-        s,
-    );
 
-    // CLOSE is the card's own lifetime, so it is the one key that answers in this commit; the rest are drawn and wait for
-    // the tasks that make them ask.
+    // CHANNEL: two keys with the value between them, because the face may not use a triangle from a system font.
+    let channel = state.device_card.channel;
+    let down = transport::transport_button(
+        ui,
+        "device-card-channel-down",
+        rows.channel_down,
+        "-",
+        false,
+    );
+    if down.clicked() {
+        state.device_request = Some(Request::SetChannel(index, prev_channel(channel)));
+    }
+    ui.painter().text(
+        Pos2::new(
+            rows.channel_down.right() + 8.0 * s,
+            rows.channel_down.center().y,
+        ),
+        Align2::LEFT_CENTER,
+        channel_label(channel),
+        theme::legend(11.0 * s),
+        theme::SILKSCREEN,
+    );
+    let up = transport::transport_button(ui, "device-card-channel-up", rows.channel_up, "+", false);
+    if up.clicked() {
+        state.device_request = Some(Request::SetChannel(index, next_channel(channel)));
+    }
+
+    // MUTE: this device's own mute, read from the strip's mirror of the rack — the panel's only reading of it.
+    let muted = device_muted(&state.strip, index);
+    let mute =
+        transport::transport_button(ui, "device-card-mute", rows.mute, mute_label(muted), muted);
+    if mute.clicked() {
+        state.device_request = Some(Request::SetMute(index, !muted));
+    }
+    tips::hover(&mute, state.tooltips, tips::Control::DeviceMute);
+
+    // CLOSE is the card's own lifetime; REMOVE is the next task's key.
     let close = transport::transport_button(ui, "device-card-close", rows.close, "CLOSE", false);
     if shield.clicked() || close.clicked() {
         state.device_request = Some(Request::Close);
@@ -310,8 +408,8 @@ fn device_muted(strip: &super::strip::Strip, index: usize) -> bool {
     strip.cells.get(index).is_some_and(|cell| cell.muted)
 }
 
-/// One row: its caption in the label column, and its value in the control column.
-fn caption_row(painter: &egui::Painter, caption: &str, control: Rect, value: &str, s: f32) {
+/// One row's caption, in the label column to the left of its control.
+fn caption(painter: &egui::Painter, caption: &str, control: Rect, s: f32) {
     painter.text(
         Pos2::new(control.left() - LABEL * s + 2.0 * s, control.center().y),
         Align2::LEFT_CENTER,
@@ -319,13 +417,52 @@ fn caption_row(painter: &egui::Painter, caption: &str, control: Rect, value: &st
         theme::legend(10.0 * s),
         theme::SILKSCREEN_DIM,
     );
-    painter.text(
-        control.left_center(),
-        Align2::LEFT_CENTER,
-        value,
-        theme::legend(11.0 * s),
-        theme::SILKSCREEN,
-    );
+}
+
+/// The role the role key asks for: the one the device does not do now.
+fn next_role(role: Role) -> Role {
+    match role {
+        Role::PlayAndControl => Role::ControlOnly,
+        Role::ControlOnly => Role::PlayAndControl,
+    }
+}
+
+/// The channel one step up: past `ANY` comes channel 1, and past the last channel comes `ANY` again, so leaving `ANY` is
+/// never a one-way door.
+fn next_channel(channel: Channel) -> Channel {
+    match channel {
+        Channel::All => Channel::One(0),
+        Channel::One(15) => Channel::All,
+        Channel::One(only) => Channel::One(only + 1),
+    }
+}
+
+/// The channel one step down, the other way round: below channel 1 is `ANY`, and below `ANY` is the last channel.
+fn prev_channel(channel: Channel) -> Channel {
+    match channel {
+        Channel::All => Channel::One(15),
+        Channel::One(0) => Channel::All,
+        Channel::One(only) => Channel::One(only - 1),
+    }
+}
+
+/// The port set a click on one row asks for: every port's tick as the card shows it, with this one flipped, in the machine's
+/// order. A tick clicked from `ALL PORTS` therefore produces the list of every port but that one, which is the honest reading
+/// of "I do not want this one"; a click that leaves nothing ticked produces `Named(vec![])`, "silent", which is the state a
+/// device added by `+` starts in.
+fn toggled(ports: &[(String, bool)], index: usize) -> Ports {
+    Ports::Named(
+        ports
+            .iter()
+            .enumerate()
+            .filter(
+                |(other, (_, heard))| {
+                    if *other == index { !heard } else { *heard }
+                },
+            )
+            .map(|(_, (port, _))| port.clone())
+            .collect(),
+    )
 }
 
 /// A role's caption on the card: what it does, not what the enum is called.
@@ -436,6 +573,33 @@ mod tests {
         assert_eq!(
             card.name, "ACID 1",
             "and the name comes back from the store"
+        );
+    }
+
+    /// A port the filter still names after the machine stopped reporting it keeps its row. The click on any row rebuilds the
+    /// whole set from the rows, so without this an unplugged controller would be dropped from the filter silently — the
+    /// device would stop listening for the cable the moment the player routed a *different* port.
+    #[test]
+    fn a_port_the_machine_no_longer_reports_keeps_its_row() {
+        let mut card = Card::default();
+        card.offer(
+            "BASS",
+            &InputFilter {
+                ports: crate::midi::route::Ports::Named(vec![
+                    "Launchkey MIDI".into(),
+                    "gone with the cable".into(),
+                ]),
+                ..InputFilter::everything()
+            },
+            vec!["Launchkey MIDI".into()],
+        );
+        assert_eq!(
+            card.ports,
+            vec![
+                ("Launchkey MIDI".to_string(), true),
+                ("gone with the cable".to_string(), true),
+            ],
+            "the machine's list first, then what the filter still holds"
         );
     }
 

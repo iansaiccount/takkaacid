@@ -102,9 +102,10 @@ struct TakkaApp {
     autosave: persist::Autosave,
     /// Whether the settings card was open last frame, so its device lists are filled on the rising edge and not per frame.
     settings_was_open: bool,
-    /// Which device the card's mirror was filled for, or `None` while it is closed. The card's name and route are a reading
-    /// of the rack and its port list costs a round trip, so it is read the frame the card opens — whichever of the caret
-    /// and F3 opened it — and not again while it stands.
+    /// Which device the card was filled for, or `None` while it is closed. The name and the port list are the round trip —
+    /// typing into the name must not be interrupted by a re-read, and `list_ports()` costs a system call — so they are read
+    /// the frame the card opens, whichever of the caret and F3 opened it. The *route* is not: `logic` re-reads it every
+    /// frame from the rack, because a tick or a channel is the store's answer and must follow a click immediately.
     card_filled: Option<usize>,
     midi: Midi,
     /// A pattern a learned controller asked for, waiting for the bar to come round.
@@ -372,20 +373,28 @@ impl eframe::App for TakkaApp {
             );
         }
         self.settings_was_open = self.panel.settings_open;
-        // The device card's mirror is a reading of one device, so it is filled the frame the card opens and not per frame:
-        // the name and the route come off the rack, and the machine's port list is a round trip. Whichever of the caret and
-        // F3 opened it, this is the one place that reads — the open flag is compared, not the click that set it.
+        // The device card is filled the frame it opens, and not per frame: the machine's port list is a round trip, and the
+        // name is being typed into. Whichever of the caret and F3 opened it, this is the one place that reads — the open flag
+        // is compared, not the click that set it, so no blank card is ever painted.
         if self.panel.device_card.open != self.card_filled {
             if let Some(index) = self.panel.device_card.open
                 && let Some(device) = self.rack.devices().get(index)
             {
-                // The port rows and the list they are drawn from arrive with the rows themselves; the name and the route
-                // are what the card can show today.
-                self.panel
-                    .device_card
-                    .offer(&device.name, &device.inputs, Vec::new());
+                self.panel.device_card.offer(
+                    &device.name,
+                    &device.inputs,
+                    midi::ports::list_ports().unwrap_or_default(),
+                );
             }
             self.card_filled = self.panel.device_card.open;
+        }
+        // Its route is a mirror, though, and read every frame while the card is up: a tick, a channel or a role is the
+        // rack's answer, so the card shows what the store holds from the frame after the click that changed it. The name is
+        // the one field that is not a mirror, because it is the one field a hand is typing into.
+        if let Some(index) = self.panel.device_card.open
+            && let Some(device) = self.rack.devices().get(index)
+        {
+            self.panel.device_card.route_from(&device.inputs);
         }
         if let Some(request) = self.panel.settings_request.take() {
             self.apply_settings_request(request);

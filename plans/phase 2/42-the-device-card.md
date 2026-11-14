@@ -455,11 +455,17 @@ Expected: FAIL — nothing is requested.
 
 - [ ] **Step 3: Draw the rows**
 
-Two private helpers carry the arithmetic — `next_channel(current: Channel) -> Channel` (`All → One(0)`, `One(n) → One((n + 1) %
-16)`) and its *down* partner — and the three tests above are what prove them, because the row's click is the only thing that
-matters. The store is `0..=15`; the label is `format!("CH {}", n + 1)` or `CH ANY`. Ports: `Ports::All` means every port is
-ticked, and a port row clicked from `All` produces `Named(everything_except_that_one)` — the honest reading of "I do not want
-this one".
+Two private helpers carry the arithmetic — `next_channel(current: Channel) -> Channel` (`All → One(0)`, `One(n) → One(n + 1)`,
+`One(15) → All`) and its *down* partner (`All → One(15)`, `One(0) → All`, `One(n) → One(n - 1)`) — and the tests below are what
+prove them, because the row's click is the only thing that matters. **The stepper wraps through `ANY`, not around the sixteen
+channels**: the plan's first formula (`One(n) → One((n + 1) % 16)`) would make `ANY` unreachable once left, which is a one-way
+door in the middle of the card. The store is `0..=15` and the label is `format!("CH {}", n + 1)` or `CH ANY`.
+
+Ports: `Ports::All` means every port is ticked, and a port row clicked from `All` produces `Named(everything_except_that_one)` —
+the honest reading of "I do not want this one". A port the filter names but `list_ports()` no longer reports keeps its row,
+because a click rebuilds the whole set from the rows: dropping it would quietly stop the device listening for a cable that was
+only unplugged. The MUTE key is on this card too (`Rows::mute`, `Request::SetMute`, lit from the strip's mirror); no earlier
+task owned it and a card about a device that cannot mute it would be strange.
 
 When `main` opens a card (`Request::Open`), it calls `Card::offer(name, &device.inputs, midi::ports::list_ports().unwrap_or_default())`
 so the list is the machine's, read on the click rather than per frame. The device's own filter is what decides which rows are
@@ -758,7 +764,21 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
       both added to the block above. **Deliberately untested:** `main`'s `Rename` write-back (`main.rs`, binary), named here as
       the plan's "Deliberately untested" paragraph asks — task 7's journey is what walks it; and `presses`' focus gate, which
       lives only in `main::logic` (the `draw_panel` half is pinned by the typing test).
-- [ ] Task 4 — the routing rows
+- [x] Task 4 — the routing rows. ROLE, `ALL PORTS`, one key per machine port, the `-`/`CH n`/`+` stepper and MUTE are all
+      live; the port labels are fitted (a port's name is the machine's and can be as long as a DAW's forwarding name), and
+      `main` opens the card with `midi::ports::list_ports()` and re-reads the route every frame (`Card::route_from`) so a tick
+      is the store's answer from the frame after the click. **Review: fresh `reviewer` subagent.** Eight findings (3
+      should-fix, 5 nits), all actioned. The one that mattered: **a port click rebuilt `Ports::Named` from the card's rows
+      only, so a controller unplugged while the card was shut was silently dropped from the filter the moment a different port
+      was routed** — `Card::offer` now appends the entries the machine no longer reports, pinned by
+      `a_port_the_machine_no_longer_reports_keeps_its_row`. The rest: `card_filled`'s doc claimed the route was read once, when
+      it is now read every frame; the plan's channel formula and a ruling row (below); the all-ticked and nothing-ticked port
+      arithmetic added to the live test; `ALL PORTS` no longer lights on a machine that reports no ports at all (it would claim
+      a device hears everything on no evidence); `transport::key_font` extracted so the card fits a key label with the font
+      that will draw it rather than a second copy of `transport_button`'s arithmetic; the MUTE key carries the strip's
+      `DeviceMute` tip; and two stale doc lines. **Deliberately untested:** `main`'s `list_ports()` fill and the per-frame
+      `route_from` (binary, named in "Deliberately untested" below); `ALL PORTS`' lit colour, which would need
+      `devices_live.rs`'s `painted()` walker, and whose *behaviour* (the `SetPorts(All)` request) is pinned.
 - [ ] Task 5 — removing a device, twice
 - [ ] Task 6 — the picker and the footnote
 - [ ] Task 7 — the gate and the journey
@@ -771,8 +791,11 @@ tested from this repo: `main` is a binary and cannot be called, which is true of
 every one of those arms is a two-line fold over a `Rack` method that `tests/rack.rs` and `midi/route.rs`'s own tests already
 pin; tasks 2-6 assert the *requests* those arms receive through `draw_panel` in `tests/device_card_live.rs`; and task 7's
 by-hand journey is the only thing that walks `main`'s answers — the rename landing as `BASS (2)`, the removal asking twice,
-the last-device refusal. A reviewer of task 2-6 should say which arm looks unexercised rather than assume the journey covers
-it.
+the last-device refusal. A reviewer of task 5-6 should say which arm looks unexercised rather than assume the journey covers
+it. Tasks 2-4 added these arms to that list: the card's rising-edge fill (`card_filled`: the name, the machine's port list and
+the `armed_remove` reset), its per-frame `route_from`, the `Open` bounds guard, and `Close`; and of the panel's own halves, the
+caret's strokes, `ALL PORTS`' lit colour, and `main`'s `text_edit_focused` gate on `presses` — each named in its task's
+Progress line with why.
 
 Rulings made while writing this plan, and their cost if wrong:
 
@@ -781,6 +804,8 @@ Rulings made while writing this plan, and their cost if wrong:
 | The card holds a *mirror* and `main` fills it on open | A device renamed from somewhere else while the card is open shows a stale name until it is reopened. Nothing else can rename it today. |
 | `DeviceKind::enabled(count)` decides greying for both the strip's `+` and the picker's rows | Two rules for one question would be the bug AGENTS.md warns about; the cost is that `DeviceKind` now knows about a rack size. |
 | `Ports::All` is a ticked row rather than a separate mode | A player who unticks every port gets `Named(vec![])`, which is "silent" — the same state a new device starts in, so it is reachable and explainable. |
+| The channel stepper wraps through `ANY` (`One(15)` up → `ANY`, `One(0)` down → `ANY`) | The plan's `(n + 1) % 16` would make `ANY` unreachable once left, which is a one-way door in the middle of the card. The cost if wrong: channel 16 is one key further from channel 1 than it would be if the stepper wrapped around the channels instead. |
+| A port the machine stops reporting keeps its row | A click on any port row rebuilds the whole `Ports::Named` from the rows, so the alternative silently drops an unplugged controller from the filter the moment a *different* port is routed. The cost if wrong: a cable no longer plugged in keeps a ticked row on the card until it is unticked. |
 | The footnote names both losses in one line | One more line on a small card. The alternative is a player losing a name with no warning, which the design calls an anti-goal. |
 | The name field confirms on **Enter only** | Amended in task 3: the original row said "or focus loss" on the premise that the songs card behaves that way, and it does not — it reads its field when SAVE is clicked. A click that dismisses the card cannot also carry the rename in `device_request`, which is one slot. The cost if wrong: a player types a name and clicks the card's own face, and the field keeps the text but the rack keeps the old name until Enter — the caption says `NAME (ENTER)` for that reason. |
 | A rename does not mark the session dirty | Names are not in the save format (`SavedState` has no device name), so `dirty` would light the SAVE lamp and trigger an autosave write for a file whose bytes do not change — the same reason `Add` does not dirty the session. The cost if wrong: a player renames a device, sees the lamp stay dark, and restarts expecting the name to have been kept. The picker's footnote is what tells them it was not. |
