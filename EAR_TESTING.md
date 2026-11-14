@@ -70,6 +70,29 @@ its neighbour, the filter is doing something you have not accounted for — that
 | `15-square` | hollow, more harmonics than the saw | a square that sounds identical to the saw |
 | `16-everything-max` | max resonance + env mod + decay + accent + cutoff: extreme, loud, still finite | clipping, crackle, or a runaway feedback tone |
 
+## Two machines, and what one cannot show you
+
+Everything above judges one voice. Phase 2 put up to four devices in one window — the strip's `+` adds one, a click or
+`Ctrl+1`..`Ctrl+4` picks which the panel shows, `F3` is that device's card — with one transport over all of them, one
+shuffle each, and a mute that is a gain rather than a stop. Three things only a second device can reveal. Add one with `+`,
+pick the `ACID` row, and press `RUN`.
+
+- **Phase.** Add the second device while the transport is running. The mixer seeks it to the step the device on the panel
+  is on, so it comes in on that step rather than at the top of the bar. What you want to hear is a *doubled attack*: two
+  machines saying the same thing at the same moment. What this round does **not** fix is where inside the step the join
+  lands — the seek aligns the step, not the sample — so the pair can be up to a step apart and stays there until the next
+  join or stop. Adding just after a step boundary is near-invisible; adding near the end of a step is a flam that does not
+  go away. Measured on a 120 BPM rack that joined 720 samples into a 6000-sample step, the second device stayed 15 ms
+  behind. So the ear's job is not "is it perfect" but "how far out, and does it stay out".
+- **Shuffle, per device.** Turn one device's `SHUFFLE` up and leave the other straight (the knob writes the device the
+  panel is showing, so `Ctrl+1`/`Ctrl+2` is how you move between them). You should hear one machine lurching and the other
+  not, *without* either of them drifting out of the bar. If the pair drifts apart, the tempo is being read twice instead of
+  once from the rack.
+- **Mute as a gain.** `M` at a cell's right end silences that device without stopping it — a 10 ms fade, which is too
+  short to hear as a fade and long enough not to click. What to listen for is the *absence* of a click on the way out,
+  and then that the muted device is still in time when you bring it back: unmute it a bar later and it should be playing
+  the step you expect, not repeating the one it was muted on.
+
 ## What is true today but is not a bug
 
 - **Everything is quiet** — peaks around 0.15–0.3, RMS around 0.02 (−33 dBFS). Gain staging to a −14 dBFS
