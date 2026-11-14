@@ -12,7 +12,7 @@ use arc_swap::ArcSwap;
 
 use acid_core::bank::PatternBank;
 
-use crate::state::{AtomicF32, DEFAULT_BPM, SharedState};
+use crate::state::{AtomicF32, SharedState};
 
 /// The most devices a rack may hold.
 ///
@@ -60,12 +60,19 @@ pub struct Device {
 }
 
 impl Device {
-    /// A brand-new device: the starter phrase in `A1`, the launch patch, and the number it was given.
+    /// A brand-new device: the starter phrase in `A1`, the launch patch, and the number it was given, on a tempo cell of
+    /// its own.
     pub fn new(kind: DeviceKind, number: usize) -> Self {
+        Self::on(kind, number, SharedState::new())
+    }
+
+    /// A brand-new device built on somebody else's state — how a device joins a rack, where the state holds the rack's own
+    /// tempo cell so there is one tempo for every engine.
+    pub fn on(kind: DeviceKind, number: usize, state: Arc<SharedState>) -> Self {
         // The same pair `persist::new_song` builds, so a new device and a new song open on the same phrase.
         let mut bank = PatternBank::new_empty();
         bank.replace(0, acid_core::factory::starter());
-        let mut device = Self::adopted(kind, number, SharedState::new(), bank);
+        let mut device = Self::adopted(kind, number, state, bank);
         // A device that arrives hearing nothing cannot be layered under a keyboard that is already playing.
         device.inputs = crate::midi::route::InputFilter::silent();
         device
@@ -138,8 +145,9 @@ pub struct Rack {
     /// The rack's transport. Every device follows it, so RUN starts them all on one frame — the downbeats coincide rather
     /// than drifting apart by a block.
     playing: AtomicBool,
-    /// The rack's tempo, in a cell the MIDI thread holds a clone of: an external clock writes it, and `sync_transport`
-    /// carries it to the devices. Tempo is the rack's; swing stays each device's own.
+    /// The rack's tempo: one cell, and the same cell in every device's `SharedState`. The panel, an external clock and a
+    /// tempo controller all write it, and every engine reads it at its next block, so no fan-out and no frame stands between
+    /// a hand and the sound. Swing stays each device's own.
     tempo_bpm: Arc<AtomicF32>,
     bus: Arc<ArcSwap<BusState>>,
 }
@@ -156,19 +164,18 @@ impl Rack {
         Self::with_device(device, saved.bpm)
     }
 
-    /// A rack of one device that already belongs to somebody else, at the launch tempo.
-    pub fn from_device(device: Device) -> Self {
-        Self::with_device(device, DEFAULT_BPM)
-    }
-
     fn with_device(device: Device, tempo_bpm: f32) -> Self {
+        // The rack's tempo is the first device's own cell: one atomic, which every device that joins is built holding, so a
+        // tempo written by the panel or the MIDI thread is heard by every engine at its next block without a fan-out.
+        device.state.tempo_bpm.set(clamp_bpm(tempo_bpm));
+        let tempo_bpm = Arc::clone(&device.state.tempo_bpm);
         let next_number = device.number + 1;
         let rack = Self {
             devices: vec![device],
             selected: 0,
             next_number,
             playing: AtomicBool::new(false),
-            tempo_bpm: Arc::new(AtomicF32::new(clamp_bpm(tempo_bpm))),
+            tempo_bpm,
             bus: Arc::new(ArcSwap::from_pointee(BusState {
                 slots: Vec::new(),
                 routes: Vec::new(),
@@ -258,7 +265,12 @@ impl Rack {
         }
         let number = self.next_number;
         self.next_number += 1;
-        self.devices.push(Device::new(kind, number));
+        // Built on the rack's own tempo cell, so the new device's engine follows the tempo without being told it.
+        self.devices.push(Device::on(
+            kind,
+            number,
+            SharedState::with_tempo(Arc::clone(&self.tempo_bpm)),
+        ));
         // A device that arrives while the rack is playing joins the transport rather than sitting silent.
         self.sync_transport();
         self.publish();
@@ -331,27 +343,27 @@ impl Rack {
         self.tempo_bpm.get()
     }
 
+    /// Set the tempo. Every device's state already holds this cell, so there is nothing to fan out: the engines read it at
+    /// their next block.
     pub fn set_tempo_bpm(&self, bpm: f32) {
         self.tempo_bpm.set(clamp_bpm(bpm));
-        self.sync_transport();
     }
 
-    /// The tempo cell, for the MIDI thread's clock follower to write. A clone of the rack's own cell, never a copy of its
-    /// value, so a followed tempo lands where `sync_transport` will find it.
+    /// The tempo cell, for the MIDI thread's clock follower and for a tempo controller. It is the cell every device's
+    /// `SharedState` holds, so whatever writes it is heard by every engine at the next block — no copy, no fan-out, and
+    /// nothing a frame can put back.
     pub fn tempo_cell(&self) -> Arc<AtomicF32> {
         Arc::clone(&self.tempo_bpm)
     }
 
     /// Fan the transport out to every device.
     ///
-    /// Called by both setters and once per frame by `main`, which is how a tempo the MIDI thread wrote straight into the cell
-    /// reaches the devices without the MIDI thread ever touching the rack.
+    /// Only `playing` needs it: the tempo is one cell every device already holds, so there is no tempo to carry. Called when
+    /// the rack's transport changes and when a device joins, never per frame.
     pub fn sync_transport(&self) {
         let playing = self.is_playing();
-        let tempo = self.tempo_bpm.get();
         for device in &self.devices {
             device.state.playing.store(playing, Ordering::Relaxed);
-            device.state.tempo_bpm.set(tempo);
         }
     }
 }

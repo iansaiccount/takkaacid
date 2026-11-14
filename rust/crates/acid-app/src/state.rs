@@ -37,11 +37,6 @@ impl AtomicF32 {
     pub fn set(&self, value: f32) {
         self.0.store(value.to_bits(), Ordering::Relaxed);
     }
-
-    /// Store `value` and answer what was there before, in one step: how a request is taken rather than read and cleared.
-    pub fn swap(&self, value: f32) -> f32 {
-        f32::from_bits(self.0.swap(value.to_bits(), Ordering::Relaxed))
-    }
 }
 
 /// Controller take-over state for one learnable control: the last value a controller sent, and whether it owns the knob.
@@ -124,7 +119,9 @@ pub struct SharedState {
     pub mute: AtomicBool,
     /// Step the transport is on, `0..16`, published by the audio thread for the LEDs.
     pub position: AtomicUsize,
-    pub tempo_bpm: AtomicF32,
+    /// The tempo this state's engine follows. In a rack it is the rack's own cell — the same `Arc` in every device — so the
+    /// panel, the MIDI thread and the fan-out-free engines all read and write one atomic. A state built on its own owns one.
+    pub tempo_bpm: Arc<AtomicF32>,
     pub swing: AtomicF32,
     /// `0` = saw, `1` = square.
     pub waveform: AtomicUsize,
@@ -161,12 +158,6 @@ pub struct SharedState {
     /// A pattern a controller asked for, as an absolute number; `-1` when there is nothing to do. The MIDI thread may
     /// not touch the bank, so it leaves this and `main` drains it.
     pub pattern_request: AtomicI32,
-    /// The tempo a learned controller asked for, or `-1.0` when there is nothing pending.
-    ///
-    /// Tempo is the rack's, so a controller that drives it cannot write what it hears: the message lands on a device, and
-    /// the router — which holds the rack's own cell for the clock — carries the request there. Without this, the rack's
-    /// fan-out put the device's copy back on the next frame and the fader did nothing at all.
-    pub tempo_request: AtomicF32,
     /// Take-over state, one per learnable control, in `cc_map` slot order: a controller has to reach a knob before it
     /// may turn it, so a fader parked somewhere else cannot slam the panel when a song loads.
     pub pickup: [Pickup; crate::midi::cc::LEARNABLE.len()],
@@ -178,12 +169,20 @@ pub struct SharedState {
 }
 
 impl SharedState {
+    /// A state with a tempo cell of its own: a device on its own, or a test.
     pub fn new() -> Arc<Self> {
+        Self::with_tempo(Arc::new(AtomicF32::new(DEFAULT_BPM)))
+    }
+
+    /// A state sharing `tempo`: how a device joins a rack, where there is one tempo for every engine. The cell is the
+    /// rack's, so a tempo the panel or the MIDI thread writes is there before the next block reads it, and nothing has to be
+    /// fanned out into a copy that a frame could turn stale.
+    pub fn with_tempo(tempo: Arc<AtomicF32>) -> Arc<Self> {
         Arc::new(Self {
             playing: AtomicBool::new(false),
             mute: AtomicBool::new(false),
             position: AtomicUsize::new(0),
-            tempo_bpm: AtomicF32::new(DEFAULT_BPM),
+            tempo_bpm: tempo,
             swing: AtomicF32::new(0.0),
             waveform: AtomicUsize::new(0),
             // The launch patch is the engine's, so the panel and the engine cannot disagree about it.
@@ -209,8 +208,6 @@ impl SharedState {
             // Nothing is waiting for the bar, so the selection is the sound.
             pattern_selected: AtomicI32::new(-1),
             pattern_request: AtomicI32::new(-1),
-            // Nothing is asking for a tempo change, so the rack's cell is the whole truth.
-            tempo_request: AtomicF32::new(-1.0),
             pickup: std::array::from_fn(|_| Pickup::new()),
             notes: NoteQueue::new(),
             status: Mutex::new(AudioStatus::Starting),
@@ -286,19 +283,6 @@ impl SharedState {
     pub fn take_pattern_request(&self) -> Option<usize> {
         let requested = self.pattern_request.swap(-1, Ordering::Relaxed);
         (requested >= 0).then_some(requested as usize)
-    }
-
-    /// Record the tempo a learned controller asked for. The router carries it to the rack's cell: tempo is the rack's, and
-    /// the message landed on a device.
-    pub fn request_tempo(&self, bpm: f32) {
-        self.tempo_request.set(bpm);
-    }
-
-    /// Take the tempo a controller asked for, if any. Only a positive tempo counts, so `-1.0` — and the `0.0` the atomic
-    /// would hold if it were ever defaulted — cannot be mistaken for a request to stop time.
-    pub fn take_tempo_request(&self) -> Option<f32> {
-        let asked = self.tempo_request.swap(-1.0);
-        (asked > 0.0).then_some(asked)
     }
 
     /// The pattern a learned controller has selected but not yet heard.

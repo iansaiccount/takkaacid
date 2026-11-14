@@ -113,7 +113,7 @@ impl eframe::App for TakkaApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.rig.poll();
         // The transport belongs to the rack: the panel asks for a change rather than writing one device's atomic, which the
-        // fan-out below would immediately undo.
+        // fan-out would immediately undo.
         if let Some(request) = self.panel.transport_request.take() {
             match request {
                 panel_ui::transport::Request::Play => self.rack.set_playing(true),
@@ -125,8 +125,6 @@ impl eframe::App for TakkaApp {
             }
             self.panel.dirty = true;
         }
-        // A tempo the MIDI thread wrote straight into the cell reaches every device here, every frame.
-        self.rack.sync_transport();
         let status = self.rack.state().status();
         let text = match &status {
             AudioStatus::Starting => "starting".to_string(),
@@ -597,8 +595,8 @@ struct Midi {
     /// reports, which is the one the app opened on its own before it could hold more than one; a player who then turns
     /// every port off gets silence for the rest of the session, because the fill happens once.
     filled: bool,
-    /// The rack's tempo cell, shared with every router this app opens: an external clock writes it, and the fan-out in
-    /// `logic` carries it to the devices, so one clock moves the whole rack.
+    /// The rack's tempo cell: the same atomic every device's `SharedState` holds, shared with every router this app opens,
+    /// so one clock — or one fader — is every engine's tempo at its next block.
     tempo: Arc<state::AtomicF32>,
     /// The published rack, for each router to load once per message: a clone of the swap, never a copy of its contents.
     bus: Arc<arc_swap::ArcSwap<device::BusState>>,

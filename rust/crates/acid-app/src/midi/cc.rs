@@ -2,10 +2,6 @@
 //!
 //! Every write lands in the same atomics the mouse writes, so a controller and the panel can never fight
 //! over a value — the last one to arrive wins, and the panel redraws from the atomic.
-//!
-//! The tempo is the exception, and it is why `CcTarget::Tempo` writes two things: the mouse moves the *rack's* tempo cell,
-//! and `apply_cc` is handed one device. So the device copy is written (the pickup measures against it) **and** a request is
-//! left for the router to carry to the rack's cell, which is the one the fan-out hands to every engine.
 
 use std::sync::atomic::Ordering;
 
@@ -292,15 +288,11 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
         CcTarget::Decay => state.decay.set(knob),
         CcTarget::Accent => state.accent.set(knob),
         CcTarget::Volume => state.volume.set(knob),
-        CcTarget::Tempo => {
-            let bpm = clamp_bpm(MIN_BPM + knob * (MAX_BPM - MIN_BPM));
-            // The device's own copy first: the pickup measures the knob against it, and a fader that outran a frame would
-            // otherwise lose the knob it is on.
-            state.tempo_bpm.set(bpm);
-            // And a request for the rack, where the tempo actually lives: `main`'s fan-out writes the rack's cell into
-            // every device, so a write to this one alone would be gone before it was heard.
-            state.request_tempo(bpm);
-        }
+        // The tempo is the rack's cell, shared with every device's state, so this one write is what the engine reads at the
+        // next block and what the pickup measures against — no copy, no fan-out, no window.
+        CcTarget::Tempo => state
+            .tempo_bpm
+            .set(clamp_bpm(MIN_BPM + knob * (MAX_BPM - MIN_BPM))),
         // The pattern's zones are equal: 128 controller steps over eight patterns is sixteen each, so a fader rests in
         // the middle of a pattern rather than on a hair-trigger boundary. The MIDI thread may not move the bank, so it
         // leaves a request and `main` drains it when the bar allows.
@@ -362,23 +354,6 @@ mod tests {
         apply_cc(&s, 72, 64);
         let mid = s.tempo_bpm.get();
         assert!(mid > 150.0 && mid < 190.0, "midpoint was {mid}");
-    }
-
-    /// The bug this pins: the fader wrote one device's tempo and the rack's fan-out put it back, so CC 72 did nothing at
-    /// all. The device copy still moves — the pickup measures against it — but the tempo the rack follows is the request.
-    #[test]
-    fn a_tempo_fader_asks_the_rack_and_a_parked_one_does_not() {
-        let s = SharedState::new();
-        assert!(apply_cc(&s, 72, 0));
-        assert_eq!(
-            s.take_tempo_request(),
-            None,
-            "a fader that has not reached the knob asks for nothing"
-        );
-
-        reach(&s, 72);
-        assert_eq!(s.take_tempo_request(), Some(MAX_BPM));
-        assert_eq!(s.take_tempo_request(), None, "a request is taken once");
     }
 
     #[test]

@@ -210,11 +210,10 @@ fn a_device_added_while_the_transport_runs_starts_in_it() {
 
 #[test]
 fn a_tempo_written_straight_into_the_cell_reaches_every_device() {
-    // This is the MIDI thread's path: the clock follower writes the cell, and the next sync carries it.
+    // This is the MIDI thread's path: the clock follower writes the cell, and every device is reading that cell already.
     let mut rack = one();
     rack.add(DeviceKind::Acid).expect("a second");
     rack.tempo_cell().set(129.0);
-    rack.sync_transport();
     for device in rack.devices() {
         assert_eq!(device.state.tempo_bpm.get(), 129.0);
     }
@@ -243,39 +242,113 @@ fn a_tempo_fader_on_a_router_moves_the_rack_and_its_devices() {
     assert_eq!(
         rack.tempo_bpm(),
         acid_core::timing::MAX_BPM,
-        "the fader lands in the rack's cell, which is what the fan-out reads"
+        "the fader lands in the cell every device holds"
     );
-    rack.sync_transport();
     assert_eq!(
         rack.devices()[0].state.tempo_bpm.get(),
         acid_core::timing::MAX_BPM,
-        "and every device follows it"
+        "and the device is reading that same cell, so no frame is owed one"
     );
 }
 
-/// The frame between two messages: `main`'s fan-out writes the rack's cell into every device every frame, so the cell is
-/// what makes a fader's next message agree with itself. A fan-out in the middle of a sweep must not undo it.
+/// One tempo, one atomic: every device in the rack is built holding the rack's own cell, so nothing has to be copied into
+/// anything and no fan-out can put an older tempo back under a moving fader.
 #[test]
-fn a_fan_out_between_two_fader_messages_leaves_the_tempo_where_the_fader_put_it() {
+fn every_device_in_a_rack_holds_the_racks_tempo_cell() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+    let cell = rack.tempo_cell();
+    for device in rack.devices() {
+        assert!(
+            std::sync::Arc::ptr_eq(&cell, &device.state.tempo_bpm),
+            "{} has a tempo of its own, which is a copy somebody has to fan out",
+            device.name
+        );
+    }
+}
+
+/// The engine reads `SharedState::tempo_bpm` at the next block and the panel reads it every frame, so a tempo written by
+/// the MIDI thread must already be there: no fan-out, no frame, no window in which the pickup sees an older value.
+#[test]
+fn a_tempo_the_midi_thread_writes_is_heard_without_a_frame() {
+    use acid_app::midi::route::Router;
+
+    let rack = one();
+    let bus = rack.bus();
+    let mut router = Router::new("Launchkey MIDI", rack.tempo_cell());
+    router.on_message(&bus.load(), &[0xB0, 72, 0]);
+    router.on_message(&bus.load(), &[0xB0, 72, 127]);
+
+    assert_eq!(
+        rack.tempo_bpm(),
+        acid_core::timing::MAX_BPM,
+        "the rack's own cell moved"
+    );
+    assert_eq!(
+        rack.devices()[0].state.tempo_bpm.get(),
+        acid_core::timing::MAX_BPM,
+        "and the device's tempo is that same cell, so no frame is owed one"
+    );
+}
+
+/// A sweep is many messages; the tempo must follow every one of them. With the fader writing the cell the pickup measures
+/// against, a quick move cannot outrun a fan-out and drop the pin halfway.
+#[test]
+fn a_quick_fader_sweep_keeps_moving_the_tempo() {
     use acid_app::midi::route::Router;
 
     let rack = one();
     let bus = rack.bus();
     let mut router = Router::new("Launchkey MIDI", rack.tempo_cell());
 
-    router.on_message(&bus.load(), &[0xB0, 72, 0]);
-    router.on_message(&bus.load(), &[0xB0, 72, 127]);
-    rack.sync_transport();
-    router.on_message(&bus.load(), &[0xB0, 72, 127]);
+    // From the bottom, past the knob at 130 bpm, and on to the top in steps no frame could keep up with.
+    let mut seen = Vec::new();
+    for value in (0..=127u8).step_by(4).chain(std::iter::once(127)) {
+        router.on_message(&bus.load(), &[0xB0, 72, value]);
+        seen.push(rack.tempo_bpm());
+    }
 
     assert_eq!(
         rack.tempo_bpm(),
         acid_core::timing::MAX_BPM,
-        "a fan-out is a mirror being rewritten, not a second opinion"
+        "the sweep ends at the top"
     );
-    assert_eq!(
-        rack.devices()[0].state.tempo_bpm.get(),
-        acid_core::timing::MAX_BPM
+    let rising = seen.windows(2).filter(|pair| pair[1] > pair[0]).count();
+    assert!(
+        rising > 20,
+        "the fader kept turning the whole way, not for a step or two: {seen:?}"
+    );
+    assert_eq!(rack.devices()[0].state.tempo_bpm.get(), rack.tempo_bpm());
+}
+
+/// The sound, not just the state: the renderer's next block pushes the snapshot into the engine. Driven through the
+/// *clock*, which is the path that used to write only the rack's cell and leave the engine reading an old copy until a
+/// frame fanned it out — so this is the test that would have caught the round's bug on its own.
+#[test]
+fn a_followed_tempo_reaches_the_engine_at_the_next_block() {
+    use acid_app::audio::renderer;
+    use acid_app::midi::route::Router;
+    use acid_app::midi::tempo::PPQN;
+    use acid_core::engine::Engine;
+
+    let rack = one();
+    let bus = rack.bus();
+    let mut router = Router::new("Launchkey MIDI", rack.tempo_cell());
+    // A steady 120 bpm stream: the follower believes a run of agreeing ticks, not one interval.
+    let step = std::time::Duration::from_secs_f64(60.0 / (120.0 * f64::from(PPQN)));
+    let start = std::time::Instant::now();
+    for tick in 0..12 {
+        router.on_message_at(&bus.load(), &[0xF8], start + step * tick);
+    }
+
+    let params = rack.devices()[0].state.snapshot();
+    let mut engine = Engine::new(48_000.0);
+    renderer::apply(&params, &mut engine);
+
+    let heard = engine.bpm();
+    assert!(
+        (heard - 120.0).abs() < 5.0,
+        "the engine should be playing the clock's tempo at its next block, was {heard}"
     );
 }
 

@@ -738,6 +738,112 @@ git commit -m "fix(midi): a learned tempo fader moves the rack, not one device"
 **Non-goal:** the tempo keys and the tempo knob already go through `Rack::set_tempo_bpm` and are untouched, and the fan-out's
 ≤ 200 ms latency for a followed clock is plan 38's design — this task makes the fader land in the same cell, not sooner.
 
+### Task 8: one tempo cell, so the knob can be moved quickly and safely
+
+Task 7 made the fader reach the rack and recorded the cost it could not pay: the device's `tempo_bpm` is a *mirror* that
+`main` rewrites every frame, so a fan-out landing between two writes can put the old tempo back for a frame, and a fast sweep
+loses the pickup pin. It also means the engine hears a tempo change at the next frame (up to 200 ms when nothing else is
+happening), not at the next block. This task removes the mirror, which removes both.
+
+**What is wrong today.** Tempo lives in two places: `Rack::tempo_bpm` (the truth) and each `SharedState::tempo_bpm` (a copy
+`Rack::sync_transport` writes into every device, called once per frame from `main::logic`). Every reader — the engine, the
+panel readout, the pickup — reads the copy. So a tempo is fast only if a frame runs, safe only if no fan-out interleaves, and
+`apply_cc` needed a `tempo_request` carrier (task 7) precisely because it could only see a copy.
+
+**Design.** One atomic. `SharedState::tempo_bpm` becomes `Arc<AtomicF32>`, and every device in a rack is built holding the
+rack's own cell: `Rack::with_device` adopts the first device's cell, `Rack::add` builds the new device on
+`SharedState::with_tempo(Arc::clone(&self.tempo_bpm))`. Then:
+
+- `Rack::sync_transport` fans out `playing` only — there is nothing to fan out for tempo.
+- `main::logic`'s per-frame `sync_transport()` goes: it existed only to carry a followed tempo.
+- `CcTarget::Tempo` is a one-line write again, and `tempo_request` / `request_tempo` / `take_tempo_request` /
+  `AtomicF32::swap` / the router's drain are deleted. The pickup reads the same cell the fader writes, so it can never be
+  stale; the renderer reads it at the next block, so the tempo is heard immediately.
+- `Deref` means every existing `.get()`/`.set()` call site is unchanged; the change is in how the cell is *made*.
+
+**Files:**
+- Modify: `rust/crates/acid-app/src/state.rs` (`tempo_bpm: Arc<AtomicF32>`, `with_tempo`, and the deletions)
+- Modify: `rust/crates/acid-app/src/device.rs` (`Device::on`, `Rack::with_device`, `Rack::add`, `sync_transport`)
+- Modify: `rust/crates/acid-app/src/midi/cc.rs` (the Tempo arm goes back to one write; the module doc's exception goes)
+- Modify: `rust/crates/acid-app/src/midi/route.rs` (the drain goes; the clock arm already writes the same cell)
+- Modify: `rust/crates/acid-app/src/main.rs` (drop the per-frame `sync_transport`)
+- Test: `rust/crates/acid-app/tests/rack.rs`, and the touched files' own test modules
+
+**Interfaces:**
+- Produces:
+  ```rust
+  impl SharedState {
+      /// A state with its own tempo cell: a device on its own, or a test.
+      pub fn new() -> Arc<Self>;
+      /// A state sharing `tempo`: how a device joins a rack, where there is one tempo for every engine.
+      pub fn with_tempo(tempo: Arc<AtomicF32>) -> Arc<Self>;
+  }
+  impl Device {
+      /// A new device built on somebody else's state — the rack's tempo cell, in `Rack::add`.
+      pub fn on(kind: DeviceKind, number: usize, state: Arc<SharedState>) -> Self;
+  }
+  ```
+- Removes: `SharedState::tempo_request`, `request_tempo`, `take_tempo_request`, `AtomicF32::swap`.
+
+- [ ] **Step 1: Write the failing tests** in `tests/rack.rs`
+
+```rust
+#[test]
+fn every_device_in_a_rack_holds_the_racks_tempo_cell() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+    let cell = rack.tempo_cell();
+    for device in rack.devices() {
+        assert!(
+            std::sync::Arc::ptr_eq(&cell, &device.state.tempo_bpm),
+            "{} has its own tempo, which is a copy somebody has to fan out",
+            device.name
+        );
+    }
+}
+
+#[test]
+fn a_tempo_the_midi_thread_writes_is_heard_without_a_frame() {
+    // The engine reads `SharedState::tempo_bpm` at the next block; the panel reads it every frame. If it is the rack's own
+    // cell, a fader or a clock is heard at once and no fan-out can put an older tempo back.
+    let rack = one();
+    let mut router = acid_app::midi::route::Router::new("Launchkey MIDI", rack.tempo_cell());
+    let bus = rack.bus();
+    router.on_message(&bus.load(), &[0xB0, 72, 0]);
+    router.on_message(&bus.load(), &[0xB0, 72, 127]);
+    assert_eq!(rack.devices()[0].state.tempo_bpm.get(), acid_core::timing::MAX_BPM);
+}
+```
+
+- [ ] **Step 2: Run to watch them fail**
+
+Run: `cd rust && cargo test -p acid-app --test rack`
+Expected: FAIL — `Arc::ptr_eq` over two different types (the device's tempo is not an `Arc` yet), which is the compile-red part.
+      The behavioural pin came with the implementation: `a_followed_tempo_reaches_the_engine_at_the_next_block` reads `130.0`
+      under the mirror and the clock's tempo under the shared cell, which is why it is the test that would have caught task 7's
+      residual bug — the fader-driven tests pass either way, because the deleted arm wrote the copy as well as the request.
+
+- [ ] **Step 3: Make the cell one cell, and delete what existed for the copy**
+
+`Rack::with_device` keeps the first device's own cell (setting it to the saved tempo) instead of allocating a second one;
+`Rack::add` builds the device on the rack's cell through `Device::on`. `sync_transport` writes `playing` only. The task-7
+carrier and its drain go; `CcTarget::Tempo` is `state.tempo_bpm.set(..)` again, because now that is the rack's cell.
+
+- [ ] **Step 4: Run the tests and the gate**
+
+Run: `cd rust && cargo test --workspace`, then the three gates. Expected: PASS, and the deleted machinery's tests with it.
+
+- [ ] **Step 5: Review the diff, action it, then commit** (see the phase overview review gate)
+
+```bash
+git add -A
+git commit -m "refactor(tempo): one tempo cell shared by the rack and every device"
+```
+
+**Non-goal:** the panel's *readout* still follows on the next frame, so it can trail a fader by up to 200 ms when nothing
+else is repainting; the sound does not, because the engine reads the cell at the next block. Waking the UI thread from MIDI is
+a separate question (it has no handle on the egui context, and inventing one is a bigger change than this).
+
 ---
 
 ## Progress
@@ -792,9 +898,10 @@ git commit -m "fix(midi): a learned tempo fader moves the rack, not one device"
       fresh session opens "every port" (task 5's ruling made it the first); Review Focus 1's live test through the card had no
       home, so it is now in `plans/phase 2/42-the-device-card.md` task 4 step 1 — the card that sets a filter is what plan 42
       builds, and until then the rack-level half in `tests/rack.rs` is the only place it can be pinned.
-- **Fixed by task 7:** `CcTarget::Tempo` (factory CC 72) used to write the *device's* `tempo_bpm`, which `sync_transport`
-      overwrote from the rack cell every frame, so the fader did nothing. The Tempo arm now also leaves a request and the
-      router carries it to the rack's cell in the same message. See task 7's own entry below.
+- **Task 7 — the tempo fader.** (Its carrier and its mirror were both removed by task 8; this line is the record of why it
+      existed.) `CcTarget::Tempo` used to write only the *device's* `tempo_bpm`, which `sync_transport` overwrote from the rack
+      cell every frame, so factory CC 72 did nothing. Task 7 gave the arm a `tempo_request` carrier the router drained into the
+      rack's cell; task 8 removed the need for both by making the device's cell the rack's.
 - **Deferred (Minor), deliberate:** the probe thread's closure — `Router` over `bus.load()` — is exercised by hand
       (`--midi-map`, and a note on a port the device's filter does not name produces silence), because constructing a
       `MidiIn` needs a device. What it hands messages to is covered by six `Router` tests and the roster around it by two.
@@ -805,18 +912,36 @@ git commit -m "fix(midi): a learned tempo fader moves the rack, not one device"
       and three tests fail with `130.0` where `300.0` belongs (the cc unit test, the router test and the rack-level one).
       New tests: the parked-fader-and-request case and the `-1.0`/take-once semantics in `cc.rs`, three in `route.rs` (one
       device, two devices hearing one fader, and a tempo learned onto another controller), and two in `tests/rack.rs` (the
-      router + rack cell + fan-out joined the way `main` joins them, and a fan-out *between* two fader messages).
+      router + rack cell + fan-out joined the way `main` joins them, and a fan-out *between* two fader messages). **Superseded by
+      task 8**, which removed the carrier, the device copy and three of those tests; the record stays because it is why task 8
+      exists.
 - **Task 7 review** (fresh `reviewer` subagent, 5 findings, all Minor, all actioned). It confirmed the Interfaces block
       exactly, no convention break, no lock or allocation added on the MIDI path, the sentinel safe (`MIN_BPM` is 40, so
       nothing real is ≤ 0), no pending request able to outlive its own message, and that removing the fix fails the new
       tests. Actioned: the Files block now names `tests/rack.rs`; a test that a fan-out between two fader messages leaves the
       tempo where the fader put it; the two-device and learned-controller cases; a blank line.
+- [x] **Task 8 — one tempo cell.** `SharedState::tempo_bpm` is an `Arc<AtomicF32>`; `Rack::with_device` adopts the first
+      device's cell as the rack's and `Rack::add` builds each new device on it through `Device::on(kind, number,
+      SharedState::with_tempo(..))`. `Rack::sync_transport` now fans out `playing` only, `main`'s per-frame call is gone, and
+      task 7's carrier (`tempo_request`/`request_tempo`/`take_tempo_request`/`AtomicF32::swap`) and the router's drain are
+      deleted. `Rack::from_device` went with it: no caller, and it now wrote a cell it had not created. Removal-checked: make
+      `with_device` allocate a cell again and three tests fail — `every_device_in_a_rack_holds_the_racks_tempo_cell`,
+      `a_tempo_the_midi_thread_writes_is_heard_without_a_frame` and `a_followed_tempo_reaches_the_engine_at_the_next_block`,
+      the last one with `was 130` where the clock's tempo belongs, which is precisely the bug this task retires.
+- **Task 8 review** (fresh `reviewer` subagent, 4 findings, all Minor, all actioned). It confirmed the Files/Interfaces blocks
+      exactly, no convention break, no allocation or lock added on the audio path, no path that can build a rack with a second
+      cell, and that nothing else still needs the per-frame `sync_transport`. Actioned: the review showed that the
+      fader-driven tests pass under the *old* design too (the deleted arm wrote the copy as well as the request), so the round
+      gained `a_followed_tempo_reaches_the_engine_at_the_next_block` — the clock path, the one that really did leave the engine
+      a frame behind — and the plan's Step 2 now says which test is red and why; four comments that still described the deleted
+      fan-out; `Rack::from_device` deleted rather than left as an untested constructor that writes someone else's cell.
 - **Ruling (task 7): the device's `tempo_bpm` is a mirror, and it is written twice for one message.** The fader writes it
       and the router writes the rack's cell; if `main`'s fan-out ran between those two writes it could put the *old* cell into
       the mirror for one frame, and a fader that moved more than the pickup's 2.5/128 would lose the knob until it crossed
       again. Closing that would mean the pickup reading the rack's cell instead of the device's — a change to what
       `SharedState` is. Cost if wrong: a fast sweep can stall for a frame and needs a re-cross; the cell — the thing the
-      engine follows — is always right, and the test above pins that a fan-out does not undo the fader.
+      engine follows — is always right, and the test above pins that a fan-out does not undo the fader. **Superseded by task 8**,
+      which removes the mirror this ruling is about.
 - **Ruling (paid in task 5):** the router was written and tested by its filters but had no `on_message` test until task 5
       added six, which is what this ruling asked of whoever took it: task 4 shipped `Router::on_message` with no caller and no
       routing test, and it is exactly the function 40.6 turns into the only message path.
@@ -836,5 +961,6 @@ Rulings made while writing this plan, and their cost if wrong:
 | An unplugged port keeps its card row, marked `(missing)` (task 5) | The list can carry a name the machine does not report. Without the row, the only way to turn a gone port off is to plug the cable back in. |
 | A song load adds its saved port to the set instead of replacing it (task 5) | A song that named one port leaves the player's others enabled. Replacing would drop controllers the file cannot name. |
 | `Router::on_message_at` takes the arrival time (task 5) | One public method whose only caller is a test. The alternative is a clock test that sleeps through a real-time stream and flakes on a loaded machine. |
-| A tempo CC leaves a request and the router carries it to the rack's cell (task 7) | A `pub` `apply_cc` called without a router leaves a request on that device that fires on its next routed CC. Today the router is its only caller and drains in the same iteration. |
-| The device's `tempo_bpm` is written twice for one fader message (task 7) | A fan-out landing between the two writes can put the old cell into the mirror for a frame, and a fast sweep loses the pin until it crosses the knob again. The cell — what the engine follows — is always right. |
+| ~~A tempo CC leaves a request and the router carries it to the rack's cell~~ (task 7) | Superseded by task 8: the fader writes the cell every device already holds, so there is no request to carry. Kept struck through because the ruling explains why task 7 existed. |
+| ~~The device's `tempo_bpm` is written twice for one fader message~~ (task 7) | Superseded by task 8, which removes the mirror the second write was feeding. |
+| One tempo cell, shared by the rack and every device (task 8) | `SharedState::tempo_bpm` is an `Arc<AtomicF32>`, so any future code that wants a device to follow a *different* tempo cannot have it without splitting the cell — which is the point: tempo is the rack's. A device built on its own (`SharedState::new()`) gets its own cell, so a test or a standalone state still works. |
