@@ -248,3 +248,89 @@ Each task ends with the three gates, the inline review, and a commit.
 | The scheme is in memory only | A colour, like a name, is gone on restart. Stated in `README.md`? No: the save limit already says names and extra devices are not saved, and a colour is part of that sentence's "extra devices" in spirit. If a player expects it to survive, the next round's footnote widens. |
 | Paste lands immediately, with a notice | A pattern replaced by mistake is gone. The user chose this over a two-click CONFIRM because the pattern being replaced is the one on screen. |
 | The clipboard is text on the OS clipboard | A secret in a clipboard, and a paste from an unrelated app that fails to decode. Both are handled: nothing is written until a copy, and a failed decode says so. |
+
+## Progress
+
+**The round is done.** Three gates on the whole workspace — `cargo test --workspace` → **68 suites, 639 tests, 0 failed**
+(the count the next round starts from), `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo fmt --check`
+clean — and `docs/guide/check.sh` still `guide: ok`.
+
+- [x] **Task 1 — the palette and the two schemes** (`1ffead6`). `theme::{Palette, BLACK, YELLOW, palette}`, `silkscreen_stroke`
+  as a method, and `device::Scheme` with `ALL`/`name`/`next`. The old colour consts stayed as aliases of `BLACK`'s fields for
+  one commit (one source of truth) and were deleted in task 2. Tests: `the_face_is_dark_in_one_scheme_and_bright_in_the_other`,
+  `both_schemes_hold_the_same_reading_rules` (well below face, legend contrast ≥ 4.5, dim quieter than full, a lit lamp above the
+  face, digits legible on the well), `the_two_families_are_exchanged`, and the rack's catalogue test. Ruling: `device::Scheme`
+  landed here rather than in task 3, because `theme::palette` takes it.
+- [x] **Task 2 — the face painters take a palette** (`903e6ff`). 107 colour references across 13 files; the face painters take
+  `&theme::Palette`, `draw_panel` passed `BLACK`, and the four cards kept `theme::BLACK`. Two shapes the task did not name and
+  the work forced: `transport::card_button` (the cards' keys in one place, so "every card is black" is stated once instead of
+  at 24 call sites) and `controls::Key` (clippy refused `switch_key` at eight arguments; the five things a row knows together
+  became one value). All 626 tests green before and after, and the face was checked against a pre-refactor screenshot.
+- [x] **Task 3 — the device's scheme reaches the face** (`e36d668`). `Device::scheme`, `Rack::set_scheme`, `PanelState::scheme`,
+  `StripCell::scheme`, per-cell palettes in the strip, and `main` filling both mirrors. Three tests, written first
+  (`rack::a_device_carries_its_own_scheme`, `the_face_follows_the_device_it_shows`,
+  `the_strip_cell_wears_its_own_devices_colours`). **Ruling that changed the design:** a strip cell painted with
+  `panel_raised` is near-black in the amber scheme while that scheme's legends are near-black too, so the cell is now a
+  miniature of *its* face (`p.panel` fill, `p.silkscreen` letters). Cost: the black scheme's cells move `#191919` → `#0B0B0B`.
+  Mutation: `palette(Yellow) → &BLACK` fails both live colour tests.
+- [x] **Task 4 — the COLOUR row** (`668a9a4`). `Request::SetScheme`, `Card::scheme` + `scheme_from` (per frame, beside
+  `route_from`), `Rows::scheme` under `CHANNEL`, one key captioned with the scheme it is on. Walked in the app: the face turns
+  amber behind a still-black card and the strip's own cell turns amber with black letters.
+- [x] **Task 5 — the clipboard format** (`058d221`). `src/clipboard.rs`: `MAGIC`, `VERSION`, a `kind`-tagged `Clip` (one
+  variant), `encode`/`decode`, five tests including eight shapes of refusal. No test was watched failing first here (format and
+  tests went in together); the gap was closed by two mutations, both caught — the header check loosened to `starts_with`, and a
+  payload rebuilt without `from`.
+- [x] **Task 6 — the gestures** (`b092772`). `dispatch::clipboard(events, typing, panel, shared, bank) -> Option<String>`,
+  `main` handing it the frame's `Copy`/`Paste` events and flushing the return through `ctx.copy_text`, notices `copied A1` /
+  `pasted A1 into A2` / `the clipboard has no pattern`, and the `typing` guard. `tests/clipboard.rs`, four tests over real
+  events and a real bank. One of my own assertions was vacuous (the "neighbour untouched" slot held the pattern being
+  pasted) — the fixture now has three distinct patterns. Mutation (paste skips `shared.set_pattern`) caught. Walked in the app:
+  `Ctrl+C` → `copied A1`, `shift+Right` → `A2`, `Ctrl+V` → `pasted A1 into A2` with the steps back.
+- [x] **Task 7 — the card and the overview** (`909070d`). `help_live` extended with `Ctrl+C`/`Ctrl+V` first (RED), then the
+  card line; `README.md` gained the clipboard sentence and the colour in the restart-cost list; `00-phase-2.md` gained this
+  plan's row and Progress line, and lost a paragraph that had been duplicated since an earlier round.
+- [x] **Task 8 — the gate** (`f3d5b13`). All three plan-named mutations re-run on the frozen code and all three caught:
+  `palette(Yellow) → &BLACK` (both live colour tests), `decode` ignoring `VERSION` (`a_foreign_clipboard_is_refused`), and a
+  paste that moves the bank but not the engine (`pasting_lands_the_pattern_and_says_what_it_replaced`).
+
+**Review mode.** Inline, per this plan's header: `pi-subagents`' only model refused the connection during plan 43 and the
+`claude-code` agent needs its own session, so there was no fresh reader. The whole-round pass walked the two seams the plan
+named:
+
+- **theme ↔ device ↔ ui.** One mapping (`theme::palette`), one catalogue (`Scheme`), the face palette read in exactly two
+  places (`draw_panel`, `strip::paint`) and the cards taking `BLACK` everywhere — checked by grep, not by memory.
+- **clipboard ↔ dispatch ↔ main.** The payload is a value with a text form; the gesture is one function; `main` is the only
+  place that touches the OS clipboard, and it does so in one line each way. The events are *not* keys, and the comment says
+  why, because the next hand will expect a `Shortcut` here.
+
+Findings:
+
+- **Critical:** none.
+- **Important:** none.
+- **Minor — fixed in this round:** the `help` card and `README` lines, the duplicated overview paragraph, and three
+  `replace_lines` slips caught by the diff in task 7 (a replaced help line, a half-deleted README bullet, a duplicated
+  sentence in the overview).
+- **Minor (deferred) — `pasted A1 into A1`.** Copying and pasting the same slot says so without mentioning that nothing
+  changed, and the notice names no device. A player who pasted twice will read it once and understand. Cost if wrong: a
+  redundant status line.
+- **Minor (deferred) — the copy-then-type papercut.** Copy a pattern, then `Ctrl+V` with the card's name field focused, and
+  egui pastes the JSON payload into the field; the field's clipboard is the field's, which is the rule, and `Rack::rename`
+  trims it into a very long name rather than losing anything. Fixing it means filtering what the field receives, which is a
+  change to how the card's field reads the clipboard, not to this round's format. Cost if wrong: one absurd device name.
+- **Minor (deferred) — a hand-written payload with no `from`** notices `pasted a pattern into B2`; the wording is untested.
+- **Deferred (deliberate):** `main`'s glue — the `Copy` → `ctx.copy_text` call and the `text_edit_focused` gate around the
+  event filter — is untested, like every other drain in that binary. `dispatch::clipboard` is where the behaviour is, and it is
+  covered; the walk in the app is the evidence for the glue.
+- **Declined to judge:** whether amber is the right amber. It was looked at, on a screenshot, by one pair of eyes; the
+  palettes' contracts (contrast, recess, lamp order) are tested, the taste is not.
+
+Rulings made while building this round, and what they cost if wrong:
+
+| Ruling | Cost if wrong |
+|---|---|
+| A strip cell is a miniature of its device's face, not a raised key | The black scheme's cells are one step darker (`#191919` → `#0B0B0B`). The alternative was a cell whose legends are the same colour as its fill. |
+| The cards are black by construction — `transport::card_button` — not by every call passing `BLACK` | A card that ever wants its device's colours has to stop using the helper. Twenty-four call sites say `BLACK` today and none of them can forget. |
+| `controls::Key` exists | One more type in `controls`; a row that grows a sixth descriptor adds a field. Clippy's arity limit asked for it. |
+| Paste lands immediately, with a notice (the user's call) | A pattern replaced by mistake is gone; the notice names the slot it went into. |
+| The colour is in memory only | A colour, like a name, is gone on restart. `README.md` says so in the restart-cost list. |
+| The clipboard is text on the OS clipboard | A paste of our own payload into a text field (the papercut above), and a secret of a kind: whatever a hand copied is on the system clipboard until something else is. |
