@@ -1,6 +1,6 @@
 //! The strip: one cell per device, a click to select, a click on MUTE for that device, and `+`.
 
-use acid_app::device::{DeviceKind, Request};
+use acid_app::device::Request;
 use acid_app::state::SharedState;
 use acid_app::ui::layout::{layout, strip_add_rect, strip_cells};
 use acid_app::ui::strip::{StripCell, mute_rect};
@@ -55,7 +55,7 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
 }
 
 #[test]
-fn the_add_key_asks_for_the_only_kind_of_device_there_is() {
+fn the_add_key_opens_the_picker() {
     let state = SharedState::new();
     let mut panel = panel_of(&[("ACID 1", true, false)]);
     panel.strip.selected = 0;
@@ -64,7 +64,11 @@ fn the_add_key_asks_for_the_only_kind_of_device_there_is() {
 
     let add = strip_add_rect(layout(screen()).strip);
     click(&ctx, &mut panel, &state, add.center());
-    assert_eq!(panel.device_request, Some(Request::Add(DeviceKind::Acid)));
+    assert_eq!(
+        panel.device_request,
+        Some(Request::OpenPicker),
+        "the add key opens the picker, which offers the kinds there are"
+    );
 }
 
 #[test]

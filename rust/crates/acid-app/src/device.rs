@@ -41,6 +41,17 @@ impl DeviceKind {
             DeviceKind::Acid => "ACID",
         }
     }
+
+    /// Whether another device of this kind fits in a rack of `count` devices.
+    ///
+    /// The strip's `+` and the picker's rows both grey out from this, so the two cannot disagree about when the rack is
+    /// full. A greyed row still answers a click: the refusal is `Rack::add`'s to say, and a dead key would say nothing.
+    pub fn enabled(self, count: usize) -> bool {
+        // Every kind shares the rack's cap — the cap is the panel's width and the voice count, not the kind's.
+        match self {
+            DeviceKind::Acid => count < MAX_DEVICES,
+        }
+    }
 }
 
 /// One machine: its own sound, its own patterns, its own identity.

@@ -629,8 +629,9 @@ impl TakkaApp {
             // The card's CLOSE key and its shield call this. `open` is a flag the card could clear itself, but the mirror it
             // is about is `main`'s reading of a device, so closing drops both in the one place that filled them.
             device::Request::Close => self.panel.close_device_card(),
-            // Still waiting for its task: the picker (task 6).
-            device::Request::OpenPicker => {} // plan 42 task 6 fills this
+            // The `+` asked for the picker: it is the card that offers the kinds there are, and it closes itself once a row
+            // has answered.
+            device::Request::OpenPicker => self.panel.open_device_picker(),
         }
     }
     /// Write the session, keeping the other 63 patterns from the bank as loaded.

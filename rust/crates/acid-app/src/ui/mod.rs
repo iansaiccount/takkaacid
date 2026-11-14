@@ -134,6 +134,9 @@ pub struct PanelState {
     /// The device card: which device it is about and what `main` last read into it. One card at a time with help, songs
     /// and settings — `open_device_card` is the only way in, so the rule cannot be forgotten at one of the three.
     pub device_card: device_card::Card,
+    /// The picker: whether the card that offers the kinds of device is up. The strip's `+` asks for it and `main` opens it;
+    /// it closes itself, because nothing on it is a reading of the machine.
+    pub device_picker: device_card::Picker,
     /// The device the flat editor fields currently hold. Follows `strip.selected` a frame later, through the swap below.
     pub focused: usize,
     /// One editor per device: written when a switch leaves a device, read when one arrives, so looking away and back keeps
@@ -204,6 +207,7 @@ impl Default for PanelState {
             strip: strip::Strip::default(),
             device_request: None,
             device_card: device_card::Card::default(),
+            device_picker: device_card::Picker::default(),
             focused: 0,
             edit_slots: Vec::new(),
         }
@@ -226,6 +230,7 @@ impl PanelState {
     /// be remembered at two of the three and forgotten at the last.
     pub fn open_device_card(&mut self, index: usize) {
         self.device_card.open = Some(index);
+        self.device_picker.open = false;
         self.settings_open = false;
         self.help_visible = false;
         self.songs.card = None;
@@ -238,6 +243,14 @@ impl PanelState {
     /// remember to clear the same seven fields.
     pub fn close_device_card(&mut self) {
         self.device_card = device_card::Card::default();
+    }
+    /// Show the picker, and put every other card away: there is room for one, and this is the one that adds a device.
+    pub fn open_device_picker(&mut self) {
+        self.device_picker.open = true;
+        self.close_device_card();
+        self.settings_open = false;
+        self.help_visible = false;
+        self.songs.card = None;
     }
 
     /// The notice still worth showing at `now`, if any.
@@ -808,10 +821,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             None => {}
         }
     }
-    // The device card is the last thing painted, so nothing draws over it. It is here rather than inside the settings
-    // card's `draw_settings` because it is not a fold of anything: it is a card about one device, and it is the only
-    // place a device's name, route and removal can be changed.
+    // Both device cards are painted last, the picker over the device card, so nothing draws over either. They are here
+    // rather than inside the settings card's `draw_settings` because neither is a fold of anything: the card is about one
+    // device, and the picker is the way to make another.
     device_card::paint(ui, state, l.panel, s);
+    // The picker is the last thing painted of all: it is the card that adds a device, so it is the one that opens over
+    // everything else and the one Escape closes first.
+    device_card::paint_picker(ui, state, l.panel, s);
 }
 
 /// The computer keyboard plays through the same route as a MIDI keyboard, so both share one voice.

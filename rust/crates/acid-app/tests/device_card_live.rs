@@ -838,3 +838,150 @@ fn switching_device_from_the_keyboard_closes_the_card() {
         "the card went with the device"
     );
 }
+
+/// The picker offers every kind there is, and its footnote is the promise the round keeps: names and extra devices are not
+/// saved yet. The line is part of what the card says, so it is read back from the paint.
+#[test]
+fn the_picker_offers_every_kind_and_says_what_is_not_saved() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    // The strip's cells are named without a kind's name, so the only place the word can come from is a picker row.
+    for (index, cell) in panel.strip.cells.iter_mut().enumerate() {
+        cell.name = format!("CELL {}", index + 1);
+    }
+    panel.device_picker.open = true;
+    let ctx = Context::default();
+    let output = run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let area = device_card::picker_rect(layout(screen()).panel, s);
+    let rows = device_card::picker_rows(area, s);
+    assert_eq!(
+        rows.kinds.len(),
+        acid_app::device::DeviceKind::ALL.len(),
+        "one row per kind, derived from the catalogue"
+    );
+
+    let said = strings(&output).join(" ");
+    assert!(said.contains("ACID"), "every kind is named: {said}");
+    assert!(
+        said.contains("NOT SAVED"),
+        "the card must say that extra devices and names do not survive a restart: {said}"
+    );
+}
+
+#[test]
+fn a_picker_row_asks_for_that_kind() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_picker.open = true;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let area = device_card::picker_rect(layout(screen()).panel, s);
+    let rows = device_card::picker_rows(area, s);
+    click(&ctx, &mut panel, &state, rows.kinds[0].center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::Add(acid_app::device::DeviceKind::Acid))
+    );
+    assert!(
+        !panel.device_picker.open,
+        "and the picker closes on its answer"
+    );
+}
+
+/// At the cap every row is greyed out — the same rule that greys the strip's `+` — but a click still asks, so the refusal is
+/// `Rack::add`'s to say. A dead key would say nothing at all.
+#[test]
+fn at_the_cap_every_row_is_greyed_and_a_click_still_says_so() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.strip.cells = (0..acid_app::device::MAX_DEVICES)
+        .map(|index| StripCell {
+            name: format!("ACID {}", index + 1),
+            running: false,
+            muted: false,
+        })
+        .collect();
+    panel.device_picker.open = true;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let area = device_card::picker_rect(layout(screen()).panel, s);
+    let rows = device_card::picker_rows(area, s);
+    click(&ctx, &mut panel, &state, rows.kinds[0].center());
+    assert_eq!(
+        panel.device_request,
+        Some(Request::Add(acid_app::device::DeviceKind::Acid)),
+        "the key still answers, so the refusal is the rack's to say"
+    );
+}
+
+/// The picker closes itself and says nothing to the rack: it has no mirror to drop, so it is the one card whose CLOSE is
+/// panel state rather than a request.
+#[test]
+fn the_picker_close_key_puts_it_away() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_picker.open = true;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let s = acid_app::ui::layout::scale(screen());
+    let area = device_card::picker_rect(layout(screen()).panel, s);
+    let rows = device_card::picker_rows(area, s);
+    click(&ctx, &mut panel, &state, rows.close.center());
+    assert!(!panel.device_picker.open);
+    assert_eq!(panel.device_request, None);
+}
+
+/// One card at a time: the picker is a card, so Escape closes it first (it is painted last) and opening it puts the device
+/// card away.
+#[test]
+fn the_picker_is_the_top_card_and_escape_takes_it() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    // Opening the picker is what puts the device card away, so the test opens it the way `main` does.
+    panel.device_card.open = Some(0);
+    panel.settings_open = true;
+    panel.open_device_picker();
+    assert_eq!(panel.device_card.open, None);
+    assert!(!panel.settings_open);
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    assert!(dispatch::escape(&mut panel, &state));
+    assert!(!panel.device_picker.open, "Escape closed the picker");
+    assert_eq!(
+        panel.device_card.open, None,
+        "the card it replaced stayed closed"
+    );
+}
+
+/// The rule the other cards already keep, both ways round: the picker puts the device card away, and F3 puts the picker away
+/// — otherwise two cards stand at once and the picker paints over one that is live underneath.
+#[test]
+fn opening_a_card_puts_the_picker_away() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.open_device_picker();
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+
+    let mut bank = acid_core::bank::PatternBank::new_empty();
+    dispatch::handle(
+        dispatch::KeyPress {
+            key: Key::F3,
+            shift: false,
+            ctrl: false,
+        },
+        &mut panel,
+        &state,
+        &mut bank,
+    );
+    assert_eq!(panel.device_card.open, Some(0));
+    assert!(!panel.device_picker.open, "F3 put the picker away");
+}

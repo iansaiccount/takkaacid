@@ -798,7 +798,25 @@ git commit -m "chore(ui): plan 42's gate, and the journey walked"
       `switching_device_from_the_keyboard_closes_the_card`. **Deliberately untested:** `main`'s `AskRemove` arm (which does
       nothing on purpose: the arming is the card's own state) and the `close_device_card()` on the successful-removal path —
       binary, and task 7's journey step 6 is what walks them.
-- [ ] Task 6 — the picker and the footnote
+- [x] Task 6 — the picker and the footnote. The strip's `+` opens `ADD DEVICE`: one row per `DeviceKind::ALL`, greyed from
+      `DeviceKind::enabled(count)` (the same rule the strip's `+` reads, so the two cannot disagree), the footnote
+      `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` in `theme::SILKSCREEN_DIM`, and CLOSE. A row asks `Request::Add` and the
+      picker closes itself, because nothing on it is a reading of the machine. **Review: fresh `reviewer` subagent.**
+      Six findings, all actioned — one a **BLOCK**: **the one-card rule had become one-way again** — F1/F2/F3 did not close the
+      picker, so F3 over the picker put two cards up with the picker painting over a live one, and a row click then left a
+      card about the device the panel had just left. `open_device_card`, the F2 arm and the F1 arm now all clear it, pinned
+      by `opening_a_card_puts_the_picker_away`; `the_picker_is_the_top_card_and_escape_takes_it` now opens the picker through
+      `open_device_picker` and asserts what that clears. The rest: four doc clauses that still said the device card was
+      painted last; the kind's caption was not really pinned (the strip's cells were named `ACID 1`, so `strings` found the
+      word in the strip — they are `CELL 1`/`CELL 2` there now); the cap test's message claimed a greyness it cannot observe
+      (it says "still answers" now, and the greying itself is recorded below); and the plan's own assertion
+      `said.contains("not saved")` could never pass on an uppercase face — it is `"NOT SAVED"`.
+      **Files outside the block:** `src/device.rs` (`DeviceKind::enabled`, which the Interfaces block names), `src/ui/mod.rs`
+      and `src/ui/dispatch.rs` (the one-card rule and Escape's order, which the plan's conventions block asks to extend in
+      place). **Deliberately untested:** `main`'s `OpenPicker` arm and the cap refusal reached from a picker row (binary; the
+      Xvfb walkthrough is the evidence — four devices, greyed row, "four devices is the limit", picker closed), and the strip's
+      `+` greyness, which is a paint colour no helper here can read (the mutation `let full = false` survives the suite), same
+      class as `ALL PORTS`' lit colour in task 4.
 - [ ] Task 7 — the gate and the journey
 
 ### Deliberately untested
@@ -825,6 +843,8 @@ Rulings made while writing this plan, and their cost if wrong:
 | The channel stepper wraps through `ANY` (`One(15)` up → `ANY`, `One(0)` down → `ANY`) | The plan's `(n + 1) % 16` would make `ANY` unreachable once left, which is a one-way door in the middle of the card. The cost if wrong: channel 16 is one key further from channel 1 than it would be if the stepper wrapped around the channels instead. |
 | REMOVE and CLEAR share one two-click rule (`clear::click`, `clear::ARM_SECONDS`) | One arming question answered in one place, so the two keys cannot disagree about what "armed" means. The cost if wrong: the removal question is open for 3 s rather than the 4 s the plan first named — short enough that a slow second click asks again instead of removing, which is the safe direction. |
 | A port the machine stops reporting keeps its row | A click on any port row rebuilds the whole `Ports::Named` from the rows, so the alternative silently drops an unplugged controller from the filter the moment a *different* port is routed. The cost if wrong: a cable no longer plugged in keeps a ticked row on the card until it is unticked. |
+| The picker closes itself rather than asking `main` | It holds no reading of the machine to drop, so it is the one card whose CLOSE is panel state; `Request::Close` therefore names the device card only, which its doc comment overclaims slightly. The cost if wrong: a future picker that shows something from the rack has to start asking. |
+| A greyed picker row is `transport_button`'s unlit face, and stays clickable | Reuses the key idiom instead of inventing a disabled one, and keeps the refusal `Rack::add`'s to say — the same reason the strip's `+` is clickable at the cap. The cost if wrong: a player reads the recessed face as merely unlit rather than unavailable. |
 | The footnote names both losses in one line | One more line on a small card. The alternative is a player losing a name with no warning, which the design calls an anti-goal. |
 | The name field confirms on **Enter only** | Amended in task 3: the original row said "or focus loss" on the premise that the songs card behaves that way, and it does not — it reads its field when SAVE is clicked. A click that dismisses the card cannot also carry the rename in `device_request`, which is one slot. The cost if wrong: a player types a name and clicks the card's own face, and the field keeps the text but the rack keeps the old name until Enter — the caption says `NAME (ENTER)` for that reason. |
 | A rename does not mark the session dirty | Names are not in the save format (`SavedState` has no device name), so `dirty` would light the SAVE lamp and trigger an autosave write for a file whose bytes do not change — the same reason `Add` does not dirty the session. The cost if wrong: a player renames a device, sees the lamp stay dark, and restarts expecting the name to have been kept. The picker's footnote is what tells them it was not. |

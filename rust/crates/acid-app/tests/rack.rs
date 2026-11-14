@@ -46,6 +46,18 @@ fn a_rack_opens_on_one_device_and_publishes_it() {
     ));
 }
 
+/// One rule for "the rack has no room": the strip's `+` and the picker's rows both ask the catalogue, so they cannot disagree
+/// about when a rack is full. A kind that is not enabled is still *clickable* — the refusal is the rack's to say.
+#[test]
+fn a_kind_is_offered_until_the_rack_holds_its_last_device() {
+    for kind in DeviceKind::ALL {
+        assert!(kind.enabled(0));
+        assert!(kind.enabled(MAX_DEVICES - 1), "{kind:?} at the last seat");
+        assert!(!kind.enabled(MAX_DEVICES), "{kind:?} when the rack is full");
+        assert!(!kind.enabled(MAX_DEVICES + 3));
+    }
+}
+
 #[test]
 fn adding_publishes_in_rack_order_and_the_bus_follows_the_list() {
     let mut rack = one();

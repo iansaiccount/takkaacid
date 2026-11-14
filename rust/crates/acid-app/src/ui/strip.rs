@@ -7,7 +7,7 @@
 use eframe::egui::{self, Align2, Pos2, Rect, Sense};
 
 use super::{PanelState, layout, text, theme, tips, transport};
-use crate::device::{DeviceKind, MAX_DEVICES, Request};
+use crate::device::{DeviceKind, Request};
 
 /// One device, as the strip shows it.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -191,7 +191,10 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
 /// refusal is `Rack::add`'s to say, and a dead key would say nothing at all.
 fn paint_add(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
     let add = layout::strip_add_rect(area);
-    let full = state.strip.cells.len() >= MAX_DEVICES;
+    // The cap is the catalogue's answer, not a second comparison here: `+` greys when no kind can be added.
+    let full = !DeviceKind::ALL
+        .iter()
+        .any(|kind| kind.enabled(state.strip.cells.len()));
     let colour = if full {
         theme::LED_OFF
     } else {
@@ -220,14 +223,16 @@ fn paint_add(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32) {
     let response = ui.interact(add, ui.scope_id().with("device-add"), Sense::click());
     tips::hover(&response, state.tooltips, tips::Control::DeviceAdd);
     if response.clicked() {
-        // The only kind there is; plan 42's picker replaces this with a card over `DeviceKind::ALL`.
-        state.device_request = Some(Request::Add(DeviceKind::Acid));
+        // The picker offers every kind there is; `+` only opens it. It opens even at the cap — a dead key would say
+        // nothing at all, and the picker's greyed rows are what say the rack is full.
+        state.device_request = Some(Request::OpenPicker);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::device::MAX_DEVICES;
 
     fn area() -> Rect {
         Rect::from_min_size(Pos2::new(16.0, 8.0), egui::vec2(948.0, 30.0))

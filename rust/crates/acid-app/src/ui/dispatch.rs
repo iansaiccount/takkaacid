@@ -158,6 +158,7 @@ pub fn handle(
             panel.help_visible = false;
             panel.songs.card = None;
             panel.close_device_card();
+            panel.device_picker.open = false;
         }
     }
     // The help card is panel state, so it is toggled here rather than in `apply` — and it follows the same one-card rule
@@ -168,10 +169,11 @@ pub fn handle(
         if panel.help_visible {
             panel.settings_open = false;
             panel.close_device_card();
+            panel.device_picker.open = false;
         }
     }
-    // The device card is the last thing painted, so it is the first thing Escape gives up on; opening it puts the other
-    // three away, because there is room for one card and this one is over the top.
+    // The device card is the topmost of the four inside the panel, so it is the second thing Escape gives up on and the
+    // one F3 toggles. Opening it puts the other four away, because there is room for one card.
     if matches!(shortcut, shortcuts::Shortcut::ToggleDeviceCard) {
         if panel.device_card.open.is_some() {
             panel.close_device_card();
@@ -191,13 +193,19 @@ pub fn handle(
     Handled::Shortcut(shortcut)
 }
 
-/// Escape gives up on one thing at a time: the device card first, because it is painted over everything; then the
-/// settings card, then help, then the songs card, then a learn in progress. Returns whether there was anything to close.
+/// Escape gives up on one thing at a time, in the order the cards are painted: the picker (over everything), then the device
+/// card, then the settings card, then help, then the songs card, then a learn in progress. Returns whether there was anything
+/// to close.
 ///
 /// The topmost card first is the rule; the songs card is the exception already — it is painted over help but closed after
 /// it — and the device card is the one card that needed the rule to hold, because it is the one a hand opens by accident.
 /// It lives here rather than in `main` because the order is the behaviour, and `main` is a binary no test can call.
 pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
+    // The picker is painted last, so it is the first thing Escape gives up on; then the device card under it.
+    if panel.device_picker.open {
+        panel.device_picker.open = false;
+        return true;
+    }
     if panel.device_card.open.is_some() {
         panel.close_device_card();
         return true;

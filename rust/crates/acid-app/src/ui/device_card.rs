@@ -6,7 +6,8 @@
 //! what a card shows is a reading of the machine and the panel does not own the rack.
 //!
 //! One card at a time: opening this one puts help, songs and settings away (`PanelState::open_device_card`), and it is
-//! painted last, so nothing draws over it.
+//! One card at a time: opening this one puts help, songs, settings and the picker away (`PanelState::open_device_card`), and
+//! it is painted over everything but the picker.
 
 use eframe::egui::{self, Align2, Pos2, Rect};
 
@@ -118,6 +119,144 @@ pub fn card_rect(panel: Rect, s: f32) -> Rect {
             height * s,
         ),
     )
+}
+
+/// The picker: a card that offers the kinds of device there are, with one honest line about what is not saved yet.
+///
+/// It is its own value rather than `device_card`'s flag because it is a different card — its own geometry, its own footnote
+/// and its own answer (`Add`), and the two are never up together.
+#[derive(Clone, Debug, Default)]
+pub struct Picker {
+    pub open: bool,
+}
+
+/// How wide the picker is, as a fraction of the panel's width, and the narrowest it may get. Narrower than the device card:
+/// a kind's name is three or four letters and the footnote is one line.
+const PICKER_WIDTH: f32 = 0.32;
+const PICKER_MIN_WIDTH: f32 = 280.0;
+/// The blank line the footnote sits on, and the type it is set in.
+const FOOTNOTE: f32 = 14.0;
+/// The sentence the round keeps: what a restart costs. It disappears in the round that adds `SavedState::devices`.
+const NOT_SAVED: &str = "NAMES AND EXTRA DEVICES ARE NOT SAVED YET";
+
+/// The picker's rect inside `panel`: centred, and as tall as its rows, its footnote and its one key need.
+pub fn picker_rect(panel: Rect, s: f32) -> Rect {
+    let kinds = crate::device::DeviceKind::ALL.len();
+    let height = PADDING + TITLE + kinds as f32 * (ROW + GAP) + FOOTNOTE + ROW + PADDING;
+    Rect::from_center_size(
+        panel.center(),
+        egui::vec2(
+            panel
+                .width()
+                .mul_add(PICKER_WIDTH, 0.0)
+                .max(PICKER_MIN_WIDTH * s),
+            height * s,
+        ),
+    )
+}
+
+/// One rect per kind, in `DeviceKind::ALL` order, and the CLOSE key under them.
+pub struct PickerRows {
+    pub kinds: Vec<Rect>,
+    pub close: Rect,
+}
+
+/// Lay the picker out. The count comes from `DeviceKind::ALL`, so a second kind is a variant and a row here.
+pub fn picker_rows(area: Rect, s: f32) -> PickerRows {
+    let left = area.left() + PADDING * s;
+    let width = area.width() - PADDING * 2.0 * s;
+    let top = area.top() + (PADDING + TITLE) * s;
+    let kinds: Vec<Rect> = (0..crate::device::DeviceKind::ALL.len())
+        .map(|index| {
+            Rect::from_min_size(
+                Pos2::new(left, top + index as f32 * (ROW + GAP) * s),
+                egui::vec2(width, ROW * s),
+            )
+        })
+        .collect();
+    let close = Rect::from_min_size(
+        Pos2::new(
+            area.right() - PADDING * s - 80.0 * s,
+            area.top() + area.height() - PADDING * s - ROW * s,
+        ),
+        egui::vec2(80.0 * s, ROW * s),
+    );
+    PickerRows { kinds, close }
+}
+
+/// Paint the picker and ask for whatever a click meant. Like the device card it is a shield, a face, its rows and one key;
+/// unlike the device card it closes itself, because it holds nothing that `main` had to read.
+pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
+    if !state.device_picker.open {
+        return;
+    }
+    let area = picker_rect(panel, s);
+    let rows = picker_rows(area, s);
+    let shield = modal::shield(ui, ui.max_rect(), "device-picker-shield");
+    {
+        let painter = ui.painter();
+        painter.rect_filled(area, 6.0 * s, theme::PANEL_RAISED);
+        painter.rect_stroke(
+            area,
+            6.0 * s,
+            theme::silkscreen_stroke(s),
+            egui::StrokeKind::Inside,
+        );
+        painter.text(
+            Pos2::new(area.left() + PADDING * s, area.top() + PADDING * s),
+            Align2::LEFT_TOP,
+            "ADD DEVICE",
+            theme::legend(13.0 * s),
+            theme::SILKSCREEN,
+        );
+    }
+
+    let mut asked: Option<Request> = None;
+    let count = state.strip.cells.len();
+    for (index, kind) in crate::device::DeviceKind::ALL.iter().enumerate() {
+        let Some(rect) = rows.kinds.get(index).copied() else {
+            return;
+        };
+        // A greyed row is the unlit face: recessed and plain instead of raised and amber. It still answers a click, so the
+        // refusal is `Rack::add`'s to say — the same reason the strip's `+` stays clickable at the cap.
+        let fits = kind.enabled(count);
+        if transport::transport_button(
+            ui,
+            &format!("device-picker-kind-{index}"),
+            rect,
+            kind.name(),
+            fits,
+        )
+        .clicked()
+        {
+            asked = Some(Request::Add(*kind));
+        }
+    }
+
+    // The footnote is the promise this round keeps, so it is a line on the card and not a notice that clears itself.
+    ui.painter().text(
+        Pos2::new(
+            area.left() + PADDING * s,
+            rows.kinds.last().map_or(area.top(), |last| last.bottom()) + FOOTNOTE * 0.5 * s,
+        ),
+        Align2::LEFT_CENTER,
+        NOT_SAVED,
+        theme::legend(10.0 * s),
+        theme::SILKSCREEN_DIM,
+    );
+
+    if transport::transport_button(ui, "device-picker-close", rows.close, "CLOSE", false).clicked()
+        || shield.clicked()
+    {
+        // Closing is this card's own state and says nothing to the rack: it has no mirror to drop.
+        asked = None;
+        state.device_picker.open = false;
+    }
+    if let Some(request) = asked {
+        // A row that was clicked has answered the question the card asked, so the card goes.
+        state.device_picker.open = false;
+        state.device_request = Some(request);
+    }
 }
 
 /// One rect per row of the card, in the order it paints them.
