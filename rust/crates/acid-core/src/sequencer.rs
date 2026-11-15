@@ -68,12 +68,18 @@ impl Sequencer {
     /// is the same start otherwise — the clock is put back on a boundary, and the step it lands on sounds — so a seek is
     /// never a silent restart. `step` wraps: callers may hand a long-running count, not an index.
     pub fn start_at(&mut self, step: usize) {
-        self.running = true;
-        // The clock kept counting through the stop, so it has to be put back on a boundary: otherwise the first step after
-        // RUN is whatever fraction of a step the previous run happened to leave, and with swing it can even be the short half
-        // of the pair.
-        self.clock.restart();
         self.position = step % STEPS_PER_PATTERN;
+        self.arm();
+    }
+
+    /// Arm the clock and the gate for a step to sound: **the one place** that says what starting a step means.
+    ///
+    /// The clock kept counting through a silence, so it is put back on a boundary: otherwise the first step after a start is
+    /// whatever fraction of a step the previous run happened to leave, and with swing it can even be the short half of the
+    /// pair. A fifth field of arming is added here once, not in every way of starting.
+    fn arm(&mut self) {
+        self.clock.restart();
+        self.running = true;
         self.prev_slide = false;
         self.trigger_pending = true;
         self.gate_close_pending = false;
@@ -93,28 +99,14 @@ impl Sequencer {
         self.running
     }
 
-    /// Pause: stop the clock and keep the step.
+    /// Carry on from the step a silence kept, arming the clock and the gate like any other start.
     ///
-    /// The same gate handling as [`Sequencer::stop`] — a pause is silent immediately — but the position is left where it is,
-    /// which is the whole difference between the two. A stop is "start the bar again"; a pause is "carry on from here".
-    pub fn pause(&mut self) {
-        if self.running {
-            self.running = false;
-            self.trigger_pending = false;
-            self.gate_close_pending = true;
-        }
-    }
-
-    /// Carry on from the step a pause kept.
-    ///
-    /// The clock restarts so the first step after the pause is a whole step, exactly as [`Sequencer::start_at`] does; what it
-    /// does not do is move the position, so a bar paused halfway through resumes halfway through.
+    /// The position is **not** moved — that is the whole of the difference from [`Sequencer::start_at`], which is handed the
+    /// step to start on. The sequencer cannot tell a stop from a pause, because on this side of the seam they are the same
+    /// thing: silent, with the step kept. Which one the player asked for is [`acid_core::engine::Engine`]'s question, and it
+    /// answers it by calling `resume` or `start` — never by reading a flag from here.
     pub fn resume(&mut self) {
-        self.clock.restart();
-        self.running = true;
-        self.prev_slide = false;
-        self.trigger_pending = true;
-        self.gate_close_pending = false;
+        self.arm();
     }
 
     /// The step being played, `0..16`.

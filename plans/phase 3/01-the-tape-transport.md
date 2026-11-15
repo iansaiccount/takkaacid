@@ -200,6 +200,22 @@ stored reversed pattern.
       on from it; a stop returns to the top and a pause does not; a resume restarts the clock so the first step after it is a
       whole step. Still to come in this task: `Rack::transport: Stopped | Playing | Paused`, the fan-out and the `Parameters`
       seam so the renderer can tell a stop from a pause, `main`'s request handling, and `transport::Request::Pause`.
+
+      **Review found (on the engine half), and what was done.** `resume` re-implemented `start_at`'s five-line arming
+      sequence — the hand-kept second list this repo has paid for twice — so both now call one private `Sequencer::arm`
+      (fixed). `Sequencer::pause` was byte-identical to `stop` and its doc claimed a distinction the sequencer does not have
+      (fixed: the sequencer has one silence, and the third state lives in `Engine`, whose `pause`/`resume` say which way back
+      each one goes). `Engine::resume` now carries the warning that it must not be used to leave `Stopped` — the engine keeps
+      its step through a stop too, so it cannot tell the two apart, and that is the app's `Transport` to know; it also fixes
+      the plan's test 2 to say PLAY-from-Stopped is `start`. The guide is untouched because no panel control is wired yet —
+      nothing a player can press has changed; task 7 owns pages 04, 09, 20 and the transport screenshots.
+      **And a test that could not fail:** `a_resume_plays_a_whole_step_before_it_advances` rendered no part-step before the
+      pause, so a `resume` with no clock work at all passed it. Rewritten as `a_resume_restarts_the_clock_on_the_step_it_kept`,
+      which renders half a step, pauses, resumes, then renders **half a step plus a little** — the extra is the whole point,
+      because equal halves never cross a boundary. Verified by mutation: deleting `self.clock.restart()` from `arm` now fails
+      that test, and did not before. Three tests joined it: a pause is silent at the audio level (rms, not the flag), a resume
+      re-strikes the step it kept (the audible decision `arm` makes, now pinned and left to be judged by ear in task 4), and a
+      whole step after a resume advances the bar.
 - [ ] Task 3 — the tape, drawn
 - [ ] Task 4 — the tape, wired
 - [ ] Task 5 — the bottom row

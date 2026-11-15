@@ -146,12 +146,20 @@ impl Engine {
     }
 
     /// Stop the clock and keep the step, so [`Engine::resume`] carries on from it.
+    ///
+    /// The same silence as [`Engine::stop`], because below this line the two are the same thing. The third state exists
+    /// because of what follows: a stop is answered with `start`, which returns to the top of the bar, and a pause with
+    /// `resume`, which does not.
     pub fn pause(&mut self) {
         self.playing = false;
-        self.sequencer.pause();
+        self.sequencer.stop();
     }
 
     /// Carry on from the step a pause kept. Unlike [`Engine::start`] this does not return to the top of the bar.
+    ///
+    /// **Not for coming out of a stop.** The engine keeps its step through a stop as well, so it cannot tell the two states
+    /// apart: a caller that resumes from `Stopped` gets the stale step rather than the bar's first. Play from `Stopped` is
+    /// [`Engine::start`]; the app's `Rack::transport` is what knows which of the two the player pressed.
     pub fn resume(&mut self) {
         self.playing = true;
         self.sequencer.resume();
