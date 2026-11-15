@@ -145,6 +145,18 @@ impl Engine {
         self.sequencer.stop();
     }
 
+    /// Stop the clock and keep the step, so [`Engine::resume`] carries on from it.
+    pub fn pause(&mut self) {
+        self.playing = false;
+        self.sequencer.pause();
+    }
+
+    /// Carry on from the step a pause kept. Unlike [`Engine::start`] this does not return to the top of the bar.
+    pub fn resume(&mut self) {
+        self.playing = true;
+        self.sequencer.resume();
+    }
+
     /// Swap the playing pattern without disturbing position, glide history or the clock.
     pub fn set_pattern(&mut self, pattern: Arc<Pattern>) {
         self.sequencer.set_pattern(pattern);

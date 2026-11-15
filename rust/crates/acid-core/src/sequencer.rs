@@ -93,6 +93,30 @@ impl Sequencer {
         self.running
     }
 
+    /// Pause: stop the clock and keep the step.
+    ///
+    /// The same gate handling as [`Sequencer::stop`] — a pause is silent immediately — but the position is left where it is,
+    /// which is the whole difference between the two. A stop is "start the bar again"; a pause is "carry on from here".
+    pub fn pause(&mut self) {
+        if self.running {
+            self.running = false;
+            self.trigger_pending = false;
+            self.gate_close_pending = true;
+        }
+    }
+
+    /// Carry on from the step a pause kept.
+    ///
+    /// The clock restarts so the first step after the pause is a whole step, exactly as [`Sequencer::start_at`] does; what it
+    /// does not do is move the position, so a bar paused halfway through resumes halfway through.
+    pub fn resume(&mut self) {
+        self.clock.restart();
+        self.running = true;
+        self.prev_slide = false;
+        self.trigger_pending = true;
+        self.gate_close_pending = false;
+    }
+
     /// The step being played, `0..16`.
     pub fn position(&self) -> usize {
         self.position

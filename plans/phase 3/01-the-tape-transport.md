@@ -195,7 +195,11 @@ stored reversed pattern.
       `area` for a `layout::Row`); `transport.rs`'s comment named the fifth transport cell `VOLUME` when it is `LEARN` (fixed,
       and the reason this plan's row description was wrong too); two new functions took a `_scale` they ignored while their
       sibling scaled its gaps (fixed by dropping it, matching `layout::knob_cells`).
-- [ ] Task 2 — the transport state
+- [ ] **Task 2 — the transport state** (started). The **engine half** has landed: `Sequencer::pause`/`resume` and
+      `Engine::pause`/`resume`, with `tests/pause.rs` fixing the three semantics — a pause keeps the step and a resume carries
+      on from it; a stop returns to the top and a pause does not; a resume restarts the clock so the first step after it is a
+      whole step. Still to come in this task: `Rack::transport: Stopped | Playing | Paused`, the fan-out and the `Parameters`
+      seam so the renderer can tell a stop from a pause, `main`'s request handling, and `transport::Request::Pause`.
 - [ ] Task 3 — the tape, drawn
 - [ ] Task 4 — the tape, wired
 - [ ] Task 5 — the bottom row
