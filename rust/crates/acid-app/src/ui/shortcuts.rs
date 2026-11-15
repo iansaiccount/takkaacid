@@ -13,7 +13,14 @@ use crate::state::SharedState;
 /// A keyboard shortcut the panel understands.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Shortcut {
+    /// Play or pause, whichever the transport is not. A stop is the STOP key's job: a deck's space bar does not rewind.
     PlayStop,
+    /// The deck's BACK key: not wired, and says so.
+    SeekBack,
+    /// The deck's FORWARD key: not wired, and says so.
+    SeekForward,
+    /// The deck's RECORD key: nothing to record into yet.
+    Record,
     TempoUp,
     TempoDown,
     NextPattern,
@@ -29,6 +36,10 @@ pub enum Shortcut {
 pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
     match (key, shift) {
         (Key::Space, _) => Some(Shortcut::PlayStop),
+        // The deck's three unwired keys still answer, because a key that does nothing reads as broken.
+        (Key::Comma, false) => Some(Shortcut::SeekBack),
+        (Key::Period, false) => Some(Shortcut::SeekForward),
+        (Key::R, false) => Some(Shortcut::Record),
         (Key::ArrowUp, false) => Some(Shortcut::TempoUp),
         (Key::ArrowDown, false) => Some(Shortcut::TempoDown),
         (Key::ArrowRight, true) => Some(Shortcut::NextPattern),
@@ -67,7 +78,12 @@ pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) ->
     match shortcut {
         // The transport belongs to the rack, so these three are requests the panel records and `main` drains; nothing here
         // may write one device's atomic, or the next fan-out would undo it.
-        Shortcut::PlayStop | Shortcut::TempoUp | Shortcut::TempoDown => false,
+        Shortcut::PlayStop
+        | Shortcut::SeekBack
+        | Shortcut::SeekForward
+        | Shortcut::Record
+        | Shortcut::TempoUp
+        | Shortcut::TempoDown => false,
         Shortcut::NextPattern => {
             select_pattern(state, bank, (bank.current() + 1) % TOTAL_PATTERNS);
             true

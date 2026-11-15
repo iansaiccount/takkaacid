@@ -118,8 +118,9 @@ pub fn save_indicator_rect(top: Rect, scale: f32) -> Rect {
     )
 }
 
-/// Keys on the tape deck: back, play, pause, stop, forward, record — in that order, left to right, the way a deck reads.
-pub const TAPE_COUNT: usize = 6;
+/// Keys on the tape deck, derived from the deck's own catalogue: a seventh key is a variant, and gets a cell without this
+/// line moving. The order is `TapeKey::ALL`'s, and the rects follow it positionally.
+pub const TAPE_COUNT: usize = crate::ui::tape::TapeKey::ALL.len();
 
 /// Cells in the tempo stepper: the nudge down, the readout, the nudge up.
 pub const TEMPO_STEPPER_CELLS: usize = 3;

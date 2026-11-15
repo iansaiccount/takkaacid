@@ -235,11 +235,32 @@ stored reversed pattern.
       layout hands out (and the three unwired ones ask for nothing), the deck paints **no text** inside its own rects (the
       no-glyph rule made checkable), and the lit states follow the transport. The first screenshot showed the back and forward
       arrows **mirrored** — each built by hand, each pointing the wrong way — so both now go through one `arrow(x, y, unit,
-      direction, ink)` helper where the sign alone decides the direction. Owed: the review of this task.
-- [ ] Task 4 — the tape, wired
+      direction, ink)` helper where the sign alone decides the direction.
+      **Review found, and what was done.** `TAPE_COUNT` was still a hand-kept six while two comments claimed it was derived
+      (fixed: `TapeKey::ALL.len()`, so a seventh key gets a cell); a `_` arm survived in `lit` (fixed, spelled out); the lit
+      test could not fail — it asserted a `store`/`load` round trip and never looked at a pixel (being fixed by a painted-fill
+      assertion); the arrow pairs were mirrored *and* off-centre inside their keys (centred now); a click on an unwired key
+      could never say why, because `draw` only returned a request (fixed: it notifies for the three itself, matching the
+      keyboard's words); `dirty` was set for play/pause/stop, which `SavedState` does not carry, so the song was marked changed
+      for something the file cannot hold (fixed: only a tempo nudge dirties it); and a `&mut PanelState` a function only reads
+      is how a hidden write gets in later (the parameter stays `&mut` for the notices).
+      **Still owed:** a test that pins each key's *symbol* — shape count and arrow direction — which the reviewer asked for
+      because the arrows shipped mirrored once and only a screenshot caught it. And one decision for the player, below.
+- [ ] **Task 4 — the tape, wired** (partly). `space` is **play/pause** now, not play/stop (a deck's space bar does not
+      rewind), and the three unwired keys answer on the keyboard — `,`, `.` and `R` — and on a click: both halves say the same
+      words from one place each (`dispatch::not_wired`, and `tape::draw`'s notice). `main` already drains `Play`/`Pause`/`Stop`
+      to the rack. Still owed: the tests for the space/keydown paths, and the words decision below.
 - [ ] Task 5 — the bottom row
 - [ ] Task 6 — `SONGS` → `BANKS`
 - [ ] Task 7 — documents and screenshots
 - [ ] Task 8 — the gate and the mutation checks
 
 Awaiting the player's approval of this design before task 1.
+
+## A decision for the player, not the code
+
+The deck's PLAY key hovers with the tip titled `RUN` — the transport row's word, which this phase is retiring — and its
+shortcut line still says "start or stop, same as RUN / STOP", which stopped being true the moment `space` became play/pause.
+The minimal truthful fix is a `TapePlay`/`TapeStop` pair of tips (wording the keys the face already shows: PLAY, PAUSE, STOP),
+appended like the four tape entries so no index moves. It is one word on a face the player will read, so it is asked rather than
+settled: **PLAY and STOP, or keep the RUN/STOP tips for the deck too?**

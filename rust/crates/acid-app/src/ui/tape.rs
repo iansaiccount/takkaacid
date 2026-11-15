@@ -81,6 +81,16 @@ pub fn draw(
         tips::hover(&response, state.tooltips, key.tip());
         if response.clicked() {
             asked = key.request();
+            if asked.is_none() {
+                // A key with nothing behind it still answers: a silent key reads as broken, and the notice is the promise
+                // being honest. The words live beside the tips, in `ui::tips`.
+                state.notify(match key {
+                    TapeKey::Back => "BACK IS NOT WIRED YET",
+                    TapeKey::Forward => "FORWARD IS NOT WIRED YET",
+                    TapeKey::Record => "RECORD IS NOT WIRED YET",
+                    TapeKey::Play | TapeKey::Pause | TapeKey::Stop => "NOTHING TO DO",
+                });
+            }
         }
     }
 
@@ -208,14 +218,15 @@ fn symbol(painter: &egui::Painter, key: TapeKey, rect: Rect, ink: egui::Color32)
             painter.add(arrow(c.x + unit * 0.55, c.y, unit, 1.0, ink));
         }
         // Back and forward are the same arrow twice, pointing the way the key moves the playhead.
+        // Two arrows make a pair `2 * unit * 1.05` wide, so a pair centred on the key starts half that from the centre.
         TapeKey::Back => {
-            for shift in [0.0, unit * 1.05] {
-                painter.add(arrow(c.x - unit * 0.55 + shift, c.y, unit, -1.0, ink));
+            for shift in [-unit * 0.52, unit * 0.52] {
+                painter.add(arrow(c.x + shift - unit * 0.5, c.y, unit, -1.0, ink));
             }
         }
         TapeKey::Forward => {
-            for shift in [0.0, unit * 1.05] {
-                painter.add(arrow(c.x + unit * 0.55 - shift, c.y, unit, 1.0, ink));
+            for shift in [-unit * 0.52, unit * 0.52] {
+                painter.add(arrow(c.x + shift + unit * 0.5, c.y, unit, 1.0, ink));
             }
         }
         TapeKey::Pause => {

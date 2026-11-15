@@ -501,7 +501,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // the next fan-out.
     if let Some(request) = tape::draw(ui, state, shared, l.top, s, p) {
         state.transport_request = Some(request);
-        state.dirty = true;
+        // The save file carries the tempo and not the transport, so only a nudge changes the song: play, pause and stop are
+        // performance, and dirtying the document for them would write a file for nothing.
+        state.dirty |= matches!(request, transport::Request::NudgeTempo(_));
     }
 
     // The middle of the strip says one thing at a time: the song the session is working on, or — for a few seconds — what
