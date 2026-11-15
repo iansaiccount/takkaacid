@@ -83,21 +83,22 @@ families exchanged:
 
 | | Black (today) | Yellow | rule kept |
 |---|---|---|---|
-| `panel` | `#0B0B0B` | `#FFC300` | the largest surface |
-| `panel_raised` | `#191919` | `#141008` | reads as raised on the face; keys and knobs are dark on amber |
+| `panel` | `#0B0B0B` | `#C99400` | the largest surface, and the **quieter** of the two golds: a whole window of it must not glare |
+| `panel_raised` | `#191919` | `#141008` | reads as raised on the face; the keys that are engraved plates and the knobs are dark on amber |
+| `key_face` | `#040404` | `#FFC300` | the face of an **unlit key**. The brighter gold lives here, where a hand rests and where the area is small; the face took the quiet one |
 | `raised_ink` | `#FFC300` | `#FFE9B0` | legible on `panel_raised`: a key's caption, a knob's pointer. The face's ink will not do, because a raised control is the other family's surface in one scheme |
-| `well` | `#040404` | `#C99400` | reads as *recessed*: darker than the face in both, by the same perceived step |
+| `well` | `#040404` | `#9E7600` | reads as *recessed*: darker than the face in both, by the same perceived step |
 | `silkscreen` | `#FFC300` | `#0B0B0B` | maximum contrast against the face |
-| `silkscreen_dim` | `#7A5C00` | `#5C4A00` | a legend that is there but not shouting — on the **well** as well as the face, because a key's border, the knob's unlit arc and the strip's shelf are drawn on it (3.2:1 in both schemes) |
-| `led_on` | `#FFE066` | `#861F00` | a lit lamp is **seen**: contrast against the face (and the well its arc is drawn on), not luminance above it |
+| `silkscreen_dim` | `#7A5C00` | `#3A2E00` | a legend that is there but not shouting — on the **well** as well as the face, because a key's border, the knob's unlit arc and the strip's shelf are drawn on it (3.2:1 in both schemes) |
+| `led_on` | `#FFE066` | `#621600` | a lit lamp is **seen**: contrast against the face (and the well its arc is drawn on), not luminance above it |
 | `led_off` | `#2A2208` | `#D9A600` | an unlit lamp is **invisible**: nearly the face's own colour, as black's `#2A2208` nearly is on `#040404` |
-| `led_accent` | `#FF9500` | `#7A1F00` | ink for the **face**: the loud colour, and louder than `silkscreen_dim` on it, because UNSAVED wears it and SAVED wears the dim legend |
+| `led_accent` | `#FF9500` | `#4E1300` | ink for the **face**: the loud colour, and louder than `silkscreen_dim` on it, because UNSAVED wears it and SAVED wears the dim legend |
 | `lit_ink` | `#FF9500` | `#FFC97A` | ink for a **lit key's raised face**, which is a different reading: a colour dark enough to read on the amber face is too dark to read on a near-black key, so the accent's two roles are two values in the amber scheme |
 | `text` | `#F5F0E0` | `#0B0B0B` | contrasting the well |
 | `white_key` | `#E8E2D0` | `#E8E2D0` | cream stays cream: a keycap is a physical thing |
 | `keycap_ink` | `#0B0B0B` | `#0B0B0B` | legible on that cream, which does not change between schemes |
 | `shade` | `black alpha 90` | `black alpha 90` | darkens whatever is under it |
-| `learn_target` | `#3DE8F0` | `#0B7A85` | never one of the panel's own lights, *and* seen: cyan on the amber face is 1.07:1, a hue difference with no luminance step |
+| `learn_target` | `#3DE8F0` | `#0B4E55` | never one of the panel's own lights, *and* seen: cyan on a gold face is a hue difference with almost no luminance step (1.8:1) |
 
 On a bright face a lamp is a mark and an unlit lamp is invisible, so the rule a scheme keeps is contrast against the face,
 not luminance above it: nothing can be both brighter than `#FFC300` and contrasting against it (white is 1.57:1 on it,
@@ -462,3 +463,30 @@ The reviewer who ruled on this asked for it, and it is recorded as their decisio
 - **The greyed `+` at the rack's cap is 1.22:1 on amber** (black 1.30:1), because ruling 1 made `led_off` a colour that
   disappears into the face. It matches black's own intent — a dead key that says "no room" by being nearly unlit — and the
   picker's greyed rows are what actually explain the cap.
+
+### The amber face softened (after the review loop, at the user's request)
+
+A player found the amber scheme too bright to look at. The request: **swap the main yellow with the yellow the buttons use,
+so the subtle one is dominant.**
+
+It was not a swap of two values, because the "button yellow" was `well` — one field doing two jobs, the recessed displays
+*and* the unlit keys — so moving it under the face would have made the wells brighter than the face and broken "a recess is a
+hole in the face". The fix is one new role and a repaint:
+
+- **`Palette::key_face`** — the face of an *unlit* key. Black: `#040404` (its old `well`, so the black scheme is
+  byte-identical); amber: `#FFC300`, the gold the face used to be. `transport::transport_button` paints an unlit key with it.
+- The amber **face** is the quiet gold it came from, `#C99400`; the **wells** go a step darker again, `#9E7600`, so the
+  displays, knob recesses and the strip's shelf still read as recesses.
+- The inks were re-derived against a mid-tone face, because every dark pair tightened: `silkscreen_dim` `#5C4A00` →
+  `#3A2E00`, `led_on` `#861F00` → `#621600`, `led_accent` `#7A1F00` → `#4E1300` (it must still outshout the dim legend),
+  `learn_target` `#0B7A85` → `#0B4E55` (a cue needs 3:1 against the face it is drawn on). All fifteen rules hold in both
+  schemes — checked with `theme`'s own luminance formula before a line of Rust was touched, then by the suite.
+- Two tests stated the old design and were restated rather than deleted: `the_face_is_dark_in_one_scheme_and_bright_in_the_other`
+  is now `the_amber_face_is_a_quieter_gold_than_the_keys_on_it` (the face is no longer the brightest surface — its keys are),
+  and `the_two_families_are_exchanged` now runs through `key_face` (`YELLOW.key_face == BLACK.silkscreen`), which is where the
+  black scheme's legend gold went. A new rule pins a key's legend against the key's own face: `contrast(key_face, silkscreen)
+  >= 4.5`.
+
+Cost if wrong: the keys are now the loudest thing on the face, where before the face was; a hand that reads "bright = the
+surface" has to relearn one step. The black scheme is untouched, and the pictures in the guide's amber pages were retaken
+(plan 45's record) so the book does not show the old gold.

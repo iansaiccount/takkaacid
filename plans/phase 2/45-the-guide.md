@@ -156,3 +156,6 @@ image and every cross-reference resolves, and the new facts are present). The wo
 - **The capture is offscreen, and says so.** `img/README.md` records `Xvfb` + `WINIT_X11_SCALE_FACTOR=2` + `xdotool`
   instead of `grim` on a live output: same binary, same 980 × 670 face, rendered at 2×, and reproducible without taking over
   someone's desktop.
+- [x] **The amber palette softened after this round** (`two-devices`, `strip`, `clipboard-notice` retaken; `19-a-devices-card`'s
+  colour paragraph corrected, because the keys are now the *brighter* gold and its old wording said the key faces were dark).
+  Plan 44's record carries the change and why it needed a new palette role.

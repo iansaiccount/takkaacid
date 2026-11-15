@@ -32,6 +32,10 @@ pub struct Palette {
     pub panel: Color32,
     /// Knob bodies, raised key faces and the cards laid over the face.
     pub panel_raised: Color32,
+    /// The face of an *unlit* key — a transport key, an octave key, `RANDOM`. Its own role because in the amber scheme it
+    /// is the one surface that is *lighter* than the face, where the wells are darker: the face is the subtle gold and the
+    /// keys stand off it.
+    pub key_face: Color32,
     /// Ink for captions and pointers drawn on `panel_raised`: a key's label, a knob's pointer line.
     ///
     /// The face's ink will not do: it is chosen to read against the face, and a raised control is the *other* family's
@@ -66,8 +70,8 @@ pub struct Palette {
     /// The "you can pick this" colour while a learn is choosing.
     ///
     /// Not one of the panel's own lights, so it cannot be mistaken for a lit key — but it has to be *seen*, and on the
-    /// amber face a cyan would be a hue difference with no luminance step (1.07:1, invisible). Each scheme therefore
-    /// carries its own: cyan on the near-black face, a deep teal on the amber one.
+    /// amber face a cyan would be a hue difference with almost no luminance step (1.8:1, too weak for a cue). Each scheme
+    /// therefore carries its own: cyan on the near-black face, a deep teal on the gold one.
     pub learn_target: Color32,
 }
 
@@ -82,6 +86,7 @@ impl Palette {
 pub const BLACK: Palette = Palette {
     panel: Color32::from_rgb(0x0B, 0x0B, 0x0B),
     panel_raised: Color32::from_rgb(0x19, 0x19, 0x19),
+    key_face: Color32::from_rgb(0x04, 0x04, 0x04),
     raised_ink: Color32::from_rgb(0xFF, 0xC3, 0x00),
     well: Color32::from_rgb(0x04, 0x04, 0x04),
     silkscreen: Color32::from_rgb(0xFF, 0xC3, 0x00),
@@ -103,25 +108,27 @@ pub const BLACK: Palette = Palette {
 /// brightest shapes on the face, and every reading rule the panel depends on ("a well is a hole in the face") would break.
 /// What is exchanged is the two *families*: the face becomes the amber and the engraving becomes the near-black.
 pub const YELLOW: Palette = Palette {
-    panel: Color32::from_rgb(0xFF, 0xC3, 0x00),
+    panel: Color32::from_rgb(0xC9, 0x94, 0x00),
     panel_raised: Color32::from_rgb(0x14, 0x10, 0x08),
+    // The old face's gold, now the keys': the face is the quieter gold below, so what a hand rests on stands out of it.
+    key_face: Color32::from_rgb(0xFF, 0xC3, 0x00),
     raised_ink: Color32::from_rgb(0xFF, 0xE9, 0xB0),
-    well: Color32::from_rgb(0xC9, 0x94, 0x00),
+    well: Color32::from_rgb(0x9E, 0x76, 0x00),
     silkscreen: Color32::from_rgb(0x0B, 0x0B, 0x0B),
-    silkscreen_dim: Color32::from_rgb(0x5C, 0x4A, 0x00),
+    silkscreen_dim: Color32::from_rgb(0x3A, 0x2E, 0x00),
     // On a bright face nothing can be both brighter and contrasting, so the lamp rule inverts: a lit lamp is a *mark*
     // (dark enough to be seen on the amber) and an unlit one is invisible, exactly as black's `#2A2208` almost is on `#040404`.
-    led_on: Color32::from_rgb(0x86, 0x1F, 0x00),
+    led_on: Color32::from_rgb(0x62, 0x16, 0x00),
     led_off: Color32::from_rgb(0xD9, 0xA6, 0x00),
     // Deep enough to outshout the dim legend: UNSAVED wears this colour and SAVED wears `silkscreen_dim`, and the quieter
     // of the two must be the one that is not shouting.
-    led_accent: Color32::from_rgb(0x7A, 0x1F, 0x00),
+    led_accent: Color32::from_rgb(0x4E, 0x13, 0x00),
     lit_ink: Color32::from_rgb(0xFF, 0xC9, 0x7A),
     text: Color32::from_rgb(0x0B, 0x0B, 0x0B),
     white_key: Color32::from_rgb(0xE8, 0xE2, 0xD0),
     keycap_ink: Color32::from_rgb(0x0B, 0x0B, 0x0B),
     shade: Color32::from_black_alpha(90),
-    learn_target: Color32::from_rgb(0x0B, 0x7A, 0x85),
+    learn_target: Color32::from_rgb(0x0B, 0x4E, 0x55),
 };
 
 /// The palette a device's face is painted in.
@@ -167,14 +174,16 @@ mod tests {
     }
 
     #[test]
-    fn the_face_is_dark_in_one_scheme_and_bright_in_the_other() {
+    fn the_amber_face_is_a_quieter_gold_than_the_keys_on_it() {
         assert!(
             luminance(BLACK.panel) < 0.02,
             "the black scheme's face is the darkest thing on screen"
         );
+        // The amber face is the quieter of the two golds: bright enough to read as a lit machine, quiet enough that a whole
+        // window of it does not glare. The gold a hand rests on — the keys — is the brighter one.
         assert!(
-            luminance(YELLOW.panel) > 0.5,
-            "and the yellow scheme's is the brightest: that is the whole signal"
+            luminance(YELLOW.panel) > 0.3 && luminance(YELLOW.panel) < luminance(YELLOW.key_face),
+            "the amber face is a mid gold, and the keys stand out of it"
         );
     }
 
@@ -237,6 +246,12 @@ mod tests {
                 contrast(p.panel_raised, p.lit_ink) >= 4.5,
                 "{scheme:?}: a lit key's legend needs contrast against its own face"
             );
+            // A key's legend is drawn on the key's own face, which in the amber scheme is lighter than the face around
+            // it — so the pair to check is the key's, not the panel's.
+            assert!(
+                contrast(p.key_face, p.silkscreen) >= 4.5,
+                "{scheme:?}: a key's legend needs contrast against the key"
+            );
             // The keycap's paper is cream in both schemes, so its lettering is fixed and must be read on its own.
             assert!(
                 contrast(p.white_key, p.keycap_ink) >= 4.5,
@@ -266,9 +281,10 @@ mod tests {
 
     #[test]
     fn the_two_families_are_exchanged() {
-        // What was the face is now the engraving, and the other way round: the swap this round exists for.
+        // What was the face is now the engraving, and what was the engraving is now the gold a key is painted: the swap this
+        // scheme exists for, with the bright gold moved one surface out so the face itself is the quieter of the two.
         assert_eq!(YELLOW.silkscreen, BLACK.panel);
-        assert_eq!(YELLOW.panel, BLACK.silkscreen);
+        assert_eq!(YELLOW.key_face, BLACK.silkscreen);
         // Black's face is near-black, not pure black; so is Yellow's engraving.
         assert_ne!(BLACK.panel, Color32::BLACK);
     }

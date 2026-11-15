@@ -23,9 +23,9 @@ Everything on it is about that one device, and every row acts on it immediately:
 
 ![The same two devices, the second one amber](img/two-devices.png)
 
-`YELLOW` turns that device's face amber — legends near-black, knobs and key faces dark — and the amber stays with the device,
-not with the window. Put one machine on amber and the next on black and the strip becomes a legend: each cell wears its own
-device's colours, while the panel wears the one you are on.
+`YELLOW` turns that device's face a soft gold — legends near-black, the keys a brighter gold that stands off it, the knobs
+dark — and the gold stays with the device, not with the window. Put one machine on gold and the next on black and the strip
+becomes a legend: each cell wears its own device's colours, while the panel wears the one you are on.
 
 The four cards stay black whatever the face does. A card is furniture laid over the instrument, not part of it.
 

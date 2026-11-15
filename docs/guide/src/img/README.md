@@ -6,8 +6,9 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 
 ## The session they came from
 
-- **App:** the working tree at `5670f52`, the last commit that touched `rust/` before this round (the guide is at the
-  commit that added this file), on 2026-11-14, with `cargo build -p acid-app --bin takka-acid`.
+- **App:** the working tree at whichever commit last touched `rust/` — the same commit that carries this file — on
+  2026-11-15, with `cargo build -p acid-app --bin takka-acid`. No hash is quoted on purpose: it would rot the moment the
+  code moved, and `git log -1 -- rust/` answers it.
 - **Scratch data directory:** `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-45`, emptied before the first launch, so the session
   is a first run — the Slow Acid demo, named "New song", unsaved, pattern `A1`, 118 BPM.
 - **Display:** offscreen, `Xvfb :82 -screen 0 2000x1400x24`, with

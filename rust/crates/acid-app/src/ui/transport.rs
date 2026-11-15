@@ -43,7 +43,7 @@ pub fn transport_button(
 ) -> Response {
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     let scale = key_scale(rect);
-    let face = if lit { p.panel_raised } else { p.well };
+    let face = if lit { p.panel_raised } else { p.key_face };
     // A lit key is a raised face and a legend on it, so its legend is `lit_ink`: `led_accent` is ink for the *face*, and in
     // the amber scheme a colour dark enough to read on amber is too dark to read on a near-black key.
     let legend = if lit { p.lit_ink } else { p.silkscreen };
