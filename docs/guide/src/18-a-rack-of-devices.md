@@ -2,7 +2,7 @@
 
 One window can hold **four machines**, and the strip above the panel is the whole rack.
 
-![Two devices, the second one amber](img/two-devices.png)
+![Two devices, the second on FESTIVAL CITRUS](img/two-devices.png)
 
 ## The strip
 

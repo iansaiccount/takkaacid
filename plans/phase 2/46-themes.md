@@ -221,3 +221,20 @@ Round complete on `phase-2`, four commits, gates green at every one of them (661
       phase review, and recorded rather than quietly skipped.
 - [ ] **The player's prune.** Show them the twenty-two on one card, take the list of names to drop, and delete one variant,
       one row and one `name()` arm per theme.
+
+### Documentation pass (after the gate, on the player's ask)
+
+Four screenshots are not merely `two-devices.png` and `strip.png` re-taken for the retired amber: `device-card.png` and
+`theme-list.png` were re-shot too, so the whole card family comes from one session — the log in `docs/guide/src/img/README.md`
+records the state and command for each, and it now says which pictures a theme changes and why the other twelve do not.
+`AGENTS.md` gained a `## Documentation` section: the book's shape, the rule that functionality is documented in the commit
+that changes it, how a page and a screenshot are added, the offscreen capture recipe, and the book's check in the gates.
+
+- **Ruling, with its cost:** this round put the documents in their own commit (Task 4 of the plan) and pushed the feature
+  commits before it. The `## Documentation` rule was written after the plan, so the split is the plan's shape and not an
+  accident — but it is exactly the shape the rule now forbids, and the last time it should happen.
+- **Finding, not fixed:** a hover tooltip still fires for a knob *under* an open card, because the panel paints its widgets
+  before the card registers the shade that should swallow their hover. It was seen while shooting (`RESONANCE`'s tip landed in
+  the first `theme-list.png`) and the picture was retaken with the pointer parked. Not this round's defect — a card has always
+  leaked tooltips this way — and the fix is a design question ("does a card disable the instrument's hover, or just its
+  clicks?"), so it is recorded for the round that answers it rather than patched under a docs pass.

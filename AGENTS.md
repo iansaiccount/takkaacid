@@ -13,17 +13,61 @@ sound by ear.
 
 ## Gates
 
-Every change ends here, all three green:
+Every change ends here, all three green, and the book's own check with them when the change touches it:
 
 ```bash
 cd rust
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
+
+./docs/guide/check.sh   # from the repo root, when the guide moved
 ```
 
 Run it with `cargo run -p acid-app --bin takka-acid`, and `--midi-map` to print what the app makes of every note
 number without opening an audio device or a window.
+
+## Documentation
+
+The book is `docs/guide`: an mdBook whose pages are `src/NN-topic.md`, numbered in reading order, with the table of contents in
+`src/SUMMARY.md` and the screenshots in `src/img/`. It is the only documentation — the README summarises, the plans record
+decisions, and neither is a substitute for the page a player reads.
+
+**Functionality is documented before it is pushed.** No push leaves the book describing behaviour the app no longer has. A
+change is finished when the page that describes it says what it now does — in the change's own commit where the change is a
+feature, and in any case in the same push, never in a follow-up branch nobody pairs with the work. A guide that contradicts
+the panel is a bug, and a stale screenshot is a contradiction the eye believes. If a change is invisible to the guide, say why
+in the plan's `## Progress` — a new internal invariant, a refactor with no behaviour, a fix to something the book never
+claimed.
+
+Editing the book:
+
+- **A new page** is `src/NN-topic.md` with the next number, a line in `src/SUMMARY.md` under the part it belongs to, and a
+  cross-reference from the page a reader would arrive from — for example `` [`19-a-devices-card`](19-a-devices-card.md) ``.
+- **Changed behaviour** edits the page in place. Prose names controls as the face spells them, in backticks: `COLOUR`,
+  `MUTE OFF`, `CHANNEL`. A claim worth pinning is added to the fact list in `docs/guide/check.sh`, which fails when the guide
+  stops saying it — that list is why a removed feature cannot leave a sentence behind.
+- **A screenshot** goes through `docs/guide/src/img/README.md`, which records per image the state and the command that took
+  it. A new picture gets a row there; a retaken one gets its row updated. Both files travel with the code that changed them.
+
+Taking screenshots — no display, real app, the design size at 2×:
+
+```bash
+cd rust && cargo build -p acid-app --bin takka-acid
+Xvfb :86 -screen 0 2000x1400x24 &
+DISPLAY=:86 WINIT_X11_SCALE_FACTOR=2 LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY= \
+  TAKKA_ACID_DATA_DIR=/tmp/takka-guide ./target/debug/takka-acid &
+```
+
+`TAKKA_ACID_DATA_DIR` must be a fresh directory so the picture shows a first run and nothing of the photographer's own.
+The window is 1960 × 1340 (980 × 670 logical, doubled): `xdotool search --name takka` finds it, `xdotool mousemove X Y` and
+`xdotool click 1` drive it with X and Y **doubled** from logical coordinates, and `import -window <id> NAME.png` grabs it.
+A crop is a second grab with `-crop`, never a cut-out of a finished image. Rect coordinates come from the layout
+(`ui/layout.rs`, `ui/strip.rs`, `ui/device_card.rs`), not from reading a screenshot; and park the pointer away from the panel
+before a grab, or a hover tooltip lands in the book.
+
+Then `./docs/guide/check.sh`, which proves every page and every image a page names exists and every pinned fact is still said.
+
 
 
 ## Review before commit

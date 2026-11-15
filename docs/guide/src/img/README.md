@@ -9,8 +9,9 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 - **App:** the working tree at whichever commit last touched `rust/` — the same commit that carries this file — on
   2026-11-15, with `cargo build -p acid-app --bin takka-acid`. No hash is quoted on purpose: it would rot the moment the
   code moved, and `git log -1 -- rust/` answers it.
-- **Scratch data directory:** `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-45`, emptied before the first launch, so the session
-  is a first run — the Slow Acid demo, named "New song", unsaved, pattern `A1`, 118 BPM.
+- **Scratch data directory:** `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-46`, emptied before the first launch, so the session
+  is a first run — the Slow Acid demo, named "New song", unsaved, pattern `A1`, 118 BPM. The theme round added a second
+  device on `FESTIVAL CITRUS`, which is why the strip pictures show a teal cell beside a black one.
 - **Display:** offscreen, `Xvfb :82 -screen 0 2000x1400x24`, with
   `DISPLAY=:82 WINIT_X11_SCALE_FACTOR=2 LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=`. The window is the design size in
   logical pixels (980 × 670) and renders at 1960 × 1340, so the silkscreen stays legible when a page scales it down.
@@ -33,10 +34,11 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/help-card.png` | the help card over the panel | `F1` |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
 | `img/songs-card.png` | the songs card: `New song`, the five demos, an empty `MY SONGS` | click `SONGS` |
-| `img/device-card.png` | the device card for `ACID 1`, `COLOUR BLACK` | `F3` |
+| `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
 | `img/picker.png` | the picker: the `ACID` row and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
-| `img/two-devices.png` | two devices, `ACID 1` black in the strip, `ACID 2` selected and amber | from the picker, click `ACID`; `F3`; click `COLOUR`; `Escape` |
-| `img/strip.png` | the same strip, cropped: a black cell and an amber one, and `+` | `-crop 1960x76+0+24` in the state above |
+| `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
+| `img/two-devices.png` | two devices, `ACID 1` black and selected, `ACID 2` on `FESTIVAL CITRUS` | from the picker, click `ACID`; `ctrl+2`; `F3`; click `COLOUR`; click the `FESTIVAL CITRUS` row; `Escape`; `ctrl+1` |
+| `img/strip.png` | the same strip, cropped: a black cell, a teal one, and `+` | `-crop 1960x76+0+24` in the state above |
 | `img/clipboard-notice.png` | the status line reading `pasted A1 into A2` | `ctrl+c`, `shift+Right`, `ctrl+v`, grabbed within the second, before the notice clears |
 | `img/top-strip.png` | the top strip: volume, wordmark, `SAVED`/`UNSAVED`, gear, `?`, song name, pattern and tempo | `-crop 1960x112+0+92` |
 | `img/knob-row.png` | the seven tone knobs and their captions | `-crop 1960x480+0+200` |
@@ -46,6 +48,10 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 
 The five band crops and `strip.png` come from the same session as `first-sound.png` (the strip crop from the two-device
 state, because one cell does not show what a strip is).
+
+Four pictures were re-taken when the theme catalogue replaced the second scheme: `device-card.png`, `theme-list.png`,
+`two-devices.png` and `strip.png`. Everything else in the table is unchanged by a theme, because the panel they were taken on
+is `BLACK`, and `BLACK` is the instrument it has always been.
 
 ## What is prose on purpose
 
