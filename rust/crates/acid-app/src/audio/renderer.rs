@@ -29,18 +29,39 @@ pub fn apply(params: &Parameters, engine: &mut Engine) {
     engine.set_volume(params.volume);
     engine.set_bpm(params.tempo_bpm);
     engine.set_swing(params.swing);
-    if params.playing != engine.is_playing() {
-        if params.playing {
-            engine.start();
-        } else {
-            engine.stop();
+}
+
+impl AudioRenderer {
+    /// Take the transport where the rack put it, and tell the engine what that means.
+    ///
+    /// The three states are not three engine calls in every direction: a resume out of a pause keeps the step, a start out of
+    /// a stop returns to the bar, and both silences are the same call to the engine. Which one a change is depends on where it
+    /// came from, and that is the one thing this struct knows and the engine does not.
+    fn settle_transport(&mut self, transport: crate::device::Transport) {
+        if transport == self.transport {
+            return;
         }
+        match transport {
+            crate::device::Transport::Playing => {
+                if self.transport == crate::device::Transport::Paused {
+                    self.engine.resume();
+                } else {
+                    self.engine.start();
+                }
+            }
+            crate::device::Transport::Paused => self.engine.pause(),
+            crate::device::Transport::Stopped => self.engine.stop(),
+        }
+        self.transport = transport;
     }
 }
 
 /// Owns the engine for the audio thread's lifetime and keeps it in step with the UI.
 pub struct AudioRenderer {
     engine: Engine,
+    /// The transport the engine was last told about. The engine cannot tell a stop from a pause — both silence it and keep its
+    /// step — so what a *change* means is decided here, where the previous state is still known.
+    transport: crate::device::Transport,
     state: Arc<SharedState>,
     /// Interleaving scratch, sized once at open so a block never allocates.
     mono: Vec<f32>,
@@ -67,6 +88,7 @@ impl AudioRenderer {
         engine.set_pattern(Arc::clone(&pattern));
         Self {
             engine,
+            transport: crate::device::Transport::Stopped,
             state,
             mono: vec![0.0; max_block.max(1)],
             pattern,
@@ -93,6 +115,7 @@ impl AudioRenderer {
     pub fn render_mono(&mut self, out: &mut [f32]) {
         let params = self.state.snapshot();
         apply(&params, &mut self.engine);
+        self.settle_transport(params.transport);
 
         // A device that joined a running rack starts where it was told to. After `apply`, because `apply` is what starts an
         // engine whose transport has just begun.

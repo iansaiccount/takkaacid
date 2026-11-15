@@ -181,7 +181,7 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
     rack.add(DeviceKind::Acid).expect("a second");
 
     assert!(!rack.is_playing());
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     assert!(rack.is_playing());
     for device in rack.devices() {
         assert!(
@@ -189,7 +189,7 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
             "every device starts on the same frame"
         );
     }
-    rack.set_playing(false);
+    rack.set_transport(acid_app::device::Transport::Stopped);
     for device in rack.devices() {
         assert!(!device.state.is_playing());
     }
@@ -209,7 +209,7 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
 #[test]
 fn a_device_added_while_the_transport_runs_starts_in_it() {
     let mut rack = one();
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     rack.set_tempo_bpm(152.0);
     let index = rack.add(DeviceKind::Acid).expect("a second");
     let device = &rack.devices()[index];

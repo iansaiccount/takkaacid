@@ -3,7 +3,7 @@
 //! Everything here is either an atomic or a short-lived mutex the audio thread never touches, so the
 //! audio callback can never be blocked by the user moving a knob.
 
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::notes::NoteQueue;
@@ -103,7 +103,7 @@ pub struct Parameters {
     pub volume: f32,
     pub tempo_bpm: f32,
     pub swing: f32,
-    pub playing: bool,
+    pub transport: crate::device::Transport,
 }
 
 /// The seam between the two threads.
@@ -113,7 +113,9 @@ pub struct Parameters {
 /// only the UI thread touches it.
 #[derive(Debug)]
 pub struct SharedState {
-    pub playing: AtomicBool,
+    /// The rack's transport, mirrored here by `Rack::sync_transport` — the panel's and the audio thread's one reading of
+    /// whether the clock runs, and of which silence it is in.
+    pub transport: AtomicU8,
     /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
     /// sequencer keeps running underneath, so unmuting rejoins on the beat instead of restarting the pattern.
     pub mute: AtomicBool,
@@ -179,7 +181,7 @@ impl SharedState {
     /// fanned out into a copy that a frame could turn stale.
     pub fn with_tempo(tempo: Arc<AtomicF32>) -> Arc<Self> {
         Arc::new(Self {
-            playing: AtomicBool::new(false),
+            transport: AtomicU8::new(crate::device::Transport::Stopped as u8),
             mute: AtomicBool::new(false),
             position: AtomicUsize::new(0),
             tempo_bpm: tempo,
@@ -214,12 +216,18 @@ impl SharedState {
         })
     }
 
-    pub fn is_playing(&self) -> bool {
-        self.playing.load(Ordering::Relaxed)
+    /// The state the rack is in, as this device last heard it.
+    pub fn transport(&self) -> crate::device::Transport {
+        crate::device::Transport::from_mirror(self.transport.load(Ordering::Relaxed))
     }
 
-    pub fn set_playing(&self, playing: bool) {
-        self.playing.store(playing, Ordering::Relaxed);
+    pub fn set_transport(&self, transport: crate::device::Transport) {
+        self.transport.store(transport as u8, Ordering::Relaxed);
+    }
+
+    /// Whether the clock is running. A pause is not playing.
+    pub fn is_playing(&self) -> bool {
+        self.transport() == crate::device::Transport::Playing
     }
 
     pub fn is_muted(&self) -> bool {
@@ -230,9 +238,14 @@ impl SharedState {
         self.mute.store(muted, Ordering::Relaxed);
     }
 
+    /// Play if anything else, stop if playing. A device on its own has no pause to offer; the rack's `Transport` does.
     pub fn toggle_playing(&self) -> bool {
         let next = !self.is_playing();
-        self.set_playing(next);
+        self.set_transport(if next {
+            crate::device::Transport::Playing
+        } else {
+            crate::device::Transport::Stopped
+        });
         next
     }
 
@@ -249,7 +262,7 @@ impl SharedState {
             volume: self.volume.get(),
             tempo_bpm: self.tempo_bpm.get(),
             swing: self.swing.get(),
-            playing: self.is_playing(),
+            transport: self.transport(),
         }
     }
 

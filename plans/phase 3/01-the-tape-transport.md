@@ -195,7 +195,15 @@ stored reversed pattern.
       `area` for a `layout::Row`); `transport.rs`'s comment named the fifth transport cell `VOLUME` when it is `LEARN` (fixed,
       and the reason this plan's row description was wrong too); two new functions took a `_scale` they ignored while their
       sibling scaled its gaps (fixed by dropping it, matching `layout::knob_cells`).
-- [ ] **Task 2 — the transport state** (started). The **engine half** has landed: `Sequencer::pause`/`resume` and
+- [x] **Task 2 — the transport state.** `device::Transport` (`Stopped | Playing | Paused`) is the rack's, carried in an
+      atomic because the panel and the MIDI thread both read it, and mirrored into each device's `SharedState` by
+      `sync_transport` — one byte, one meaning, no second opinion. `Parameters.transport` carries it to the audio path, and the
+      renderer is the only place that knows where a change *came from*: `settle_transport` resumes out of a pause, starts the
+      bar out of a stop, and treats both silences as the same call. That is the whole reason the state lives above the engine:
+      below it, a stop and a pause are the same silence. `transport::Request::Pause` and `main`'s handling are in; the panel key
+      that asks for it is task 3's. Proven by the engine's `tests/pause.rs` and by the workspace's rack/mixer/state tests, which
+      now drive `set_transport` instead of a bool.
+      **The engine half, and its review,** landed first (`6ad989c`, `81bc3f3`): `Sequencer::pause`/`resume` and
       `Engine::pause`/`resume`, with `tests/pause.rs` fixing the three semantics — a pause keeps the step and a resume carries
       on from it; a stop returns to the top and a pause does not; a resume restarts the clock so the first step after it is a
       whole step. Still to come in this task: `Rack::transport: Stopped | Playing | Paused`, the fan-out and the `Parameters`

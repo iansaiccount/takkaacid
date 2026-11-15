@@ -37,7 +37,7 @@ static A: Counting = Counting;
 #[test]
 fn the_audio_path_never_allocates() {
     let s = SharedState::new();
-    s.playing.store(true, Ordering::Relaxed);
+    s.set_transport(acid_app::device::Transport::Playing);
     s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
         [Step::note(Pitch::A, -1); 16],
     )));
@@ -86,7 +86,7 @@ fn the_audio_path_never_allocates() {
     let mut rack = Rack::from_saved(&persist::SavedState::default());
     rack.add(DeviceKind::Acid)
         .expect("room for a second device");
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     rack.publish();
     let mut mixer = Mixer::new(48_000.0, 2, rack.bus());
     let mut mix = vec![0.0f32; 2_048];

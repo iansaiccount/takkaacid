@@ -82,7 +82,7 @@ fn click_transport(shared: &SharedState, panel: &mut PanelState, index: usize) {
 #[test]
 fn position_is_published_and_never_exceeds_fifteen() {
     let s = SharedState::new();
-    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
+    s.set_transport(acid_app::device::Transport::Playing);
     s.tempo_bpm.set(300.0);
     s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
         [Step::note(Pitch::A, -1); 16],
@@ -102,16 +102,16 @@ fn position_is_published_and_never_exceeds_fifteen() {
 #[test]
 fn stopping_clears_the_chase() {
     let s = SharedState::new();
-    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
+    s.set_transport(acid_app::device::Transport::Playing);
     s.set_pattern(std::sync::Arc::new(Pattern::from_steps(
         [Step::note(Pitch::A, -1); 16],
     )));
     let mut r = AudioRenderer::new(48_000.0, 2, s.clone(), 2_048);
     r.render_into(&mut vec![0.0f32; 4_096]);
-    s.playing.store(false, std::sync::atomic::Ordering::Relaxed);
+    s.set_transport(acid_app::device::Transport::Stopped);
     r.render_into(&mut vec![0.0f32; 4_096]);
     let position = s.position.load(std::sync::atomic::Ordering::Relaxed);
-    let playing = s.playing.load(std::sync::atomic::Ordering::Relaxed);
+    let playing = s.is_playing();
     let view = acid_app::ui::step_key::step_view(
         &Step::rest(),
         position,

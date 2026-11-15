@@ -34,7 +34,7 @@ fn stopped_transport_renders_silence_into_every_channel() {
 #[test]
 fn playing_duplicates_the_mono_signal_to_both_channels() {
     let s = SharedState::new();
-    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
+    s.set_transport(acid_app::device::Transport::Playing);
     s.tempo_bpm.set(120.0);
     s.set_pattern(std::sync::Arc::new(
         acid_core::pattern::Pattern::from_steps(
@@ -55,7 +55,7 @@ fn playing_duplicates_the_mono_signal_to_both_channels() {
 fn block_size_never_changes_what_the_renderer_produces() {
     let make = || {
         let s = SharedState::new();
-        s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
+        s.set_transport(acid_app::device::Transport::Playing);
         s.tempo_bpm.set(137.0);
         s.set_pattern(std::sync::Arc::new(
             acid_core::pattern::Pattern::from_steps(

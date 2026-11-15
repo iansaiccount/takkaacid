@@ -14,6 +14,8 @@ use super::theme;
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Request {
     Play,
+    /// Stop the clock and keep the step. Play resumes from it; Stop returns to the bar.
+    Pause,
     Stop,
     /// One BPM, in the direction of the key.
     NudgeTempo(i8),

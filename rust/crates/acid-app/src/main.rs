@@ -122,8 +122,15 @@ impl eframe::App for TakkaApp {
         // fan-out would immediately undo.
         if let Some(request) = self.panel.transport_request.take() {
             match request {
-                panel_ui::transport::Request::Play => self.rack.set_playing(true),
-                panel_ui::transport::Request::Stop => self.rack.set_playing(false),
+                panel_ui::transport::Request::Play => self
+                    .rack
+                    .set_transport(acid_app::device::Transport::Playing),
+                panel_ui::transport::Request::Pause => {
+                    self.rack.set_transport(acid_app::device::Transport::Paused)
+                }
+                panel_ui::transport::Request::Stop => self
+                    .rack
+                    .set_transport(acid_app::device::Transport::Stopped),
                 panel_ui::transport::Request::NudgeTempo(direction) => {
                     let next = panel_ui::transport::nudge_tempo(self.rack.tempo_bpm(), direction);
                     self.rack.set_tempo_bpm(next);
