@@ -42,13 +42,14 @@ impl AudioRenderer {
             return;
         }
         match transport {
-            crate::device::Transport::Playing => {
-                if self.transport == crate::device::Transport::Paused {
-                    self.engine.resume();
-                } else {
-                    self.engine.start();
+            crate::device::Transport::Playing => match self.transport {
+                // Out of a pause: carry on from the step the pause kept.
+                crate::device::Transport::Paused => self.engine.resume(),
+                // Out of a stop (or asked to play while already playing, which cannot reach here): the bar again.
+                crate::device::Transport::Stopped | crate::device::Transport::Playing => {
+                    self.engine.start()
                 }
-            }
+            },
             crate::device::Transport::Paused => self.engine.pause(),
             crate::device::Transport::Stopped => self.engine.stop(),
         }
@@ -120,7 +121,7 @@ impl AudioRenderer {
         // A device that joined a running rack starts where it was told to. After `apply`, because `apply` is what starts an
         // engine whose transport has just begun.
         if let Some(step) = self.pending_seek.take()
-            && self.engine.is_playing()
+            && params.transport != crate::device::Transport::Stopped
         {
             self.engine.start_at(step);
         }

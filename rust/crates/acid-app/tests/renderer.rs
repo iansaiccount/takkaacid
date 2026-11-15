@@ -130,3 +130,50 @@ fn a_soft_midi_note_auditions_at_the_velocity_it_will_be_written_with() {
         "velocity 30 ({soft}) should be clearly quieter than 127 ({hard})"
     );
 }
+
+/// A pause through the whole seam — `SharedState` → `Parameters` → `settle_transport` — keeps the bar, and a resume carries on.
+///
+/// Half a step at a time, and the resume buffer is *more* than half: a `settle_transport` that treated a pause as a play would
+/// call `start`, and the position would be back at zero; one that treated the resume as a start would take the next step. The
+/// extra samples are what tell a restarted clock from a merely-short block.
+#[test]
+fn a_pause_through_the_seam_keeps_the_bar_and_a_resume_carries_on() {
+    use acid_app::device::Transport;
+    use acid_core::timing;
+
+    let s = SharedState::new();
+    s.tempo_bpm.set(130.0);
+    s.set_pattern(std::sync::Arc::new(
+        acid_core::pattern::Pattern::from_steps(
+            [acid_core::pattern::Step::note(acid_core::pitch::Pitch::A, -1); 16],
+        ),
+    ));
+    let mut r = AudioRenderer::new(48_000.0, 1, s.clone(), 4_096);
+
+    // Play, and get halfway into a step.
+    s.set_transport(Transport::Playing);
+    let half = (timing::step_duration_samples(0, 130.0, 48_000.0, 0.0) / 2.0).round() as usize;
+    let mut block = vec![0.0; half];
+    r.render_into(&mut block);
+    let held = r.engine().position();
+
+    // Pause: silent, and the step stays where it was.
+    s.set_transport(Transport::Paused);
+    let mut quiet = vec![1.0; 4_096];
+    r.render_into(&mut quiet);
+    assert_eq!(r.engine().position(), held, "a pause keeps the bar");
+    assert_eq!(peak(&quiet[2_048..]), 0.0, "and is silent");
+
+    // Resume: still the same step, and a whole step later it has moved on.
+    s.set_transport(Transport::Playing);
+    let mut again = vec![0.0; half + 64];
+    r.render_into(&mut again);
+    assert_eq!(
+        r.engine().position(),
+        held,
+        "a resume carries on from the step the pause kept"
+    );
+    let mut rest = vec![0.0; half * 2];
+    r.render_into(&mut rest);
+    assert_ne!(r.engine().position(), held, "and then the bar goes on");
+}

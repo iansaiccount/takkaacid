@@ -322,16 +322,32 @@ pub enum Transport {
 }
 
 impl Transport {
-    /// The byte an atomic carries. Unknown values read as `Stopped`: a transport is not a thing to guess at.
-    ///
-    /// The same reading serves the rack and each device's mirror: a mirror is not a second opinion, it is the same byte read
-    /// from the other thread.
-    pub fn from_mirror(byte: u8) -> Self {
-        match byte {
-            1 => Self::Playing,
-            2 => Self::Paused,
-            _ => Self::Stopped,
+    /// The catalogue: every state, in the order the deck's keys and the byte numbering follow.
+    pub const ALL: [Transport; 3] = [Transport::Stopped, Transport::Playing, Transport::Paused];
+
+    /// The byte an atomic carries, written out in full so a fourth state fails to compile *here* rather than arriving at the
+    /// audio thread as `Stopped` with the panel lit. The catalogue owns the numbering.
+    pub fn byte(self) -> u8 {
+        match self {
+            Transport::Stopped => 0,
+            Transport::Playing => 1,
+            Transport::Paused => 2,
         }
+    }
+
+    /// The state a byte carries, read through [`Transport::ALL`] so the decode cannot drift from the encode. An unknown byte
+    /// reads as `Stopped`: a transport is not a thing to guess at.
+    pub fn from_mirror(byte: u8) -> Self {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|state| state.byte() == byte)
+            .unwrap_or(Transport::Stopped)
+    }
+
+    /// Whether the clock runs. False for a pause: a paused deck is not playing, it is merely still on its step.
+    pub fn is_playing(self) -> bool {
+        self == Transport::Playing
     }
 }
 
@@ -341,10 +357,9 @@ pub struct Rack {
     /// The number the next device will be given. A high-water mark: a removal never frees one, so two devices never share a
     /// default name and "the one I muted" is still the one that was muted.
     next_number: usize,
-    /// The rack's transport. Every device follows it, so RUN starts them all on one frame — the downbeats coincide rather
-    /// than drifting apart by a block.
     /// The rack's transport, as one of three states. An atomic because the rack is read from the panel and from the MIDI
-    /// thread; the devices' own copies are mirrors of it, never a second opinion.
+    /// thread; the devices' own copies are mirrors of it, never a second opinion. Every device follows it, so a play starts
+    /// them all on one frame — the downbeats coincide rather than drifting apart by a block.
     transport: AtomicU8,
     /// The rack's tempo: one cell, and the same cell in every device's `SharedState`. The panel, an external clock and a
     /// tempo controller all write it, and every engine reads it at its next block, so no fan-out and no frame stands between
@@ -375,7 +390,7 @@ impl Rack {
             devices: vec![device],
             selected: 0,
             next_number,
-            transport: AtomicU8::new(Transport::Stopped as u8),
+            transport: AtomicU8::new(Transport::Stopped.byte()),
             tempo_bpm,
             bus: Arc::new(ArcSwap::from_pointee(BusState {
                 slots: Vec::new(),
@@ -537,26 +552,22 @@ impl Rack {
         Transport::from_mirror(self.transport.load(Ordering::Relaxed))
     }
 
-    /// Whether the clock is running. False for a pause: a paused deck is not playing, it is merely still on its step.
+    /// Whether the clock is running. False for a pause.
     pub fn is_playing(&self) -> bool {
-        self.transport() == Transport::Playing
+        self.transport().is_playing()
     }
 
     /// Move every device to the same transport state, on the same frame. This is what makes the downbeats coincide.
+    ///
+    /// Pausing a stopped rack is refused: the engine keeps its step through a stop, so a pause taken from there would resume
+    /// mid-bar on the next play, and the plan's key table says a pause from `Stopped` does nothing. The refusal lives here
+    /// because here is where the two states are both known.
     pub fn set_transport(&self, transport: Transport) {
-        self.transport.store(transport as u8, Ordering::Relaxed);
+        if transport == Transport::Paused && self.transport() == Transport::Stopped {
+            return;
+        }
+        self.transport.store(transport.byte(), Ordering::Relaxed);
         self.sync_transport();
-    }
-
-    /// Play if anything else, stop if playing. What `space` asks for when there is no pause key in reach.
-    pub fn toggle_playing(&self) -> bool {
-        let next = self.is_playing();
-        self.set_transport(if next {
-            Transport::Stopped
-        } else {
-            Transport::Playing
-        });
-        !next
     }
 
     pub fn tempo_bpm(&self) -> f32 {

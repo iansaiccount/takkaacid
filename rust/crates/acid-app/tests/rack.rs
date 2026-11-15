@@ -189,6 +189,28 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
             "every device starts on the same frame"
         );
     }
+    // A pause is a third state, not a second way of saying stopped: the mirror carries it, and the device is not playing.
+    rack.set_transport(acid_app::device::Transport::Paused);
+    assert_eq!(rack.transport(), acid_app::device::Transport::Paused);
+    for device in rack.devices() {
+        assert_eq!(
+            device.state.transport(),
+            acid_app::device::Transport::Paused,
+            "the fan-out carries the pause, not just the silence"
+        );
+        assert!(!device.state.is_playing(), "a paused device is not playing");
+    }
+
+    // A pause taken from Stopped is refused: the engine keeps its step through a stop, so a pause from there would resume
+    // mid-bar on the next play instead of starting the bar. The plan's key table says PAUSE from Stopped does nothing.
+    rack.set_transport(acid_app::device::Transport::Stopped);
+    rack.set_transport(acid_app::device::Transport::Paused);
+    assert_eq!(
+        rack.transport(),
+        acid_app::device::Transport::Stopped,
+        "a pause from a stopped rack is not a state, it is a no-op"
+    );
+
     rack.set_transport(acid_app::device::Transport::Stopped);
     for device in rack.devices() {
         assert!(!device.state.is_playing());
