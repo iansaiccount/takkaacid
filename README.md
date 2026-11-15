@@ -37,7 +37,8 @@ that adds one.
   panel. The `M` at a cell's right end mutes that device without stopping it — a 10 ms fade, not a cut — so a device that
   was running mutes late and unmutes back in time.
 - **One card per device.** `F3` opens the card for the device on the panel: its name, whether it plays what it hears or only
-  answers controllers, which ports it hears and on which channel, its mute, and its removal (`REMOVE` asks twice).
+  answers controllers, which ports it hears and on which channel, its mute, its removal (`REMOVE` asks twice), and the theme
+  it wears — one of twenty-two, from the list its `COLOUR` row opens.
 - **One transport, one clock.** `RUN`/`STOP` and the tempo belong to the rack and every device follows them; a device added
   while the transport is running joins on the step the others are on, not at the top of the bar. Swing and the performance
   row are per device.
@@ -45,8 +46,7 @@ that adds one.
   its own ports and channel.
 - **What a restart costs.** `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`: the session file still holds one device — the first
   one's patterns, patch, swing and learned controllers, plus the first MIDI port the app had open — so extra devices, the
-  ports, channel and role any device was given, the colour scheme it was given, and every name typed for one, are gone on
-  restart. "Save the whole rack" in `plans/future/wishlist.md` is the round that ends this.
+  ports, channel and role any device was given, the theme it wears, and every name typed for one, are gone on restart. "Save the whole rack" in `plans/future/wishlist.md` is the round that ends this.
 
 ## Features
 

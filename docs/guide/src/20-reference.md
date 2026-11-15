@@ -98,7 +98,8 @@ and tempo wells at the right.
 | `CONFIRM?` | `REMOVE` on a device card, after the first click |
 
 **The device card.** `NAME (ENTER)`, `ROLE` (`PLAY + CTRL` / `CTRL ONLY`), `PORTS` (`ALL PORTS`, then a ticked row per port),
-`CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (`BLACK` / `YELLOW`), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
+`CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `MUTE
+OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 
 **The picker.** `ADD DEVICE`, a row per kind (`ACID`), `CLOSE`, and the line under the rows:
 `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.

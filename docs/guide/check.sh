@@ -33,7 +33,7 @@ done
 # 4. the facts that must not drift (spec Review Focus 1, 2, 3, 5; phase 2's rack, card, colour and clipboard)
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
-            'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines'; do
+            'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done
 echo "guide: ok"

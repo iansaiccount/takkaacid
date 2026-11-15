@@ -53,11 +53,13 @@ together.
 fade and long enough not to click — and the sequencer keeps running underneath. Unmute a bar later and it is where it would
 have been.
 
-## The colour
+## The theme
 
-A device's face can be **black** or **amber**, and the card's `COLOUR` row is where you choose
-([`19-a-devices-card`](19-a-devices-card.md)). Pick amber for one machine and black for the next and the strip tells them
-apart before you click: its cells wear their own device's colours while the panel wears the selected one's.
+A device's face can be **any of twenty-two themes** — the instrument's own black, and twenty-one built from the palettes on
+the music-colour page the panel was drawn from — and the card's `COLOUR` row opens the list
+([`19-a-devices-card`](19-a-devices-card.md)). Put one machine on `FESTIVAL CITRUS` and the next on `BLACK` and the strip
+tells them apart before you click: the cell above each device wears that device's colours, while the panel wears the selected
+one's.
 
 ## What a restart costs
 
