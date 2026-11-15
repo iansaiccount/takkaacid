@@ -1178,10 +1178,50 @@ fn the_list_stays_on_the_panel_and_never_covers_the_key_that_opened_it() {
         list.list,
         screen()
     );
+    // A gap, not a touching edge: `intersects` did not pin the case where the two rects share an edge, so the rule is
+    // written as what it is — two points of daylight between the list and the key.
+    let gap = if list.list.bottom() <= card.scheme.top() {
+        card.scheme.top() - list.list.bottom()
+    } else {
+        list.list.top() - card.scheme.bottom()
+    };
     assert!(
-        !list.list.intersects(card.scheme),
-        "the list opens away from the key, or the key would be buried under the row it shows"
+        !list.list.intersects(card.scheme) && gap >= 2.0,
+        "the list opens away from the key with a gap ({gap}), or the key would be buried under the row it shows"
     );
+}
+
+/// Both directions, because the card's own panel leaves room *below* the key and the app's does not: a test that only ever
+/// sees one of them says nothing about the other, which is exactly how a mutation survived here once already.
+#[test]
+fn the_list_keeps_its_gap_whether_it_opens_up_or_down() {
+    let mut panel = two_device_panel();
+    panel.device_card.themes.top = 0;
+    let area = device_card::card_rect(screen(), 1.0);
+    let card = device_card::rows(area, 1.0, &panel.device_card);
+
+    // A panel with its top far above the card: the list has room above and must take it, leaving the gap on that side.
+    let tall = Rect::from_min_size(Pos2::new(0.0, -400.0), egui::vec2(980.0, 1070.0));
+    let up = device_card::theme_rows(&card, tall, 1.0, 0);
+    assert!(
+        up.list.bottom() <= card.scheme.top(),
+        "the list opens above the key"
+    );
+    assert!(
+        card.scheme.top() - up.list.bottom() >= 2.0,
+        "and leaves a gap under it: {} to {}",
+        up.list.bottom(),
+        card.scheme.top()
+    );
+
+    // The panel it is drawn in: the card sits low enough that the list opens downward instead.
+    let down = device_card::theme_rows(&card, screen().shrink(40.0), 1.0, 0);
+    if down.list.top() >= card.scheme.bottom() {
+        assert!(
+            down.list.top() - card.scheme.bottom() >= 2.0,
+            "and the other way round"
+        );
+    }
 }
 
 #[test]

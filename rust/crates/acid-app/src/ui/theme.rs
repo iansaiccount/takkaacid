@@ -627,10 +627,13 @@ pub fn derive(row: &Row) -> Palette {
         .tune
         .silkscreen
         .unwrap_or_else(|| ink_on(panel, &sorted));
-    let well = row
-        .tune
-        .well
-        .unwrap_or_else(|| mix(panel, Color32::BLACK, 0.18));
+    // A well is the recess the display and the name field sit in. On a dark face that is a hole, so it goes darker; on a light
+    // face the readout is the brightest thing on the instrument, so it goes lighter — and that is also what gives the dim
+    // legend room to be quiet, because a quiet legend reads *better* against a lighter well than against a mid-tone one.
+    let well = row.tune.well.unwrap_or_else(|| match row.polar {
+        Polar::Dark => mix(panel, Color32::BLACK, 0.18),
+        Polar::Light => mix(panel, Color32::WHITE, 0.55),
+    });
     let panel_raised = match row.polar {
         Polar::Dark => mix(panel, Color32::WHITE, 0.08),
         Polar::Light => mix(panel, Color32::BLACK, 0.35),
@@ -764,10 +767,12 @@ mod tests {
     fn every_theme_holds_the_reading_rules() {
         for scheme in Scheme::ALL {
             let p = palette(scheme);
-            // A recess is darker than the face in both schemes: that is what makes it read as a well.
+            // A well is the surface the legends read *best* against, which is what makes it read as a recess: on a dark face
+            // that is darker than the face, and on a light face it is the bright readout. Written as "further from the legends"
+            // rather than "darker", because the second is only true of half the catalogue.
             assert!(
-                luminance(p.well) < luminance(p.panel),
-                "{scheme:?}: the well must sit below the face"
+                contrast(p.well, p.silkscreen) > contrast(p.panel, p.silkscreen),
+                "{scheme:?}: the well must be further from the legends than the face is"
             );
             // Engraving is legible against the face; dim engraving is legible but quieter.
             assert!(
@@ -898,6 +903,53 @@ mod tests {
             assert!(
                 row.colours.contains(&panel) || row.tune.panel == Some(panel),
                 "{scheme:?}: the face {panel:?} is neither the page's nor its row's"
+            );
+        }
+    }
+
+    /// The legends are one of the five colours the page gave, not a stock white.
+    ///
+    /// This is the bug the first derivation shipped: `ink_on` offered white and black among its candidates, so every dark
+    /// theme came out with pure-white legends and the catalogue was twenty-one themes with the theme taken out of them. The
+    /// reading rules all passed — white is the most readable thing there is — which is why the rule needed a test of its own.
+    #[test]
+    fn a_theme_legends_are_one_of_its_own_colours() {
+        for (index, row) in ROWS.iter().enumerate() {
+            let scheme = Scheme::ALL[index + 1];
+            let legend = palette(scheme).silkscreen;
+            assert!(
+                (legend != Color32::WHITE && legend != Color32::BLACK)
+                    || row.colours.contains(&legend),
+                "{scheme:?}: the legend {legend:?} is a stock white or black the page never gave"
+            );
+            assert!(
+                row.colours
+                    .iter()
+                    .any(|of| of.r().abs_diff(legend.r()) <= 60
+                        && of.g().abs_diff(legend.g()) <= 60
+                        && of.b().abs_diff(legend.b()) <= 60),
+                "{scheme:?}: the legend {legend:?} is not a shade of any of the page's five"
+            );
+        }
+    }
+
+    /// The dim legend is **quiet by measure**, not one shade off the full one.
+    ///
+    /// The first `dim_legend` walked from quiet to loud and returned the first candidate that passed, which is the loudest
+    /// acceptable colour: a "dim" legend 10 % away from the full one. It walked the wrong way round.
+    #[test]
+    fn every_theme_legend_has_a_quieter_second_weight() {
+        for scheme in Scheme::ALL {
+            let p = palette(scheme);
+            let full = contrast(p.panel, p.silkscreen);
+            let dim = contrast(p.panel, p.silkscreen_dim);
+            assert!(
+                dim <= full * 0.85,
+                "{scheme:?}: the dim legend reads at {dim:.2}:1 against the legend's {full:.2}:1, which is not dimmed"
+            );
+            assert!(
+                contrast(p.well, p.silkscreen_dim) >= 3.0,
+                "{scheme:?}: and still has to read in the well it is drawn in"
             );
         }
     }

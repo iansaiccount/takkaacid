@@ -699,7 +699,6 @@ fn paint_themes(
     let count = crate::device::Scheme::ALL.len();
     let window = theme_rows(rows, panel, s, state.device_card.themes.top);
     state.device_card.themes.top = window.top;
-    let last = count.saturating_sub(window.rows.len());
 
     // The wheel scrolls the window and stops at either end. Read only while the pointer is over the list, so a wheel over the
     // panel behind it keeps doing whatever the panel does with a wheel.
@@ -709,9 +708,10 @@ fn paint_themes(
     if over {
         let scrolled = ui.input(|input| input.smooth_scroll_delta.y);
         if scrolled != 0.0 {
+            // Only the floor is clamped here: the ceiling belongs to `theme_rows`, which is the one place that decides what
+            // window exists. Two clamps would mean mutating either one is invisible to every test.
             let step = (scrolled / ((ROW + GAP) * s)).round() as i64;
-            state.device_card.themes.top =
-                (window.top as i64 - step).clamp(0, last as i64) as usize;
+            state.device_card.themes.top = (window.top as i64 - step).max(0) as usize;
         }
     }
     let window = theme_rows(rows, panel, s, state.device_card.themes.top);
@@ -740,6 +740,7 @@ fn paint_themes(
             let track = (window.list.height() - 8.0 * s).max(1.0);
             let thumb = (track * share).max(8.0 * s);
             let travel = track - thumb;
+            let last = count.saturating_sub(window.rows.len());
             let at = match last {
                 0 => 0.0,
                 last => window.top as f32 / last as f32,
