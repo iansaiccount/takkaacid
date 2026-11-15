@@ -98,3 +98,31 @@ old size — each must fail one of the four.
 - **Moving the volume knob.** It stays first on the left, where the hand finds it.
 - **A second line for the name.** One line, fitted, with the tooltip for the rest.
 - **The bottom row.** That is task 5 of plan 01, untouched here.
+
+## Progress
+
+- [x] **Task 1 — the band re-derived.** One left cluster (volume, wordmark, session name, settings, help), the deck spread
+      across the middle, the tempo stepper, the pattern readout at the wall. Geometry only.
+- [x] **Task 2 — the name carries the state.** A raised plate in `led_accent` while there are unsaved changes, plain silk when
+      written, `SONG` alone when never named; the name fitted and left-aligned in a fixed corridor; the whole name and its state
+      in the tooltip — the one dynamic tip on the face, named as the exception.
+- [x] **Task 3 — the deck grows.** Keys from a fixed 20 px to 23 px at the design size, capped so a key stays a key, with the
+      gaps taking the slack.
+- [ ] **Task 4 — the documents.** The two prose sentences about the name being "in the middle" are corrected. **The screenshots
+      are not:** `top-strip.png`, `first-sound.png` and `running.png` still show the old band, and this round is not pushed
+      until they are retaken with their `img/README.md` rows.
+- [x] **Task 5 — the gate, partly.** 670 tests, clippy `-D warnings`, `fmt --check`, `check.sh` green. The four mutations are
+      recorded below as what each test would catch, not yet run.
+
+**Four bugs found by tests rather than by eye:** the deck ran into the tempo stepper (its right edge was measured to the pattern
+readout, not the stepper's `−`); the cluster's buttons were measured at one scale and drawn at another (`help_rect` took the
+scale, `tape_cells` measured it at 1.0); the cluster's gaps shrank with the panel while the name's corridor was a fraction, so
+they collided at 500×340; and six abutting cells computed as `index * stride` need not agree about the edge they share in f32.
+
+**Found by the screenshot, not by a test:** the band read `SONG SONG New song` (the helper already prefixes it — the first fix
+exited before writing, so the screenshot was the second report of the same bug), the plate spanned the whole corridor rather than
+the name, and the name was centred instead of left-aligned.
+
+**Ruling, with its cost:** the name's corridor is a fixed fraction of the band, so a longer name is fitted with `…` and the
+tooltip is the only place it is whole. The alternative — a corridor that grows with the name — moves six keys every time a song
+is named, which is worse.

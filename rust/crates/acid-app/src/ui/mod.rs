@@ -524,19 +524,23 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     let named = state.songs.name.is_some();
     let (line, colour) = match notice {
         Some(message) => (message.to_string(), p.led_accent),
+        // `song_label` already carries the `SONG` prefix; a second one made the band read `SONG SONG New song`.
         None if named => (
-            format!("SONG {}", song_label(state.songs.name.as_deref())),
+            song_label(state.songs.name.as_deref()),
             if unsaved { p.led_accent } else { p.silkscreen },
         ),
         None => ("SONG".to_string(), p.silkscreen_dim),
     };
     if notice.is_none() && unsaved {
-        // The plate, not a heavier word: the bundled font has one weight, so "bold" is a lit key's language.
-        ui.painter().rect_filled(
-            label.expand2(egui::vec2(3.0 * s, 2.0 * s)),
-            3.0 * s,
-            p.panel_raised,
-        );
+        // The plate, not a heavier word: the bundled font has one weight, so "bold" is a lit key's language. It hugs the name
+        // rather than the corridor — a plate the width of the corridor reads as a display well, not as a word that is lit.
+        let font = theme::legend(10.0 * s);
+        let galley = ui.painter().layout_no_wrap(line.clone(), font, colour);
+        let width = galley.size().x.min(label.width());
+        let plate =
+            egui::Rect::from_min_size(label.left_center(), egui::vec2(width, label.height()))
+                .expand2(egui::vec2(3.0 * s, 2.0 * s));
+        ui.painter().rect_filled(plate, 3.0 * s, p.panel_raised);
     }
     if notice.is_none() {
         // The only dynamic tooltip on this face: it carries a name the player typed, so it cannot come from `ui::tips`.
@@ -561,9 +565,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // One font for the measurement and the paint, or the fit would be honest only while two expressions stayed equal.
     let font = theme::legend(10.0 * s);
     let line = text::fit(ui.painter(), &line, font.clone(), label.width());
+    // Left-aligned in the corridor: a name is read from its first letter, and a centred one jumps every time it is typed.
     ui.painter().with_clip_rect(label).text(
-        label.center(),
-        egui::Align2::CENTER_CENTER,
+        egui::Pos2::new(label.left(), label.center().y),
+        egui::Align2::LEFT_CENTER,
         line,
         font,
         colour,
