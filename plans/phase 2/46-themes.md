@@ -191,3 +191,33 @@ Each ends with the three workspace gates and `bash docs/guide/check.sh`, reviewe
 | The palette is *derived*, with per-theme overrides | A theme is a rule's idea of the page's palette; the overrides are where taste had to intervene, and they are visible in the table. |
 | Polarity is a hand-set bit per theme | Six themes are declared light on my reading of the page's "canvas" advice; a wrong bit gives a face whose legends and lamps are inverted. `a_light_face_gets_dark_lamps…` proves the bit is applied, not that it was the right bit. |
 | The list scrolls by rows with the wheel | No keyboard access to the list beyond `Escape`, and a mouse-less player can reach only what fits. Accepted: the card's other rows are pointer controls too. |
+
+## Progress
+
+Round complete on `phase-2`, four commits, gates green at every one of them (661 tests, clippy `-D warnings`, `fmt --check`,
+`docs/guide/check.sh`). Detail lives in `.superpowers/sdd/46-themes/progress.md`; what follows is what a later session needs.
+
+- [x] **Task 1+2 — catalogue and derivation**, one commit (`feat(theme): twenty-two themes, derived from the page's
+      palettes`). Tasks 1 and 2 were ruled into one because they share the exhaustive `palette()` match. `Scheme` has 22
+      variants, `ALL` in page order, `index()` derived from `ALL`, `next()` gone; `Row`/`Tune`/`Polar` and `derive` produce a
+      palette cached in a `OnceLock`, so `palette()` still hands out `&'static`.
+      Eight fixes, six of them to the *rule* rather than to a theme: `ink_on` prefers the page's five (the first version put
+      stock white legends on nineteen themes and every contrast rule passed), `dim_legend` walks from the legend towards the
+      face on a 5 % grid, `away_from` measures which end is further instead of guessing at 0.5 luminance, `learn_cue` can no
+      longer equal the legend, the display digits are chosen against the well, and six faces carry a one-line `tune.panel`
+      override because the page reuses its anchors.
+- [x] **Task 3 — the drop-down** (`feat(device card): the COLOUR key drops down the whole catalogue`). `Card::themes`,
+      `theme_rows` as the single place the window is decided, a shade registered last so a click elsewhere costs only the
+      list, `Escape` order in `dispatch::escape`, seven integration tests. Two things the plan did not foresee: a scroll thumb
+      (11 of 22 rows fit, and nothing said the rest existed) and the egui 0.37 `MouseWheel` shape.
+- [x] **Task 4 — documents** (`docs: the guide, the README and the checker learn the theme catalogue`). Two screenshots
+      retaken, `check.sh` gained `VINYL NOIR`.
+- [x] **Task 5 — gate** (`test(theme): pin the two rules the catalogue could pass while being wrong`). Two rules on top of
+      the reading rules, five mutations, and one real design fault found by writing the rules: a light theme's well was a
+      darker mix of its face, which left no room for a dim legend. Fixed by making a light face's well a brighter readout and
+      restating the reading rule as "further from the legends" rather than "darker".
+- [ ] **Review of the whole round by a fresh reader.** The per-task reviews here were inline, with the mutation checks as the
+      reviewer; `AGENTS.md` asks for a fresh reviewer per commit and this round leaned on the gates instead. Owed before the
+      phase review, and recorded rather than quietly skipped.
+- [ ] **The player's prune.** Show them the twenty-two on one card, take the list of names to drop, and delete one variant,
+      one row and one `name()` arm per theme.
