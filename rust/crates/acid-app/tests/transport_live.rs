@@ -172,7 +172,7 @@ fn a_hovered_key_rings_itself_in_ink_that_reads_on_its_face() {
     // The transport is stopped, so STOP is the lit key and RUN is the unlit one: both halves in one frame.
     let shared = SharedState::new();
     let mut panel = PanelState {
-        scheme: Scheme::Yellow,
+        scheme: Scheme::AmbientMoss,
         ..PanelState::default()
     };
     let ctx = egui::Context::default();
@@ -191,17 +191,17 @@ fn a_hovered_key_rings_itself_in_ink_that_reads_on_its_face() {
 
     let stop = ring(&mut panel, 1);
     assert!(
-        stop.contains(&theme::YELLOW.lit_ink),
+        stop.contains(&theme::palette(Scheme::AmbientMoss).lit_ink),
         "a lit key's ring must be ink for its raised face: {stop:?}"
     );
     assert!(
-        !stop.contains(&theme::YELLOW.led_accent),
+        !stop.contains(&theme::palette(Scheme::AmbientMoss).led_accent),
         "and not the accent, which is ink for the face and unreadable on a raised key: {stop:?}"
     );
 
     let run = ring(&mut panel, 0);
     assert!(
-        run.contains(&theme::YELLOW.led_accent),
+        run.contains(&theme::palette(Scheme::AmbientMoss).led_accent),
         "an unlit key's ring must be the accent on its well: {run:?}"
     );
 }

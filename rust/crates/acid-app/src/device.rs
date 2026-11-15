@@ -54,36 +54,122 @@ impl DeviceKind {
     }
 }
 
-/// Which way round a device paints its face — its own, so four machines are told apart at a glance, not the rack's.
+/// Which theme a device paints its face in — its own, so four machines are told apart at a glance, not the rack's.
 ///
-/// A catalogue: `match`es over it are written out in full, so a third scheme fails to compile wherever a decision is owed.
-/// The colours themselves are `ui::theme`'s (`theme::palette`), because they are a painter's business and this is not.
+/// A catalogue: `match`es over it are written out in full, so a theme added or removed fails to compile wherever a decision
+/// is owed. The colours are `ui::theme`'s (`theme::palette`), derived from the five-colour palettes on
+/// <https://www.media.io/color-palette/music-color-palette.html>; each one's five source colours live in `theme`'s table,
+/// which is the one place they are written down.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub enum Scheme {
     /// The face the instrument has always had: near-black slab, amber silkscreen.
     #[default]
     Black,
-    /// The same two families exchanged: an amber face, near-black engraving.
-    Yellow,
+    /// Page 1.
+    VinylNoir,
+    /// Page 2.
+    StageSpotlight,
+    /// Page 3.
+    JazzLounge,
+    /// Page 4.
+    SynthNeon,
+    /// Page 5.
+    AcousticSunrise,
+    /// Page 6.
+    FestivalCitrus,
+    /// Page 7.
+    IndieDusk,
+    /// Page 8.
+    OperaVelvet,
+    /// Page 9.
+    LoFiRain,
+    /// Page 10.
+    DrumlineConcrete,
+    /// Page 11.
+    ChoirPastel,
+    /// Page 12.
+    BasslineEmber,
+    /// Page 13.
+    PopBubblegum,
+    /// Page 14.
+    OrchestralIce,
+    /// Page 15.
+    GarageGrunge,
+    /// Page 16.
+    DiscoMirrorball,
+    /// Page 17.
+    AmbientMoss,
+    /// Page 18.
+    KPopCandy,
+    /// Page 19.
+    StudioSandalwood,
+    /// Page 20.
+    EdmLaser,
+    /// Page 21.
+    RetroCassette,
 }
 
 impl Scheme {
-    /// Every scheme there is, in the order the card offers them.
-    pub const ALL: [Scheme; 2] = [Scheme::Black, Scheme::Yellow];
+    /// Every theme there is, in the order the card's list offers them.
+    pub const ALL: [Scheme; 22] = [
+        Scheme::Black,
+        Scheme::VinylNoir,
+        Scheme::StageSpotlight,
+        Scheme::JazzLounge,
+        Scheme::SynthNeon,
+        Scheme::AcousticSunrise,
+        Scheme::FestivalCitrus,
+        Scheme::IndieDusk,
+        Scheme::OperaVelvet,
+        Scheme::LoFiRain,
+        Scheme::DrumlineConcrete,
+        Scheme::ChoirPastel,
+        Scheme::BasslineEmber,
+        Scheme::PopBubblegum,
+        Scheme::OrchestralIce,
+        Scheme::GarageGrunge,
+        Scheme::DiscoMirrorball,
+        Scheme::AmbientMoss,
+        Scheme::KPopCandy,
+        Scheme::StudioSandalwood,
+        Scheme::EdmLaser,
+        Scheme::RetroCassette,
+    ];
 
-    /// The caption on the card's key.
+    /// Where this theme sits in `ALL`. Found rather than written down: a second positional list is the bug this repo has
+    /// paid for twice, and twenty-two arms of `Scheme::X => 12` would be exactly that.
+    pub fn index(self) -> usize {
+        Scheme::ALL
+            .iter()
+            .position(|scheme| *scheme == self)
+            .expect("every scheme is in ALL")
+    }
+
+    /// The caption on the card's key and in its list.
     pub fn name(self) -> &'static str {
         match self {
             Scheme::Black => "BLACK",
-            Scheme::Yellow => "YELLOW",
-        }
-    }
-
-    /// What a click on the card's key asks for: the other one. Two schemes, so this is the whole of the mapping.
-    pub fn next(self) -> Scheme {
-        match self {
-            Scheme::Black => Scheme::Yellow,
-            Scheme::Yellow => Scheme::Black,
+            Scheme::VinylNoir => "VINYL NOIR",
+            Scheme::StageSpotlight => "STAGE SPOTLIGHT",
+            Scheme::JazzLounge => "JAZZ LOUNGE",
+            Scheme::SynthNeon => "SYNTH NEON",
+            Scheme::AcousticSunrise => "ACOUSTIC SUNRISE",
+            Scheme::FestivalCitrus => "FESTIVAL CITRUS",
+            Scheme::IndieDusk => "INDIE DUSK",
+            Scheme::OperaVelvet => "OPERA VELVET",
+            Scheme::LoFiRain => "LO FI RAIN",
+            Scheme::DrumlineConcrete => "DRUMLINE CONCRETE",
+            Scheme::ChoirPastel => "CHOIR PASTEL",
+            Scheme::BasslineEmber => "BASSLINE EMBER",
+            Scheme::PopBubblegum => "POP BUBBLEGUM",
+            Scheme::OrchestralIce => "ORCHESTRAL ICE",
+            Scheme::GarageGrunge => "GARAGE GRUNGE",
+            Scheme::DiscoMirrorball => "DISCO MIRRORBALL",
+            Scheme::AmbientMoss => "AMBIENT MOSS",
+            Scheme::KPopCandy => "K POP CANDY",
+            Scheme::StudioSandalwood => "STUDIO SANDALWOOD",
+            Scheme::EdmLaser => "EDM LASER",
+            Scheme::RetroCassette => "RETRO CASSETTE",
         }
     }
 }

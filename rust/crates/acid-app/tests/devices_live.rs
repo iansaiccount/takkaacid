@@ -300,12 +300,17 @@ fn the_face_follows_the_device_it_shows() {
         "a black device paints the face it has always had"
     );
 
-    panel.scheme = Scheme::Yellow;
+    panel.scheme = Scheme::AmbientMoss;
     let output = run(&ctx, &mut panel, &state, vec![]);
     assert_eq!(
         face_fill(&output),
-        Some(theme::YELLOW.panel),
-        "and a yellow one turns the face amber"
+        Some(theme::palette(Scheme::AmbientMoss).panel),
+        "and a themed one paints its own face"
+    );
+    assert_ne!(
+        theme::palette(Scheme::AmbientMoss).panel,
+        theme::BLACK.panel,
+        "or this would pass without the theme reaching the face at all"
     );
 }
 
@@ -318,7 +323,7 @@ fn the_strip_cell_wears_its_own_devices_colours() {
     let state = SharedState::new();
     let mut panel = panel_of(&[("ACID 1", false, false), ("BASS", false, false)]);
     panel.scheme = Scheme::Black;
-    panel.strip.cells[1].scheme = Scheme::Yellow;
+    panel.strip.cells[1].scheme = Scheme::AmbientMoss;
     let ctx = Context::default();
     let output = run(&ctx, &mut panel, &state, vec![]);
 
@@ -339,7 +344,7 @@ fn the_strip_cell_wears_its_own_devices_colours() {
     );
     assert_eq!(
         cell_fill(cells[1]),
-        Some(theme::YELLOW.panel),
-        "and the yellow device's cell is amber, whatever the panel is showing"
+        Some(theme::palette(Scheme::AmbientMoss).panel),
+        "and a themed device's cell wears that theme, whatever the panel is showing"
     );
 }

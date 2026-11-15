@@ -1022,10 +1022,10 @@ fn opening_a_card_puts_the_picker_away() {
     assert!(!panel.device_picker.open, "F3 put the picker away");
 }
 
-/// The COLOUR row is one key showing the scheme the device is on, and it asks for the other one — two schemes, so the row
-/// that says which one is also the row that flips it.
+/// The COLOUR key names the theme its device is on and, until the list lands, asks for the next one in the catalogue — so the
+/// row both says where you are and moves you on.
 #[test]
-fn the_colour_row_asks_for_the_other_scheme() {
+fn the_colour_key_names_the_theme_and_cycles_the_catalogue() {
     use acid_app::device::Scheme;
 
     let state = SharedState::new();
@@ -1037,52 +1037,45 @@ fn the_colour_row_asks_for_the_other_scheme() {
     assert!(said.contains("COLOUR"), "the row needs its caption: {said}");
     assert!(
         said.contains("BLACK"),
-        "and shows the scheme it is on: {said}"
+        "and shows the theme it is on: {said}"
     );
 
     let rows = card_rows(&panel);
     click(&ctx, &mut panel, &state, rows.scheme.center());
     assert_eq!(
         panel.device_request,
-        Some(Request::SetScheme(0, Scheme::Yellow)),
-        "a black device's key asks for yellow"
+        Some(Request::SetScheme(0, Scheme::ALL[1])),
+        "a black device's key asks for the next theme in the catalogue"
     );
 
-    // And back: the key asks for the other one whatever this one is.
+    // And the caption follows the device, not a fixed word.
     panel.device_request = None;
-    panel.device_card.scheme = Scheme::Yellow;
+    panel.device_card.scheme = Scheme::AmbientMoss;
     let said = strings(&run(&ctx, &mut panel, &state, vec![])).join(" ");
     assert!(
-        said.contains("YELLOW"),
-        "the key prints the scheme the device is on, not a fixed caption: {said}"
-    );
-    let rows = card_rows(&panel);
-    click(&ctx, &mut panel, &state, rows.scheme.center());
-    assert_eq!(
-        panel.device_request,
-        Some(Request::SetScheme(0, Scheme::Black)),
-        "a yellow device's key asks for black"
+        said.contains("AMBIENT MOSS"),
+        "the key prints the theme the device is on: {said}"
     );
 }
 
 /// The conversation's decision, pinned: the face inverts but the cards do not. A card is an object laid over the
 /// instrument rather than part of its face, so it stays black even when everything under it is amber.
 #[test]
-fn a_card_stays_black_over_a_yellow_face() {
+fn a_card_stays_black_over_a_themed_face() {
     use acid_app::device::Scheme;
     use acid_app::ui::theme;
 
     let state = SharedState::new();
     let mut panel = two_device_panel();
-    panel.scheme = Scheme::Yellow;
+    panel.scheme = Scheme::AmbientMoss;
     panel.device_card.open = Some(0);
     let ctx = Context::default();
     let output = run(&ctx, &mut panel, &state, vec![]);
 
     assert_eq!(
         fill_around(&output, acid_app::ui::layout::layout(screen()).panel),
-        Some(theme::YELLOW.panel),
-        "the face behind the card is amber, or this proves nothing"
+        Some(theme::palette(Scheme::AmbientMoss).panel),
+        "the face behind the card is the theme's, or this proves nothing"
     );
     // The card's own surface: the smallest painted thing that covers its first row and its last key is the card itself, since
     // its keys are separate shapes and the scrim under it reaches to the panel's edges.

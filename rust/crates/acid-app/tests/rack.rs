@@ -440,19 +440,30 @@ fn a_rack_hands_each_router_the_tempo_cell_it_shares() {
     assert_eq!(rack.devices()[0].state.tempo_bpm.get(), 144.0);
 }
 
-/// The scheme catalogue: two entries, the first the instrument's own face, and a toggle that is the whole of the mapping.
+/// The theme catalogue: the instrument's own face first, then one per palette on the page, and a name for each that the
+/// card's list can print.
 #[test]
-fn the_scheme_catalogue_is_black_then_yellow_and_toggles() {
+fn the_theme_catalogue_starts_with_black_and_names_every_theme() {
     use acid_app::device::Scheme;
 
-    assert_eq!(Scheme::ALL, [Scheme::Black, Scheme::Yellow]);
+    assert_eq!(Scheme::ALL.len(), 22, "BLACK and the page's twenty-one");
+    assert_eq!(
+        Scheme::ALL[0],
+        Scheme::Black,
+        "the instrument's own face first"
+    );
     assert_eq!(Scheme::default(), Scheme::Black, "a new device is black");
     assert_eq!(Scheme::Black.name(), "BLACK");
-    assert_eq!(Scheme::Yellow.name(), "YELLOW");
-    for scheme in Scheme::ALL {
-        assert_eq!(scheme.next().next(), scheme, "{scheme:?} toggles back");
-        assert_ne!(scheme.next(), scheme, "{scheme:?} asks for the other one");
+    for (index, scheme) in Scheme::ALL.iter().enumerate() {
+        // The index is found from ALL, not written down: a second positional list is the bug this repo has paid for twice.
+        assert_eq!(scheme.index(), index, "{scheme:?} is not where ALL says");
+        assert!(!scheme.name().is_empty(), "{scheme:?} has no caption");
         assert!(scheme.name().is_ascii(), "{scheme:?} is a panel caption");
+        assert_eq!(
+            scheme.name().to_uppercase(),
+            scheme.name(),
+            "{scheme:?} is set in capitals on the face"
+        );
     }
 }
 
@@ -470,14 +481,14 @@ fn a_device_carries_its_own_scheme() {
         "a new device is black"
     );
 
-    rack.set_scheme(1, Scheme::Yellow);
-    assert_eq!(rack.devices()[1].scheme, Scheme::Yellow);
+    rack.set_scheme(1, Scheme::SynthNeon);
+    assert_eq!(rack.devices()[1].scheme, Scheme::SynthNeon);
     assert_eq!(rack.devices()[0].scheme, Scheme::Black, "and only that one");
 
     rack.select(0);
     assert_eq!(
         rack.devices()[1].scheme,
-        Scheme::Yellow,
+        Scheme::SynthNeon,
         "a colour is not a selection"
     );
 
@@ -491,7 +502,7 @@ fn a_device_carries_its_own_scheme() {
     );
     assert_eq!(
         rack.devices()[1].scheme,
-        Scheme::Yellow,
+        Scheme::SynthNeon,
         "nor the one it was not about"
     );
 }

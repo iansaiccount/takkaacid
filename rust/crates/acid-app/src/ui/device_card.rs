@@ -545,19 +545,18 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         asked = Some(Request::SetChannel(index, next_channel(channel)));
     }
 
-    // COLOUR: which way round the device paints its face. One key showing the scheme it is on — there are two, and the row
-    // already says which — and a click asks for the other one. Lit for yellow, so a machine that will turn the face amber
-    // says so before you switch to it.
+    // COLOUR: the theme this device wears. Interim, and marked as such: the key names the current theme and cycles to the
+    // next one in the catalogue, because the list that replaces it is the next commit. A key that works beats a key that
+    // waits while the catalogue lands in pieces.
     let scheme = state.device_card.scheme;
-    let colour = transport::card_button(
-        ui,
-        "device-card-colour",
-        rows.scheme,
-        scheme.name(),
-        scheme == crate::device::Scheme::Yellow,
-    );
+    let colour =
+        transport::card_button(ui, "device-card-colour", rows.scheme, scheme.name(), false);
     if colour.clicked() {
-        asked = Some(Request::SetScheme(index, scheme.next()));
+        let all = crate::device::Scheme::ALL;
+        asked = Some(Request::SetScheme(
+            index,
+            all[(scheme.index() + 1) % all.len()],
+        ));
     }
 
     // MUTE: this device's own mute, read from the strip's mirror of the rack — the panel's only reading of it.
