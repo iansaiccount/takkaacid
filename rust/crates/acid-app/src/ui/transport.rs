@@ -24,7 +24,10 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))
 }
 
-/// Cells in the transport row: RUN, STOP, TEMPO −, TEMPO +, VOLUME.
+/// Cells in the transport row: RUN, STOP, TEMPO −, TEMPO +, LEARN.
+///
+/// The fifth cell is the MIDI learn key, not a volume: the volume knob lives in the top strip's corner, and the name this
+/// comment used to carry was a leftover from before learn had a cell.
 pub const TRANSPORT_CELLS: usize = 5;
 /// A key on one of the cards. Every card is painted in the black scheme whatever the face behind it does, so this is the one
 /// place that says so — a card that took the face's palette would go amber over an amber device.

@@ -100,8 +100,9 @@ same when it earns one. Naming a phase here is not opening it.
 the tempo's `+` and `−` beside it, and the song's load and save icons where the session name is. The transport leaves the synth
 altogether: the row under the panel loses `RUN`, `STOP`, `TEMPO −`, `TEMPO +` and keeps `VOLUME`, and the four cells it frees
 become `REVERSE`, `TBC`, `TRANSPOSE −`, `TRANSPOSE +` (one semitone at a time). Reverse per pattern, so one device can run its
-line backwards while the others run forwards; transpose for the whole synth from one control. `BACK`, `FORWARD`, `RECORD`,
-`LOAD` and `SAVE` are drawn and reachable by keyboard now, and recede as not-yet-wired.
+line backwards while the others run forwards; transpose for the whole synth from one control. `BACK`, `FORWARD` and `RECORD`
+are drawn and reachable by keyboard now, and recede as not-yet-wired; `LOAD` and `SAVE` wait for the song document, because the
+room they would reserve is the status line's (`plans/phase 3/01-the-tape-transport.md`).
 
 **What is asked for and not designed yet.** Whether the tape sits in the top band (where the tempo readout is) or in the row it
 empties; what a key whose feature does not exist does when clicked (a notice, or nothing at all); which keys `BACK`, `FORWARD`

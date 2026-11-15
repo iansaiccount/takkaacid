@@ -136,12 +136,16 @@ stored reversed pattern.
 
 ## Tasks
 
-1. **Layout.** `PanelLayout` gains `tape`, `tempo_stepper`, `document`; band 0's contents re-derived; the bottom row's cell
-   identities become `REVERSE TBC TRANSPOSE− TRANSPOSE+ VOLUME`. Tests: geometry only, no behaviour.
+1. **Layout.** Band 0 gains `tape_cells` and `tempo_stepper_cells` (in `panel.rs`, beside the band's other geometry), the
+   pattern readout keeps the wall, the tempo well becomes the stepper's middle cell, and the session name becomes the corridor
+   before the deck. The bottom row's cell identities are task 5's: a caption with nothing behind it — not even a notice — is the
+   "key that does nothing reads as broken" this plan forbids. Tests: geometry only, over three window sizes.
 2. **The transport state.** `Transport::{Stopped, Playing, Paused}` on the rack, `Rack::playing` removed, `is_playing()`,
    the fan-out, and the three states' semantics for `pattern_swap` and the caret. Tests: unit + the state machine part of 2.
-3. **The tape, drawn.** The six keys as shapes, the tempo stepper and its well, the document icons, lit/unlit states, tooltips.
-   Tests: 1, 8, 9.
+3. **The tape, drawn.** The six keys as shapes, the tempo stepper and its well, lit/unlit states, tooltips. This is also where
+   `TAPE_COUNT` stops being a hand-kept six: a `TapeKey` catalogue (`Back, Play, Pause, Stop, Forward, Record`) with `ALL`, and
+   `TAPE_COUNT` derived from it the way `KNOB_COUNT` derives from `Knob::ALL` — indexing the rects by position against the tips
+   catalogue is the hand-kept second list this repo has paid for twice. Tests: 1, 8, 9.
 4. **The tape, wired.** Play/pause/stop requests, tempo `−`/`+`, notices for the not-wired keys, `space`/`,`/`.`/`R`. Tests: 2,
    3, 4.
 5. **The bottom row.** `REVERSE` (flag, mirrored read), `TRANSPOSE −/+` (rack offset, ±12), `TBC` (notice), `VOLUME`
@@ -151,7 +155,8 @@ stored reversed pattern.
 7. **Documents.** Guide pages 04 (the face), 09 (playing), 12 (banks), 15 (keyboard), 20 (reference); `check.sh` facts; the
    screenshots that contain the transport band — `transport.png`, `top-strip.png`, `switches.png`, `first-sound.png`,
    `running.png`, the card shots that include the bottom band, and the `SONGS` card shot renamed to `banks-card.png`. Each row
-   in `src/img/README.md` updated with its state and command.
+   in `src/img/README.md` updated with its state and command. Pages 04 and 20 still say the session's name is "in the middle"
+   of the strip; it is not any more, and those sentences are this task's to fix.
 8. **The gate.** Three workspace commands, `check.sh`, the mutation checks above, and the round's whole-branch read.
 
 ## Non-goals
@@ -168,7 +173,28 @@ stored reversed pattern.
 
 ## Progress
 
-- [ ] Task 1 — layout
+- [x] **Task 1 — layout**, `panel.rs` + `notice_live.rs`. Band 0's chain is now name → deck → tempo stepper → pattern readout
+      at the wall, right-anchored in `panel.rs` beside the band's other geometry. Geometry only; no behaviour.
+      Proven by `the_tape_and_its_neighbours_share_the_top_strip_in_order` (three window sizes: 500×340, design, 1600×1040;
+      pressability and a readable name asserted at the reference size only) and
+      `the_song_label_fills_the_corridor_before_the_document_icons` (the corridor's endpoints and ten neighbours it must not
+      cover).
+      **Ruling (player, this round):** the song's `LOAD`/`SAVE` icons are not drawn and their space is not reserved. Measuring
+      the first build showed the icons cost the session-name corridor — which is also the status line — about forty pixels, and
+      at 980×560 that left a notice ~57 px, twelve characters, where `a_long_notice_keeps_its_beginning` needs ~73 px to keep
+      its beginning. Cost if wrong: the icons move again when the song document lands — the round that must reconcile them with
+      the existing `SAVE` switch anyway.
+      **Ruling (this round):** the session name is no longer centred. The deck and stepper spend the room the symmetry used, and
+      a centred label ending at the deck would be a few pixels wide. The two centring tests were replaced by the corridor test,
+      not deleted; the guide's "in the middle" sentences are task 7's.
+      **Review found, and what was done:** the first build hung the band the wrong way round — documents before the deck, tempo
+      on the wall — against the sketch the player approved (P1; fixed by re-anchoring); a doc comment still promised the
+      centring (fixed); one window size tested, with a 12 px key floor that only holds above ~583×399 (fixed: three sizes,
+      floors at the reference size); this section was empty (fixed); the plan blamed a module cycle for putting the geometry in
+      `panel.rs`, which is not how Rust works (fixed: the real reason is that band 0's right-anchored pieces have no band-wide
+      `area` for a `layout::Row`); `transport.rs`'s comment named the fifth transport cell `VOLUME` when it is `LEARN` (fixed,
+      and the reason this plan's row description was wrong too); two new functions took a `_scale` they ignored while their
+      sibling scaled its gaps (fixed by dropping it, matching `layout::knob_cells`).
 - [ ] Task 2 — the transport state
 - [ ] Task 3 — the tape, drawn
 - [ ] Task 4 — the tape, wired

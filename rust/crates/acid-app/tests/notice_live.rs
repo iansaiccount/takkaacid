@@ -44,7 +44,7 @@ fn painted_lines(output: &eframe::egui::FullOutput) -> Vec<(String, f32)> {
     out
 }
 
-/// The label sits in the middle of the strip and nowhere near the things it could cover.
+/// The label fills the corridor before the tape deck and nowhere near the things it could cover.
 #[test]
 fn the_song_label_sits_clear_of_everything_it_could_cover() {
     let l = layout(screen());
@@ -139,60 +139,54 @@ fn the_gear_sits_beside_the_help_dot_and_clear_of_the_lamp() {
     );
 }
 
-/// The song label sits on the strip's own middle — not on the midpoint of the gap it lives in. The left cluster
-/// (volume, wordmark, lamp, gear, `?`) is far wider than the right (pattern, tempo), so the gap's midpoint is about
-/// sixty pixels right of centre and the name reads off-centre.
+/// The song label fills the corridor between the wordmark's corner and the tape deck.
+///
+/// It used to be centred on the strip, symmetric about `top.center().x`. The deck and the tempo stepper took the room that
+/// symmetry spent, and a label that stayed centred would be a few pixels wide — so the rule is now the corridor itself: from
+/// the wordmark to the deck, no gaps wasted and no neighbour covered. The corridor is also the status line: a notice is
+/// painted here, which is why `a_long_notice_keeps_its_beginning` is the test that says this must stay wide enough to read.
 #[test]
-fn the_song_label_is_centred_in_the_strip() {
+fn the_song_label_fills_the_corridor_before_the_document_icons() {
     let l = layout(screen());
     let s = scale(screen());
     let label = panel::song_label_rect(l.top, s);
+    let gap = acid_app::ui::theme::GAP * s;
 
     assert!(
-        (label.center().x - l.top.center().x).abs() <= 1.0,
-        "the name belongs on the middle of the strip: {} vs {}",
-        label.center().x,
-        l.top.center().x
+        (label.left() - (panel::brand_rect(l.top).right() + gap)).abs() <= 1.0,
+        "the name starts at the wordmark's corner: {} vs {}",
+        label.left(),
+        panel::brand_rect(l.top).right() + gap
     );
+    let tape = panel::tape_cells(l.top);
+    assert!(
+        (label.right() - (tape[0].left() - gap)).abs() <= 1.0,
+        "and ends at the tape deck: {} vs {}",
+        label.right(),
+        tape[0].left() - gap
+    );
+    assert!(
+        label.width() > 60.0,
+        "a name still needs room to be a name: {}",
+        label.width()
+    );
+
+    let stepper = panel::tempo_stepper_cells(l.top);
     for (what, rect) in [
         ("the wordmark", panel::brand_rect(l.top)),
         ("the saves lamp", panel::save_indicator_rect(l.top, s)),
         ("the gear", panel::gear_rect(l.top, s)),
         ("the help dot", panel::help_rect(l.top, s)),
+        ("the tape", tape[0]),
         ("the pattern display", panel::pattern_display_rect(l.top)),
         ("the tempo display", panel::tempo_display_rect(l.top)),
+        ("the tempo stepper's `+`", stepper[2]),
     ] {
         assert!(!label.intersects(rect), "the name must not cover {what}");
     }
     assert!(
         l.top.contains_rect(label),
         "the label lives on the top strip"
-    );
-}
-
-/// The window spends the room evenly and wastes none: half its width is exactly the room the tighter side allows, counted
-/// from the *strip's* centre. Both numbers come from outside the rect, so the pre-fix rect — the whole gap, centred on the
-/// gap's own midpoint — fails this (132.75 against 77.7 at 980 × 560).
-#[test]
-fn the_song_label_window_uses_all_the_room_the_tighter_side_allows() {
-    let l = layout(screen());
-    let s = scale(screen());
-    let label = panel::song_label_rect(l.top, s);
-    let bound_left = panel::brand_rect(l.top).right() + acid_app::ui::theme::GAP * s;
-    let bound_right = panel::pattern_display_rect(l.top).left() - acid_app::ui::theme::GAP * s;
-    let centre = l.top.center().x;
-    let room = (centre - bound_left).min(bound_right - centre);
-
-    assert!(
-        (label.width() * 0.5 - room).abs() <= 1.0,
-        "the window should be as wide as the tighter side allows: {} of {room}",
-        label.width() * 0.5
-    );
-    // The left cluster is the tighter side at these proportions, so that is the edge the window must reach.
-    assert!(
-        (label.left() - bound_left).abs() <= 1.0,
-        "the window should reach the tighter neighbour: {} vs {bound_left}",
-        label.left()
     );
 }
 
