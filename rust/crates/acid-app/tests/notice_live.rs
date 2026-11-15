@@ -137,43 +137,41 @@ fn the_gear_sits_beside_the_help_dot_and_clear_of_the_lamp() {
     );
 }
 
-/// The song label is a fixed corridor in the session's own cluster: after the wordmark, before the settings gear.
+/// The song label is a fixed corridor after the session's two buttons, and before the deck.
 ///
-/// Round 3a moved it there from the middle of the band, where it had been a corridor to the deck. A fixed width is what makes
-/// the deck's own place stable: a corridor that grew with the name would move six keys every time a song was named.
+/// Round 3a moved it out of the middle of the band, where it had been a corridor to the deck; the player then asked for the
+/// order logo, settings, help, name, transport, so the name follows the buttons. A fixed width is what keeps the deck's own
+/// place stable: a corridor that grew with the name would move six keys every time a song was named.
 #[test]
-fn the_song_label_is_a_fixed_corridor_before_the_gear() {
+fn the_song_label_is_a_fixed_corridor_after_the_buttons() {
     let l = layout(screen());
     let s = scale(screen());
     let label = panel::song_label_rect(l.top, s);
     let gap = acid_app::ui::theme::GAP;
 
     assert!(
-        (label.left() - (panel::brand_rect(l.top).right() + gap)).abs() <= 1.0,
-        "the name starts at the wordmark's corner: {} vs {}",
+        (label.left() - (panel::help_rect(l.top, s).right() + gap)).abs() <= 1.0,
+        "the name starts after the help dot: {} vs {}",
         label.left(),
-        panel::brand_rect(l.top).right() + gap
+        panel::help_rect(l.top, s).right() + gap
     );
     assert!(
         label.width() > 60.0,
         "a name still needs room to be a name: {}",
         label.width()
     );
-    let gear = panel::gear_rect(l.top, s);
-    assert!(
-        label.right() <= gear.left(),
-        "and ends before the gear: {} vs {}",
-        label.right(),
-        gear.left()
-    );
-
     let tape = panel::tape_cells(l.top);
+    assert!(
+        label.right() <= tape[0].left(),
+        "and ends before the deck: {} vs {}",
+        label.right(),
+        tape[0].left()
+    );
     let stepper = panel::tempo_stepper_cells(l.top);
     for (what, rect) in [
         ("the wordmark", panel::brand_rect(l.top)),
-        ("the gear", gear),
+        ("the gear", panel::gear_rect(l.top, s)),
         ("the help dot", panel::help_rect(l.top, s)),
-        ("the tape", tape[0]),
         ("the pattern display", panel::pattern_display_rect(l.top)),
         ("the tempo display", panel::tempo_display_rect(l.top)),
         ("the tempo stepper's `+`", stepper[2]),

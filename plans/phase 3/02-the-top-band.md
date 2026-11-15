@@ -126,3 +126,25 @@ the name, and the name was centred instead of left-aligned.
 **Ruling, with its cost:** the name's corridor is a fixed fraction of the band, so a longer name is fitted with `…` and the
 tooltip is the only place it is whole. The alternative — a corridor that grows with the name — moves six keys every time a song
 is named, which is worse.
+
+## The player's order, taken
+
+The first build put the name before the buttons, which read as *logo, space, name, space, settings, help, deck* — two gaps
+around a name and the deck crammed right. The player asked for **logo, settings, help, name, transport**, with no corner wider
+than its contents. Taken:
+
+- the wordmark's corner is now **its own width** (`BRAND_WIDTH`, a multiple of the band's height) instead of 40 % of the band, so
+  the icon and the word sit where they end and the next thing follows;
+- the order is wordmark → gear → help → name → deck, each hung off the one before it, so no gap can open between them;
+- the name's corridor is narrower (10 % of the band) and left-aligned, and the deck takes everything from its right edge to the
+  tempo stepper — which is where the width came from.
+
+Measured at the design size: the deck's keys went from 20.2 px to **34.7 px**, and the gaps between them from 2 px to 10.3 px.
+
+## A blocker for the screenshots, found while taking them
+
+The capture recipe in `AGENTS.md` no longer produces a 1960 × 1340 window on this machine: with
+`WINIT_X11_SCALE_FACTOR=2` set and a 2600 × 1800 Xvfb screen, the app opens at **1280 × 800** — `xdotool getwindowgeometry`
+says so, and so does the grab. Every screenshot of this band is therefore of the wrong size and the wrong scale, and the recipe
+needs correcting (the winit/eframe version in use does not honour that variable the way the note assumes) before task 4 can be
+finished. The three images are **not** retaken, and this round stays unpushed until they are.

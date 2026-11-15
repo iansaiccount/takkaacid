@@ -45,22 +45,24 @@ pub fn volume_knob_rect(top: Rect) -> Rect {
     )
 }
 
-/// How much of the band the wordmark's corner takes: the icon, the word, and no more. It used to take 40 % so the
-/// session name could centre itself in what was left; the name sits here now, and the deck needs the rest.
-const BRAND_FRACTION: f32 = 0.26;
+/// How wide the wordmark's corner is, as a multiple of the band's height. The wordmark is one constant word at one size, so
+/// this is *its* width and not a share of the band: a fraction left a corner wider than the word in it, and the player saw the
+/// gap as space between the logo and everything else.
+const BRAND_WIDTH: f32 = 2.65;
 /// How much of the band the session name's corridor takes, measured from the wordmark's corner. Fixed, not fitted to the
 /// name: a corridor that grew with its contents would move the deck every time a song was named, and the fit inside a fixed
 /// corridor is what the tooltip exists to complete.
-const NAME_FRACTION: f32 = 0.18;
+const NAME_FRACTION: f32 = 0.10;
 /// How big the settings gear and the help dot are, as a multiple of the band's height — the size the two round buttons have
 /// always been drawn at (18 of 56), kept band-relative so every piece of this band is measured one way.
 const CLUSTER_BUTTON: f32 = 18.0 / 56.0;
 
 /// The wordmark's corner of the top strip: right of the volume knob, so the two never collide.
 pub fn brand_rect(top: Rect) -> Rect {
+    let left = volume_knob_rect(top).right() + theme::GAP;
     Rect::from_min_max(
-        Pos2::new(volume_knob_rect(top).right() + theme::GAP, top.top()),
-        Pos2::new(top.left() + top.width() * BRAND_FRACTION, top.bottom()),
+        Pos2::new(left, top.top()),
+        Pos2::new(left + top.height() * BRAND_WIDTH, top.bottom()),
     )
 }
 
@@ -71,7 +73,7 @@ pub fn gear_rect(top: Rect, _scale: f32) -> Rect {
     // Sized from the band, like every key beside it: `tape_cells` measures this rect to know where the deck starts, and a
     // scale-dependent size would have the deck start inside the dot at any window but the design one.
     let size = top.height() * CLUSTER_BUTTON;
-    let centre = song_label_rect(top, 1.0).right() + theme::GAP + size * 0.5;
+    let centre = brand_rect(top).right() + theme::GAP + size * 0.5;
     Rect::from_center_size(Pos2::new(centre, top.center().y), egui::vec2(size, size))
 }
 
@@ -92,8 +94,8 @@ pub fn help_rect(top: Rect, scale: f32) -> Rect {
 /// Fixed width, left-aligned: the name is fitted into it and the whole of it is in the tooltip. It used to be centred on the
 /// band, then a corridor to the deck; now the deck owns the middle of the band and the session's own cluster (name, settings,
 /// help) sits to its left, whole.
-pub fn song_label_rect(top: Rect, _scale: f32) -> Rect {
-    let left = brand_rect(top).right() + theme::GAP;
+pub fn song_label_rect(top: Rect, scale: f32) -> Rect {
+    let left = help_rect(top, scale).right() + theme::GAP;
     Rect::from_min_max(
         Pos2::new(left, top.top()),
         Pos2::new(left + top.width() * NAME_FRACTION, top.bottom()),
@@ -152,7 +154,7 @@ fn tape_key(top: Rect) -> f32 {
 /// document exists it will need its own answer, and a layout that pauses for it now would be a layout that lies about what fits.
 pub fn tape_cells(top: Rect) -> [Rect; TAPE_COUNT] {
     // From the help dot to the pattern readout: the room the saved word and the name's tail used to spend, now the deck's.
-    let left = help_rect(top, 1.0).right() + theme::GAP;
+    let left = song_label_rect(top, 1.0).right() + theme::GAP;
     // The stepper sits between the deck and the pattern readout, so the deck stops at the stepper's `−`.
     let right = tempo_stepper_cells(top)[0].left() - theme::GAP;
     let span = (right - left).max(1.0);
@@ -330,6 +332,7 @@ mod tests {
             let top = l.top;
             let s = layout::scale(window);
 
+            let brand = brand_rect(top);
             let name = song_label_rect(top, s);
             let gear = gear_rect(top, s);
             let help = help_rect(top, s);
@@ -337,10 +340,14 @@ mod tests {
             let stepper = tempo_stepper_cells(top);
             let pattern = pattern_display_rect(top);
 
-            // The session's own cluster on the left, then the deck spread across the middle, then the tempo and the readout.
-            assert!(name.right() <= gear.left(), "name then gear at {size:?}");
+            // The band reads as one sentence: wordmark, settings, help, the session's name, then the deck across what is left.
+            assert!(
+                brand.right() <= gear.left(),
+                "wordmark then gear at {size:?}"
+            );
             assert!(gear.right() <= help.left(), "gear then help at {size:?}");
-            assert!(help.right() <= tape[0].left(), "help then deck at {size:?}");
+            assert!(help.right() <= name.left(), "help then name at {size:?}");
+            assert!(name.right() <= tape[0].left(), "name then deck at {size:?}");
             assert!(
                 tape[TAPE_COUNT - 1].right() <= stepper[0].left(),
                 "deck then tempo at {size:?}"
@@ -387,7 +394,7 @@ mod tests {
             l.top.height() * 0.36
         );
         assert!(
-            song_label_rect(l.top, 1.0).width() > 100.0,
+            song_label_rect(l.top, 1.0).width() > 80.0,
             "the name still needs a corridor to be read in"
         );
     }
