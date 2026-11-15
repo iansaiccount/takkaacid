@@ -76,11 +76,14 @@ pub enum Control {
     TapeForward,
     /// The deck's RECORD key: nothing to record into yet, and its tip says so.
     TapeRecord,
+    /// The deck's PLAY key. The transport row's `RUN` is a different key with a different job, so it has its own words; the
+    /// deck's STOP is the same key's job as the row's and shares its row.
+    TapePlay,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 34] = [
+    pub const ALL: [Control; 35] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -115,6 +118,7 @@ impl Control {
         Control::TapePause,
         Control::TapeForward,
         Control::TapeRecord,
+        Control::TapePlay,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -141,6 +145,7 @@ impl Control {
             Control::TapePause => TIPS[31],
             Control::TapeForward => TIPS[32],
             Control::TapeRecord => TIPS[33],
+            Control::TapePlay => TIPS[34],
             Control::OctaveDown => TIPS[17],
             Control::OctaveUp => TIPS[18],
             Control::Shuffle => TIPS[19],
@@ -175,7 +180,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 34] = [
+const TIPS: [Tip; 35] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -234,12 +239,12 @@ const TIPS: [Tip; 34] = [
     Tip {
         title: "RUN",
         what: "Starts the transport from the pattern's first step.",
-        shortcut: Some("SPACE: start or stop, same as RUN / STOP"),
+        shortcut: None,
     },
     Tip {
         title: "STOP",
         what: "Stops the transport and returns to the first step.",
-        shortcut: Some("SPACE: start or stop, same as RUN / STOP"),
+        shortcut: None,
     },
     Tip {
         title: "TEMPO -",
@@ -346,6 +351,11 @@ const TIPS: [Tip; 34] = [
         what: "Record what the instrument plays. Not wired yet: nothing exists to record into.",
         shortcut: Some("R"),
     },
+    Tip {
+        title: "PLAY",
+        what: "Start the bar again from a stop, or carry on from the step a pause kept.",
+        shortcut: Some("SPACE: play or pause, same as PLAY / PAUSE"),
+    },
 ];
 
 /// The help for `control`, or nothing at all when the player has turned the hints off.
@@ -442,10 +452,21 @@ mod tests {
 
     #[test]
     fn the_text_names_the_control_its_job_and_only_a_real_shortcut() {
-        let text = Control::Run.tip().text();
-        assert!(text.starts_with("RUN\n"));
-        assert!(text.contains("transport"));
-        assert!(text.ends_with("SPACE: start or stop, same as RUN / STOP"));
+        // RUN's key has no shortcut any more: the deck's PLAY and PAUSE are the pair that own the space bar, so a tip that
+        // still claimed it would be a lie the player would try to use.
+        let run = Control::Run.tip();
+        assert!(run.text().starts_with("RUN\n"));
+        assert!(run.text().contains("transport"));
+        assert_eq!(run.shortcut, None);
+
+        // And the space bar is claimed by the key that has it.
+        let play = Control::TapePlay.tip();
+        assert!(play.text().starts_with("PLAY\n"));
+        assert!(
+            play.shortcut.is_some_and(|key| key.starts_with("SPACE")),
+            "PLAY owns the space bar: {:?}",
+            play.shortcut
+        );
 
         // A knob has no key, and its text must not pretend otherwise.
         let knob = Control::Cutoff.tip();

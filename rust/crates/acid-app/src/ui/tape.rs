@@ -38,7 +38,7 @@ impl TapeKey {
     pub fn tip(self) -> tips::Control {
         match self {
             TapeKey::Back => tips::Control::TapeBack,
-            TapeKey::Play => tips::Control::Run,
+            TapeKey::Play => tips::Control::TapePlay,
             TapeKey::Pause => tips::Control::TapePause,
             TapeKey::Stop => tips::Control::Stop,
             TapeKey::Forward => tips::Control::TapeForward,
