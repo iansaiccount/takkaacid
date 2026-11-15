@@ -85,9 +85,9 @@ task with a bare commit is wrong. Do not skip it because a task looks small; the
 
 1. **Gates green.** `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`.
 2. **Review the diff.** Dispatch a fresh reviewer subagent with the task's **Files** and **Interfaces** blocks and the output of
-   `git diff --staged`, and nothing else from this plan — the point is to hear whether the task said what it did. Where the
-   harness exposes no subagent tool, do the same review yourself: read the staged diff top to bottom and answer the three
-   questions as if it were someone else's work.
+   `git diff --staged`, and nothing else from this plan — the point is to hear whether the task said what it did. The reviewer
+   is never the executor: no subagent reachable means no review, and the commit waits. See `AGENTS.md` — that rule lives there
+   and is not restated with an escape hatch here.
 3. **The three questions.** Does the diff do what the task said and only that? Does it break a rule in `AGENTS.md`? What does it
    leave untested, and is that deliberate?
 4. **Action every finding before the commit.** A finding fixed in a later commit has not gated anything. If a finding is wrong,

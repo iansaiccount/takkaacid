@@ -3,8 +3,8 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). Each task ends green — the workspace
 > gates and `docs/guide/check.sh` — and reviewed before its commit, per `00-phase-2.md`.
 >
-> **Review:** inline per task, plus the whole-round read at the end. The fresh reader that matters here is the *suite*: every
-> theme is held to the same fifteen reading rules, so a palette that cannot be read cannot ship.
+> **Review:** superseded by `AGENTS.md`'s rule — a dispatched subagent per commit, never the executor. This plan was written
+> when the gate was inline, which is why Task 5 below ran with the mutation checks standing in for a reader.
 
 **Goal:** every palette on `https://www.media.io/color-palette/music-color-palette.html` becomes a theme a device can wear —
 **twenty-two** of them, the twenty-one on the page plus the instrument's own black — and the device card's `COLOUR` row becomes
@@ -221,6 +221,30 @@ Round complete on `phase-2`, four commits, gates green at every one of them (661
       phase review, and recorded rather than quietly skipped.
 - [ ] **The player's prune.** Show them the twenty-two on one card, take the list of names to drop, and delete one variant,
       one row and one `name()` arm per theme.
+
+### The review rule, changed after the round (on the player's ask)
+
+Commit `2a2ddcc` (amended before its push) made subagent review the rule in `AGENTS.md` and removed the self-review fallback that
+this round had leaned on. The guide is untouched because the change is invisible to a player — it governs how the repo is
+maintained, not what the app does — which is what `AGENTS.md`'s Documentation rule asks a round to say.
+
+The sequence was imperfect and is recorded rather than tidied: the commit was made *before* the reviewer was dispatched, which
+the new text forbids. Nothing was pushed, so the review gated the push: the reviewed tree is what went out, and the commit was
+amended — scope widened to `plans/phase 2/00-phase-2.md` — to carry the review's findings.
+
+What the reviewer found, and what was done:
+
+1. **P1, accepted:** `00-phase-2.md:87-90` still licensed self-review, and every plan in the phase defers to that document. Its
+   clause is replaced with the stop rule and a pointer to `AGENTS.md`. Rides the amend.
+2. **P2, accepted:** plan headers that prescribe inline review. `46` now says its header is superseded; `44` and `45` are closed
+   rounds whose headers say the same, kept as written because they record why the rule changed. `43`'s Progress is history and
+   untouched.
+3. **P2, accepted:** this section — the change had no `## Progress` anywhere to carry its own record.
+4. **P2 taste, accepted:** "say so and stop" did not say who hears it. `AGENTS.md` now names the plan's Progress and the human
+   partner, and calls an unreachable reviewer a blocked round.
+5. **P2 taste, declined in part:** the reviewer wanted no remedy for "no commit is made unreviewed" being an absolute this commit
+   did not meet, and recommended explicitly *against* an amend allowance as a loophole. Agreed — the text stays strict, and the
+   sequence above is the record instead.
 
 ### Documentation pass (after the gate, on the player's ask)
 

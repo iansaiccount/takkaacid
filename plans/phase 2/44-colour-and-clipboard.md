@@ -3,10 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). Steps use checkbox (`- [ ]`) tracking;
 > each task ends in a green, reviewed commit.
 >
-> **Review:** every task ends with the review gate in `00-phase-2.md`. This round runs it **inline** — the executor reads the
-> staged diff and answers AGENTS.md's three questions — because `pi-subagents`' only reachable model returned `ECONNREFUSED`
-> during plan 43 and the `claude-code` agent wants an interactive session. The whole-round review at the end is the same pass,
-> run a second time over the seams. If a fresh reviewer becomes reachable, use it instead.
+> **Review:** every task ends with the review gate in `00-phase-2.md`. *Superseded:* this round ran it inline, which
+> `AGENTS.md` no longer permits — the reviewer is now a dispatched subagent or the commit waits. Kept as written because it
+> records why the rule changed.
 
 **Goal:** a device can be given a colour scheme of its own — the panel face inverts to amber when the device on the panel asks
 for it, so four machines are told apart at a glance — and the pattern on the panel can be copied and pasted, between patterns

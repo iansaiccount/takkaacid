@@ -3,9 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (inline). This round is documents and pictures,
 > no code. Each task ends green: `bash docs/guide/check.sh`, which is the guide's only test.
 >
-> **Review:** the phase's gate (`00-phase-2.md`), inline, at the end of each task — with the guide there is no diff a
-> compiler has read, so the review is the reader's: does every sentence match the panel, and is every picture the state it
-> claims?
+> **Review:** the phase's gate (`00-phase-2.md`) at the end of each task. *Superseded:* this round ran it inline, which
+> `AGENTS.md` no longer permits. The question it asked is still the one a reviewer must answer — does every sentence match the
+> panel, and is every picture the state it claims — and it is now asked by a subagent rather than by the hand that wrote the
+> page.
 
 **Goal:** the guide on disk describes the app on disk. It was written before phase 2 and says so in one sentence at the top;
 this round removes the need for that sentence, pictures the states it could not, and gives the four new features the pages

@@ -76,9 +76,16 @@ Then `./docs/guide/check.sh`, which proves every page and every image a page nam
 action what the review found, and commit in the same breath. A review whose findings land in a later commit has gated nothing;
 a review nobody acted on is worse than no review, because it looks like one.
 
-The reviewer is fresh — a subagent where the harness has one, and otherwise the same three questions asked of the diff by the
-executor wearing a reviewer's hat. It is given the task's **Files** and **Interfaces** blocks and the diff, not the whole plan,
-and it answers:
+**The reviewer is a subagent.** Dispatch one for every review, as a separate agent that did not write the code and has not seen
+the session that did. The executor reviewing its own diff is not a review: it reads what it meant to write, and the questions
+below are exactly the ones an author cannot answer about their own work. There is no fallback to self-review — if the harness
+offers no subagent tool, say so and stop before the commit rather than pretend the diff was gated: record the blocked review
+in the plan's `## Progress` and take it to the human partner, because an unreachable reviewer is a blocked round, not a licence
+to review your own work.
+
+Give it the task's **Files** and **Interfaces** blocks and the diff, not the whole plan, so it judges the change against what
+was claimed rather than against the reasoning that produced it. It reports; it does not edit — a round has one writer, and the
+executor applies what the review found, so that the commit that lands is the one that was read. It answers:
 
 - **Does the diff do what the task said, and only that?** Extra work smuggled into a commit is a finding.
 - **Does it break a convention in this file?** A second hand-kept list, a `_` arm on a catalogue enum, a font glyph, a lock or an
@@ -86,7 +93,11 @@ and it answers:
 - **What does it leave untested, and is that deliberate?** A missing test is a finding; a deferred one must be in the plan's
   Progress with the reason.
 
-Findings are fixed before the commit, and the task's `## Progress` line records what the review found and what was done about it.
+Findings are fixed before the commit, and the task's `## Progress` line records what the review found and what was done about it
+— including a finding the executor disagrees with, which is written down with the reason it stood rather than dropped. A
+subagent that could not be reached, timed out, or answered about the wrong commit is a review that did not happen: re-dispatch
+it, and do not commit on the strength of the gates alone.
+
 The whole-branch review at the end of a phase is not a substitute for these: it catches what the seams between tasks hide, not
 what one commit hid.
 
