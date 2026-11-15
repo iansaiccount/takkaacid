@@ -20,7 +20,7 @@ another. [`18-a-rack-of-devices`](18-a-rack-of-devices.md) is that page.
 - **The wordmark** `takka-acid`.
 - **`SAVED` / `UNSAVED`**, the lamp: whether what you see is on disk. [`03-first-sound`](03-first-sound.md) explains the two words.
 - **The gear** and the **`?`** — the two round keys that open the settings card and the help card.
-- **`SONG`** and the session's name, in the middle. It is the song's name, not a file path; a session with no name shows
+- **`SONG`** and the session's name, in the band's left cluster, on a lit plate while there are unsaved changes. It is the song's name, not a file path; a session with no name shows
   what a new song is called.
 - **Two readouts** at the right: the pattern that is playing (`A1` … `H8`), and the tempo in BPM. Both are seven-segment
   displays, and both answer the pointer: hover one and it says what it is.

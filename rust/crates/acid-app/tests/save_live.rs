@@ -81,15 +81,15 @@ fn a_click_elsewhere_does_not_ask_for_a_write() {
 }
 
 #[test]
-fn the_indicator_sits_inside_the_top_strip_and_clear_of_the_help_dot() {
+fn the_name_sits_inside_the_top_strip_and_clear_of_the_help_dot() {
     // Cheap guard for the layout: a word painted outside its band would be invisible or overlap the `?`.
     let top = layout(screen()).top;
-    let rect = acid_app::ui::panel::save_indicator_rect(top, acid_app::ui::layout::scale(screen()));
+    let rect = acid_app::ui::panel::song_label_rect(top, acid_app::ui::layout::scale(screen()));
     assert!(top.contains_rect(rect));
     let help_dot = egui_help_dot(top);
     assert!(
         !rect.intersects(help_dot),
-        "the saved word must not sit under the ? that opens the card"
+        "the session name must not sit under the ? that opens the card"
     );
 }
 

@@ -74,7 +74,7 @@ has to be reached before it takes over.
 **The strip** above the top strip holds a cell per device: its name, a lamp while it runs, its `M` mute, and `+` at the
 right end.
 
-**The top strip** holds four things: the lamp inside the wordmark's corner, the song name in the middle, and the pattern
+**The top strip** holds four things: the lamp inside the wordmark's corner, the song name in the band's left cluster, its plate lit while unsaved, the whole name and its state in its tooltip, and the pattern
 and tempo wells at the right.
 
 | Word | Where | Meaning |

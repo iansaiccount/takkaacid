@@ -55,7 +55,6 @@ fn the_song_label_sits_clear_of_everything_it_could_cover() {
         ("the pattern display", panel::pattern_display_rect(l.top)),
         ("the tempo display", panel::tempo_display_rect(l.top)),
         ("the wordmark", panel::brand_rect(l.top)),
-        ("the saves lamp", panel::save_indicator_rect(l.top, s)),
     ] {
         assert!(
             !label.intersects(rect),
@@ -127,7 +126,6 @@ fn the_gear_sits_beside_the_help_dot_and_clear_of_the_lamp() {
 
     assert!(!gear.intersects(help), "the gear is its own button");
     for (what, rect) in [
-        ("the saves lamp", panel::save_indicator_rect(l.top, s)),
         ("the pattern display", panel::pattern_display_rect(l.top)),
         ("the tempo display", panel::tempo_display_rect(l.top)),
     ] {
@@ -139,18 +137,16 @@ fn the_gear_sits_beside_the_help_dot_and_clear_of_the_lamp() {
     );
 }
 
-/// The song label fills the corridor between the wordmark's corner and the tape deck.
+/// The song label is a fixed corridor in the session's own cluster: after the wordmark, before the settings gear.
 ///
-/// It used to be centred on the strip, symmetric about `top.center().x`. The deck and the tempo stepper took the room that
-/// symmetry spent, and a label that stayed centred would be a few pixels wide — so the rule is now the corridor itself: from
-/// the wordmark to the deck, no gaps wasted and no neighbour covered. The corridor is also the status line: a notice is
-/// painted here, which is why `a_long_notice_keeps_its_beginning` is the test that says this must stay wide enough to read.
+/// Round 3a moved it there from the middle of the band, where it had been a corridor to the deck. A fixed width is what makes
+/// the deck's own place stable: a corridor that grew with the name would move six keys every time a song was named.
 #[test]
-fn the_song_label_fills_the_corridor_before_the_document_icons() {
+fn the_song_label_is_a_fixed_corridor_before_the_gear() {
     let l = layout(screen());
     let s = scale(screen());
     let label = panel::song_label_rect(l.top, s);
-    let gap = acid_app::ui::theme::GAP * s;
+    let gap = acid_app::ui::theme::GAP;
 
     assert!(
         (label.left() - (panel::brand_rect(l.top).right() + gap)).abs() <= 1.0,
@@ -158,24 +154,24 @@ fn the_song_label_fills_the_corridor_before_the_document_icons() {
         label.left(),
         panel::brand_rect(l.top).right() + gap
     );
-    let tape = panel::tape_cells(l.top);
-    assert!(
-        (label.right() - (tape[0].left() - gap)).abs() <= 1.0,
-        "and ends at the tape deck: {} vs {}",
-        label.right(),
-        tape[0].left() - gap
-    );
     assert!(
         label.width() > 60.0,
         "a name still needs room to be a name: {}",
         label.width()
     );
+    let gear = panel::gear_rect(l.top, s);
+    assert!(
+        label.right() <= gear.left(),
+        "and ends before the gear: {} vs {}",
+        label.right(),
+        gear.left()
+    );
 
+    let tape = panel::tape_cells(l.top);
     let stepper = panel::tempo_stepper_cells(l.top);
     for (what, rect) in [
         ("the wordmark", panel::brand_rect(l.top)),
-        ("the saves lamp", panel::save_indicator_rect(l.top, s)),
-        ("the gear", panel::gear_rect(l.top, s)),
+        ("the gear", gear),
         ("the help dot", panel::help_rect(l.top, s)),
         ("the tape", tape[0]),
         ("the pattern display", panel::pattern_display_rect(l.top)),
@@ -188,31 +184,6 @@ fn the_song_label_fills_the_corridor_before_the_document_icons() {
         l.top.contains_rect(label),
         "the label lives on the top strip"
     );
-}
-
-/// A window small enough to squeeze the strip must still yield a usable rect rather than an inverted one.
-#[test]
-fn the_song_label_window_survives_a_squeezed_strip() {
-    // 320 × 200 and 240 × 160 squeeze the strip but still leave the two clusters apart; 40 × 30 is narrow enough that
-    // the wordmark and the pattern display cross, which is the branch where the window has to collapse rather than invert.
-    for size in [
-        vec2(320.0, 200.0),
-        vec2(240.0, 160.0),
-        vec2(40.0, 30.0),
-        vec2(20.0, 16.0),
-    ] {
-        let l = layout(Rect::from_min_size(Pos2::ZERO, size));
-        let label = panel::song_label_rect(l.top, scale(Rect::from_min_size(Pos2::ZERO, size)));
-        assert!(
-            label.width() >= 0.0 && label.height() > 0.0,
-            "an inverted or empty label at {size:?}: {label:?}"
-        );
-        assert!(
-            l.top.contains_rect(label),
-            "the label left the strip at {size:?}: {label:?} in {:?}",
-            l.top
-        );
-    }
 }
 
 /// A notice longer than the label keeps its beginning. The clip rect used to cut the message at both ends, so the player

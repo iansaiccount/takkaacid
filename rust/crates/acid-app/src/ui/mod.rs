@@ -18,7 +18,6 @@ pub mod randomise;
 pub mod row_knobs;
 pub mod row_perform;
 pub mod row_transport;
-pub mod save;
 pub mod scale;
 pub mod selection;
 pub mod settings;
@@ -519,17 +518,42 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     let notice = state.notice_now(now);
     let label = panel::song_label_rect(l.top, s);
+    // The name carries the save state now that the word is gone (round 3a): the accent and a raised plate while there are
+    // changes on disk's behalf, plain silk when the session is written, and `SONG` alone while it has never been named.
+    let unsaved = state.dirty;
+    let named = state.songs.name.is_some();
     let (line, colour) = match notice {
         Some(message) => (message.to_string(), p.led_accent),
-        None => (
-            song_label(state.songs.name.as_deref()),
-            if state.songs.file.is_some() {
-                p.silkscreen_dim
-            } else {
-                p.silkscreen_dim.gamma_multiply(0.55)
-            },
+        None if named => (
+            format!("SONG {}", song_label(state.songs.name.as_deref())),
+            if unsaved { p.led_accent } else { p.silkscreen },
         ),
+        None => ("SONG".to_string(), p.silkscreen_dim),
     };
+    if notice.is_none() && unsaved {
+        // The plate, not a heavier word: the bundled font has one weight, so "bold" is a lit key's language.
+        ui.painter().rect_filled(
+            label.expand2(egui::vec2(3.0 * s, 2.0 * s)),
+            3.0 * s,
+            p.panel_raised,
+        );
+    }
+    if notice.is_none() {
+        // The only dynamic tooltip on this face: it carries a name the player typed, so it cannot come from `ui::tips`.
+        let full = song_label(state.songs.name.as_deref());
+        let said = if named {
+            format!(
+                "SONG {full}\n({})",
+                if unsaved { "unsaved" } else { "saved" }
+            )
+        } else {
+            "SONG\nThis session has no name yet".to_string()
+        };
+        let response = ui.interact(label, ui.scope_id().with("song-name"), egui::Sense::hover());
+        if response.hovered() {
+            response.on_hover_text(said);
+        }
+    }
     // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
     // of the face. Cutting it with the clip rect alone lost both ends; this keeps the beginning and says it was cut.
     // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
@@ -785,18 +809,6 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.step_mode = !state.step_mode;
         }
     }
-    // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.
-    let (save_label, save_colour) = save::state_label(state.dirty, p);
-    // The lamp says one word: SAVED in dim silk, UNSAVED in amber, inside its own corner of the strip.
-    ui.painter()
-        .with_clip_rect(panel::save_indicator_rect(l.top, s))
-        .text(
-            panel::save_indicator_rect(l.top, s).right_center(),
-            egui::Align2::RIGHT_CENTER,
-            save_label,
-            theme::legend(10.0 * s),
-            save_colour,
-        );
     // The transport row: the five keys under the switches, drawn after everything above them, so a later widget wins a
     // hit-test tie and the panel behaves in the order it always has.
     row_transport::draw(state, shared, ui, &l, p);

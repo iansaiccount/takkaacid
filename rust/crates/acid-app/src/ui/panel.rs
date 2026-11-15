@@ -45,49 +45,58 @@ pub fn volume_knob_rect(top: Rect) -> Rect {
     )
 }
 
+/// How much of the band the wordmark's corner takes: the icon, the word, and no more. It used to take 40 % so the
+/// session name could centre itself in what was left; the name sits here now, and the deck needs the rest.
+const BRAND_FRACTION: f32 = 0.26;
+/// How much of the band the session name's corridor takes, measured from the wordmark's corner. Fixed, not fitted to the
+/// name: a corridor that grew with its contents would move the deck every time a song was named, and the fit inside a fixed
+/// corridor is what the tooltip exists to complete.
+const NAME_FRACTION: f32 = 0.18;
+/// How big the settings gear and the help dot are, as a multiple of the band's height — the size the two round buttons have
+/// always been drawn at (18 of 56), kept band-relative so every piece of this band is measured one way.
+const CLUSTER_BUTTON: f32 = 18.0 / 56.0;
+
 /// The wordmark's corner of the top strip: right of the volume knob, so the two never collide.
 pub fn brand_rect(top: Rect) -> Rect {
     Rect::from_min_max(
         Pos2::new(volume_knob_rect(top).right() + theme::GAP, top.top()),
-        Pos2::new(top.left() + top.width() * 0.40, top.bottom()),
+        Pos2::new(top.left() + top.width() * BRAND_FRACTION, top.bottom()),
     )
 }
 
-/// The help dot: at the right end of the wordmark's corner, clear of the saves lamp beside it.
+/// The settings gear: first of the session's two round buttons, hung off the name's corridor. The cluster is anchored on the
+/// left — name, gear, help — because the name's corridor is a fraction of the band while the gaps shrink with the panel; an
+/// anchor from the right let them collide at a small window.
+pub fn gear_rect(top: Rect, _scale: f32) -> Rect {
+    // Sized from the band, like every key beside it: `tape_cells` measures this rect to know where the deck starts, and a
+    // scale-dependent size would have the deck start inside the dot at any window but the design one.
+    let size = top.height() * CLUSTER_BUTTON;
+    let centre = song_label_rect(top, 1.0).right() + theme::GAP + size * 0.5;
+    Rect::from_center_size(Pos2::new(centre, top.center().y), egui::vec2(size, size))
+}
+
+/// The help dot: the gear's twin, one gap to its right, and the last thing before the deck.
 pub fn help_rect(top: Rect, scale: f32) -> Rect {
+    let gear = gear_rect(top, scale);
     Rect::from_center_size(
-        Pos2::new(brand_rect(top).right() - 10.0 * scale, top.center().y),
-        egui::vec2(18.0 * scale, 18.0 * scale),
+        Pos2::new(
+            gear.right() + theme::GAP + gear.width() * 0.5,
+            top.center().y,
+        ),
+        gear.size(),
     )
 }
 
-/// The settings gear: the help dot's twin, one step left, so help and settings read as one pair of round buttons and the
-/// gear never crowds the saves lamp.
-pub fn gear_rect(top: Rect, scale: f32) -> Rect {
-    let help = help_rect(top, scale);
-    Rect::from_center_size(
-        egui::Pos2::new(brand_rect(top).right() - 34.0 * scale, help.center().y),
-        help.size(),
-    )
-}
-
-/// The song label: the corridor between the wordmark's corner and the tape deck.
+/// The session name's corridor: the left cluster's third element, between the wordmark and the settings gear.
 ///
-/// It used to be centred on the strip, symmetric about `top.center().x`, and it is not any more: the deck, the tempo stepper
-/// and the song's two document icons took the room that symmetry spent, and a centred label ending at the deck would be a few
-/// pixels wide. The name fills the corridor it has, and a line cut by `text::fit` loses its tail rather than both ends.
-pub fn song_label_rect(top: Rect, scale: f32) -> Rect {
-    let gap = theme::GAP * scale;
-    let left = brand_rect(top).right() + gap;
-    // The corridor to the song's document icons, and the whole of it. The name used to be centred on the strip, symmetric
-    // about `top.center().x`; the tape deck and the two icons took the room that symmetry spent, and a centred label with its
-    // right edge at the document corner would be a few pixels wide.
-    let right = tape_cells(top)[0].left() - gap;
-    // A window narrow enough that the corners meet or cross: clamp rather than invert — a negative-width rect paints mirrored
-    // and reads as a bug.
+/// Fixed width, left-aligned: the name is fitted into it and the whole of it is in the tooltip. It used to be centred on the
+/// band, then a corridor to the deck; now the deck owns the middle of the band and the session's own cluster (name, settings,
+/// help) sits to its left, whole.
+pub fn song_label_rect(top: Rect, _scale: f32) -> Rect {
+    let left = brand_rect(top).right() + theme::GAP;
     Rect::from_min_max(
         Pos2::new(left, top.top()),
-        Pos2::new(right.max(left), top.bottom()),
+        Pos2::new(left + top.width() * NAME_FRACTION, top.bottom()),
     )
 }
 
@@ -109,15 +118,6 @@ pub fn learn_highlight_bounds(rect: Rect, scale: f32) -> Rect {
     rect.expand(2.5 * scale)
 }
 
-/// The saved-or-unsaved word: right end of the wordmark's corner, clear of the `?` that opens the help card.
-pub fn save_indicator_rect(top: Rect, scale: f32) -> Rect {
-    let brand = brand_rect(top);
-    Rect::from_min_max(
-        Pos2::new(brand.right() - 118.0 * scale, top.top()),
-        Pos2::new(brand.right() - 56.0 * scale, top.bottom()),
-    )
-}
-
 /// Keys on the tape deck, derived from the deck's own catalogue: a seventh key is a variant, and gets a cell without this
 /// line moving. The order is `TapeKey::ALL`'s, and the rects follow it positionally.
 pub const TAPE_COUNT: usize = crate::ui::tape::TapeKey::ALL.len();
@@ -125,15 +125,19 @@ pub const TAPE_COUNT: usize = crate::ui::tape::TapeKey::ALL.len();
 /// Cells in the tempo stepper: the nudge down, the readout, the nudge up.
 pub const TEMPO_STEPPER_CELLS: usize = 3;
 
-/// How wide one key of the deck is, as a multiple of the band's height: square-ish, so a triangle fits inside it.
-const TAPE_KEY: f32 = 0.36;
+/// The widest a key of the deck may be, as a multiple of the band's height. The deck spreads across the band (task 3a) and
+/// the keys grow with it, but a deck is still a row of keys: past this the shapes inside them start to look lost.
+const TAPE_KEY_MAX: f32 = 0.62;
+/// The narrowest, for a window so small that the band has almost nothing to give: below this the shapes stop reading.
+const TAPE_KEY_MIN: f32 = 0.18;
 /// The daylight between two keys of the deck. Small enough to read as one block of keys, wide enough that two shapes never
 /// touch at 1× — a deck's keys abut, they do not merge.
 const TAPE_GAP: f32 = 2.0;
 
-/// One key of the top band's controls: square-ish, sized from the band so the whole strip scales as one piece.
+/// A nudge key of the tempo stepper: the size the band's small keys have always been, not the deck's grown size. The deck
+/// spreads; the `−` and `+` are two small keys beside a readout and would eat the deck's room if they grew with it.
 fn tape_key(top: Rect) -> f32 {
-    (top.height() * TAPE_KEY).max(1.0)
+    (top.height() * 0.36).max(1.0)
 }
 
 /// The deck: `TAPE_COUNT` square keys, left of the tempo stepper.
@@ -147,16 +151,28 @@ fn tape_key(top: Rect) -> f32 {
 /// window that left the line able to say twelve characters of a notice. The space is not reserved either: when the song
 /// document exists it will need its own answer, and a layout that pauses for it now would be a layout that lies about what fits.
 pub fn tape_cells(top: Rect) -> [Rect; TAPE_COUNT] {
-    let size = tape_key(top);
-    let gap = TAPE_GAP;
-    let total = TAPE_COUNT as f32 * size + (TAPE_COUNT as f32 - 1.0) * gap;
+    // From the help dot to the pattern readout: the room the saved word and the name's tail used to spend, now the deck's.
+    let left = help_rect(top, 1.0).right() + theme::GAP;
+    // The stepper sits between the deck and the pattern readout, so the deck stops at the stepper's `−`.
     let right = tempo_stepper_cells(top)[0].left() - theme::GAP;
-    let left = right - total;
-    let y = top.center().y - size * 0.5;
+    let span = (right - left).max(1.0);
+    let tallest = top.height() * TAPE_KEY_MAX;
+    let shortest = (top.height() * TAPE_KEY_MIN).max(1.0);
+    // Six keys and five gaps: the keys take what the cap allows, and the gaps share the rest, so the row fills the band
+    // instead of huddling at one end of it.
+    let per = span / TAPE_COUNT as f32;
+    // The floor is a floor only while it fits: at a tiny window six minimum keys are wider than the band.
+    let key = (per * 0.82).min(tallest).max(shortest).min(per);
+    let gap = ((span - TAPE_COUNT as f32 * key) / (TAPE_COUNT as f32 - 1.0)).max(0.0);
+    let y = top.center().y - key * 0.5;
+    let stride = key + gap;
     let mut cells = [Rect::NOTHING; TAPE_COUNT];
-    for (index, cell) in cells.iter_mut().enumerate() {
-        let x = left + index as f32 * (size + gap);
-        *cell = Rect::from_min_size(Pos2::new(x, y), egui::vec2(size, size));
+    // One accumulated stride, not `index * stride` per cell: two neighbours then agree about the edge they share, which a
+    // multiplication and an addition need not do in f32 — the last pair straddled by a hardware ulp and a test caught it.
+    let mut x = left;
+    for cell in cells.iter_mut() {
+        *cell = Rect::from_min_size(Pos2::new(x, y), egui::vec2(key, key));
+        x += stride;
     }
     cells
 }
@@ -314,32 +330,30 @@ mod tests {
             let top = l.top;
             let s = layout::scale(window);
 
-            let label = song_label_rect(top, s);
+            let name = song_label_rect(top, s);
+            let gear = gear_rect(top, s);
+            let help = help_rect(top, s);
             let tape = tape_cells(top);
             let stepper = tempo_stepper_cells(top);
             let pattern = pattern_display_rect(top);
 
-            // Left to right, nothing crossing: the name, the deck, the tempo, the pattern readout at the wall.
-            assert!(
-                label.right() <= tape[0].left(),
-                "label then deck at {size:?}"
-            );
+            // The session's own cluster on the left, then the deck spread across the middle, then the tempo and the readout.
+            assert!(name.right() <= gear.left(), "name then gear at {size:?}");
+            assert!(gear.right() <= help.left(), "gear then help at {size:?}");
+            assert!(help.right() <= tape[0].left(), "help then deck at {size:?}");
             assert!(
                 tape[TAPE_COUNT - 1].right() <= stepper[0].left(),
                 "deck then tempo at {size:?}"
             );
             assert!(
                 stepper[2].right() <= pattern.left(),
-                "tempo then the pattern readout at {size:?}"
+                "tempo then readout at {size:?}"
             );
             assert!(
                 (pattern.right() - top.right()).abs() < 0.5,
-                "the pattern readout keeps the band's right wall at {size:?}: {} vs {}",
-                pattern.right(),
-                top.right()
+                "the pattern readout keeps the band's right wall at {size:?}"
             );
 
-            // Every piece is on the band, and each one has room to exist at all.
             for rect in tape.iter().chain(stepper.iter()) {
                 assert!(
                     top.contains_rect(*rect),
@@ -347,42 +361,34 @@ mod tests {
                 );
                 assert!(rect.width() > 0.0 && rect.height() > 0.0);
             }
-            // A deck's keys abut, they do not float: one continuous block read as a tape deck.
+            // The deck spreads: one width for every key, and the gaps share what the cap leaves.
+            let width = tape[0].width();
             for pair in tape.windows(2) {
                 assert!(
-                    pair[0].right() <= pair[1].left(),
-                    "tape keys overlap at {size:?}"
+                    (pair[1].width() - width).abs() < 0.5,
+                    "the deck's keys are one size at {size:?}"
                 );
-                assert!(
-                    pair[1].left() - pair[0].right() <= 3.0,
-                    "a deck's keys abut: {} of daylight at {size:?}",
-                    pair[1].left() - pair[0].right()
-                );
+                assert!(pair[0].right() <= pair[1].left(), "no overlap at {size:?}");
             }
-            // The number keeps its own well between the nudge keys.
             assert_eq!(
                 stepper[1],
                 tempo_display_rect(top),
                 "the readout is the stepper's middle"
             );
-            assert!(stepper[0].right() <= stepper[1].left());
-            assert!(stepper[1].right() <= stepper[2].left());
         }
 
-        // At the reference size: keys a finger can hit, and a name with room to be a name.
+        // At the reference size the keys are bigger than the old fixed 0.36 of the band, which is what the round is for.
         let l = layout::layout(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE));
         let tape = tape_cells(l.top);
         assert!(
-            tape[0].width() >= 18.0 && tape[0].height() >= 18.0,
-            "a key of the deck is a key: {:.1} × {:.1}",
+            tape[0].width() > l.top.height() * 0.36,
+            "the deck should have grown: {:.1} against {:.1}",
             tape[0].width(),
-            tape[0].height()
+            l.top.height() * 0.36
         );
-        let label = song_label_rect(l.top, 1.0);
         assert!(
-            label.width() > 60.0,
-            "the session name needs room at the reference size: {:.1}",
-            label.width()
+            song_label_rect(l.top, 1.0).width() > 100.0,
+            "the name still needs a corridor to be read in"
         );
     }
 
