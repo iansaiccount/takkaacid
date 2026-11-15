@@ -178,6 +178,13 @@ docs/                  design notes and review material
 
 MIT.
 
+## Credits
+
+The twenty-one themes besides the instrument's own black are built from the palettes published on the music colour palette
+page at <https://www.media.io/color-palette/music-color-palette.html>. Those palettes are that page's work; the derivation,
+the mixed faces and anything that reads badly are this project's. What a theme is, and how the list chooses one, is in
+[`docs/guide/src/19-a-devices-card.md`](docs/guide/src/19-a-devices-card.md).
+
 ## Demo songs and saving
 
 Five demos ship inside the binary — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and **Funk** — each a patch

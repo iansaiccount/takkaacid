@@ -30,9 +30,12 @@ right edge is where you are in it. A click on a row puts the list away and repai
 
 A theme is a face and everything that has to go with it: the panel colour, the raised plates the knobs sit on, the legends
 and their dimmed second weight, the lamp and its unlit state, the digits in the wells, the keycaps, and the tint the learn cue
-uses. `BLACK` is the instrument's own and the one every device starts on. The others come from a page of page palettes — one
-table row each, five colours and a polarity — and a rule derives the rest of the face from them, which is why they hold the
-same reading rules the black face does rather than being pictures at a fixed size.
+uses. `BLACK` is the instrument's own and the one every device starts on. The other twenty-one are built from the palettes
+published on [the music colour palette page](https://www.media.io/color-palette/music-color-palette.html) — the palettes are
+that page's work, and the credit for them is theirs. Each theme is one row of a small table of its own — five colours and a
+polarity — and a rule derives the rest of the face from them, which is why they hold the same reading rules the black face
+does rather than being pictures at a fixed size. Six of them mix one of the page's colours into a face of their own, and
+what the derivation makes of those five — including any face that reads badly — is this project's.
 
 The catalogue runs from `VINYL NOIR` and `STAGE SPOTLIGHT` through `ORCHESTRAL ICE` and `AMBIENT MOSS` to `EDM LASER` and
 `RETRO CASSETTE`; the list opens on the theme in use and the wheel finds the rest.

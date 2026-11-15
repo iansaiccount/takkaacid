@@ -56,7 +56,7 @@ have been.
 ## The theme
 
 A device's face can be **any of twenty-two themes** — the instrument's own black, and twenty-one built from the palettes on
-the music-colour page the panel was drawn from — and the card's `COLOUR` row opens the list
+the music colour palette page the themes were taken from — and the card's `COLOUR` row opens the list
 ([`19-a-devices-card`](19-a-devices-card.md)). Put one machine on `FESTIVAL CITRUS` and the next on `BLACK` and the strip
 tells them apart before you click: the cell above each device wears that device's colours, while the panel wears the selected
 one's.
