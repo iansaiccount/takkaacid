@@ -129,8 +129,13 @@ impl Engine {
 
     /// Start the transport at step 0 of the current pattern.
     pub fn start(&mut self) {
+        self.start_at(0);
+    }
+
+    /// Start the transport on `step`, so a device joining a running rack comes in on the bar rather than on the downbeat.
+    pub fn start_at(&mut self, step: usize) {
         self.playing = true;
-        self.sequencer.start();
+        self.sequencer.start_at(step);
     }
 
     /// Stop the transport and close the gate. Closing it here as well as in the sequencer means a stop

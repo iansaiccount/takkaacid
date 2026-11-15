@@ -9,7 +9,6 @@
 use eframe::egui::{self, Align2, Pos2, Rect, Ui, UiBuilder};
 
 use crate::audio::status as audio_status;
-use crate::midi::ports::PortChoice;
 
 use super::theme;
 use super::tips;
@@ -22,13 +21,17 @@ const VISIBLE_ROWS: usize = 4;
 /// or failed must show without closing and reopening it.
 #[derive(Clone, Default)]
 pub struct Settings {
-    /// Every MIDI input the machine offers, as names.
+    /// Every MIDI input the machine offers, as names. The list the card shows when it opens; a port that arrives later
+    /// shows on the next opening, because enumerating is a round trip per opening and not per frame.
     pub midi_ports: Vec<String>,
+    /// The ports the app is holding open, by name. This is the tick on each row, and it survives a port going away: a
+    /// controller with its cable out keeps its name, and its row, until the player turns it off.
+    pub midi_enabled: Vec<String>,
+    /// The ports that answer right now, named above the list so the answer is readable while the list is shut. Not the
+    /// same question as `midi_enabled`: an unplugged port is still held, and still has a row, but nothing answers it.
+    pub midi_current: Vec<String>,
     /// Every audio output the machine offers.
     pub outputs: Vec<String>,
-    /// The port actually connected, named above the panel so the answer is visible while the list is shut. Not the
-    /// preference: on a first run the preference is "any" while a controller is playing, and the card must say which.
-    pub midi_current: Option<String>,
     /// The output the stream is on, named above the panel for the same reason.
     pub output_current: Option<String>,
     /// True while the supervisor has stopped retrying: the card then offers RETRY, where the status line used to.
@@ -47,7 +50,10 @@ pub struct Settings {
 /// What is happening to the two devices right now. `main` builds this every frame the card is open; the card only
 /// copies it, so nothing here queries a device.
 pub struct Live<'a> {
-    pub midi_current: Option<&'a str>,
+    /// The ports that are open right now.
+    pub midi_current: &'a [&'a str],
+    /// The ports the app is holding open: the tick on each row, whether or not the port answers.
+    pub midi_enabled: &'a [&'a str],
     pub output_current: Option<&'a str>,
     pub midi_status: &'a str,
     pub midi_given_up: bool,
@@ -66,11 +72,43 @@ impl Settings {
     /// that fails, a supervisor that gives up 30 s after the card opened, or an output the player just chose must show
     /// on the card that is already up.
     pub fn follow(&mut self, live: Live<'_>) {
-        self.midi_current = live.midi_current.map(str::to_string);
+        self.midi_current = live
+            .midi_current
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+        self.midi_enabled = live
+            .midi_enabled
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
         self.output_current = live.output_current.map(str::to_string);
         self.midi_status = live.midi_status.to_string();
         self.midi_given_up = live.midi_given_up;
         self.audio_status = live.audio_status.to_string();
+    }
+
+    /// The rows the MIDI list shows, in order: the ports the machine reports, then any port the app still holds that the
+    /// machine does not. A controller with its cable out keeps its row, because the app is still trying to open it, and
+    /// turning it off is the only way out of that — a row that vanishes leaves nothing to click.
+    pub fn ports(&self) -> Vec<&str> {
+        let mut rows: Vec<&str> = self.midi_ports.iter().map(String::as_str).collect();
+        for name in &self.midi_enabled {
+            if !rows.contains(&name.as_str()) {
+                rows.push(name);
+            }
+        }
+        rows
+    }
+
+    /// Whether the app is holding this port open: the tick on its row.
+    pub fn is_enabled(&self, port: &str) -> bool {
+        self.midi_enabled.iter().any(|name| name == port)
+    }
+
+    /// Whether the machine still reports this port. A port that is held but not reported keeps its row, and says so.
+    pub fn is_listed(&self, port: &str) -> bool {
+        self.midi_ports.iter().any(|name| name == port)
     }
 }
 
@@ -82,8 +120,8 @@ pub enum Request {
     Tooltips,
     /// Flip autosave.
     Autosave,
-    /// Use this input, or `None` for "any port that looks like a controller".
-    MidiIn(Option<String>),
+    /// Open this port, or close it. The `bool` is the state the row is asking for: a row is a toggle, not a choice.
+    MidiPort(String, bool),
     /// Move the stream to this output.
     SoundOut(String),
     /// Ask the supervisor to probe again.
@@ -108,14 +146,6 @@ pub enum Click {
     Own(Own),
 }
 
-/// The device a row chose, in the shape the picker keeps. `main` writes it into `PickerState`, which the stream handling
-/// already consumes — the card is a new surface on the same mechanism, not a second one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Pick {
-    Midi(PortChoice),
-    Sound(String),
-}
-
 /// What `main` does with a request: one total mapping, so every arm of the match in `main` can run and a test can prove
 /// the mapping without the binary.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -123,7 +153,10 @@ pub enum Action {
     ToggleTooltips,
     ToggleAutosave,
     Retry,
-    Choose(Pick),
+    /// Open or close one MIDI input, by name.
+    TogglePort(String, bool),
+    /// Move the stream to this output.
+    SoundOut(String),
 }
 
 impl Request {
@@ -133,22 +166,21 @@ impl Request {
             Request::Tooltips => Action::ToggleTooltips,
             Request::Autosave => Action::ToggleAutosave,
             Request::Retry => Action::Retry,
-            Request::MidiIn(Some(name)) => {
-                Action::Choose(Pick::Midi(PortChoice::Named(name.clone())))
-            }
-            // The `none` row is the app picking a controller for itself.
-            Request::MidiIn(None) => Action::Choose(Pick::Midi(PortChoice::Any)),
-            Request::SoundOut(name) => Action::Choose(Pick::Sound(name.clone())),
+            Request::MidiPort(name, on) => Action::TogglePort(name.clone(), *on),
+            Request::SoundOut(name) => Action::SoundOut(name.clone()),
         }
     }
 }
-/// Where the fixed parts of the card sit. Device rows live inside the two panels and are laid out by the scroll area, so
-/// they are not here; a test clicks the fold headers and the switches, which do not move.
+/// Where the fixed parts of the card sit. Rows live inside the two panels and are laid out by the scroll area, so a
+/// panel's rows are `ports` (one rect per port) and nothing else: a test clicks a fold header, a switch, or a port row.
 pub struct Rows {
     pub tooltips: Rect,
     pub autosave: Rect,
     pub midi_header: Rect,
     pub midi_panel: Rect,
+    /// One rect per port row, in the order the card paints them. Empty while the panel is folded, because a folded panel
+    /// paints no rows and so has none to click.
+    pub ports: Vec<Rect>,
     pub sound_header: Rect,
     pub sound_panel: Rect,
     pub retry: Option<Rect>,
@@ -167,15 +199,7 @@ pub fn card_rect(panel: Rect, scale: f32) -> Rect {
 }
 
 /// Lay the card out. An open panel is as tall as its rows, up to `VISIBLE_ROWS`, and whatever does not fit scrolls.
-pub fn rows(
-    panel: Rect,
-    scale: f32,
-    ports: usize,
-    outputs: usize,
-    retry: bool,
-    midi_open: bool,
-    sound_open: bool,
-) -> Rows {
+pub fn rows(panel: Rect, scale: f32, settings: &Settings) -> Rows {
     let card = card_rect(panel, scale);
     let left = card.left() + PADDING * scale;
     let width = card.width() - PADDING * 2.0 * scale;
@@ -196,18 +220,19 @@ pub fn rows(
 
     let midi_header = row(y, width * 0.60, HEADING);
     y += HEADING * scale + CURRENT * scale;
-    // The input list has one extra row: `none`, which lets the app pick a controller for itself.
+    // One row per port, and no `none` row any more: "no ports" is every row unticked, which is a state the list can show.
+    let port_count = settings.ports().len();
     let midi_panel = row(
         y,
         width * 0.72,
-        if midi_open {
-            panel_height(ports + 1)
+        if settings.midi_open {
+            panel_height(port_count)
         } else {
             0.0
         },
     );
     y += midi_panel.height();
-    let retry_rect = retry.then(|| {
+    let retry_rect = settings.midi_given_up.then(|| {
         let rect = row(y, width * 0.18, ROW);
         y += ROW * scale + GAP * scale;
         rect
@@ -219,8 +244,8 @@ pub fn rows(
     let sound_panel = row(
         y,
         width * 0.72,
-        if sound_open {
-            panel_height(outputs)
+        if settings.sound_open {
+            panel_height(settings.outputs.len())
         } else {
             0.0
         },
@@ -233,16 +258,35 @@ pub fn rows(
         ),
         egui::vec2(90.0 * scale, ROW * scale),
     );
+    let ports = if settings.midi_open {
+        row_bands(midi_panel, scale, port_count)
+    } else {
+        Vec::new()
+    };
     Rows {
         tooltips: switches,
         autosave,
         midi_header,
         midi_panel,
+        ports,
         sound_header,
         sound_panel,
         retry: retry_rect,
         close,
     }
+}
+
+/// One rect per row of a list, in the order the scroll area lays them out, before any scrolling: a test clicks a row's
+/// centre, and the card paints the same band unless the list has been scrolled.
+fn row_bands(area: Rect, scale: f32, count: usize) -> Vec<Rect> {
+    (0..count)
+        .map(|index| {
+            Rect::from_min_size(
+                Pos2::new(area.left(), area.top() + index as f32 * (ROW + GAP) * scale),
+                egui::vec2(area.width(), ROW * scale),
+            )
+        })
+        .collect()
 }
 
 /// Paint the card and say what was clicked, if anything. Only one control can be clicked in a frame, so the last request
@@ -258,25 +302,17 @@ pub fn paint(
     let card = card_rect(panel, scale);
     {
         let painter = ui.painter();
-        painter.rect_filled(card, 6.0 * scale, theme::PANEL_RAISED);
+        painter.rect_filled(card, 6.0 * scale, theme::BLACK.panel_raised);
         painter.rect_stroke(
             card,
             6.0 * scale,
-            theme::silkscreen_stroke(scale),
+            theme::BLACK.silkscreen_stroke(scale),
             egui::StrokeKind::Inside,
         );
     }
 
     let padding = PADDING * scale;
-    let rows = rows(
-        panel,
-        scale,
-        settings.midi_ports.len(),
-        settings.outputs.len(),
-        settings.midi_given_up,
-        settings.midi_open,
-        settings.sound_open,
-    );
+    let rows = rows(panel, scale, settings);
     let mut request: Option<Click> = None;
 
     ui.painter().text(
@@ -284,12 +320,12 @@ pub fn paint(
         Align2::LEFT_TOP,
         "SETTINGS",
         theme::legend(13.0 * scale),
-        theme::SILKSCREEN,
+        theme::BLACK.silkscreen,
     );
 
     // The two switches are the controls the deleted TIPS and AUTO keys were, so they explain themselves the way those
     // keys did — the tip follows the control that was actually drawn, and is silent when help is off.
-    let tooltips_switch = transport::transport_button(
+    let tooltips_switch = transport::card_button(
         ui,
         "settings-tooltips",
         rows.tooltips,
@@ -300,7 +336,7 @@ pub fn paint(
     if tooltips_switch.clicked() {
         request = Some(Click::Ask(Request::Tooltips));
     }
-    let autosave_switch = transport::transport_button(
+    let autosave_switch = transport::card_button(
         ui,
         "settings-autosave",
         rows.autosave,
@@ -313,7 +349,7 @@ pub fn paint(
     }
 
     // MIDI IN: the fold, the device in use named above it, then the ports themselves, scrolling if there are many.
-    if transport::transport_button(
+    if transport::card_button(
         ui,
         "settings-midi-fold",
         rows.midi_header,
@@ -327,9 +363,9 @@ pub fn paint(
     ui.painter().text(
         Pos2::new(card.left() + padding, rows.midi_header.bottom()),
         Align2::LEFT_TOP,
-        current_line(settings.midi_current.as_deref()),
+        current_line(&settings.midi_current),
         theme::legend(10.0 * scale),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
     ui.painter().text(
         Pos2::new(card.right() - padding, rows.midi_header.bottom()),
@@ -337,46 +373,35 @@ pub fn paint(
         &settings.midi_status,
         theme::legend(10.0 * scale),
         if settings.midi_given_up {
-            theme::LED_ACCENT
+            theme::BLACK.led_accent
         } else {
-            theme::SILKSCREEN_DIM
+            theme::BLACK.silkscreen_dim
         },
     );
+    // Every port is its own row with its own tick: what the player turns on is a set, not a choice, and a port the machine
+    // has lost keeps its row so it can be turned off without hunting for the cable.
+    let ports = settings.ports();
     if settings.midi_open
-        && let Some(clicked) = scrollable(
-            ui,
-            rows.midi_panel,
-            scale,
-            settings.midi_ports.len() + 1,
-            |index| {
-                let (label, lit, request) = if index < settings.midi_ports.len() {
-                    let port = &settings.midi_ports[index];
-                    (
-                        shorten(port, 34),
-                        settings.midi_current.as_deref() == Some(port.as_str()),
-                        Request::MidiIn(Some(port.clone())),
-                    )
-                } else {
-                    (
-                        "none".to_string(),
-                        settings.midi_current.is_none(),
-                        Request::MidiIn(None),
-                    )
-                };
-                (label, lit, request)
-            },
-        )
+        && let Some(clicked) = scrollable(ui, rows.midi_panel, scale, ports.len(), |index| {
+            let port = ports[index];
+            let on = settings.is_enabled(port);
+            (
+                port_label(port, on, settings.is_listed(port)),
+                on,
+                Request::MidiPort(port.to_string(), !on),
+            )
+        })
     {
         request = Some(Click::Ask(clicked));
     }
     if let Some(retry) = rows.retry
-        && transport::transport_button(ui, "settings-retry", retry, "RETRY", true).clicked()
+        && transport::card_button(ui, "settings-retry", retry, "RETRY", true).clicked()
     {
         request = Some(Click::Ask(Request::Retry));
     }
 
     // SOUND OUT: the same shape. No `none` row: an audio stream needs a device to land on.
-    if transport::transport_button(
+    if transport::card_button(
         ui,
         "settings-sound-fold",
         rows.sound_header,
@@ -390,9 +415,9 @@ pub fn paint(
     ui.painter().text(
         Pos2::new(card.left() + padding, rows.sound_header.bottom()),
         Align2::LEFT_TOP,
-        current_line(settings.output_current.as_deref()),
+        output_line(settings.output_current.as_deref()),
         theme::legend(10.0 * scale),
-        theme::SILKSCREEN_DIM,
+        theme::BLACK.silkscreen_dim,
     );
     // The stream's own words, beside the output in use. This is the card's half of what the deleted bottom line said:
     // a machine with a busy or hot-unplugged device looks healthy on the face and is silent, so it must say so here.
@@ -402,9 +427,9 @@ pub fn paint(
         &settings.audio_status,
         theme::legend(10.0 * scale),
         if audio_status::is_failed(&settings.audio_status) {
-            theme::LED_ACCENT
+            theme::BLACK.led_accent
         } else {
-            theme::SILKSCREEN_DIM
+            theme::BLACK.silkscreen_dim
         },
     );
     if settings.sound_open
@@ -426,7 +451,7 @@ pub fn paint(
         request = Some(Click::Ask(clicked));
     }
 
-    if transport::transport_button(ui, "settings-close", rows.close, "CLOSE", false).clicked() {
+    if transport::card_button(ui, "settings-close", rows.close, "CLOSE", false).clicked() {
         request = Some(Click::Own(Own::Close));
     }
     request
@@ -443,11 +468,32 @@ fn switch_label(name: &str, on: bool) -> String {
     format!("{name} {}", if on { "ON" } else { "OFF" })
 }
 
-/// The device in use, named above its list so the answer is readable while the list is shut.
-fn current_line(current: Option<&str>) -> String {
+/// The ports in use, named above the list so the answer is readable while the list is shut. There is more than one answer
+/// now, so it names them all; a long list is cut by `shorten`, which is the one place the face may use an ellipsis.
+fn current_line(current: &[String]) -> String {
+    match current {
+        [] => "IN USE: none".to_string(),
+        [one] => format!("IN USE: {}", shorten(one, 40)),
+        many => format!("IN USE: {}", shorten(&many.join(", "), 40)),
+    }
+}
+
+/// The output in use: one stream, so one name, in the same words the ports line uses.
+fn output_line(current: Option<&str>) -> String {
     match current {
         Some(name) => format!("IN USE: {}", shorten(name, 40)),
         None => "IN USE: none".to_string(),
+    }
+}
+
+/// A port row: its tick, its name, and a word when the machine no longer reports it. The tick is the state, the word is the
+/// reason, and the row is the only place either is said.
+fn port_label(port: &str, on: bool, listed: bool) -> String {
+    let mark = if on { "x" } else { " " };
+    if listed {
+        format!("[{mark}] {}", shorten(port, 34))
+    } else {
+        format!("[{mark}] {} (missing)", shorten(port, 24))
     }
 }
 
@@ -486,14 +532,8 @@ fn scrollable(
                 // of `area`, so `area.width()` ran every row underneath it.
                 let rect = Rect::from_min_size(top_left, egui::vec2(row_width, ROW * scale));
                 ui.allocate_space(rect.size());
-                if transport::transport_button(
-                    ui,
-                    &format!("settings-row-{index}"),
-                    rect,
-                    &label,
-                    lit,
-                )
-                .clicked()
+                if transport::card_button(ui, &format!("settings-row-{index}"), rect, &label, lit)
+                    .clicked()
                 {
                     request = Some(asked);
                 }

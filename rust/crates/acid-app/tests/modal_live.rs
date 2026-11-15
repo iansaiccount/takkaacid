@@ -66,7 +66,7 @@ fn face_is_dimmed(output: &FullOutput) -> bool {
     filled_rects(output).iter().any(|(rect, fill)| {
         *rect == screen()
             && fill.a() > 0
-            && theme::luminance(*fill) < theme::luminance(theme::PANEL)
+            && theme::luminance(*fill) < theme::luminance(theme::BLACK.panel)
     })
 }
 

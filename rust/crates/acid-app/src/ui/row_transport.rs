@@ -4,8 +4,8 @@ use eframe::egui;
 
 use crate::state::SharedState;
 
-use super::controls::switch_key;
-use super::{PanelState, layout, learn, tips, transport};
+use super::controls::{Key, switch_key};
+use super::{PanelState, layout, learn, theme, tips, transport};
 
 /// Draw the transport row into its cells.
 pub(super) fn draw(
@@ -13,50 +13,72 @@ pub(super) fn draw(
     shared: &SharedState,
     ui: &mut egui::Ui,
     l: &layout::PanelLayout,
+    p: &theme::Palette,
 ) {
-    // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time.
+    // Transport: RUN and STOP are lit keys; the tempo buttons nudge one BPM at a time. Both are *requests*: the rack owns
+    // the transport and fans it out to every device, so a row that wrote the displayed device's atomic would be undone by
+    // the next sync.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
     if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {
         let playing = shared.is_playing();
-        if switch_key(ui, state, "run", run, "RUN", playing, tips::Control::Run) {
-            shared.set_playing(true);
+        if switch_key(
+            ui,
+            state,
+            Key {
+                id: "run",
+                rect: run,
+                label: "RUN",
+                lit: playing,
+                control: tips::Control::Run,
+            },
+            p,
+        ) {
+            state.transport_request = Some(transport::Request::Play);
             state.dirty = true;
         }
         if switch_key(
             ui,
             state,
-            "stop",
-            stop,
-            "STOP",
-            !playing,
-            tips::Control::Stop,
+            Key {
+                id: "stop",
+                rect: stop,
+                label: "STOP",
+                lit: !playing,
+                control: tips::Control::Stop,
+            },
+            p,
         ) {
-            shared.set_playing(false);
-            state.dirty = true;
-        }
-        let bpm = shared.tempo_bpm.get();
-        if switch_key(
-            ui,
-            state,
-            "tempo-down",
-            tempo_down,
-            "TEMPO -",
-            false,
-            tips::Control::TempoDown,
-        ) {
-            shared.tempo_bpm.set(transport::nudge_tempo(bpm, -1));
+            state.transport_request = Some(transport::Request::Stop);
             state.dirty = true;
         }
         if switch_key(
             ui,
             state,
-            "tempo-up",
-            tempo_up,
-            "TEMPO +",
-            false,
-            tips::Control::TempoUp,
+            Key {
+                id: "tempo-down",
+                rect: tempo_down,
+                label: "TEMPO -",
+                lit: false,
+                control: tips::Control::TempoDown,
+            },
+            p,
         ) {
-            shared.tempo_bpm.set(transport::nudge_tempo(bpm, 1));
+            state.transport_request = Some(transport::Request::NudgeTempo(-1));
+            state.dirty = true;
+        }
+        if switch_key(
+            ui,
+            state,
+            Key {
+                id: "tempo-up",
+                rect: tempo_up,
+                label: "TEMPO +",
+                lit: false,
+                control: tips::Control::TempoUp,
+            },
+            p,
+        ) {
+            state.transport_request = Some(transport::Request::NudgeTempo(1));
             state.dirty = true;
         }
 
@@ -65,11 +87,14 @@ pub(super) fn draw(
         if switch_key(
             ui,
             state,
-            "learn",
-            volume_cell,
-            learn::label(state.learn),
-            state.learn != learn::Step::Idle,
-            tips::Control::Learn,
+            Key {
+                id: "learn",
+                rect: volume_cell,
+                label: learn::label(state.learn),
+                lit: state.learn != learn::Step::Idle,
+                control: tips::Control::Learn,
+            },
+            p,
         ) {
             state.learn = match state.learn {
                 learn::Step::Idle => learn::Step::Choosing,

@@ -8,8 +8,8 @@ use crate::knobs::snap_to_detent;
 use crate::midi;
 use crate::state::SharedState;
 
-use super::controls::{learn_pick, switch_key};
-use super::{PanelState, knob, layout, learn, panel, randomise, scale, tips};
+use super::controls::{Key, learn_pick, switch_key};
+use super::{PanelState, knob, layout, learn, panel, randomise, scale, theme, tips};
 /// Draw the performance row into its cells.
 pub(super) fn draw(
     state: &mut PanelState,
@@ -17,6 +17,7 @@ pub(super) fn draw(
     ui: &mut egui::Ui,
     l: &layout::PanelLayout,
     s: f32,
+    p: &theme::Palette,
 ) {
     // The performance row: transpose the pattern, shuffle the clock, and the two dials that decide what RANDOM does.
     if let [
@@ -38,7 +39,18 @@ pub(super) fn draw(
             ),
             (octave_up, "octave-up", "OCT +", 1, tips::Control::OctaveUp),
         ] {
-            if switch_key(ui, state, id, rect, label, false, control) {
+            if switch_key(
+                ui,
+                state,
+                Key {
+                    id,
+                    rect,
+                    label,
+                    lit: false,
+                    control,
+                },
+                p,
+            ) {
                 let moved = state.pattern.transposed(12 * octaves);
                 state.pattern = Arc::new(moved);
                 shared.set_pattern(Arc::clone(&state.pattern));
@@ -57,11 +69,11 @@ pub(super) fn draw(
         let mut scratch = before_swing;
         let response = {
             let value = if choosing { &mut scratch } else { &mut swing };
-            perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", value)
+            perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", value, p)
         };
         tips::hover(&response, state.tooltips, tips::Control::Shuffle);
         if learn::highlight(state.learn, midi::cc::CcTarget::Swing) {
-            panel::learn_highlight(ui.painter(), shuffle_cell, s);
+            panel::learn_highlight(ui.painter(), shuffle_cell, s, p);
         }
         if choosing {
             learn_pick(
@@ -81,7 +93,7 @@ pub(super) fn draw(
         let before_density = state.density;
         let mut density = state.density;
         let caption = format!("{:.0}%", density * 100.0);
-        let response = perform_knob(ui, density_cell, "density", &caption, &mut density);
+        let response = perform_knob(ui, density_cell, "density", &caption, &mut density, p);
         tips::hover(&response, state.tooltips, tips::Control::Density);
         state.density = density.clamp(0.0, 1.0);
         if state.density != before_density {
@@ -91,7 +103,14 @@ pub(super) fn draw(
         // SCALE snaps on release, never mid-drag: a frame-by-frame snap pulls the position back onto the detent it
         // started from, and a slow drag could never cross a midpoint.
         let mut position = state.scale_knob;
-        let response = perform_knob(ui, scale_cell, "scale", state.scale.name(), &mut position);
+        let response = perform_knob(
+            ui,
+            scale_cell,
+            "scale",
+            state.scale.name(),
+            &mut position,
+            p,
+        );
         tips::hover(&response, state.tooltips, tips::Control::Scale);
         state.scale_knob = position.clamp(0.0, 1.0);
         if !response.dragged() {
@@ -111,11 +130,14 @@ pub(super) fn draw(
         if switch_key(
             ui,
             state,
-            "randomise",
-            randomise_cell,
-            "RANDOM",
-            false,
-            tips::Control::Randomise,
+            Key {
+                id: "randomise",
+                rect: randomise_cell,
+                label: "RANDOM",
+                lit: false,
+                control: tips::Control::Randomise,
+            },
+            p,
         ) {
             // Seeded from the clock: a randomiser that repeats is a bug, and the seed is there for the tests.
             let seed = std::time::SystemTime::now()
@@ -140,10 +162,18 @@ fn perform_knob(
     id: &str,
     label: &str,
     value: &mut f32,
+    p: &theme::Palette,
 ) -> egui::Response {
     let diameter = cell.height() * 0.78;
     let square = egui::Rect::from_center_size(cell.center(), egui::vec2(diameter, cell.height()));
     let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(square));
     cell_ui.set_clip_rect(cell);
-    knob::knob(&mut cell_ui, egui::Id::unique(id), label, value, diameter)
+    knob::knob(
+        &mut cell_ui,
+        egui::Id::unique(id),
+        label,
+        value,
+        diameter,
+        p,
+    )
 }

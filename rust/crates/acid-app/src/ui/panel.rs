@@ -101,11 +101,11 @@ pub fn song_label_rect(top: Rect, scale: f32) -> Rect {
 ///
 /// Drawn just outside the control's own rect so it never covers the face it is pointing at, in a colour no other light on
 /// the panel uses: the player is being asked "which one?", and the answer has to be visible at a glance.
-pub fn learn_highlight(painter: &Painter, rect: Rect, scale: f32) {
+pub fn learn_highlight(painter: &Painter, rect: Rect, scale: f32, p: &theme::Palette) {
     painter.rect_stroke(
         learn_highlight_bounds(rect, scale),
         6.0 * scale,
-        egui::Stroke::new(2.0 * scale, theme::LEARN_TARGET),
+        egui::Stroke::new(2.0 * scale, p.learn_target),
         egui::StrokeKind::Outside,
     );
 }
@@ -142,39 +142,39 @@ pub fn tempo_display_rect(top: Rect) -> Rect {
 }
 
 /// Paint the face: recess, slab, engraved frame, screws and wordmark. Displays come in Task 31.
-pub fn paint_panel(painter: &Painter, layout: &PanelLayout) {
+pub fn paint_panel(painter: &Painter, layout: &PanelLayout, p: &theme::Palette) {
     let panel = layout.panel;
     // What the panel is set *into*: a well slightly larger than the slab, so the face looks recessed
     // rather than printed on the window.
     let s = panel.width() / theme::DESIGN_SIZE.x;
-    painter.rect_filled(panel.expand(theme::GAP * s), 10.0 * s, theme::WELL);
-    painter.rect_filled(panel, 8.0 * s, theme::PANEL);
+    painter.rect_filled(panel.expand(theme::GAP * s), 10.0 * s, p.well);
+    painter.rect_filled(panel, 8.0 * s, p.panel);
 
     let [outer, inner] = frame_lines(panel);
     painter.rect_stroke(
         outer,
         6.0 * s,
-        theme::silkscreen_stroke(2.0 * s),
+        p.silkscreen_stroke(2.0 * s),
         egui::StrokeKind::Inside,
     );
     painter.rect_stroke(
         inner,
         5.0 * s,
-        theme::silkscreen_stroke(1.0 * s),
+        p.silkscreen_stroke(1.0 * s),
         egui::StrokeKind::Inside,
     );
 
     for pos in screw_positions(panel) {
         let r = theme::SCREW_RADIUS * s;
-        painter.circle_filled(pos, r, theme::PANEL_RAISED);
-        painter.circle_stroke(pos, r, theme::silkscreen_stroke(1.0 * s));
+        painter.circle_filled(pos, r, p.panel_raised);
+        painter.circle_stroke(pos, r, p.silkscreen_stroke(1.0 * s));
         // A single slot, so the screw reads as a screw and not a rivet.
         painter.line_segment(
             [
                 pos - egui::vec2(r * 0.6, 0.0),
                 pos + egui::vec2(r * 0.6, 0.0),
             ],
-            theme::silkscreen_stroke(1.0 * s),
+            p.silkscreen_stroke(1.0 * s),
         );
     }
 
@@ -184,7 +184,7 @@ pub fn paint_panel(painter: &Painter, layout: &PanelLayout) {
         egui::Align2::LEFT_CENTER,
         "takka-acid",
         theme::legend(20.0 * s),
-        theme::SILKSCREEN,
+        p.silkscreen,
     );
     // A thin rule closing off the top strip, so the knobs sit under a line like silkscreen does.
     painter.line_segment(
@@ -192,7 +192,7 @@ pub fn paint_panel(painter: &Painter, layout: &PanelLayout) {
             Pos2::new(layout.top.left(), layout.top.bottom()),
             Pos2::new(layout.top.right(), layout.top.bottom()),
         ],
-        theme::silkscreen_stroke(1.0 * s),
+        p.silkscreen_stroke(1.0 * s),
     );
 }
 
@@ -250,7 +250,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let l = layout::layout(ui.max_rect());
-            paint_panel(ui.painter(), &l);
+            paint_panel(ui.painter(), &l, &theme::BLACK);
         });
         // Nothing renders this frame's textures, and `FullOutput` panics if its deltas are dropped
         // unhandled — clear them before the frame goes out of scope.

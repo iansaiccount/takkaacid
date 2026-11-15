@@ -112,7 +112,9 @@ pub struct SavedState {
     pub knobs: Knobs,
     pub bpm: f32,
     pub swing: f32,
-    /// The MIDI input the player chose, by port name; `None` means "the first one the system reports".
+    /// One MIDI input name, kept for the frozen save format: the first port the session had open, or `None` when it had
+    /// none. It cannot say "none on purpose" apart from "nothing chosen yet", so a session that closed every port opens one
+    /// again on the next launch — the save-a-list round is where that gets a field.
     #[serde(default)]
     pub midi_input: Option<String>,
     /// The named song this session is working on, if any; `None` until it is first saved by name.

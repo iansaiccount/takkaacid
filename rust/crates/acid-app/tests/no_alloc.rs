@@ -7,7 +7,10 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use acid_app::audio::mixer::Mixer;
 use acid_app::audio::renderer::AudioRenderer;
+use acid_app::device::{DeviceKind, Rack};
+use acid_app::persist;
 use acid_app::state::SharedState;
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
@@ -75,5 +78,33 @@ fn the_audio_path_never_allocates() {
     assert!(
         swap <= 1,
         "a pattern swap allocated {swap} times in the audio path"
+    );
+
+    // The mix path is the second real-time path, and it has one allocation in it: `reconcile` rebuilds the slot list when
+    // the published rack changes. A rack that did not change must not — its fast path is what this window proves, and a
+    // mutation that drops it allocates a `Vec` per block while `Mixer::rebuilds` still counts nothing.
+    let mut rack = Rack::from_saved(&persist::SavedState::default());
+    rack.add(DeviceKind::Acid)
+        .expect("room for a second device");
+    rack.set_playing(true);
+    rack.publish();
+    let mut mixer = Mixer::new(48_000.0, 2, rack.bus());
+    let mut mix = vec![0.0f32; 2_048];
+    mixer.render_mono(&mut mix); // warm-up: the first block builds a slot per device
+    let built = mixer.rebuilds();
+
+    COUNT.store(0, Ordering::Relaxed);
+    for _ in 0..1_000 {
+        mixer.render_mono(&mut mix);
+    }
+    let mixed = COUNT.load(Ordering::Relaxed);
+    assert_eq!(
+        mixed, 0,
+        "a steady rack allocated {mixed} times in the mix path"
+    );
+    assert_eq!(
+        mixer.rebuilds(),
+        built,
+        "and it still reused its two engines while doing it"
     );
 }

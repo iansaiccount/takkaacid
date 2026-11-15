@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use acid_core::bank::{PatternBank, TOTAL_PATTERNS};
-use acid_core::timing::clamp_bpm;
 use eframe::egui::Key;
 
 use crate::state::SharedState;
@@ -20,6 +19,8 @@ pub enum Shortcut {
     NextPattern,
     PrevPattern,
     ToggleSettings,
+    /// The device card for the device on the panel: its name, its route and its removal.
+    ToggleDeviceCard,
     ToggleHelp,
 }
 
@@ -34,6 +35,7 @@ pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
         (Key::ArrowLeft, true) => Some(Shortcut::PrevPattern),
         (Key::F1, _) => Some(Shortcut::ToggleHelp),
         (Key::F2, _) => Some(Shortcut::ToggleSettings),
+        (Key::F3, _) => Some(Shortcut::ToggleDeviceCard),
         (Key::Questionmark, true) => Some(Shortcut::ToggleHelp),
         _ => None,
     }
@@ -63,18 +65,9 @@ pub fn select_pattern(state: &SharedState, bank: &mut PatternBank, index: usize)
 
 pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) -> bool {
     match shortcut {
-        Shortcut::PlayStop => {
-            state.set_playing(!state.is_playing());
-            true
-        }
-        Shortcut::TempoUp => {
-            state.tempo_bpm.set(clamp_bpm(state.tempo_bpm.get() + 1.0));
-            true
-        }
-        Shortcut::TempoDown => {
-            state.tempo_bpm.set(clamp_bpm(state.tempo_bpm.get() - 1.0));
-            true
-        }
+        // The transport belongs to the rack, so these three are requests the panel records and `main` drains; nothing here
+        // may write one device's atomic, or the next fan-out would undo it.
+        Shortcut::PlayStop | Shortcut::TempoUp | Shortcut::TempoDown => false,
         Shortcut::NextPattern => {
             select_pattern(state, bank, (bank.current() + 1) % TOTAL_PATTERNS);
             true
@@ -88,7 +81,7 @@ pub fn apply(shortcut: Shortcut, state: &SharedState, bank: &mut PatternBank) ->
             true
         }
         // Both cards are panel state, so `handle` toggles them; nothing here touches the shared state.
-        Shortcut::ToggleHelp | Shortcut::ToggleSettings => false,
+        Shortcut::ToggleHelp | Shortcut::ToggleSettings | Shortcut::ToggleDeviceCard => false,
     }
 }
 
@@ -99,26 +92,19 @@ mod tests {
     use acid_core::pitch::Pitch;
 
     #[test]
-    fn space_toggles_the_transport() {
+    fn the_transport_shortcuts_write_no_device_state() {
+        // The rack owns the transport, and `dispatch` turns these three into requests. A `apply` that wrote one device's
+        // atomic would be undone by the next fan-out, so it must not write anything at all.
         let s = SharedState::new();
         let mut bank = PatternBank::factory();
-        assert_eq!(shortcut_for(Key::Space, false), Some(Shortcut::PlayStop));
-        apply(Shortcut::PlayStop, &s, &mut bank);
-        assert!(s.playing.load(std::sync::atomic::Ordering::Relaxed));
-        apply(Shortcut::PlayStop, &s, &mut bank);
-        assert!(!s.playing.load(std::sync::atomic::Ordering::Relaxed));
-    }
+        let before = s.tempo_bpm.get();
 
-    #[test]
-    fn arrows_move_tempo_in_whole_bpm_and_clamp() {
-        let s = SharedState::new();
-        let mut bank = PatternBank::factory();
-        s.tempo_bpm.set(130.0);
-        apply(Shortcut::TempoUp, &s, &mut bank);
-        assert_eq!(s.tempo_bpm.get(), 131.0);
-        s.tempo_bpm.set(acid_core::timing::MAX_BPM);
-        apply(Shortcut::TempoUp, &s, &mut bank);
-        assert_eq!(s.tempo_bpm.get(), acid_core::timing::MAX_BPM);
+        assert_eq!(shortcut_for(Key::Space, false), Some(Shortcut::PlayStop));
+        assert!(!apply(Shortcut::PlayStop, &s, &mut bank));
+        assert!(!s.is_playing(), "apply must not start the transport");
+        assert!(!apply(Shortcut::TempoUp, &s, &mut bank));
+        assert!(!apply(Shortcut::TempoDown, &s, &mut bank));
+        assert_eq!(s.tempo_bpm.get(), before, "apply must not move the tempo");
     }
 
     #[test]

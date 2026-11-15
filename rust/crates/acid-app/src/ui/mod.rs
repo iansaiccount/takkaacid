@@ -2,6 +2,7 @@
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
 pub mod clear;
 pub mod controls;
+pub mod device_card;
 pub mod dispatch;
 pub mod display;
 pub mod edit;
@@ -24,6 +25,7 @@ pub mod settings;
 pub mod shortcuts;
 pub mod songs;
 pub mod step_key;
+pub mod strip;
 pub mod switches;
 pub mod text;
 pub mod tips;
@@ -31,6 +33,7 @@ pub mod tips;
 pub mod theme;
 pub mod transport;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
@@ -41,7 +44,7 @@ use crate::state::SharedState;
 
 use crate::knobs::{Kind, Knob};
 
-use self::controls::{learn_pick, switch_key};
+use self::controls::{Key, learn_pick, switch_key};
 
 use acid_core::pitch::Pitch;
 
@@ -86,6 +89,9 @@ pub struct PanelState {
     pub clear_armed_at: Option<std::time::Instant>,
     /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
     pub save_requested: bool,
+    /// Set by the transport row; consumed by `main`, which owns the rack's transport. A request rather than a write: the
+    /// rack fans a change out to every device, so writing the displayed device's own atomic would be undone by the next sync.
+    pub transport_request: Option<transport::Request>,
     /// The songs card, what it asked for, and the song this session is working on.
     pub songs: SongState,
     /// Where the MIDI-learn flow is: idle, waiting for a knob, or waiting for a controller.
@@ -120,6 +126,29 @@ pub struct PanelState {
     /// when the hand lets go. Anything that sets `scale` from outside — a song load, a restart — must set this too, or
     /// the next frame snaps the scale back to where the knob was; [`PanelState::set_scale`] is the way to do it.
     pub scale_knob: f32,
+    /// The strip: one cell per device, and which of them is on the panel. `main` fills it from the rack every frame, the
+    /// way `pattern` is filled from the device's state, because the panel paints and never owns the list.
+    pub strip: strip::Strip,
+    /// Which way round to paint the face: the selected device's scheme, filled by `main` every frame the way the strip is.
+    /// The four cards ignore it — they are furniture, and stay black whatever the face does.
+    pub scheme: crate::device::Scheme,
+    /// Set by the strip and by `Ctrl+1..4`, drained by `main` after the frame. The panel cannot reach the rack, so asking
+    /// is the only way it can select a device, mute one or add one.
+    pub device_request: Option<crate::device::Request>,
+    /// The device card: which device it is about and what `main` last read into it. One card at a time with help, songs
+    /// and settings — `open_device_card` is the only way in, so the rule cannot be forgotten at one of the three.
+    pub device_card: device_card::Card,
+    /// The picker: whether the card that offers the kinds of device is up. The strip's `+` asks for it and `main` opens it;
+    /// it closes itself, because nothing on it is a reading of the machine.
+    pub device_picker: device_card::Picker,
+    /// The device whose editor the flat fields currently hold, by its number — the identity that does not move when a
+    /// device before it is removed. `None` until the first frame shows one.
+    pub focused: Option<usize>,
+    /// One editor per device, keyed by that device's number: written when a switch leaves a device, read when one
+    /// arrives, so looking away and back keeps the step, the step mode and the randomise dials. Keyed by number rather
+    /// than by position because the position is exactly what a removal moves: a survivor would otherwise inherit the
+    /// removed device's editor. A device that is gone has its slot dropped on the next frame.
+    pub edit_slots: BTreeMap<usize, PanelEdit>,
 }
 
 /// The songs card and everything it asked for.
@@ -138,13 +167,11 @@ pub struct SongState {
     /// nothing of it is on disk until the player saves it.
     pub file: Option<String>,
 }
-/// What the player chose on the panel, consumed by `main` on the next frame. The lists themselves live in the settings card,
-/// which asks for a choice the same way the old status-line pickers did, so the stream handling is unchanged.
-
+/// What the player chose on the panel, consumed by `main` on the next frame. The output list lives in the settings card,
+/// which asks for a choice the same way the old status-line picker did, so the stream handling is unchanged. The inputs
+/// are not here: a port row is a switch, so opening one is a state `main` acts on, not a choice it waits for.
 #[derive(Default)]
 pub struct PickerState {
-    /// The MIDI input the player chose.
-    pub input_choice: Option<midi::ports::PortChoice>,
     /// The audio output the player chose.
     pub output_choice: Option<String>,
 }
@@ -170,6 +197,7 @@ impl Default for PanelState {
             selected: 0,
             clear_armed_at: None,
             save_requested: false,
+            transport_request: None,
             songs: SongState::default(),
             learn: learn::Step::Idle,
             step_mode: false,
@@ -183,6 +211,13 @@ impl Default for PanelState {
             density: randomise::DEFAULT_DENSITY,
             scale: scale::Scale::default(),
             scale_knob: scale::scale_position(scale::Scale::default()),
+            strip: strip::Strip::default(),
+            scheme: crate::device::Scheme::Black,
+            device_request: None,
+            device_card: device_card::Card::default(),
+            device_picker: device_card::Picker::default(),
+            focused: None,
+            edit_slots: BTreeMap::new(),
         }
     }
 }
@@ -194,6 +229,36 @@ impl PanelState {
     /// Say something on the status line. It survives the card that asked for it, and it clears itself.
     pub fn notify(&mut self, message: impl Into<String>) {
         self.notice = Some((message.into(), std::time::Instant::now()));
+    }
+
+    /// Show the device card for `index`, and put every other card away: there is room for one, and this one is painted over
+    /// the panel last.
+    ///
+    /// F3, the caret on the strip's selected cell and `main`'s `Request::Open` all arrive here, so the one-card rule cannot
+    /// be remembered at two of the three and forgotten at the last.
+    pub fn open_device_card(&mut self, index: usize) {
+        self.device_card.open = Some(index);
+        self.device_picker.open = false;
+        self.settings_open = false;
+        self.help_visible = false;
+        self.songs.card = None;
+    }
+
+    /// Put the device card away, mirror and all: its name, its route and its arming are readings of one device, and none of
+    /// them may be shown against the next one.
+    ///
+    /// F3, Escape, the card's CLOSE key and its shield all arrive here, and would otherwise be four places that have to
+    /// remember to clear the same seven fields.
+    pub fn close_device_card(&mut self) {
+        self.device_card = device_card::Card::default();
+    }
+    /// Show the picker, and put every other card away: there is room for one, and this is the one that adds a device.
+    pub fn open_device_picker(&mut self) {
+        self.device_picker.open = true;
+        self.close_device_card();
+        self.settings_open = false;
+        self.help_visible = false;
+        self.songs.card = None;
     }
 
     /// The notice still worth showing at `now`, if any.
@@ -219,12 +284,112 @@ impl PanelState {
     }
 }
 
+/// What the panel remembers about one device while another is displayed.
+///
+/// Exactly the fields that are *not* re-read from `SharedState` every frame: `knobs`, `volume`, `pattern`, `tempo`,
+/// `playing` and `position` are mirrors and need no slot. A field added later that is neither a mirror nor here will reset
+/// on every device switch, which is why the test names all nine.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PanelEdit {
+    pub pattern_id: PatternId,
+    pub selected: usize,
+    pub step_mode: bool,
+    pub placed: Vec<egui::Key>,
+    pub last_pitch: Pitch,
+    pub last_octave: i8,
+    pub density: f32,
+    pub scale: scale::Scale,
+    pub scale_knob: f32,
+}
+
+impl PanelEdit {
+    /// The editor a device the panel has never shown starts with: the panel's own defaults, taken from `PanelState::default`
+    /// so the two cannot drift apart.
+    pub fn of_defaults() -> Self {
+        let mut fresh = PanelState::default();
+        fresh.save_edit()
+    }
+}
+
+impl PanelState {
+    /// Take the flat editor fields into a slot — the outgoing half of a device switch.
+    pub fn save_edit(&mut self) -> PanelEdit {
+        PanelEdit {
+            pattern_id: self.pattern_id,
+            selected: self.selected,
+            step_mode: self.step_mode,
+            placed: self.placed.clone(),
+            last_pitch: self.last_pitch,
+            last_octave: self.last_octave,
+            density: self.density,
+            scale: self.scale,
+            scale_knob: self.scale_knob,
+        }
+    }
+
+    /// Put a slot back into the flat fields — the incoming half of a device switch.
+    pub fn load_edit(&mut self, edit: PanelEdit) {
+        self.pattern_id = edit.pattern_id;
+        self.selected = edit.selected;
+        self.step_mode = edit.step_mode;
+        self.placed = edit.placed;
+        self.last_pitch = edit.last_pitch;
+        self.last_octave = edit.last_octave;
+        self.density = edit.density;
+        self.scale = edit.scale;
+        self.scale_knob = edit.scale_knob;
+    }
+}
 /// Paint the whole panel into `ui`: face, displays, knobs, step keys, switches and transport legends.
 ///
 /// Painting uses absolute rects from `layout`, so the panel lands in the same place whatever the Ui's own
 /// cursor is doing. Returns nothing: Phase 07 wires the controls to the engine.
 pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::Ui) {
+    // `main` owns the rack and may have removed a device since it filled the mirror, so the count the strip draws is
+    // derived here rather than trusted: the panel may be one frame behind, and it must not be one index out of bounds.
+    state.strip.selected = state
+        .strip
+        .selected
+        .min(state.strip.cells.len().saturating_sub(1));
+    // The strip is a mirror, so the device under the editor can change between frames: save the outgoing device's editor and
+    // load the incoming one's. Both are keyed by the device's *number*, because a removal moves every later device's
+    // position and would otherwise hand the survivor the removed device's step, step mode and randomise dials. A device the
+    // panel has never shown starts on its own first step with the panel's defaults — but keeps the pattern `main` has just
+    // pointed the display at, because that is that device's bank, not a default.
+    let showing = state
+        .strip
+        .cells
+        .get(state.strip.selected)
+        .map(|cell| cell.number);
+    // A device that is gone keeps no editor: the map is bounded by the rack, and a number is never reused.
+    let present: Vec<usize> = state.strip.cells.iter().map(|cell| cell.number).collect();
+    state
+        .edit_slots
+        .retain(|number, _| present.contains(number));
+    if let Some(showing) = showing
+        && state.focused != Some(showing)
+    {
+        if let Some(leaving) = state.focused {
+            let edited = state.save_edit();
+            state.edit_slots.insert(leaving, edited);
+        }
+        state.focused = Some(showing);
+        let arriving = match state.edit_slots.get(&showing) {
+            Some(edit) => edit.clone(),
+            None => PanelEdit {
+                pattern_id: state.pattern_id,
+                ..PanelEdit::of_defaults()
+            },
+        };
+        state.load_edit(arriving);
+        // A learn belongs to the device it was started on: switching away cancels it rather than teaching the neighbour.
+        state.learn = learn::Step::Idle;
+        learn::cancel(shared);
+    }
     let window = ui.max_rect();
+    // A focused text field owns the keyboard, and the panel's audition keys are not an exception: with the cursor in the
+    // device card's name field, `A` and shift+`A` are a letter and a capital, not a note and a step. The device card is the
+    // first field on the face that a player types a *name* into, which is what made this reachable.
     play_computer_keys(shared, ui, state);
 
     // Every MIDI note still waiting while the panel is editing (step mode, or shift held) belongs to the selected
@@ -252,6 +417,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     let l = layout::layout(window);
     let s = layout::scale(window);
+    // The face's palette, from the device on the panel. The cards stay `BLACK`: they are furniture laid over the face, not
+    // part of it, and an amber card over an amber face would read as a second instrument.
+    let p = theme::palette(state.scheme);
     // The pattern is whatever the UI thread last published — one refcount bump, no allocation.
     state.pattern = shared.pattern();
     state.playing = shared.is_playing();
@@ -267,19 +435,23 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     state.tempo = shared.tempo_bpm.get();
     state.position = shared.position.load(std::sync::atomic::Ordering::Relaxed);
     state.volume = shared.volume.get();
-    panel::paint_panel(ui.painter(), &l);
+    panel::paint_panel(ui.painter(), &l, p);
+    // The strip sits on the face and asks for what a click meant; `main` answers after the frame.
+    strip::paint(ui, state, l.strip, s, p);
 
     display::paint_display(
         ui.painter(),
         panel::pattern_display_rect(l.top),
         &display::format_pattern(state.pattern_id),
         s,
+        p,
     );
     display::paint_display(
         ui.painter(),
         panel::tempo_display_rect(l.top),
         &display::format_tempo(state.tempo),
         s,
+        p,
     );
     // Both readouts answer the pointer, so a player who does not know what "A1" or "128" means can ask: a display is
     // still a control, and it is teachable besides.
@@ -301,10 +473,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // Both readouts wear the pick colour: while choosing, they are the answer to "which one?"; while a learn is
     // listening for one of them, that one keeps its border so the player can see what the controller will bind.
     if learn::highlight(state.learn, midi::cc::CcTarget::Tempo) {
-        panel::learn_highlight(ui.painter(), panel::tempo_display_rect(l.top), s);
+        panel::learn_highlight(ui.painter(), panel::tempo_display_rect(l.top), s, p);
     }
     if learn::highlight(state.learn, midi::cc::CcTarget::Pattern) {
-        panel::learn_highlight(ui.painter(), panel::pattern_display_rect(l.top), s);
+        panel::learn_highlight(ui.painter(), panel::pattern_display_rect(l.top), s, p);
     }
     learn_pick(
         ui,
@@ -337,13 +509,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     let notice = state.notice_now(now);
     let label = panel::song_label_rect(l.top, s);
     let (line, colour) = match notice {
-        Some(message) => (message.to_string(), theme::LED_ACCENT),
+        Some(message) => (message.to_string(), p.led_accent),
         None => (
             song_label(state.songs.name.as_deref()),
             if state.songs.file.is_some() {
-                theme::SILKSCREEN_DIM
+                p.silkscreen_dim
             } else {
-                theme::SILKSCREEN_DIM.gamma_multiply(0.55)
+                p.silkscreen_dim.gamma_multiply(0.55)
             },
         ),
     };
@@ -361,8 +533,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         font,
         colour,
     );
-    row_knobs::draw(state, shared, ui, &l, s);
-    row_perform::draw(state, shared, ui, &l, s);
+    row_knobs::draw(state, shared, ui, &l, s, p);
+    row_perform::draw(state, shared, ui, &l, s, p);
     // VOLUME has its own corner of the top strip, before the wordmark, so the transport row keeps its five keys.
     let volume_rect = panel::volume_knob_rect(l.top);
     let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));
@@ -381,9 +553,10 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         "",
         volume_target,
         volume_rect.width(),
+        p,
     );
     if learn::highlight(state.learn, midi::cc::CcTarget::Volume) {
-        panel::learn_highlight(ui.painter(), volume_rect, s);
+        panel::learn_highlight(ui.painter(), volume_rect, s, p);
     }
     if choosing {
         if ui
@@ -424,7 +597,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             // A slide only glides into a step that sounds, so the keycap needs to know about the next one.
             state.pattern.steps[(i + 1) % STEPS_PER_PATTERN].on,
         );
-        let response = step_key::step_key(ui, i, &step, &view, *cell);
+        let response = step_key::step_key(ui, i, &step, &view, *cell, p);
         let (shift, alt, ctrl) =
             ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.ctrl));
         // Every click moves the selection, editing or not: the outline must always say where the keyboard
@@ -485,7 +658,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                 egui::Align2::CENTER_CENTER,
                 edit::pitch_name(pitch, octave),
                 theme::legend(10.0 * s),
-                theme::SILKSCREEN,
+                p.silkscreen,
             );
         } else {
             state.drag = None;
@@ -501,6 +674,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             switches::cell(l.switches, *switch),
             s,
             switch.label(),
+            p,
         );
     }
     {
@@ -511,11 +685,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         if switch_key(
             ui,
             state,
-            "clear-pattern",
-            clear_cell,
-            label,
-            armed,
-            tips::Control::Clear,
+            Key {
+                id: "clear-pattern",
+                rect: clear_cell,
+                label,
+                lit: armed,
+                control: tips::Control::Clear,
+            },
+            p,
         ) {
             match clear::click(state.clear_armed_at, now) {
                 clear::Click::Armed => state.clear_armed_at = Some(now),
@@ -536,11 +713,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         if switch_key(
             ui,
             state,
-            "save-session",
-            save_cell,
-            "SAVE",
-            dirty,
-            tips::Control::Save,
+            Key {
+                id: "save-session",
+                rect: save_cell,
+                label: "SAVE",
+                lit: dirty,
+                control: tips::Control::Save,
+            },
+            p,
         ) {
             state.save_requested = true;
         }
@@ -551,11 +731,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         if switch_key(
             ui,
             state,
-            "songs",
-            songs_cell,
-            "SONGS",
-            state.songs.card.is_some(),
-            tips::Control::Songs,
+            Key {
+                id: "songs",
+                rect: songs_cell,
+                label: "SONGS",
+                lit: state.songs.card.is_some(),
+                control: tips::Control::Songs,
+            },
+            p,
         ) {
             state.songs.card = match state.songs.card {
                 Some(_) => None,
@@ -579,17 +762,20 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         if switch_key(
             ui,
             state,
-            "step-mode",
-            step_cell,
-            "STEP",
-            state.step_mode,
-            tips::Control::Step,
+            Key {
+                id: "step-mode",
+                rect: step_cell,
+                label: "STEP",
+                lit: state.step_mode,
+                control: tips::Control::Step,
+            },
+            p,
         ) {
             state.step_mode = !state.step_mode;
         }
     }
     // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.
-    let (save_label, save_colour) = save::state_label(state.dirty);
+    let (save_label, save_colour) = save::state_label(state.dirty, p);
     // The lamp says one word: SAVED in dim silk, UNSAVED in amber, inside its own corner of the strip.
     ui.painter()
         .with_clip_rect(panel::save_indicator_rect(l.top, s))
@@ -602,7 +788,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         );
     // The transport row: the five keys under the switches, drawn after everything above them, so a later widget wins a
     // hit-test tie and the panel behaves in the order it always has.
-    row_transport::draw(state, shared, ui, &l);
+    row_transport::draw(state, shared, ui, &l, p);
 
     // A small `?` at the end of the wordmark opens the help card, and the card covers the panel while it is
     // showing — it is the only thing that needs no explanation of its own.
@@ -621,15 +807,15 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         egui::Sense::click(),
     );
     let painter = ui.painter();
-    painter.circle_stroke(help_dot.center(), 8.0 * s, theme::silkscreen_stroke(s));
+    painter.circle_stroke(help_dot.center(), 8.0 * s, p.silkscreen_stroke(s));
     painter.text(
         help_dot.center(),
         egui::Align2::CENTER_CENTER,
         "?",
         theme::legend(11.0 * s),
-        theme::SILKSCREEN,
+        p.silkscreen,
     );
-    paint_gear(painter, gear_dot.center(), s);
+    paint_gear(painter, gear_dot.center(), s, p);
     // The card must not re-close on the click that opened it, so dismissal reads the frame-start value.
     let help_was_visible = state.help_visible;
     if gear_response.clicked() {
@@ -674,6 +860,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             None => {}
         }
     }
+    // Both device cards are painted last, the picker over the device card, so nothing draws over either. They are here
+    // rather than inside the settings card's `draw_settings` because neither is a fold of anything: the card is about one
+    // device, and the picker is the way to make another.
+    device_card::paint(ui, state, l.panel, s);
+    // The picker is the last thing painted of all: it is the card that adds a device, so it is the one that opens over
+    // everything else and the one Escape closes first.
+    device_card::paint_picker(ui, state, l.panel, s);
 }
 
 /// The computer keyboard plays through the same route as a MIDI keyboard, so both share one voice.
@@ -687,8 +880,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
 /// at its repeat rate, and a press the platform repeats (which egui may not flag) writes nothing because the key is
 /// already in [`PanelState::placed`].
 fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelState) {
+    // A focused text field owns every key on the keyboard: `wants_keyboard_input` is egui's own answer to "is something
+    // being typed into", and it is asked here rather than at the call site so a later keyboard reader cannot forget it.
+    // Without it, typing a capital into the device card's name field wrote a step and marked the session unsaved.
+    if ui.ctx().text_edit_focused() {
+        return;
+    }
     use std::sync::atomic::Ordering;
-
     let octave = shared.octave.load(Ordering::Relaxed);
     ui.input(|input| {
         // A window that lost the focus will never deliver the releases for what was held, so forget them rather than
@@ -754,12 +952,18 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
 }
 
 /// A static button face: raised, engraved, with a silkscreen caption when `label` is not empty.
-fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &str) {
-    painter.rect_filled(rect, 4.0 * scale, theme::PANEL_RAISED);
+fn paint_switch(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    scale: f32,
+    label: &str,
+    p: &theme::Palette,
+) {
+    painter.rect_filled(rect, 4.0 * scale, p.panel_raised);
     painter.rect_stroke(
         rect,
         4.0 * scale,
-        theme::silkscreen_stroke(scale),
+        p.silkscreen_stroke(scale),
         egui::StrokeKind::Inside,
     );
     if !label.is_empty() {
@@ -768,7 +972,7 @@ fn paint_switch(painter: &egui::Painter, rect: egui::Rect, scale: f32, label: &s
             egui::Align2::CENTER_CENTER,
             label,
             theme::legend(12.0 * scale),
-            theme::SILKSCREEN,
+            p.raised_ink,
         );
     }
 }
@@ -788,8 +992,8 @@ fn song_label(name: Option<&str>) -> String {
 
 /// A gear, drawn rather than typed: a ring, eight teeth and a hub. The face may not use font glyphs, so the shape is the
 /// icon — and at 18 px it still reads as a gear because the teeth are strokes, not pixels.
-fn paint_gear(painter: &egui::Painter, centre: egui::Pos2, scale: f32) {
-    let stroke = theme::silkscreen_stroke(scale);
+fn paint_gear(painter: &egui::Painter, centre: egui::Pos2, scale: f32, p: &theme::Palette) {
+    let stroke = p.silkscreen_stroke(scale);
     painter.circle_stroke(centre, 7.0 * scale, stroke);
     for tooth in 0..8 {
         let angle = std::f32::consts::FRAC_PI_4 * tooth as f32;
@@ -802,7 +1006,7 @@ fn paint_gear(painter: &egui::Painter, centre: egui::Pos2, scale: f32) {
             stroke,
         );
     }
-    painter.circle_filled(centre, 2.0 * scale, theme::SILKSCREEN_DIM);
+    painter.circle_filled(centre, 2.0 * scale, p.silkscreen_dim);
 }
 
 /// The settings card, drawn after everything else so it covers the panel like help and songs do. One card at a time: help

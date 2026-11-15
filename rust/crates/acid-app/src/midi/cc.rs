@@ -288,11 +288,11 @@ pub fn apply_cc(state: &SharedState, cc: u8, value: u8) -> bool {
         CcTarget::Decay => state.decay.set(knob),
         CcTarget::Accent => state.accent.set(knob),
         CcTarget::Volume => state.volume.set(knob),
-        CcTarget::Tempo => {
-            state
-                .tempo_bpm
-                .set(clamp_bpm(MIN_BPM + knob * (MAX_BPM - MIN_BPM)));
-        }
+        // The tempo is the rack's cell, shared with every device's state, so this one write is what the engine reads at the
+        // next block and what the pickup measures against — no copy, no fan-out, no window.
+        CcTarget::Tempo => state
+            .tempo_bpm
+            .set(clamp_bpm(MIN_BPM + knob * (MAX_BPM - MIN_BPM))),
         // The pattern's zones are equal: 128 controller steps over eight patterns is sixteen each, so a fader rests in
         // the middle of a pattern rather than on a hair-trigger boundary. The MIDI thread may not move the bank, so it
         // leaves a request and `main` drains it when the bar allows.

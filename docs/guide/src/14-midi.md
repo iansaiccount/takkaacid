@@ -1,12 +1,26 @@
 # MIDI
 
-takka-acid has one MIDI input. It plays notes, and it can be taught to drive almost every control on the face.
+takka-acid listens to one MIDI input, or to several at once. Each plays notes, and can be taught to drive almost every
+control on the face.
 
-## Choosing a port
+## Choosing ports
 
-`F2`, then unfold **`MIDI IN  [+]`** and click the port. The list ends with `none`, which means *any port*: the app opens
-the first input it finds, which is where a fresh session starts. The choice is remembered across sessions; if the port is
-missing next time, the card says so — `MIDI: none (retrying)` — rather than silently picking a different device.
+`F2`, then unfold **`MIDI IN  [+]`** and click a port's row: `[x]` is a port the app holds open, `[ ]` is one it does not,
+and any number may be on at once. A fresh session starts with the first port the machine reports. The session remembers
+the first port it had open across sessions; if that port is missing next time, the card says so —
+`MIDI: none (retrying)` — rather than silently picking a different device.
+
+## What each device hears
+
+Which ports are **open** is the settings card's business ([`13-settings`](13-settings.md)). Which of them a *device* hears
+is that device's own card's: `F3`, then `PORTS` — `ALL PORTS`, or a tick per port — and `CHANNEL`, which is `CH ANY` or one
+channel of sixteen.
+
+`ROLE` decides what a message on that channel does. `PLAY + CTRL` plays it and moves the knobs; `CTRL ONLY` answers with the
+knobs and ignores notes, which is what a box of faders on a channel of its own wants: moving a knob must not start a note.
+
+So one open port can feed four devices: give each a channel, or let two share one deliberately. Learn is per device too —
+the same controller number can drive a knob on two machines at once.
 
 ## Playing notes in
 

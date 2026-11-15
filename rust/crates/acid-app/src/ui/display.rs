@@ -68,12 +68,12 @@ pub fn segments_for(ch: char) -> [bool; 7] {
 }
 
 /// Paint `text` as segments in a dark well, one character per cell.
-pub fn paint_display(painter: &Painter, rect: Rect, text: &str, scale: f32) {
-    painter.rect_filled(rect, 3.0 * scale, theme::WELL);
+pub fn paint_display(painter: &Painter, rect: Rect, text: &str, scale: f32, p: &theme::Palette) {
+    painter.rect_filled(rect, 3.0 * scale, p.well);
     painter.rect_stroke(
         rect,
         3.0 * scale,
-        theme::silkscreen_stroke(scale),
+        p.silkscreen_stroke(scale),
         egui::StrokeKind::Inside,
     );
     let count = text.chars().count().max(1);
@@ -87,12 +87,18 @@ pub fn paint_display(painter: &Painter, rect: Rect, text: &str, scale: f32) {
                 rect.bottom() - pad,
             ),
         );
-        paint_segments(painter, cell, segments_for(ch), scale);
+        paint_segments(painter, cell, segments_for(ch), scale, p);
     }
 }
 
 /// One character's segments: a bar for each lit segment, drawn twice — a wide dim halo under a bright core.
-fn paint_segments(painter: &Painter, cell: Rect, segments: [bool; 7], scale: f32) {
+fn paint_segments(
+    painter: &Painter,
+    cell: Rect,
+    segments: [bool; 7],
+    scale: f32,
+    p: &theme::Palette,
+) {
     let thickness = (cell.height() * 0.12).max(1.5 * scale);
     let half = thickness * 0.5;
     let (l, r, t, b) = (cell.left(), cell.right(), cell.top(), cell.bottom());
@@ -119,18 +125,20 @@ fn paint_segments(painter: &Painter, cell: Rect, segments: [bool; 7], scale: f32
             );
         };
 
-    let halo = egui::Color32::from_rgba_unmultiplied(0xFF, 0xE0, 0x66, 102); // 40 % LED_ON
+    // 40 % of the palette's lit lamp, not black's: the halo is the lamp bleeding into the glass, so it goes where the lamp goes.
+    let led_on = p.led_on;
+    let halo = egui::Color32::from_rgba_unmultiplied(led_on.r(), led_on.g(), led_on.b(), 102);
     if segments[A] {
         horiz(painter, t + half, thickness * 1.8, halo);
-        horiz(painter, t + half, thickness, theme::TEXT);
+        horiz(painter, t + half, thickness, p.text);
     }
     if segments[G] {
         horiz(painter, mid_y, thickness * 1.8, halo);
-        horiz(painter, mid_y, thickness, theme::TEXT);
+        horiz(painter, mid_y, thickness, p.text);
     }
     if segments[D] {
         horiz(painter, b - half, thickness * 1.8, halo);
-        horiz(painter, b - half, thickness, theme::TEXT);
+        horiz(painter, b - half, thickness, p.text);
     }
     for (lit, x, top, bottom) in [
         (segments[F], l + half, t, mid_y),
@@ -140,7 +148,7 @@ fn paint_segments(painter: &Painter, cell: Rect, segments: [bool; 7], scale: f32
     ] {
         if lit {
             vert(painter, x, top, bottom, thickness * 1.8, halo);
-            vert(painter, x, top, bottom, thickness, theme::TEXT);
+            vert(painter, x, top, bottom, thickness, p.text);
         }
     }
 }

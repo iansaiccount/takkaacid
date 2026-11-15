@@ -32,6 +32,8 @@ pub struct Row {
 /// Where every region of the panel sits, in window coordinates.
 pub struct PanelLayout {
     pub panel: Rect,
+    /// The strip band above the top strip: one cell per device and the add key.
+    pub strip: Rect,
     pub top: Rect,
     pub knobs: Row,
     /// The performance row under the knobs: octave down/up, shuffle, randomise.
@@ -41,17 +43,25 @@ pub struct PanelLayout {
     pub transport: Rect,
 }
 
-/// The six bands as fractions of the panel height: 16..72, 84..300, 312..374, 386..490, 502..560, 570..614 on a
-/// 640-tall panel. The first two keep the pixel heights they had at 560, so growing the panel for the performance row
-/// cost nothing above it; the step keys and the two key rows below are untouched too.
+/// The six bands as fractions of the panel height: 46..102, 114..330, 342..404, 416..520, 532..590, 600..644 on a
+/// 670-tall panel. That is the six bands this plan inherited, each moved down exactly 30 px by the strip band above them:
+/// their pixel heights are unchanged, so the face did not shrink to make room for the strip.
 const BANDS: [(f32, f32); 6] = [
-    (16.0 / 640.0, 72.0 / 640.0),
-    (84.0 / 640.0, 300.0 / 640.0),
-    (312.0 / 640.0, 374.0 / 640.0),
-    (386.0 / 640.0, 490.0 / 640.0),
-    (502.0 / 640.0, 560.0 / 640.0),
-    (570.0 / 640.0, 614.0 / 640.0),
+    (46.0 / 670.0, 102.0 / 670.0),
+    (114.0 / 670.0, 330.0 / 670.0),
+    (342.0 / 670.0, 404.0 / 670.0),
+    (416.0 / 670.0, 520.0 / 670.0),
+    (532.0 / 670.0, 590.0 / 670.0),
+    (600.0 / 670.0, 644.0 / 670.0),
 ];
+
+/// The strip band, as fractions of the panel height: the 30 px above the top strip. Its own constant rather than a seventh
+/// `BANDS` entry — `BANDS` is the six bands `paint_panel` walks, and a seventh would change what "every band" means to
+/// every test that loops over it.
+const STRIP_BAND: (f32, f32) = (16.0 / 670.0, 46.0 / 670.0);
+
+/// The width of the `+` key at the strip's right wall, in design pixels: a square the height of the band.
+pub const STRIP_ADD_WIDTH: f32 = 30.0;
 
 /// Side inset as a fraction of the panel width (16 of 980).
 const INSET: f32 = 16.0 / 980.0;
@@ -72,27 +82,16 @@ pub fn design_rect(window: Rect) -> Rect {
     Rect::from_center_size(window.center(), theme::DESIGN_SIZE * fit)
 }
 
-/// Place all five regions inside `window`. Pure arithmetic: no painting, no egui context.
+/// Place every region inside `window`. Pure arithmetic: no painting, no egui context.
 pub fn layout(window: Rect) -> PanelLayout {
     let panel = design_rect(window);
-    let band = |i: usize| {
-        let (top, bottom) = BANDS[i];
-        Rect::from_min_max(
-            Pos2::new(
-                panel.left() + panel.width() * INSET,
-                panel.top() + panel.height() * top,
-            ),
-            Pos2::new(
-                panel.right() - panel.width() * INSET,
-                panel.top() + panel.height() * bottom,
-            ),
-        )
-    };
+    let band = |i: usize| band_of(&panel, BANDS[i]);
     let knobs_area = band(1);
     let perform_area = band(2);
 
     PanelLayout {
         panel,
+        strip: band_of(&panel, STRIP_BAND),
         top: band(0),
         knobs: Row {
             area: knobs_area,
@@ -106,6 +105,37 @@ pub fn layout(window: Rect) -> PanelLayout {
         switches: band(4),
         transport: band(5),
     }
+}
+
+/// A band as fractions of the panel: one place for "inset the sides, take the height band", so the strip and the six
+/// below it cannot disagree about where the frame sits.
+fn band_of(panel: &Rect, (top, bottom): (f32, f32)) -> Rect {
+    Rect::from_min_max(
+        Pos2::new(
+            panel.left() + panel.width() * INSET,
+            panel.top() + panel.height() * top,
+        ),
+        Pos2::new(
+            panel.right() - panel.width() * INSET,
+            panel.top() + panel.height() * bottom,
+        ),
+    )
+}
+
+/// One cell per device, `theme::GAP` apart, in the room the add key leaves. The count is the rack's, which the layout
+/// cannot know, so this is a helper the strip calls rather than part of `layout`.
+pub fn strip_cells(area: Rect, count: usize) -> Vec<Rect> {
+    let right = (area.right() - STRIP_ADD_WIDTH - theme::GAP).max(area.left());
+    let room = Rect::from_min_max(area.min, Pos2::new(right, area.bottom()));
+    knob_cells(room, count)
+}
+
+/// The `+` key at the strip's right wall.
+pub fn strip_add_rect(area: Rect) -> Rect {
+    Rect::from_min_max(
+        Pos2::new(area.right() - STRIP_ADD_WIDTH, area.top()),
+        Pos2::new(area.right(), area.bottom()),
+    )
 }
 
 /// `count` equal cells across `area`, `theme::GAP` apart.
@@ -330,6 +360,62 @@ mod tests {
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(100.0, 100.0))) >= 0.65);
         assert!(scale(Rect::from_min_size(Pos2::ZERO, egui::vec2(4000.0, 3000.0))) <= 1.6);
         let r = design_rect(Rect::from_min_size(Pos2::ZERO, egui::vec2(1600.0, 900.0)));
-        assert!((r.width() / r.height() - 980.0 / 640.0).abs() < 0.01);
+        assert!((r.width() / r.height() - 980.0 / 670.0).abs() < 0.01);
+    }
+}
+
+#[cfg(test)]
+mod strip_tests {
+    use super::*;
+
+    #[test]
+    fn the_strip_sits_above_the_top_strip_and_nothing_else_moves_height() {
+        let window = Rect::from_min_size(Pos2::ZERO, egui::vec2(980.0, 670.0));
+        let l = layout(window);
+        assert!(l.strip.top() < l.top.top(), "the strip is the first band");
+        assert!(
+            (l.strip.height() - 30.0).abs() < 1.0,
+            "the strip is 30 design px: {}",
+            l.strip.height()
+        );
+        // Every band keeps its pixel height: the strip cost the panel 30 px, not the face.
+        for (band, height) in [
+            (l.top, 56.0),
+            (l.knobs.area, 216.0),
+            (l.perform.area, 62.0),
+            (l.steps, 104.0),
+            (l.switches, 58.0),
+            (l.transport, 44.0),
+        ] {
+            assert!(
+                (band.height() - height).abs() < 1.5,
+                "a band changed height: {} vs {height}",
+                band.height()
+            );
+        }
+        assert!(
+            l.transport.bottom() < l.panel.bottom(),
+            "the bottom margin survives"
+        );
+    }
+
+    #[test]
+    fn the_strip_has_one_cell_per_device_and_one_add_key() {
+        let window = Rect::from_min_size(Pos2::ZERO, egui::vec2(980.0, 670.0));
+        let l = layout(window);
+        let cells = strip_cells(l.strip, 3);
+        assert_eq!(cells.len(), 3);
+        assert!(
+            cells[2].right() < strip_add_rect(l.strip).left(),
+            "the add key is past the last cell"
+        );
+        assert!(
+            cells
+                .windows(2)
+                .all(|pair| pair[0].right() < pair[1].left()),
+            "cells do not overlap"
+        );
+        // Nothing to show means no cells, not a panic: the first frame of a session has no devices in the mirror yet.
+        assert!(strip_cells(l.strip, 0).is_empty());
     }
 }

@@ -19,6 +19,7 @@ pub(super) fn draw(
     ui: &mut egui::Ui,
     l: &layout::PanelLayout,
     s: f32,
+    p: &theme::Palette,
 ) {
     // The row is the catalogue, walked in drawing order: a knob's slot, caption, tooltip, learn target and the atomic it
     // drives all come from `Knob`, so this loop cannot disagree with the saved file or the learn map.
@@ -46,16 +47,17 @@ pub(super) fn draw(
             label,
             target,
             diameter,
+            p,
         );
         tips::hover(&response, state.tooltips, tips::Control::for_knob(knob));
         // A switch wears its detents, so the faces it may snap to are visible before the hand lets go.
         if knob.kind() == Kind::Switch && !choosing {
-            waveform_detents(cell_ui.painter(), *cell, state.knobs[slot], s);
+            waveform_detents(cell_ui.painter(), *cell, state.knobs[slot], s, p);
         }
         if learn::highlight(state.learn, knob.learn_target()) {
             // Choosing asks "which one?" of every knob; once one is picked only it keeps the border, because the turn of
             // the controller is about to bind to it.
-            panel::learn_highlight(ui.painter(), *cell, s);
+            panel::learn_highlight(ui.painter(), *cell, s, p);
         }
         if choosing {
             let hit = ui.interact(
@@ -110,7 +112,13 @@ pub(super) fn draw(
 ///
 /// The knob's pointer alone cannot say *where* the other waves are, which is the difference between a dial and a switch;
 /// a tick per wave turns it into one at a glance.
-fn waveform_detents(painter: &egui::Painter, cell: egui::Rect, position: f32, scale: f32) {
+fn waveform_detents(
+    painter: &egui::Painter,
+    cell: egui::Rect,
+    position: f32,
+    scale: f32,
+    p: &theme::Palette,
+) {
     let diameter = cell.width().min(cell.height() * 0.78);
     let center = egui::Pos2::new(cell.center().x, cell.top() + diameter / 2.0);
     let radius = diameter / 2.0;
@@ -129,9 +137,9 @@ fn waveform_detents(painter: &egui::Painter, cell: egui::Rect, position: f32, sc
                 egui::Pos2::new(center.x + outer * sin, center.y - outer * cos),
             ],
             if lit {
-                egui::Stroke::new(2.0 * scale, theme::LED_ACCENT)
+                egui::Stroke::new(2.0 * scale, p.led_accent)
             } else {
-                egui::Stroke::new(1.0 * scale, theme::SILKSCREEN_DIM)
+                egui::Stroke::new(1.0 * scale, p.silkscreen_dim)
             },
         );
     }

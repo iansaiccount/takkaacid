@@ -53,15 +53,17 @@ impl NoteGate {
 /// duplicate note-on is refused and traced, so a run with `TAKKA_TRACE_INPUT=1` shows it.
 pub fn passes(gate: &mut NoteGate, event: MidiEvent) -> bool {
     match event {
-        MidiEvent::NoteOn { velocity: 0, note } => {
+        MidiEvent::NoteOn {
+            velocity: 0, note, ..
+        } => {
             gate.note_off(note);
             true
         }
-        MidiEvent::NoteOff { note } => {
+        MidiEvent::NoteOff { note, .. } => {
             gate.note_off(note);
             true
         }
-        MidiEvent::NoteOn { note, velocity } => {
+        MidiEvent::NoteOn { note, velocity, .. } => {
             if gate.note_on(note) {
                 true
             } else {
@@ -85,6 +87,7 @@ mod tests {
 
     fn note_on(note: u8) -> MidiEvent {
         MidiEvent::NoteOn {
+            channel: 0,
             note,
             velocity: 100,
         }
@@ -100,7 +103,13 @@ mod tests {
         );
         assert!(!passes(&mut gate, note_on(64)), "and every further copy");
 
-        assert!(passes(&mut gate, MidiEvent::NoteOff { note: 64 }));
+        assert!(passes(
+            &mut gate,
+            MidiEvent::NoteOff {
+                channel: 0,
+                note: 64
+            }
+        ));
         assert!(
             passes(&mut gate, note_on(64)),
             "released, so it is new again"
@@ -114,6 +123,7 @@ mod tests {
         assert!(passes(
             &mut gate,
             MidiEvent::NoteOn {
+                channel: 0,
                 note: 64,
                 velocity: 0
             }
@@ -143,7 +153,11 @@ mod tests {
             MidiEvent::Start,
             MidiEvent::Stop,
             MidiEvent::Continue,
-            MidiEvent::ControlChange { cc: 74, value: 64 },
+            MidiEvent::ControlChange {
+                channel: 0,
+                cc: 74,
+                value: 64,
+            },
         ] {
             assert!(passes(&mut gate, event), "{event:?}");
         }

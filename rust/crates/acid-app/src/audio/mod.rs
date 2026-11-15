@@ -12,6 +12,7 @@ use anyhow::{Context, Result, anyhow};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, StreamConfig, SupportedStreamConfig};
 
+pub mod mixer;
 pub mod renderer;
 pub mod status;
 pub mod supervisor;

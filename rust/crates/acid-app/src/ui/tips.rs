@@ -59,11 +59,20 @@ pub enum Control {
     Pattern,
     /// The AUTOSAVE switch in the settings card: whether the session saves itself.
     Autosave,
+    /// A device's cell in the strip: put that device on the panel.
+    DeviceCell,
+    /// That cell's MUTE key.
+    DeviceMute,
+    /// The strip's `+`: another device in the rack.
+    DeviceAdd,
+    /// The caret on the selected cell: the way into that device's card. Appended, so no existing position in the table
+    /// moves — the cell says which device is on the panel, and the caret says how to open it, which are two questions.
+    DeviceCaret,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 26] = [
+    pub const ALL: [Control; 30] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -90,6 +99,10 @@ impl Control {
         Control::Tempo,
         Control::Pattern,
         Control::Autosave,
+        Control::DeviceCell,
+        Control::DeviceMute,
+        Control::DeviceAdd,
+        Control::DeviceCaret,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -121,6 +134,10 @@ impl Control {
             Control::Tempo => TIPS[23],
             Control::Pattern => TIPS[24],
             Control::Autosave => TIPS[25],
+            Control::DeviceCell => TIPS[26],
+            Control::DeviceMute => TIPS[27],
+            Control::DeviceAdd => TIPS[28],
+            Control::DeviceCaret => TIPS[29],
         }
     }
 
@@ -142,7 +159,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 26] = [
+const TIPS: [Tip; 30] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -272,6 +289,26 @@ const TIPS: [Tip; 26] = [
         title: "AUTOSAVE",
         what: "Whether the session writes itself as you work. Off by default: the SAVE key and the lamp are how you know where you stand.",
         shortcut: None,
+    },
+    Tip {
+        title: "DEVICE",
+        what: "Puts that device on the panel: its knobs, its pattern and the step you were editing.",
+        shortcut: Some("ctrl + 1..4: the same, from the keyboard"),
+    },
+    Tip {
+        title: "MUTE",
+        what: "Silences that device without stopping it, so unmuting rejoins on the beat.",
+        shortcut: None,
+    },
+    Tip {
+        title: "ADD DEVICE",
+        what: "Another machine in the rack, up to four. Names and the rack are not saved yet.",
+        shortcut: None,
+    },
+    Tip {
+        title: "DEVICE CARD",
+        what: "The device you are looking at: its name, what it hears, and the way to remove it.",
+        shortcut: Some("F3: the same, from the keyboard"),
     },
 ];
 

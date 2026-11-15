@@ -13,15 +13,43 @@ use crate::state::SharedState;
 pub const ACCENT_VELOCITY: u8 = 100;
 
 /// What an incoming MIDI message means.
+///
+/// The channel travels with every channel message, because routing is per device: a device may be told to listen to one
+/// channel and not the others, so the channel is part of what the message *is*, not something the reader can throw away.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum MidiEvent {
-    NoteOn { note: u8, velocity: u8 },
-    NoteOff { note: u8 },
-    ControlChange { cc: u8, value: u8 },
+    NoteOn { channel: u8, note: u8, velocity: u8 },
+    NoteOff { channel: u8, note: u8 },
+    ControlChange { channel: u8, cc: u8, value: u8 },
     Clock,
     Start,
     Stop,
     Continue,
+}
+
+impl MidiEvent {
+    /// The channel this arrived on, `0..=15`, or `None` for the four real-time bytes.
+    pub fn channel(&self) -> Option<u8> {
+        match *self {
+            MidiEvent::NoteOn { channel, .. }
+            | MidiEvent::NoteOff { channel, .. }
+            | MidiEvent::ControlChange { channel, .. } => Some(channel),
+            MidiEvent::Clock | MidiEvent::Start | MidiEvent::Stop | MidiEvent::Continue => None,
+        }
+    }
+
+    /// Whether this message can start or stop a note. The routing asks this, because a device may be told to answer
+    /// controllers and not to play.
+    pub fn carries_notes(&self) -> bool {
+        match *self {
+            MidiEvent::NoteOn { .. } | MidiEvent::NoteOff { .. } => true,
+            MidiEvent::ControlChange { .. }
+            | MidiEvent::Clock
+            | MidiEvent::Start
+            | MidiEvent::Stop
+            | MidiEvent::Continue => false,
+        }
+    }
 }
 
 /// Decode one MIDI message. Anything that is not a channel message we act on, or one of the four transport
@@ -32,13 +60,20 @@ pub fn parse(bytes: &[u8]) -> Option<MidiEvent> {
         [0xFA] => Some(MidiEvent::Start),
         [0xFB] => Some(MidiEvent::Continue),
         [0xFC] => Some(MidiEvent::Stop),
-        [status, note, velocity] if status & 0xF0 == 0x90 => {
-            Some(MidiEvent::NoteOn { note, velocity })
-        }
-        [status, note, _] if status & 0xF0 == 0x80 => Some(MidiEvent::NoteOff { note }),
-        [status, cc, value] if status & 0xF0 == 0xB0 => {
-            Some(MidiEvent::ControlChange { cc, value })
-        }
+        [status, note, velocity] if status & 0xF0 == 0x90 => Some(MidiEvent::NoteOn {
+            channel: status & 0x0F,
+            note,
+            velocity,
+        }),
+        [status, note, _] if status & 0xF0 == 0x80 => Some(MidiEvent::NoteOff {
+            channel: status & 0x0F,
+            note,
+        }),
+        [status, cc, value] if status & 0xF0 == 0xB0 => Some(MidiEvent::ControlChange {
+            channel: status & 0x0F,
+            cc,
+            value,
+        }),
         _ => None,
     }
 }
@@ -69,10 +104,10 @@ pub fn concert_name(note: u8) -> String {
     format!("{}{octave}", NAMES[usize::from(note) % 12])
 }
 
-/// Apply an event to the shared state. Returns true when something changed, so callers can skip work.
+/// Apply an event to one device's shared state. Returns true when something changed, so callers can skip work.
 ///
-/// Only atomics are written: this runs on the MIDI thread. Clock, transport and continuous controllers are
-/// other tasks' business for now, so they report "no change".
+/// Only atomics are written: this runs on the MIDI thread. The channel is not this function's business — the routing has
+/// already decided that this device is the one being addressed.
 pub fn handle(event: MidiEvent, state: &SharedState) -> bool {
     match event {
         // A note-on with zero velocity is the running-status way of saying note off.
@@ -80,7 +115,7 @@ pub fn handle(event: MidiEvent, state: &SharedState) -> bool {
             state.midi_gate.store(false, Ordering::Relaxed);
             true
         }
-        MidiEvent::NoteOn { note, velocity } => {
+        MidiEvent::NoteOn { note, velocity, .. } => {
             crate::trace::note("midi in", || format!("note {note} velocity {velocity}"));
             state.midi_hz.set(note_hz(note));
             state
@@ -118,11 +153,73 @@ mod tests {
         assert_eq!(concert_name(72), "C5");
         assert_eq!(concert_name(0), "C-1");
     }
+
+    #[test]
+    fn a_message_carries_the_channel_it_arrived_on() {
+        assert_eq!(
+            parse(&[0x92, 60, 100]),
+            Some(MidiEvent::NoteOn {
+                channel: 2,
+                note: 60,
+                velocity: 100
+            })
+        );
+        assert_eq!(
+            parse(&[0x8F, 36, 0]),
+            Some(MidiEvent::NoteOff {
+                channel: 15,
+                note: 36
+            })
+        );
+        assert_eq!(
+            parse(&[0xB0, 74, 127]),
+            Some(MidiEvent::ControlChange {
+                channel: 0,
+                cc: 74,
+                value: 127
+            })
+        );
+        assert_eq!(
+            parse(&[0xF8]).and_then(|event| event.channel()),
+            None,
+            "clock has no channel"
+        );
+    }
+
+    #[test]
+    fn only_the_two_note_messages_can_carry_notes() {
+        assert!(
+            MidiEvent::NoteOn {
+                channel: 0,
+                note: 60,
+                velocity: 1
+            }
+            .carries_notes()
+        );
+        assert!(
+            MidiEvent::NoteOff {
+                channel: 0,
+                note: 60
+            }
+            .carries_notes()
+        );
+        assert!(
+            !MidiEvent::ControlChange {
+                channel: 0,
+                cc: 1,
+                value: 1
+            }
+            .carries_notes()
+        );
+        assert!(!MidiEvent::Clock.carries_notes());
+    }
+
     #[test]
     fn note_on_and_off_parse_on_any_channel() {
         assert_eq!(
             parse(&[0x90, 60, 100]),
             Some(MidiEvent::NoteOn {
+                channel: 0,
                 note: 60,
                 velocity: 100
             })
@@ -130,14 +227,24 @@ mod tests {
         assert_eq!(
             parse(&[0x9F, 36, 1]),
             Some(MidiEvent::NoteOn {
+                channel: 15,
                 note: 36,
                 velocity: 1
             })
         );
-        assert_eq!(parse(&[0x80, 60, 0]), Some(MidiEvent::NoteOff { note: 60 }));
+        assert_eq!(
+            parse(&[0x80, 60, 0]),
+            Some(MidiEvent::NoteOff {
+                channel: 0,
+                note: 60
+            })
+        );
         assert_eq!(
             parse(&[0x8A, 61, 64]),
-            Some(MidiEvent::NoteOff { note: 61 })
+            Some(MidiEvent::NoteOff {
+                channel: 10,
+                note: 61
+            })
         );
     }
 
@@ -145,7 +252,11 @@ mod tests {
     fn control_clock_and_transport_parse() {
         assert_eq!(
             parse(&[0xB0, 74, 127]),
-            Some(MidiEvent::ControlChange { cc: 74, value: 127 })
+            Some(MidiEvent::ControlChange {
+                channel: 0,
+                cc: 74,
+                value: 127
+            })
         );
         assert_eq!(parse(&[0xF8]), Some(MidiEvent::Clock));
         assert_eq!(parse(&[0xFA]), Some(MidiEvent::Start));
@@ -192,6 +303,7 @@ mod tests {
         let s = SharedState::new();
         assert!(handle(
             MidiEvent::NoteOn {
+                channel: 3,
                 note: 45,
                 velocity: 120
             },
@@ -200,8 +312,29 @@ mod tests {
         assert!(s.midi_gate.load(Ordering::Relaxed));
         assert!(s.midi_accent.load(Ordering::Relaxed));
         assert!((s.midi_hz.get() - note_hz(45)).abs() < 0.01);
-        assert!(handle(MidiEvent::NoteOff { note: 45 }, &s));
+        assert!(handle(
+            MidiEvent::NoteOff {
+                channel: 3,
+                note: 45
+            },
+            &s
+        ));
         assert!(!s.midi_gate.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn the_channel_does_not_change_what_a_note_does_to_one_device() {
+        let s = SharedState::new();
+        // A device has already been told this message is for it, so the channel is not its business.
+        assert!(handle(
+            MidiEvent::NoteOn {
+                channel: 15,
+                note: 50,
+                velocity: 100
+            },
+            &s
+        ));
+        assert!(s.midi_gate.load(Ordering::Relaxed));
     }
 
     #[test]
@@ -209,6 +342,7 @@ mod tests {
         let s = SharedState::new();
         handle(
             MidiEvent::NoteOn {
+                channel: 0,
                 note: 50,
                 velocity: 100,
             },
@@ -216,6 +350,7 @@ mod tests {
         );
         assert!(handle(
             MidiEvent::NoteOn {
+                channel: 0,
                 note: 50,
                 velocity: 0
             },

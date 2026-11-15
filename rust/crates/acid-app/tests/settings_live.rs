@@ -107,7 +107,7 @@ fn press(
             ..Modifiers::default()
         },
     }];
-    for press in dispatch::presses(&events, shift) {
+    for press in dispatch::presses(&events) {
         dispatch::handle(press, panel, shared, bank);
     }
 }
@@ -150,15 +150,18 @@ fn open_settings(midi_ports: &[&str], outputs: &[&str]) -> PanelState {
 
 fn rows(panel: &PanelState) -> settings::Rows {
     let l = layout(screen());
-    settings::rows(
-        l.panel,
-        scale(screen()),
-        panel.settings.midi_ports.len(),
-        panel.settings.outputs.len(),
-        panel.settings.midi_given_up,
-        panel.settings.midi_open,
-        panel.settings.sound_open,
-    )
+    settings::rows(l.panel, scale(screen()), &panel.settings)
+}
+
+/// A card whose two lists are as long as the caller says, for the tests that only care about how much room a list takes.
+fn settings_of(ports: usize, outputs: usize) -> settings::Settings {
+    settings::Settings {
+        midi_ports: (0..ports).map(|index| format!("Port {index}")).collect(),
+        outputs: (0..outputs).map(|index| format!("Out {index}")).collect(),
+        midi_open: true,
+        sound_open: true,
+        ..settings::Settings::default()
+    }
 }
 
 /// The bug this pins: the dismissal shield was registered after the card, so it won the hit test and every click inside the
@@ -252,8 +255,8 @@ fn the_two_sections_fold_independently() {
 fn an_open_panel_is_four_rows_tall_at_most() {
     let l = layout(screen());
     let s = scale(screen());
-    let short = settings::rows(l.panel, s, 2, 2, false, true, true);
-    let long = settings::rows(l.panel, s, 12, 12, false, true, true);
+    let short = settings::rows(l.panel, s, &settings_of(2, 2));
+    let long = settings::rows(l.panel, s, &settings_of(12, 12));
 
     let four_rows = 4.0 * (22.0 + 2.0) * s;
     assert!(short.midi_panel.height() <= four_rows);
@@ -267,24 +270,98 @@ fn an_open_panel_is_four_rows_tall_at_most() {
     );
 }
 
-/// A device row writes the same choice the old status-line picker wrote: the card is a new surface, not a new mechanism.
+/// A port row is a toggle: what the player turns on is a set, not a choice, so three ports are three rows, each its own.
 #[test]
-fn a_midi_row_writes_the_input_choice() {
+fn the_card_lists_every_port_with_its_own_toggle() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&["Launchkey MIDI", "nanoKONTROL", "KeyStep"], &[]);
+    panel.settings.midi_open = true;
+
+    let rows = rows(&panel);
+    assert_eq!(rows.ports.len(), 3, "one rect per port row");
+
+    click(&ctx, &mut panel, &shared, rows.ports[1].center());
+
+    assert_eq!(
+        panel.settings_request,
+        Some(Request::MidiPort("nanoKONTROL".to_string(), true)),
+        "the row asks to turn on the port it names"
+    );
+    assert!(panel.settings_open, "turning a port on is not a dismissal");
+}
+
+/// The tick says which side of the set a port is on, and the row asks for the other one.
+#[test]
+fn a_port_that_is_on_asks_to_be_turned_off() {
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = open_settings(&["KeyStep", "IAC Driver"], &[]);
     panel.settings.midi_open = true;
+    panel.settings.follow(settings::Live {
+        midi_current: &["KeyStep"],
+        midi_enabled: &["KeyStep"],
+        output_current: None,
+        midi_status: "MIDI: KeyStep",
+        midi_given_up: false,
+        audio_status: "",
+    });
+
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(
+        says(&texts, "[x] KeyStep"),
+        "an open port wears a tick: {texts:?}"
+    );
+    assert!(
+        says(&texts, "[ ] IAC Driver"),
+        "a shut one does not: {texts:?}"
+    );
 
     let rows = rows(&panel);
-    let first_row = rows.midi_panel.min + vec2(12.0, 8.0);
-    click(&ctx, &mut panel, &shared, first_row);
-
+    click(&ctx, &mut panel, &shared, rows.ports[0].center());
     assert_eq!(
         panel.settings_request,
-        Some(Request::MidiIn(Some("KeyStep".to_string()))),
-        "the row asks for the port it names"
+        Some(Request::MidiPort("KeyStep".to_string(), false))
     );
-    assert!(panel.settings_open, "choosing a device is not a dismissal");
+}
+
+/// A controller pulled out keeps its row: the app is still holding the name, so the player can turn it off without
+/// plugging the cable back in. Hiding the row would make the only way out of a missing port a trip to the machine.
+#[test]
+fn a_port_that_is_gone_keeps_its_row_so_it_can_be_turned_off() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_settings(&["Launchkey MIDI"], &[]);
+    panel.settings.midi_open = true;
+    panel.settings.follow(settings::Live {
+        midi_current: &[],
+        midi_enabled: &["nanoKONTROL"],
+        output_current: None,
+        midi_status: "MIDI: none (retrying)",
+        midi_given_up: false,
+        audio_status: "",
+    });
+
+    let rows = rows(&panel);
+    assert_eq!(
+        rows.ports.len(),
+        2,
+        "the port the machine reports, then the one it lost"
+    );
+
+    let texts = painted(&ctx, &mut panel, &shared);
+    assert!(
+        texts
+            .iter()
+            .any(|text| text.contains("nanoKONTROL") && text.contains("missing")),
+        "the card has to say why the row is still there: {texts:?}"
+    );
+
+    click(&ctx, &mut panel, &shared, rows.ports[1].center());
+    assert_eq!(
+        panel.settings_request,
+        Some(Request::MidiPort("nanoKONTROL".to_string(), false))
+    );
 }
 
 /// The sound rows do the same for the output, and the card stays up while the stream moves.
@@ -460,7 +537,8 @@ fn the_card_follows_the_devices_while_it_is_open() {
     let mut panel = open_settings(&["KeyStep"], &["Speakers", "HDMI"]);
 
     panel.settings.follow(settings::Live {
-        midi_current: Some("KeyStep"),
+        midi_current: &["KeyStep"],
+        midi_enabled: &["KeyStep"],
         output_current: Some("Speakers"),
         midi_status: "MIDI: KeyStep",
         midi_given_up: false,
@@ -471,7 +549,8 @@ fn the_card_follows_the_devices_while_it_is_open() {
     assert!(says(&texts, "48 kHz - Speakers"), "{texts:?}");
 
     panel.settings.follow(settings::Live {
-        midi_current: Some("KeyStep"),
+        midi_current: &["KeyStep"],
+        midi_enabled: &["KeyStep"],
         output_current: Some("HDMI"),
         midi_status: "MIDI: KeyStep",
         midi_given_up: false,
@@ -499,7 +578,8 @@ fn a_device_unplugged_while_the_card_is_open_leaves_the_rows_working() {
     let mut panel = open_settings(&["KeyStep", "IAC Driver"], &[]);
     panel.settings.midi_open = true;
     panel.settings.follow(settings::Live {
-        midi_current: Some("KeyStep"),
+        midi_current: &["KeyStep"],
+        midi_enabled: &["KeyStep"],
         output_current: None,
         midi_status: "MIDI: KeyStep",
         midi_given_up: false,
@@ -510,7 +590,9 @@ fn a_device_unplugged_while_the_card_is_open_leaves_the_rows_working() {
     // The port goes away: `main` reports the connection it has, which is now none, and the code that makes the words
     // has already said so. Nothing may panic on the name that is no longer there.
     panel.settings.follow(settings::Live {
-        midi_current: None,
+        midi_current: &[],
+        // The port is still held, even though nothing answers it: that is what keeps the row on the card.
+        midi_enabled: &["KeyStep"],
         output_current: None,
         midi_status: "MIDI: none (retrying)",
         midi_given_up: false,
@@ -521,13 +603,12 @@ fn a_device_unplugged_while_the_card_is_open_leaves_the_rows_working() {
     assert!(says(&texts, "MIDI: none (retrying)"), "{texts:?}");
 
     let rows = rows(&panel);
-    let second_row = rows.midi_panel.min + vec2(12.0, 22.0 + 2.0 + 8.0);
-    click(&ctx, &mut panel, &shared, second_row);
+    click(&ctx, &mut panel, &shared, rows.ports[1].center());
 
     assert_eq!(
         panel.settings_request,
-        Some(Request::MidiIn(Some("IAC Driver".to_string()))),
-        "the rows that are left still choose, whatever the card was told before"
+        Some(Request::MidiPort("IAC Driver".to_string(), true)),
+        "the rows that are left still work, whatever the card was told before"
     );
 }
 
@@ -539,7 +620,8 @@ fn an_audio_failure_is_visible_in_the_settings_card() {
     let shared = SharedState::new();
     let mut panel = open_settings(&[], &["Speakers"]);
     panel.settings.follow(settings::Live {
-        midi_current: None,
+        midi_current: &[],
+        midi_enabled: &[],
         output_current: None,
         midi_status: "MIDI: none (retrying)",
         midi_given_up: false,
@@ -600,21 +682,20 @@ fn escape_closes_one_thing_at_a_time_and_the_card_comes_first() {
 /// a binary and no test can call it — and it is total, so `main` has no arm that cannot run.
 #[test]
 fn a_device_row_asks_for_the_action_main_takes() {
-    use acid_app::midi::ports::PortChoice;
-    use acid_app::ui::settings::{Action, Pick};
+    use acid_app::ui::settings::Action;
 
     assert_eq!(
-        Request::MidiIn(Some("KeyStep".to_string())).action(),
-        Action::Choose(Pick::Midi(PortChoice::Named("KeyStep".to_string())))
+        Request::MidiPort("KeyStep".to_string(), true).action(),
+        Action::TogglePort("KeyStep".to_string(), true)
     );
     assert_eq!(
-        Request::MidiIn(None).action(),
-        Action::Choose(Pick::Midi(PortChoice::Any)),
-        "the `none` row is the app picking a controller for itself"
+        Request::MidiPort("KeyStep".to_string(), false).action(),
+        Action::TogglePort("KeyStep".to_string(), false),
+        "a row that is already on asks to turn it off"
     );
     assert_eq!(
         Request::SoundOut("HDMI".to_string()).action(),
-        Action::Choose(Pick::Sound("HDMI".to_string()))
+        Action::SoundOut("HDMI".to_string())
     );
     assert_eq!(Request::Tooltips.action(), Action::ToggleTooltips);
     assert_eq!(Request::Autosave.action(), Action::ToggleAutosave);
@@ -690,8 +771,12 @@ fn a_scrolling_list_gives_the_scrollbar_its_gutter() {
         let row_height = 22.0;
         let widest = filled_rects(&output)
             .into_iter()
+            // A row's face: as tall as a row, wide as a face, and inside the band. The width test is what keeps the scroll
+            // bar's handle out of the measurement — it is a sliver at the band's right edge, and on the frame it animates
+            // in it is degenerate, which would read as a row that runs under the bar.
             .filter(|rect| {
                 (rect.height() - row_height * scale(screen())).abs() < 1.0
+                    && rect.width() > rect.height()
                     && rect.top() >= band.top() - 1.0
                     && rect.bottom() <= band.bottom() + 1.0
             })
@@ -725,7 +810,7 @@ fn a_scrolling_list_gives_the_scrollbar_its_gutter() {
     click(&ctx, &mut panel, &shared, first_row);
     assert_eq!(
         panel.settings_request,
-        Some(Request::MidiIn(Some("Port 0".to_string()))),
+        Some(Request::MidiPort("Port 0".to_string(), true)),
         "a row that stops short of the bar is still clickable"
     );
 }

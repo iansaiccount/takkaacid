@@ -36,7 +36,10 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "backspace: rest, shift+note: write where you are",
                 "shift+up / down: note up or down",
                 "enter: note on or off",
-                "F1 or shift+?: this card, F2: settings",
+                "F1 or shift+?: this card, F2: settings, F3: the device card",
+                "F3 then COLOUR: a device's face repaints in amber",
+                "Ctrl+1..4: pick the device the panel shows",
+                "Ctrl+C / Ctrl+V: copy or paste the pattern",
                 "hover to read a control; tooltips and autosave are in settings",
             ],
         ),
@@ -56,7 +59,9 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
             &[
                 "the top strip names the song; F2 or the gear opens settings",
                 "settings: tooltips, autosave, MIDI in, sound out",
-                "one voice: MIDI and the keyboard share it",
+                "each device is one voice: MIDI and the keyboard share it",
+                "the strip: click picks a device; M is its MUTE; + adds one",
+                "four devices; names and extra devices are not saved yet",
                 "SAVED / UNSAVED sits by the wordmark",
                 "saved on exit and 2 s after a change",
                 "SONGS: new, save, save a copy, import, export, load, delete",
@@ -97,11 +102,11 @@ pub const CARD_INSET: f32 = 4.0;
 /// Draw the card inside `panel`, scaled. Everything is sized from `scale`, so it fits at 0.65x and 1.6x.
 pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
     let card = card_rect(panel, scale);
-    painter.rect_filled(card, 6.0 * scale, theme::PANEL_RAISED);
+    painter.rect_filled(card, 6.0 * scale, theme::BLACK.panel_raised);
     painter.rect_stroke(
         card,
         6.0 * scale,
-        theme::silkscreen_stroke(scale),
+        theme::BLACK.silkscreen_stroke(scale),
         eframe::egui::StrokeKind::Inside,
     );
 
@@ -118,7 +123,7 @@ pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
             Align2::LEFT_TOP,
             heading,
             theme::legend(heading_size),
-            theme::SILKSCREEN,
+            theme::BLACK.silkscreen,
         );
         y += heading_size + line_height * 0.4;
         for line in lines {
@@ -127,7 +132,7 @@ pub fn paint_help(painter: &Painter, panel: Rect, scale: f32) {
                 Align2::LEFT_TOP,
                 line,
                 theme::legend(body_size),
-                theme::TEXT,
+                theme::BLACK.text,
             );
             y += line_height;
         }

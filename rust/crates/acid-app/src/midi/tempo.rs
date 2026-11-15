@@ -4,11 +4,6 @@
 //! tempo is reported only once the stream has settled.
 
 use std::time::Instant;
-
-use acid_core::timing::clamp_bpm;
-
-use crate::state::SharedState;
-
 /// MIDI clock ticks per quarter note.
 pub const PPQN: u32 = 24;
 
@@ -102,14 +97,6 @@ impl TempoFollower {
     }
 }
 
-/// Adopt an external tempo: the panel shows it and the transport follows it.
-pub fn follow_clock(state: &SharedState, bpm: f32) {
-    state.tempo_bpm.set(clamp_bpm(bpm));
-    state
-        .external_clock
-        .store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,14 +143,6 @@ mod tests {
             (after_bpm - settled).abs() < 5.0,
             "{settled} -> {after_bpm}"
         );
-    }
-
-    #[test]
-    fn following_writes_the_tempo_and_marks_the_clock_external() {
-        let s = SharedState::new();
-        follow_clock(&s, 124.0);
-        assert!((s.tempo_bpm.get() - 124.0).abs() < 1e-6);
-        assert!(s.external_clock.load(std::sync::atomic::Ordering::Relaxed));
     }
 
     #[test]

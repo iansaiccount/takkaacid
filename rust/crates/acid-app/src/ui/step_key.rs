@@ -66,6 +66,7 @@ pub fn step_key(
     step: &Step,
     view: &StepView,
     rect: Rect,
+    p: &theme::Palette,
 ) -> Response {
     let response = ui.interact(
         rect,
@@ -92,32 +93,34 @@ pub fn step_key(
 
     let painter = ui.painter();
     let led_radius = (led_band * 0.30).max(2.0);
-    painter.circle_filled(led_center, led_radius * 1.7, theme::WELL);
+    painter.circle_filled(led_center, led_radius * 1.7, p.well);
     let lit = view.current || view.on;
     if lit {
-        // A soft halo, then the core: two concentric circles read as a glowing LED on a dark panel.
+        // A soft halo, then the core: two concentric circles read as a glowing LED on a dark panel. The halo is the
+        // palette's own lamp at 25 %, so it follows the scheme instead of staying black's.
+        let led_on = p.led_on;
         painter.circle_filled(
             led_center,
             led_radius * 1.7,
-            egui::Color32::from_rgba_unmultiplied(0xFF, 0xE0, 0x66, 64),
+            egui::Color32::from_rgba_unmultiplied(led_on.r(), led_on.g(), led_on.b(), 64),
         );
-        painter.circle_filled(led_center, led_radius, theme::LED_ON);
+        painter.circle_filled(led_center, led_radius, p.led_on);
     } else {
-        painter.circle_filled(led_center, led_radius, theme::LED_OFF);
+        painter.circle_filled(led_center, led_radius, p.led_off);
     }
     if view.accent {
         painter.circle_stroke(
             led_center,
             led_radius * 1.25,
-            egui::Stroke::new((1.5 * s).max(1.0), theme::LED_ACCENT),
+            egui::Stroke::new((1.5 * s).max(1.0), p.led_accent),
         );
     }
 
-    painter.rect_filled(keycap, 3.0 * s, theme::WHITE_KEY);
+    painter.rect_filled(keycap, 3.0 * s, p.white_key);
     painter.rect_stroke(
         keycap,
         3.0 * s,
-        egui::Stroke::new((1.0 * s).max(1.0), theme::PANEL),
+        egui::Stroke::new((1.0 * s).max(1.0), p.keycap_ink),
         egui::StrokeKind::Inside,
     );
     // While the step is being dragged the panel prints the live pitch in the cell, larger and in silk; a
@@ -128,7 +131,7 @@ pub fn step_key(
             egui::Align2::CENTER_CENTER,
             step_label(step),
             theme::legend(12.0 * s),
-            theme::PANEL,
+            p.keycap_ink,
         );
     }
     // The step number keeps a home in the corner: the note is what you read, the number is what you count.
@@ -137,7 +140,7 @@ pub fn step_key(
         egui::Align2::RIGHT_BOTTOM,
         format!("{}", index + 1),
         theme::legend(8.0 * s),
-        theme::PANEL,
+        p.keycap_ink,
     );
 
     if view.accent {
@@ -145,7 +148,7 @@ pub fn step_key(
             keycap.min,
             egui::Pos2::new(keycap.right(), keycap.top() + bar),
         );
-        painter.rect_filled(accent_bar, 1.5 * s, theme::LED_ACCENT);
+        painter.rect_filled(accent_bar, 1.5 * s, p.led_accent);
     }
     if view.slide {
         // Two cues, because one thin strip was not enough to notice: an amber block filling the strip under
@@ -153,15 +156,15 @@ pub fn step_key(
         // cannot glide — the next step is a rest — keeps a dim strip and no arrow, so the panel never promises
         // a sound it will not make.
         let strip = if view.slide_glides {
-            theme::LED_ACCENT
+            p.led_accent
         } else {
-            theme::SILKSCREEN_DIM
+            p.silkscreen_dim
         };
         painter.rect_filled(slide_bar, 1.5 * s, strip);
         if view.slide_glides {
             let head = 5.0 * s;
             let tip = egui::Pos2::new(keycap.right() - 9.0 * s, keycap.center().y);
-            let stroke = egui::Stroke::new((1.5 * s).max(1.0), theme::PANEL);
+            let stroke = egui::Stroke::new((1.5 * s).max(1.0), p.keycap_ink);
             painter.line_segment([tip - egui::vec2(head, head), tip], stroke);
             painter.line_segment([tip, tip - egui::vec2(head, -head)], stroke);
         }
@@ -171,7 +174,7 @@ pub fn step_key(
         painter.rect_stroke(
             rect,
             3.0 * s,
-            egui::Stroke::new((2.0 * s).max(1.0), theme::LED_ACCENT),
+            egui::Stroke::new((2.0 * s).max(1.0), p.led_accent),
             egui::StrokeKind::Inside,
         );
     }
@@ -259,7 +262,7 @@ mod tests {
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
                         );
-                        step_key(ui, 0, &step, &view, cell);
+                        step_key(ui, 0, &step, &view, cell, &theme::BLACK);
                     },
                 );
                 output.textures_delta.clear();
@@ -296,7 +299,7 @@ mod tests {
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
                         );
-                        step_key(ui, 0, &step, &view, cell);
+                        step_key(ui, 0, &step, &view, cell, &theme::BLACK);
                     },
                 );
                 output.textures_delta.clear();
@@ -337,7 +340,7 @@ mod tests {
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
                         );
-                        step_key(ui, 0, &step, &view, cell);
+                        step_key(ui, 0, &step, &view, cell, &theme::BLACK);
                     },
                 );
                 output.textures_delta.clear();
@@ -412,7 +415,7 @@ mod tests {
                     for (i, cell) in cells.iter().enumerate() {
                         let step = pattern[i % pattern.len()];
                         let view = step_view(&step, i, 1, false, false, false, true);
-                        step_key(ui, i, &step, &view, *cell);
+                        step_key(ui, i, &step, &view, *cell, &theme::BLACK);
                     }
                 },
             );

@@ -39,10 +39,14 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | `backspace` | empty the step to a rest, while editing |
 | `F1`, `shift+?`, or the `?` | the help card |
 | `F2`, or the gear | the settings card |
-| `escape` | close a card; then give up on a `LEARN` |
+| `F3`, or the caret on the selected cell | the device card |
+| `Ctrl+1` … `Ctrl+4` | put that device on the panel |
+| `Ctrl+C` / `Ctrl+V` | copy the pattern on the panel / paste one into it |
+| `escape` | close the topmost card — the picker, the device card, settings, help, the songs card — then give up on a `LEARN` |
 
 **The panel's own keys:** `RUN` `STOP` `TEMPO -` `TEMPO +` `LEARN` on the transport row; `CLEAR` `SAVE` `SONGS` `STEP` in
 the switch row (`BANK` `PATTERN` `MODE` are engraved and do nothing yet); `OCT -` `OCT +` `RANDOM` on the performance row.
+**The strip above the panel:** a click on a cell selects that device, its `M` mutes it, and `+` at the right end adds one.
 
 ## The factory controller map
 
@@ -67,6 +71,9 @@ has to be reached before it takes over.
 
 ## The words the panel prints
 
+**The strip** above the top strip holds a cell per device: its name, a lamp while it runs, its `M` mute, and `+` at the
+right end.
+
 **The top strip** holds four things: the lamp inside the wordmark's corner, the song name in the middle, and the pattern
 and tempo wells at the right.
 
@@ -88,6 +95,16 @@ and tempo wells at the right.
 | `SURE` | the `x` on a song row, after one click |
 | `PICK` | the `LEARN` key, waiting for you to click a control |
 | `MOVE` | the `LEARN` key, waiting for the controller |
+| `CONFIRM?` | `REMOVE` on a device card, after the first click |
+
+**The device card.** `NAME (ENTER)`, `ROLE` (`PLAY + CTRL` / `CTRL ONLY`), `PORTS` (`ALL PORTS`, then a ticked row per port),
+`CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `MUTE
+OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
+
+**The picker.** `ADD DEVICE`, a row per kind (`ACID`), `CLOSE`, and the line under the rows:
+`NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.
+
+**The clipboard's notices**, in the top strip's middle: `copied A1`, `pasted A1 into A2`, `the clipboard has no pattern`.
 
 **The settings card.**
 
@@ -119,7 +136,7 @@ and tempo wells at the right.
 | `$TAKKA_ACID_DATA_DIR` | the whole data directory, when that variable is set |
 | `$XDG_DATA_HOME/takka-acid` | otherwise, this |
 | `~/.local/share/takka-acid` | or this, when `XDG_DATA_HOME` is unset too |
-| `state.json` | the session: bank, patch, tempo, swing, switches, MIDI choice |
+| `state.json` | the session: bank, patch, tempo, swing, switches, MIDI choice — **the first device only**; other devices' names, patterns, ports and colours are not saved |
 | `songs/<name>.json` | one file per named song; the name is the file name |
 
 Song names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.

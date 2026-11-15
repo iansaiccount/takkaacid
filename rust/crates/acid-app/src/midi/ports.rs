@@ -14,65 +14,18 @@ pub fn empty_ports_error() -> &'static str {
     NO_PORTS
 }
 
-/// Which port to open: the first one the system reports, or a named one.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum PortChoice {
-    #[default]
-    Any,
-    Named(String),
+/// The index of the port with exactly this name. Never a substring and never a neighbour: every name the app holds came
+/// from the machine's own enumeration, so a name it no longer reports is a port that has gone, not a fuzzy match.
+fn exact_index(names: &[String], name: &str) -> Option<usize> {
+    names.iter().position(|listed| listed == name)
 }
-
-impl PortChoice {
-    /// The name this choice asks for, if it asks for one.
-    pub fn name(&self) -> Option<&str> {
-        match self {
-            Self::Any => None,
-            Self::Named(name) => Some(name),
-        }
-    }
-
-    /// Resolve against the names the system reports. `Any` takes the first port; a name takes an exact match,
-    /// then a case-insensitive substring — and never a different port, because silently listening to the wrong
-    /// interface is worse than not listening at all.
-    pub fn resolve(&self, names: &[String]) -> Option<usize> {
-        let Some(wanted) = self.name() else {
-            return if names.is_empty() { None } else { Some(0) };
-        };
-        if let Some(exact) = names.iter().position(|name| name == wanted) {
-            return Some(exact);
-        }
-        let needle = wanted.to_lowercase();
-        names
-            .iter()
-            .position(|name| name.to_lowercase().contains(&needle))
-    }
-}
-
-impl From<Option<&str>> for PortChoice {
-    fn from(wanted: Option<&str>) -> Self {
-        match wanted {
-            Some(name) => Self::Named(name.to_string()),
-            None => Self::Any,
-        }
-    }
-}
-
-/// Choose a port: an exact name first, then a case-insensitive substring, then the first port when no
-/// preference was given.
-pub fn pick_port(names: &[String], wanted: Option<&str>) -> Option<usize> {
-    PortChoice::from(wanted).resolve(names)
-}
-
-/// Whether a port with this exact name is still on the system.
+/// The ports a session opens when it has no saved preference: the first the machine reports, which is the one the app
+/// opened on its own before it could hold more than one.
 ///
-/// This is how a live connection is checked without opening a second one: listing ports costs nothing and delivers no
-/// messages, where a probe connection would deliver every note twice. An enumeration that fails counts as "still there",
-/// because the alternative is dropping a working connection over a transient error.
-pub fn is_listed(name: &str) -> bool {
-    match list_ports() {
-        Ok(names) => names.iter().any(|listed| listed == name),
-        Err(_) => true,
-    }
+/// One and not all, because one interface can publish two ports — USB and DIN, or a DAW forwarding its input — and two
+/// handlers with a note gate each cannot tell that one press arrived twice. The card offers the rest, one tick each.
+pub fn opened_by_default(names: &[String]) -> Vec<String> {
+    names.first().cloned().into_iter().collect()
 }
 
 /// Every MIDI input port the system reports, by name.
@@ -94,16 +47,16 @@ pub struct MidiIn {
     /// Held only for its `Drop`, which closes the port; never read.
     #[allow(dead_code)]
     connection: MidiInputConnection<()>,
-    port_name: String,
 }
 
 impl MidiIn {
-    /// Open a port and hand every message to `handler` on midir's thread.
+    /// Open the port with exactly this name, and hand every message to `handler` on midir's thread.
     ///
-    /// `port_name` is a preference: exact match, then substring, then the first port. The handler must not
-    /// block — it runs on the MIDI thread, so the wiring writes atomics and returns.
-    pub fn open(
-        choice: &PortChoice,
+    /// A name the machine does not report is an error, never a substitute: quietly listening to a different interface is
+    /// worse than not listening at all. The handler must not block — it runs on the MIDI thread, so the wiring writes
+    /// atomics and returns.
+    pub fn open_named(
+        name: &str,
         mut handler: impl FnMut(u64, &[u8]) + Send + 'static,
     ) -> Result<Self> {
         let input =
@@ -116,10 +69,8 @@ impl MidiIn {
         if names.is_empty() {
             return Err(anyhow!(empty_ports_error()));
         }
-        let index = choice
-            .resolve(&names)
-            .ok_or_else(|| anyhow!("MIDI port {:?} not found", choice.name().unwrap_or("any")))?;
-        let chosen = names[index].clone();
+        let index =
+            exact_index(&names, name).ok_or_else(|| anyhow!("MIDI port {name:?} not found"))?;
         let connection = input
             .connect(
                 &ports[index],
@@ -127,15 +78,8 @@ impl MidiIn {
                 move |stamp, message, _| handler(stamp, message),
                 (),
             )
-            .map_err(|error| anyhow!("connecting to {chosen}: {error}"))?;
-        Ok(Self {
-            connection,
-            port_name: chosen,
-        })
-    }
-
-    pub fn port_name(&self) -> &str {
-        &self.port_name
+            .map_err(|error| anyhow!("connecting to {name}: {error}"))?;
+        Ok(Self { connection })
     }
 }
 
@@ -144,39 +88,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn an_exact_name_wins_over_a_substring() {
+    fn a_name_is_answered_by_that_port_or_by_nothing() {
+        // The rule that makes holding a name safe: a port that has gone is silent, not answered with its neighbour.
         let names = vec!["Arturia KeyStep".to_string(), "Launchkey MIDI".to_string()];
-        assert_eq!(pick_port(&names, Some("Launchkey MIDI")), Some(1));
-        assert_eq!(pick_port(&names, Some("keystep")), Some(0));
-        assert_eq!(pick_port(&names, Some("ARTURIA")), Some(0));
-    }
-
-    #[test]
-    fn a_missing_name_and_no_ports_are_handled() {
-        let names = vec!["Port A".to_string()];
-        assert_eq!(pick_port(&names, Some("nope")), None);
-        assert_eq!(pick_port(&[], None), None);
-        assert_eq!(pick_port(&names, None), Some(0));
-    }
-
-    #[test]
-    fn any_takes_the_first_port_and_a_name_takes_its_own() {
-        let names = vec!["Arturia KeyStep".to_string(), "Launchkey MIDI".to_string()];
-        assert_eq!(PortChoice::Any.resolve(&names), Some(0));
+        assert_eq!(exact_index(&names, "Launchkey MIDI"), Some(1));
         assert_eq!(
-            PortChoice::Named("Launchkey MIDI".into()).resolve(&names),
-            Some(1)
+            exact_index(&names, "keystep"),
+            None,
+            "a shorter name is a different port, not a match"
         );
-        assert_eq!(PortChoice::Named("keystep".into()).resolve(&names), Some(0));
+        assert_eq!(exact_index(&names, "Port B"), None);
+        assert_eq!(exact_index(&[], "Launchkey MIDI"), None);
     }
 
     #[test]
-    fn a_named_port_that_is_missing_resolves_to_nothing() {
-        // The rule that makes an explicit choice safe: never substitute a different interface.
-        let names = vec!["Port A".to_string()];
-        assert_eq!(PortChoice::Named("Port B".into()).resolve(&names), None);
-        assert_eq!(PortChoice::Named("Port B".into()).resolve(&[]), None);
-        assert_eq!(PortChoice::Any.resolve(&[]), None);
+    fn a_fresh_session_opens_one_port_and_not_every_one() {
+        // A keyboard can publish two ports — USB and DIN, or a DAW forwarding its input — and two handlers each with its
+        // own note gate cannot tell that the two presses are one press. So a session with no saved preference opens the
+        // port the app used to open on its own, and the card offers the rest.
+        let names = vec!["Launchkey MIDI".to_string(), "nanoKONTROL".to_string()];
+        assert_eq!(
+            opened_by_default(&names),
+            vec!["Launchkey MIDI".to_string()]
+        );
+        assert_eq!(opened_by_default(&names).len(), 1, "one press, one step");
+        assert!(
+            opened_by_default(&[]).is_empty(),
+            "nothing to open is nothing"
+        );
     }
 
     #[test]
