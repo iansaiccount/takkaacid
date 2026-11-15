@@ -68,11 +68,19 @@ pub enum Control {
     /// The caret on the selected cell: the way into that device's card. Appended, so no existing position in the table
     /// moves — the cell says which device is on the panel, and the caret says how to open it, which are two questions.
     DeviceCaret,
+    /// The deck's BACK key: a seek backwards. Appended, like the strip's own three, so no position moves.
+    TapeBack,
+    /// The deck's PAUSE key: silent, with the bar kept.
+    TapePause,
+    /// The deck's FORWARD key: a seek forwards.
+    TapeForward,
+    /// The deck's RECORD key: nothing to record into yet, and its tip says so.
+    TapeRecord,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 30] = [
+    pub const ALL: [Control; 34] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -103,6 +111,10 @@ impl Control {
         Control::DeviceMute,
         Control::DeviceAdd,
         Control::DeviceCaret,
+        Control::TapeBack,
+        Control::TapePause,
+        Control::TapeForward,
+        Control::TapeRecord,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -125,6 +137,10 @@ impl Control {
             Control::TempoUp => TIPS[14],
             Control::Learn => TIPS[15],
             Control::Tooltips => TIPS[16],
+            Control::TapeBack => TIPS[30],
+            Control::TapePause => TIPS[31],
+            Control::TapeForward => TIPS[32],
+            Control::TapeRecord => TIPS[33],
             Control::OctaveDown => TIPS[17],
             Control::OctaveUp => TIPS[18],
             Control::Shuffle => TIPS[19],
@@ -159,7 +175,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 30] = [
+const TIPS: [Tip; 34] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -309,6 +325,26 @@ const TIPS: [Tip; 30] = [
         title: "DEVICE CARD",
         what: "The device you are looking at: its name, what it hears, and the way to remove it.",
         shortcut: Some("F3: the same, from the keyboard"),
+    },
+    Tip {
+        title: "BACK",
+        what: "Step the playhead back a bar. Not wired yet: the key is drawn so its place is settled.",
+        shortcut: Some(","),
+    },
+    Tip {
+        title: "PAUSE",
+        what: "Stop the clock and keep the bar. A play carries on from the step it kept.",
+        shortcut: Some("space"),
+    },
+    Tip {
+        title: "FORWARD",
+        what: "Step the playhead on a bar. Not wired yet: the key is drawn so its place is settled.",
+        shortcut: Some("."),
+    },
+    Tip {
+        title: "RECORD",
+        what: "Record what the instrument plays. Not wired yet: nothing exists to record into.",
+        shortcut: Some("R"),
     },
 ];
 

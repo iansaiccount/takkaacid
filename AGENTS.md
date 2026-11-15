@@ -94,7 +94,13 @@ executor applies what the review found, so that the commit that lands is the one
   Progress with the reason.
 
 Findings are fixed before the commit, and the task's `## Progress` line records what the review found and what was done about it
-— including a finding the executor disagrees with, which is written down with the reason it stood rather than dropped. A
+— including a finding the executor disagrees with, which is written down with the reason it stood rather than dropped.
+
+**Act on the findings yourself, then carry on.** A review is not a question for the player: the executor fixes what it found,
+records it, commits, and moves to the next task in the same breath — the reviewing loop is the quiet part of the work, not a
+checkpoint. Stop and ask only when a finding needs a decision that is the player's and not the code's: a face they will see, a
+word they will read, a feature that is not this round's, or a finding whose two fixes cost materially different things. Everything
+else — a duplicated mapping, a missing test, a doc that lies, a `_` arm, a gap in a catalogue — is the executor's to settle. A
 subagent that could not be reached, timed out, or answered about the wrong commit is a review that did not happen: re-dispatch
 it, and do not commit on the strength of the gates alone.
 

@@ -224,7 +224,16 @@ stored reversed pattern.
       that test, and did not before. Three tests joined it: a pause is silent at the audio level (rms, not the flag), a resume
       re-strikes the step it kept (the audible decision `arm` makes, now pinned and left to be judged by ear in task 4), and a
       whole step after a resume advances the bar.
-- [ ] Task 3 — the tape, drawn
+- [ ] **Task 3 — the tape, drawn** (in progress). `ui/tape.rs` holds the `TapeKey` catalogue (`Back, Play, Pause, Stop,
+      Forward, Record`) and paints the six keys as **shapes** — a triangle for play, two each for back and forward, two bars
+      for pause, a square for stop, a filled circle for record — with the tempo stepper's `−` and `+` drawn as bars. The three
+      keys with nothing behind them are drawn dim and say so in their tips; `Play` and `Pause` light from the transport. The
+      catalogue grew by four tip entries (`TapeBack/Pause/Forward/Record`), so a deck key cannot reach a player without text,
+      and the `lit` match is written out in full — no `_` arm over a catalogue. The deck is wired into `draw_panel` and its
+      presses are requests, like the switches'.
+      **Still owed by this task:** the three tests — the keys answer where the layout puts them (through `draw_panel`), no
+      text is painted inside the tape rects (the no-glyph rule made checkable), and the tips catalogue test already covers the
+      four new controls — plus the review.
 - [ ] Task 4 — the tape, wired
 - [ ] Task 5 — the bottom row
 - [ ] Task 6 — `SONGS` → `BANKS`

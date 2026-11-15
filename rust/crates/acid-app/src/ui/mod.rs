@@ -27,6 +27,7 @@ pub mod songs;
 pub mod step_key;
 pub mod strip;
 pub mod switches;
+pub mod tape;
 pub mod text;
 pub mod tips;
 
@@ -494,6 +495,14 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         panel::pattern_display_rect(l.top),
         midi::cc::CcTarget::Pattern,
     );
+
+    // The tape deck and the tempo stepper, between the session name and the pattern readout. Its presses are *requests* for
+    // the same reason the switches' are: the rack owns the transport, and a key that wrote a device's atomic would be undone by
+    // the next fan-out.
+    if let Some(request) = tape::draw(ui, state, shared, l.top, s, p) {
+        state.transport_request = Some(request);
+        state.dirty = true;
+    }
 
     // The middle of the strip says one thing at a time: the song the session is working on, or — for a few seconds — what
     // just happened. Notices used to share the line with a MIDI status readout; that readout now lives in the settings card,
