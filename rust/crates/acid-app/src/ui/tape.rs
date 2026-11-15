@@ -197,51 +197,25 @@ fn key_key(
 
 /// The six symbols, drawn inside `rect`. Triangles for play and the two directions, bars for pause, a square for stop, a
 /// filled circle for record — the shapes a deck has used for fifty years.
+///
+/// Every arrow goes through [`arrow`], which takes the direction as a sign: the first version built the two rewind/fast-forward
+/// triangles by hand and drew them pointing the wrong way — the screenshot showed a deck whose back key pointed forward.
 fn symbol(painter: &egui::Painter, key: TapeKey, rect: Rect, ink: egui::Color32) {
     let c = rect.center();
     let unit = rect.width() * 0.30;
-    let triangle = |tip: Pos2, up: f32, down: f32, back: f32| {
-        Shape::convex_polygon(
-            vec![
-                tip,
-                Pos2::new(tip.x - back, tip.y - up),
-                Pos2::new(tip.x - back, tip.y + down),
-            ],
-            ink,
-            Stroke::NONE,
-        )
-    };
     match key {
         TapeKey::Play => {
-            painter.add(triangle(
-                Pos2::new(c.x + unit * 0.6, c.y),
-                unit,
-                unit,
-                unit * 1.2,
-            ));
+            painter.add(arrow(c.x + unit * 0.55, c.y, unit, 1.0, ink));
         }
+        // Back and forward are the same arrow twice, pointing the way the key moves the playhead.
         TapeKey::Back => {
-            for shift in [0.0, unit * 1.1] {
-                painter.add(triangle(
-                    Pos2::new(c.x + unit * 0.5 - shift, c.y),
-                    unit * 0.8,
-                    unit * 0.8,
-                    unit * 0.9,
-                ));
+            for shift in [0.0, unit * 1.05] {
+                painter.add(arrow(c.x - unit * 0.55 + shift, c.y, unit, -1.0, ink));
             }
         }
         TapeKey::Forward => {
-            for shift in [unit * 1.1, 0.0] {
-                let tip = Pos2::new(c.x - unit * 0.5 + shift, c.y);
-                painter.add(Shape::convex_polygon(
-                    vec![
-                        tip,
-                        Pos2::new(tip.x + unit * 0.9, tip.y - unit * 0.8),
-                        Pos2::new(tip.x + unit * 0.9, tip.y + unit * 0.8),
-                    ],
-                    ink,
-                    Stroke::NONE,
-                ));
+            for shift in [0.0, unit * 1.05] {
+                painter.add(arrow(c.x + unit * 0.55 - shift, c.y, unit, 1.0, ink));
             }
         }
         TapeKey::Pause => {
@@ -266,4 +240,20 @@ fn symbol(painter: &egui::Painter, key: TapeKey, rect: Rect, ink: egui::Color32)
             painter.circle_filled(c, unit * 0.85, ink);
         }
     }
+}
+
+/// One arrowhead with its apex at `x` and its body behind it, `direction` being `1.0` for "points right" and `-1.0` for
+/// "points left". The sign is the only thing that decides which way it looks, so the two directions cannot disagree.
+fn arrow(x: f32, y: f32, unit: f32, direction: f32, ink: egui::Color32) -> Shape {
+    let apex = Pos2::new(x, y);
+    let base = x - direction * unit * 0.95;
+    Shape::convex_polygon(
+        vec![
+            apex,
+            Pos2::new(base, y - unit * 0.8),
+            Pos2::new(base, y + unit * 0.8),
+        ],
+        ink,
+        Stroke::NONE,
+    )
 }

@@ -231,9 +231,11 @@ stored reversed pattern.
       catalogue grew by four tip entries (`TapeBack/Pause/Forward/Record`), so a deck key cannot reach a player without text,
       and the `lit` match is written out in full — no `_` arm over a catalogue. The deck is wired into `draw_panel` and its
       presses are requests, like the switches'.
-      **Still owed by this task:** the three tests — the keys answer where the layout puts them (through `draw_panel`), no
-      text is painted inside the tape rects (the no-glyph rule made checkable), and the tips catalogue test already covers the
-      four new controls — plus the review.
+      **Tests, and what the painting taught.** `tests/tape_live.rs` proves the three things: every key answers at the rect the
+      layout hands out (and the three unwired ones ask for nothing), the deck paints **no text** inside its own rects (the
+      no-glyph rule made checkable), and the lit states follow the transport. The first screenshot showed the back and forward
+      arrows **mirrored** — each built by hand, each pointing the wrong way — so both now go through one `arrow(x, y, unit,
+      direction, ink)` helper where the sign alone decides the direction. Owed: the review of this task.
 - [ ] Task 4 — the tape, wired
 - [ ] Task 5 — the bottom row
 - [ ] Task 6 — `SONGS` → `BANKS`
