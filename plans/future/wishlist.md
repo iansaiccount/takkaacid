@@ -91,42 +91,58 @@ only worth it once somebody has built a patch they want a second of.
 The next five rounds, in the player's order. Each entry points at the wishlist entry that already holds the detail and then says
 only what that entry does not — restating a plan is the bug this repo has paid for twice.
 
-Where they will live: **2a is a plan in `plans/phase 2/`** (`47-…`), because it is phase 2's transport, and each of 3 to 6 opens
-its own `plans/phase N/` directory with a `00-` overview when it earns a plan. Naming a phase here is not opening it.
+Where they will live: **phase 3 opens `plans/phase 3/`** with a `00-` overview and its first plan, and each of 4 to 7 does the
+same when it earns one. Naming a phase here is not opening it.
 
-### Phase 2a — the transport at the top, seek, reverse, transpose
+### Phase 3 — the tape transport, and the row it frees
 
-**What it would do.** Play, stop, back and forward in the transport row, for the whole instrument. Reverse per pattern, so one
-device can run its line backwards while the others run forwards. A semitone transpose for the whole synth from one control.
+**What it would do.** A conventional tape transport for the whole instrument — play, pause, stop, back, forward, record — with
+the tempo's `+` and `−` beside it, and the song's load and save icons where the session name is. The transport leaves the synth
+altogether: the row under the panel loses `RUN`, `STOP`, `TEMPO −`, `TEMPO +` and keeps `VOLUME`, and the four cells it frees
+become `REVERSE`, `TBC`, `TRANSPOSE −`, `TRANSPOSE +` (one semitone at a time). Reverse per pattern, so one device can run its
+line backwards while the others run forwards; transpose for the whole synth from one control. `BACK`, `FORWARD`, `RECORD`,
+`LOAD` and `SAVE` are drawn and reachable by keyboard now, and recede as not-yet-wired.
 
-**Why not now — and what already exists.** More of this is built than it looks, which is why the entry says where each piece
-would ride rather than proposing new seams:
+**What is asked for and not designed yet.** Whether the tape sits in the top band (where the tempo readout is) or in the row it
+empties; what a key whose feature does not exist does when clicked (a notice, or nothing at all); which keys `BACK`, `FORWARD`
+and `RECORD` take, given that the arrows already walk the step selection and space already toggles the transport; whether
+`REVERSE` and `TRANSPOSE` are per device (they are, today) with a rack-wide transpose as well. Screenshots showing the transport
+row change with the row.
 
-- **Play and stop** exist and are already rack-wide: `Rack::playing` and `Rack::tempo_bpm` (`state.rs`), fanned out by
-  `Device::sync_transport`. Moving them to the transport row is the first bullet of *A global transport, with racks under it*.
-- **Transpose** is the surprise: `param::tuning_semitones` is exactly ±12 semitones (`param.rs`), and it is applied at the voice
-  by `Voice::set_tuning_semitones` in `apply_pitch`, under everything `base_hz` came from — so it transposes sequencer notes and
+**A rename this phase carries.** The panel's `SONGS` browser lists *pattern banks* — the demos and the player's own — not songs.
+It becomes `BANKS`; a song stays the saved session, and the day it holds every machine it will be the document the load and save
+icons read. The save-bank work belongs to Phase 5 (renamed from 4), which is where bank files land.
+
+**What already exists.** More of this is built than it looks, which is why the entry says where each piece would ride rather
+than proposing new seams:
+
+- **Play and stop** are the transport already, and already rack-wide: `Rack::playing` and `Rack::tempo_bpm` (`state.rs`), fanned
+  out by `Device::sync_transport`. `RUN`/`STOP` are two of the five cells in the bottom row (`transport::TRANSPORT_CELLS`), and
+  `space` toggles them.
+- **Transpose** is the surprise: `param::tuning_semitones` is exactly ±12 semitones (`param.rs`), applied at the voice by
+  `Voice::set_tuning_semitones` in `apply_pitch`, under everything `base_hz` came from — so it transposes sequencer notes and
   MIDI alike. The tuning path is the transpose; what is missing is a *quantised, rack-wide* control on it rather than a knob per
   device.
-- **Seek** exists end to end per device: `AudioRenderer::seek` sets a `pending_seek`, which is how a device that joins a
-  running rack lands on the bar everybody else is on (`Engine::start_at`, `Sequencer::start_at`). What is missing is a
-  **rack-level** seek that reaches every device mid-run, and the two keys.
+- **Seek** exists per device: `AudioRenderer::seek` sets a `pending_seek`, which is how a device that joins a running rack lands
+  on the bar everybody else is on (`Engine::start_at`, `Sequencer::start_at`). What is missing is a **rack-level** seek that
+  reaches every device mid-run.
 - **Reverse of any kind** does not exist.
+- **Two transpose controls already collide.** The performance row's octave `-`/`+` transpose by *rewriting the stored pattern*
+  and mark the song dirty (`tests/perform_live.rs` pins that). A semitone transpose that is a performance value must either
+  retire those keys or say which of the two owns "transpose".
 
-**What would have to move.** For **back and forward**: a rack-level `seek` that fans out like `sync_transport`, plus the two
-cells. The transport row is already five cells wide (RUN, STOP, TEMPO −, TEMPO +, VOLUME), which is the *master fader* entry's
-problem arriving early. For **reverse per pattern**: a direction on the device's own clock — `last_position` and the sequencer's
-wrap both assume one direction — and **a flag in memory, not a property of the pattern**, so it costs no `SAVE_VERSION` bump;
-if the player wants reverse stored with a pattern instead, that is a version bump and lands with the save round. Slides and
-accents read oddly backwards, so the rule for a slide into a step that has already passed is a design question, not a detail.
-For **transpose**: riding the tuning path has a consequence the entry must face — `persist::Knobs.tuning` is a *saved* knob, so
-"kept out of the pattern" is not the same as "not saved", and a transposed rehearsal would write itself into the song through
-the knobs instead. Decide whether transpose is a knob (saved) or a performance value (not saved, a new field that is deliberately
-not persisted). And note the face already has an octave `-`/`+` pair in the performance row, which transposes by **rewriting the
-stored pattern** and marking the song dirty (`tests/perform_live.rs` pins that a transposed pattern is worth saving): those keys
-either become this control or are retired, and that is a behaviour change to something a player can already press.
+**What it costs, per piece.** For **back and forward**: a rack-level `seek` that fans out like `sync_transport`, and the keys —
+the arrows already walk the step selection, so these need their own. For **reverse per pattern**: a direction on the device's
+own clock (`last_position` and the sequencer's wrap both assume one direction), and **a flag in memory, not a property of the
+pattern**, so it costs no `SAVE_VERSION` bump; if the player wants reverse stored with a pattern, that is a version bump and
+lands with the save round. Slides and accents read oddly backwards, so a slide into a step that has already passed is a design
+question, not a detail. For **transpose**: riding the tuning path has a consequence the entry must face —
+`persist::Knobs.tuning` is a *saved* knob, so "kept out of the pattern" is not "not saved", and a rehearsal would write itself
+into the song through the knobs instead. For **pause**: play and stop have no third state today (`Rack::playing` is a bool), so
+pause is a new state and every reader of `is_playing` has to decide what it means. For **record**: nothing exists to record into;
+the key is drawn and refuses until the song document does.
 
-### Phase 3 — the drum machine
+### Phase 4 — the drum machine
 
 **What it would do.** A second device kind that plays drums rather than a bass line, in the same rack, on its own ports and
 channel, with the same transport.
@@ -141,7 +157,7 @@ slide }` — it is a set of voices hit at once — so either the pattern grows a
 its own pattern type and the clipboard, the bank and the save file learn two. Deciding that before writing the machine is the
 whole phase.
 
-### Phase 4 — saving and loading banks, patterns and songs
+### Phase 5 — saving and loading banks, patterns and songs
 
 **What it would do.** Write and read those three things as files, not just the session: a bank to a file and back into any
 slot, a single pattern likewise, and a song as today *once* *Save the whole rack* lands — that round is this phase's song work,
@@ -157,7 +173,7 @@ kind. Patterns are already text on the clipboard (`Ctrl+C`/`Ctrl+V`), so a patte
 bank is the one that needs a decision about where a loaded bank lands (the current slot, the next free slot, or a slot chosen in
 the dialog). The dialogs stay in `main`, the path functions in `persist`.
 
-### Phase 5 — 1/32 and 1/8T patterns
+### Phase 6 — 1/32 and 1/8T patterns
 
 **What it would do.** A pattern whose grid is not sixteenths, chosen per pattern: thirty-seconds, which are finer than a
 sixteenth, or eighth-note triplets, which are twelve to the bar and *longer* than a sixteenth, so they sit off its grid rather
@@ -175,12 +191,12 @@ answer. The panel is sixteen keys with sixteen lamps and sixteen numbers: at twe
 shrinks — `ui/strip.rs` first, sequencer second. Note that this entry and *Pattern length per device* cannot both be designed
 separately: they are the same change, and whichever gets a plan should absorb the other.
 
-### Phase 6 — the sampler
+### Phase 7 — the sampler
 
 **What it would do.** A third device kind that plays recorded sound: load a sample, pitch it from the keyboard, put it under
 the same sequencer, transport and rack.
 
-**Why not now.** It is the same trait object as Phase 3, built a second time, and it is the first thing in the project that has
+**Why not now.** It is the same trait object as Phase 4, built a second time, and it is the first thing in the project that has
 to read a file the player chooses and hold it in memory while the audio thread reads it.
 
 **What would have to move.** The audio callback allocates nothing and holds no locks (`tests/no_alloc.rs` is the gate), so a
