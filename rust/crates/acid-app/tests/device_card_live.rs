@@ -1025,7 +1025,7 @@ fn opening_a_card_puts_the_picker_away() {
 /// The COLOUR key names the theme its device is on and, until the list lands, asks for the next one in the catalogue — so the
 /// row both says where you are and moves you on.
 #[test]
-fn the_colour_key_names_the_theme_and_cycles_the_catalogue() {
+fn the_colour_key_names_the_theme_the_device_wears() {
     use acid_app::device::Scheme;
 
     let state = SharedState::new();
@@ -1038,14 +1038,6 @@ fn the_colour_key_names_the_theme_and_cycles_the_catalogue() {
     assert!(
         said.contains("BLACK"),
         "and shows the theme it is on: {said}"
-    );
-
-    let rows = card_rows(&panel);
-    click(&ctx, &mut panel, &state, rows.scheme.center());
-    assert_eq!(
-        panel.device_request,
-        Some(Request::SetScheme(0, Scheme::ALL[1])),
-        "a black device's key asks for the next theme in the catalogue"
     );
 
     // And the caption follows the device, not a fixed word.
@@ -1087,5 +1079,213 @@ fn a_card_stays_black_over_a_themed_face() {
         ),
         Some(theme::BLACK.panel_raised),
         "and the card is the black furniture it has always been"
+    );
+}
+
+// ---- the theme list ------------------------------------------------------------------------------------------------
+
+/// The card's COLOUR key opens a list rather than cycling: twenty-two themes do not fit one key, and a cycling key is a
+/// lottery with twenty-two tickets.
+fn open_theme_list(panel: &mut PanelState, shared: &SharedState, ctx: &Context) {
+    open_card(panel, 0, &[]);
+    run(ctx, panel, shared, vec![]);
+    let rect = card_rows(panel).scheme;
+    click(ctx, panel, shared, rect.center());
+    run(ctx, panel, shared, vec![]);
+}
+
+fn list_rows(panel: &PanelState) -> device_card::ThemeRows {
+    let area = device_card::card_rect(screen(), 1.0);
+    device_card::theme_rows(
+        &device_card::rows(area, 1.0, &panel.device_card),
+        screen(),
+        1.0,
+        panel.device_card.themes.top,
+    )
+}
+
+#[test]
+fn the_colour_key_opens_the_theme_list_and_asks_for_nothing() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    let ctx = Context::default();
+    open_card(&mut panel, 0, &[]);
+    run(&ctx, &mut panel, &state, vec![]);
+    let rect = card_rows(&panel).scheme;
+    click(&ctx, &mut panel, &state, rect.center());
+    run(&ctx, &mut panel, &state, vec![]);
+
+    assert!(
+        panel.device_card.themes.open,
+        "the COLOUR key opens the list"
+    );
+    assert_eq!(
+        panel.device_request, None,
+        "opening a list is not a choice, so it asks the rack for nothing"
+    );
+}
+
+#[test]
+fn the_list_offers_every_theme_and_a_pick_asks_for_that_theme() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    let ctx = Context::default();
+    open_theme_list(&mut panel, &state, &ctx);
+
+    let rows = list_rows(&panel);
+    assert!(
+        rows.rows.len() >= 3 && rows.rows.len() < acid_app::device::Scheme::ALL.len(),
+        "twenty-two rows do not fit the panel, so the list shows a window of them: {} shown",
+        rows.rows.len()
+    );
+
+    // A row other than the device's own: the pick has to be able to differ from the state.
+    let index = rows.top + rows.rows.len() - 1;
+    let free = acid_app::device::Scheme::ALL[index];
+    assert_ne!(free, panel.device_card.scheme);
+    click(
+        &ctx,
+        &mut panel,
+        &state,
+        rows.rows[rows.rows.len() - 1].center(),
+    );
+    run(&ctx, &mut panel, &state, vec![]);
+
+    assert_eq!(
+        panel.device_request,
+        Some(Request::SetScheme(0, free)),
+        "a row asks for the theme it names, for the device the card is about"
+    );
+    assert!(
+        !panel.device_card.themes.open,
+        "a row answers the list's question, so the list goes"
+    );
+}
+
+#[test]
+fn the_list_stays_on_the_panel_and_never_covers_the_key_that_opened_it() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    let ctx = Context::default();
+    open_theme_list(&mut panel, &state, &ctx);
+
+    let area = device_card::card_rect(screen(), 1.0);
+    let card = device_card::rows(area, 1.0, &panel.device_card);
+    let list = list_rows(&panel);
+    assert!(
+        screen().contains_rect(list.list),
+        "the list is inside the panel: {:?} in {:?}",
+        list.list,
+        screen()
+    );
+    assert!(
+        !list.list.intersects(card.scheme),
+        "the list opens away from the key, or the key would be buried under the row it shows"
+    );
+}
+
+#[test]
+fn the_list_opens_with_the_theme_the_device_wears_in_view() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    panel.device_card.scheme = acid_app::device::Scheme::RetroCassette;
+    let ctx = Context::default();
+    open_theme_list(&mut panel, &state, &ctx);
+
+    let rows = list_rows(&panel);
+    let current = acid_app::device::Scheme::RetroCassette.index();
+    assert!(
+        (rows.top..rows.top + rows.rows.len()).contains(&current),
+        "the theme in use is in the window: {} not in {}..{}",
+        current,
+        rows.top,
+        rows.top + rows.rows.len()
+    );
+}
+
+#[test]
+fn the_wheel_scrolls_the_list_and_stops_at_the_ends() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    let ctx = Context::default();
+    open_theme_list(&mut panel, &state, &ctx);
+
+    let rows = list_rows(&panel);
+    let inside = rows.rows[1].center();
+    run(&ctx, &mut panel, &state, vec![Event::PointerMoved(inside)]);
+    // One notch down is three rows: a wheel tick is a big step on a list this compact.
+    let wheel = |dy: f32| Event::MouseWheel {
+        unit: eframe::egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, dy),
+        phase: eframe::egui::TouchPhase::Move,
+        source: eframe::egui::MouseWheelSource::Wheel,
+        modifiers: Modifiers::default(),
+    };
+    run(&ctx, &mut panel, &state, vec![wheel(-60.0)]);
+    let after = panel.device_card.themes.top;
+    assert!(after > 0, "the wheel moved the window: {after}");
+
+    // Past the end it stops at the last window rather than running off it.
+    for _ in 0..40 {
+        run(&ctx, &mut panel, &state, vec![wheel(-120.0)]);
+    }
+    let count = acid_app::device::Scheme::ALL.len();
+    assert_eq!(
+        panel.device_card.themes.top,
+        count - rows.rows.len(),
+        "the last window ends on the last theme"
+    );
+
+    for _ in 0..40 {
+        run(&ctx, &mut panel, &state, vec![wheel(120.0)]);
+    }
+    assert_eq!(
+        panel.device_card.themes.top, 0,
+        "and the first on the first"
+    );
+}
+
+#[test]
+fn escape_puts_the_list_away_before_the_card() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    let ctx = Context::default();
+    open_theme_list(&mut panel, &state, &ctx);
+
+    assert!(
+        dispatch::escape(&mut panel, &state),
+        "Escape is used by the list"
+    );
+    assert!(!panel.device_card.themes.open, "the list goes first");
+    assert_eq!(
+        panel.device_card.open,
+        Some(0),
+        "the card it belongs to stays open"
+    );
+    assert!(
+        dispatch::escape(&mut panel, &state),
+        "the next Escape is the card's"
+    );
+    assert_eq!(panel.device_card.open, None);
+}
+
+#[test]
+fn a_click_outside_the_list_puts_the_list_away_and_leaves_the_card() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    let ctx = Context::default();
+    open_theme_list(&mut panel, &state, &ctx);
+
+    click(&ctx, &mut panel, &state, Pos2::new(10.0, 10.0));
+    run(&ctx, &mut panel, &state, vec![]);
+
+    assert!(
+        !panel.device_card.themes.open,
+        "a click outside closes the list"
+    );
+    assert_eq!(
+        panel.device_card.open,
+        Some(0),
+        "and is spent on the list, not on the card behind it"
     );
 }

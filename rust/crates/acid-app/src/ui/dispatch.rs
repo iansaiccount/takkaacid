@@ -207,6 +207,12 @@ pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
         panel.device_picker.open = false;
         return true;
     }
+    if panel.device_card.themes.open {
+        // The list is painted over the card, so it is what Escape gives up first: one Escape for the drop-down, the next for
+        // the card under it.
+        panel.device_card.themes.open = false;
+        return true;
+    }
     if panel.device_card.open.is_some() {
         panel.close_device_card();
         return true;

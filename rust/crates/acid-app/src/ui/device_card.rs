@@ -48,9 +48,10 @@ pub struct Card {
     pub ports: Vec<(String, bool)>,
     /// The channel the device listens on, in the store's numbering (`0..=15`, shown as `1..=16`).
     pub channel: Channel,
-    /// Which way round the device paints its face. A reading like the route: the key shows this, and a click on it asks the
-    /// rack for `next()`.
+    /// Which theme the device wears. A reading like the route: the key shows this, and a click on it opens the list.
     pub scheme: crate::device::Scheme,
+    /// The theme list that key opens, and where its window sits in the catalogue.
+    pub themes: Themes,
     /// When REMOVE was first clicked: the same two-click switch `PanelState::clear_armed_at` is, and spent the same way. `None`
     /// means the key says `REMOVE`; a fresh `Some` means it says `CONFIRM?` and the next click asks the rack.
     pub armed_remove: Option<std::time::Instant>,
@@ -68,6 +69,7 @@ impl Default for Card {
             ports: Vec::new(),
             channel: Channel::All,
             scheme: crate::device::Scheme::Black,
+            themes: Themes::default(),
             armed_remove: None,
         }
     }
@@ -135,6 +137,17 @@ pub fn card_rect(panel: Rect, s: f32) -> Rect {
 ///
 /// It is its own value rather than `device_card`'s flag because it is a different card — its own geometry, its own footnote
 /// and its own answer (`Add`), and the two are never up together.
+/// The theme list: a drop-down over the card, because twenty-two themes do not fit one key.
+///
+/// It lives on the card rather than in a card of its own: it is the same device's question, it is painted over the card's
+/// face, and it dies with the card. `top` is the first row drawn, so the wheel and the clamp are the only two things that
+/// move it and the geometry is the only place the window is decided.
+#[derive(Clone, Debug, Default)]
+pub struct Themes {
+    pub open: bool,
+    pub top: usize,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Picker {
     pub open: bool,
@@ -267,6 +280,52 @@ pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f
         state.device_picker.open = false;
         state.device_request = Some(request);
     }
+}
+
+/// The theme list's geometry: the popup and one rect per visible row, plus the window's first row after clamping.
+///
+/// The list opens away from the key that opened it — over the card's own face, never under the key itself — and is capped by
+/// the panel, so it is the panel's height and not the catalogue that decides how many rows are on screen.
+pub struct ThemeRows {
+    pub list: Rect,
+    pub rows: Vec<Rect>,
+    pub top: usize,
+}
+
+pub fn theme_rows(rows: &Rows, panel: Rect, s: f32, top: usize) -> ThemeRows {
+    let count = crate::device::Scheme::ALL.len();
+    let row_height = (ROW + GAP) * s;
+    let pad = 4.0 * s;
+    let width = rows.scheme.width().max(190.0 * s);
+    let above = rows.scheme.top() - panel.top() - 12.0 * s;
+    let below = panel.bottom() - rows.scheme.bottom() - 12.0 * s;
+    let (up, space) = if above >= below {
+        (true, above)
+    } else {
+        (false, below)
+    };
+    let visible = (((space - pad * 2.0) / row_height).floor() as usize).clamp(3, count);
+    let height = visible as f32 * row_height + pad * 2.0;
+    // A gap, not an abutment: the list must not even touch the key, or the key's own click area would sit under its edge.
+    let y = if up {
+        rows.scheme.top() - GAP * s - height
+    } else {
+        rows.scheme.bottom() + GAP * s
+    };
+    let list = Rect::from_min_size(Pos2::new(rows.scheme.left(), y), egui::vec2(width, height));
+    let top = top.min(count.saturating_sub(visible));
+    let rows = (0..visible)
+        .map(|index| {
+            Rect::from_min_size(
+                Pos2::new(
+                    list.left() + pad,
+                    list.top() + pad + index as f32 * row_height,
+                ),
+                egui::vec2(width - pad * 2.0, ROW * s),
+            )
+        })
+        .collect();
+    ThemeRows { list, rows, top }
 }
 
 /// One rect per row of the card, in the order it paints them.
@@ -545,18 +604,28 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         asked = Some(Request::SetChannel(index, next_channel(channel)));
     }
 
-    // COLOUR: the theme this device wears. Interim, and marked as such: the key names the current theme and cycles to the
-    // next one in the catalogue, because the list that replaces it is the next commit. A key that works beats a key that
-    // waits while the catalogue lands in pieces.
+    // COLOUR: the theme this device wears, and the key that opens the list of them. A key that shows the current theme and
+    // opens one list beats a key that cycles: twenty-two themes is a lottery with twenty-two tickets.
     let scheme = state.device_card.scheme;
-    let colour =
-        transport::card_button(ui, "device-card-colour", rows.scheme, scheme.name(), false);
+    let colour = transport::card_button(
+        ui,
+        "device-card-colour",
+        rows.scheme,
+        scheme.name(),
+        state.device_card.themes.open,
+    );
     if colour.clicked() {
-        let all = crate::device::Scheme::ALL;
-        asked = Some(Request::SetScheme(
-            index,
-            all[(scheme.index() + 1) % all.len()],
-        ));
+        state.device_card.themes.open = !state.device_card.themes.open;
+        if state.device_card.themes.open {
+            // Open on the theme in use: the window is this list's, and a list that opened at its first row would hide the one
+            // row the player can be sure they want to see.
+            let window = theme_rows(&rows, panel, s, 0).rows.len();
+            let count = crate::device::Scheme::ALL.len();
+            state.device_card.themes.top = scheme
+                .index()
+                .saturating_sub(window / 2)
+                .min(count.saturating_sub(window));
+        }
     }
 
     // MUTE: this device's own mute, read from the strip's mirror of the rack — the panel's only reading of it.
@@ -597,6 +666,8 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         asked = Some(Request::Close);
     }
 
+    paint_themes(ui, state, panel, s, &rows, &mut asked, index);
+
     // One write, and the arming's one rule: any other key on the card answers a different question, so it puts the question
     // away. A click that asked nothing leaves whatever the frame already held — a strip cell's click must survive the card.
     if let Some(request) = asked {
@@ -604,6 +675,146 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
             state.device_card.armed_remove = None;
         }
         state.device_request = Some(request);
+    }
+}
+
+/// Paint the theme list and answer a pick.
+///
+/// Its shade is registered last, so while the list is up a click anywhere else is the list's: it puts the list away and does
+/// not reach the card behind it. That is the one rule a drop-down needs — the key that opened it must not also be the thing
+/// that a click meant for a row lands on.
+fn paint_themes(
+    ui: &mut egui::Ui,
+    state: &mut PanelState,
+    panel: Rect,
+    s: f32,
+    rows: &Rows,
+    asked: &mut Option<Request>,
+    device: usize,
+) {
+    if !state.device_card.themes.open {
+        return;
+    }
+    let current = state.device_card.scheme;
+    let count = crate::device::Scheme::ALL.len();
+    let window = theme_rows(rows, panel, s, state.device_card.themes.top);
+    state.device_card.themes.top = window.top;
+    let last = count.saturating_sub(window.rows.len());
+
+    // The wheel scrolls the window and stops at either end. Read only while the pointer is over the list, so a wheel over the
+    // panel behind it keeps doing whatever the panel does with a wheel.
+    let over = ui
+        .input(|input| input.pointer.hover_pos())
+        .is_some_and(|at| window.list.contains(at));
+    if over {
+        let scrolled = ui.input(|input| input.smooth_scroll_delta.y);
+        if scrolled != 0.0 {
+            let step = (scrolled / ((ROW + GAP) * s)).round() as i64;
+            state.device_card.themes.top =
+                (window.top as i64 - step).clamp(0, last as i64) as usize;
+        }
+    }
+    let window = theme_rows(rows, panel, s, state.device_card.themes.top);
+    state.device_card.themes.top = window.top;
+
+    let shield = modal::shield(ui, ui.max_rect(), "device-card-themes-shield");
+    let _face = ui.interact(
+        window.list,
+        ui.scope_id().with("device-card-themes"),
+        egui::Sense::click(),
+    );
+    {
+        let painter = ui.painter();
+        painter.rect_filled(window.list, 4.0 * s, theme::BLACK.panel_raised);
+        painter.rect_stroke(
+            window.list,
+            4.0 * s,
+            theme::BLACK.silkscreen_stroke(s),
+            egui::StrokeKind::Inside,
+        );
+        // The window is about half the catalogue, and nothing else on the list says there is more of it below: a thumb on
+        // the right edge, as tall as the window's share and as far down as the window has scrolled. No glyph, and no click
+        // of its own — the wheel and the rows are the list's input.
+        if window.rows.len() < count.max(1) {
+            let share = window.rows.len() as f32 / count as f32;
+            let track = (window.list.height() - 8.0 * s).max(1.0);
+            let thumb = (track * share).max(8.0 * s);
+            let travel = track - thumb;
+            let at = match last {
+                0 => 0.0,
+                last => window.top as f32 / last as f32,
+            };
+            painter.rect_filled(
+                Rect::from_min_size(
+                    Pos2::new(
+                        window.list.right() - 3.0 * s,
+                        window.list.top() + 4.0 * s + travel * at,
+                    ),
+                    egui::vec2(2.0 * s, thumb),
+                ),
+                1.0 * s,
+                theme::BLACK.silkscreen_dim,
+            );
+        }
+    }
+    for (offset, rect) in window.rows.iter().enumerate() {
+        let Some(scheme) = crate::device::Scheme::ALL.get(window.top + offset).copied() else {
+            break;
+        };
+        let key = ui.interact(
+            *rect,
+            ui.scope_id()
+                .with(("device-card-theme", window.top + offset)),
+            egui::Sense::click(),
+        );
+        let painter = ui.painter();
+        if key.hovered() {
+            painter.rect_filled(rect.shrink(s), 3.0 * s, theme::BLACK.well);
+        }
+        // The swatch is the theme's own face, bordered in its own dim legend: a theme whose face and raised plate are close
+        // together still reads as a square, which is why the border is the theme's and not the card's.
+        let palette = theme::palette(scheme);
+        let swatch = Rect::from_center_size(
+            Pos2::new(rect.left() + 10.0 * s, rect.center().y),
+            egui::vec2(12.0 * s, 12.0 * s),
+        );
+        painter.rect_filled(swatch, 2.0 * s, palette.panel);
+        painter.rect_stroke(
+            swatch,
+            2.0 * s,
+            egui::Stroke::new(s, palette.silkscreen_dim),
+            egui::StrokeKind::Inside,
+        );
+        let font = theme::legend(11.0 * s);
+        let name = text::fit(
+            painter,
+            scheme.name(),
+            font.clone(),
+            rect.width() - 34.0 * s,
+        );
+        painter.text(
+            Pos2::new(rect.left() + 22.0 * s, rect.center().y),
+            Align2::LEFT_CENTER,
+            name,
+            font,
+            theme::BLACK.silkscreen,
+        );
+        if scheme == current {
+            // A dot, not a tick: the face may not use a font glyph, and the theme in use is the one thing this list has to say
+            // without being clicked.
+            painter.circle_filled(
+                Pos2::new(rect.right() - 8.0 * s, rect.center().y),
+                3.5 * s,
+                theme::BLACK.led_on,
+            );
+        }
+        if key.clicked() {
+            *asked = Some(Request::SetScheme(device, scheme));
+            state.device_card.themes.open = false;
+        }
+    }
+    if shield.clicked() {
+        state.device_card.themes.open = false;
     }
 }
 
