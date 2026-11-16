@@ -87,6 +87,9 @@ pub struct PanelState {
     pub volume: f32,
     /// When CLEAR was first clicked: a second click inside the window empties the pattern on screen.
     pub clear_armed_at: Option<std::time::Instant>,
+    /// The pattern text this panel last put on the clipboard, so the COPY key can read as pressed while the clipboard still
+    /// holds the pattern on screen. `None` until something is copied — a paste from elsewhere is not this panel's copy.
+    pub copied: Option<String>,
     /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
     pub save_requested: bool,
     /// Set by the transport row; consumed by `main`, which owns the rack's transport. A request rather than a write: the
@@ -196,6 +199,7 @@ impl Default for PanelState {
             help_visible: false,
             selected: 0,
             clear_armed_at: None,
+            copied: None,
             save_requested: false,
             transport_request: None,
             songs: SongState::default(),
@@ -716,6 +720,61 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         );
     }
     {
+        // COPY writes the same text `Ctrl+C` writes — the gesture and the key are one format, and `main` puts it on the OS
+        // clipboard from the same function — so the two cannot drift.
+        let copy_cell = switches::cell(l.switches, switches::Switch::Copy);
+        let holding = state.copied.as_deref() == Some(pattern_text(shared).as_str());
+        let pressed = switch_key(
+            ui,
+            state,
+            Key {
+                id: "copy-pattern",
+                rect: copy_cell,
+                label: "COPY",
+                lit: false,
+                control: tips::Control::Copy,
+            },
+            p,
+        );
+        if holding {
+            // Indented while the clipboard holds the pattern on screen: a second border inside the key, the way a pressed
+            // collar sits inside a real switch. It is the only feedback that says "this is already copied".
+            ui.painter().rect_stroke(
+                copy_cell.shrink(2.0 * s),
+                2.0 * s,
+                p.silkscreen_stroke(1.0 * s),
+                egui::StrokeKind::Inside,
+            );
+        }
+        if pressed {
+            let text = pattern_text(shared);
+            ui.ctx().copy_text(text.clone());
+            state.copied = Some(text);
+            let slot = display::format_pattern(state.pattern_id);
+            state.notify(format!("copied {slot}"));
+        }
+    }
+    {
+        // PASTE asks egui for a paste, so the event path that `Ctrl+V` uses does the work — including refusing when a text
+        // field has focus. A key with its own paste would be a second behaviour to keep in step.
+        let paste_cell = switches::cell(l.switches, switches::Switch::Paste);
+        if switch_key(
+            ui,
+            state,
+            Key {
+                id: "paste-pattern",
+                rect: paste_cell,
+                label: "PASTE",
+                lit: false,
+                control: tips::Control::Paste,
+            },
+            p,
+        ) {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+        }
+    }
+    {
         // SAVE writes the session; whether it worked is `main`'s to know, so it asks and leaves `dirty` alone.
         let save_cell = switches::cell(l.switches, switches::Switch::Save);
         if switch_key(
@@ -1051,4 +1110,12 @@ fn open_banks(state: &mut PanelState) {
             ..songs::Songs::default()
         }),
     };
+}
+
+/// The pattern on the panel, as the clipboard's text: one format, written by the COPY key and by `Ctrl+C` alike.
+fn pattern_text(shared: &SharedState) -> String {
+    crate::clipboard::encode(&crate::clipboard::Clip::Pattern {
+        pattern: *shared.pattern(),
+        from: None,
+    })
 }

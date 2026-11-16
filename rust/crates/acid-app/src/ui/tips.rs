@@ -87,11 +87,15 @@ pub enum Control {
     TransposeDown,
     /// The row's TRANS +: the whole rack up a semitone.
     TransposeUp,
+    /// The row's COPY: the pattern on the panel onto the clipboard, as text.
+    Copy,
+    /// The row's PASTE: whatever pattern the clipboard holds onto the pattern on the panel.
+    Paste,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 39] = [
+    pub const ALL: [Control; 41] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -131,6 +135,8 @@ impl Control {
         Control::Tbc,
         Control::TransposeDown,
         Control::TransposeUp,
+        Control::Copy,
+        Control::Paste,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -162,6 +168,8 @@ impl Control {
             Control::Tbc => TIPS[36],
             Control::TransposeDown => TIPS[37],
             Control::TransposeUp => TIPS[38],
+            Control::Copy => TIPS[39],
+            Control::Paste => TIPS[40],
             Control::OctaveDown => TIPS[17],
             Control::OctaveUp => TIPS[18],
             Control::Shuffle => TIPS[19],
@@ -196,7 +204,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 39] = [
+const TIPS: [Tip; 41] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -391,6 +399,16 @@ const TIPS: [Tip; 39] = [
         title: "TRANS +",
         what: "Moves the whole rack up a semitone. A performance control: the TUNING knobs are untouched and nothing is saved.",
         shortcut: None,
+    },
+    Tip {
+        title: "COPY",
+        what: "Copies the pattern on the panel to the clipboard as text, so it can go into another slot, another device, or another window.",
+        shortcut: Some("CTRL+C"),
+    },
+    Tip {
+        title: "PASTE",
+        what: "Pastes the clipboard's pattern into the pattern on the panel. A pattern is text, so this works across windows.",
+        shortcut: Some("CTRL+V"),
     },
 ];
 

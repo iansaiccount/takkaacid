@@ -197,7 +197,7 @@ fn the_tempo_and_pattern_readouts_can_be_taught() {
 fn the_switches_row_has_no_reset_key() {
     // RESET rewrote the whole map from a dark key beside LEARN; it was removed rather than moved, so the row is seven
     // keys and none of them prints it.
-    assert_eq!(switches::Switch::ALL.len(), 6);
+    assert_eq!(switches::Switch::ALL.len(), 7);
     for switch in switches::Switch::ALL {
         assert_ne!(switch.label(), "RESET", "{switch:?} is back");
     }
