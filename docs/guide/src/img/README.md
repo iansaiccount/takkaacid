@@ -33,7 +33,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/running.png` | the transport running, `RUN` lit rather than `STOP` | `space` from the first-sound state |
 | `img/help-card.png` | the help card over the panel | `F1` |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
-| `img/songs-card.png` | the songs card: `New song`, the five demos, an empty `MY SONGS` | click `SONGS` |
+| `img/banks-card.png` | the songs card: `New song`, the five demos, an empty `MY SONGS` | click `SONGS` |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
 | `img/picker.png` | the picker: the `ACID` row and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |

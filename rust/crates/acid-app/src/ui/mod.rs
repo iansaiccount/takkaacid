@@ -549,7 +549,11 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         };
         // The name is a door as well as a label: the bank browser is how a session is loaded and saved, and the icons that
         // used to open it were cut in round 3a for room the deck needed. A label that answers a click is the cheapest way back in.
-        let response = ui.interact(label, ui.scope_id().with("song-name"), egui::Sense::click());
+        let response = ui.interact(
+            label,
+            ui.scope_id().with("song-title"),
+            egui::Sense::click(),
+        );
         if response.hovered() {
             response
                 .clone()

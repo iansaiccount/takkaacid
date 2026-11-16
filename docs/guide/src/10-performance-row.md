@@ -6,7 +6,7 @@ to touch mid-bar, and all of it can be heard without stopping.
 ## `OCT -` and `OCT +`
 
 Transpose the whole pattern an octave down or up. This is not a temporary shift: the notes themselves are rewritten, so
-`UNSAVED` comes on and a save keeps the new register. While the line runs, the steps you have not reached yet play in the
+the song name turns amber and a save keeps the new register. While the line runs, the steps you have not reached yet play in the
 new octave; a step already triggered keeps the note it played.
 
 Neither key stops at the edge of the range. Walk a line far enough up or down and its notes fall outside what the voice

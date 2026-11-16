@@ -30,7 +30,10 @@ Three tables and the files: every gesture, the factory controller map, and the w
 |---|---|
 | `A W S E D F T G Y H U J K` | play a chromatic scale; with `shift` or `STEP`, write the note to the selected step |
 | `Z` / `X` | octave down / up, two either way |
-| `space` | start / stop, same as `RUN` / `STOP` |
+| `space` | play / pause, same as `PLAY` / `PAUSE` |
+| `,` | step the playhead back a bar (drawn, not wired yet) |
+| `.` | step the playhead on a bar (drawn, not wired yet) |
+| `R` | record (drawn, not wired yet) |
 | `left` / `right` | move the selection one step |
 | `shift+left` / `shift+right` | previous / next pattern |
 | `shift+up` / `shift+down` | note up / down a step |
@@ -42,9 +45,10 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | `F3`, or the caret on the selected cell | the device card |
 | `Ctrl+1` … `Ctrl+4` | put that device on the panel |
 | `Ctrl+C` / `Ctrl+V` | copy the pattern on the panel / paste one into it |
-| `escape` | close the topmost card — the picker, the device card, settings, help, the songs card — then give up on a `LEARN` |
+| `escape` | close the topmost card — the picker, the device card, settings, help, the bank browser — then give up on a `LEARN` |
 
-**The panel's own keys:** `RUN` `STOP` `TEMPO -` `TEMPO +` `LEARN` on the transport row; `CLEAR` `SAVE` `SONGS` `STEP` in
+**The panel's own keys:** `REVERSE` `TRANS -` `TRANS +` `TBC` `LEARN` in the bottom row; `CLEAR` `RANDOM` in the performance row
+beside the octave keys; `SAVE` `BANKS` `STEP` `COPY` `PASTE` in
 the switch row (`BANK` `PATTERN` `MODE` are engraved and do nothing yet); `OCT -` `OCT +` `RANDOM` on the performance row.
 **The strip above the panel:** a click on a cell selects that device, its `M` mutes it, and `+` at the right end adds one.
 
@@ -74,12 +78,13 @@ has to be reached before it takes over.
 **The strip** above the top strip holds a cell per device: its name, a lamp while it runs, its `M` mute, and `+` at the
 right end.
 
-**The top strip** holds four things: the lamp inside the wordmark's corner, the song name in the band's left cluster, its plate lit while unsaved, the whole name and its state in its tooltip, and the pattern
+**The top strip** holds the volume knob and the wordmark, the settings gear and the help dot, the song name — amber while unsaved,
+plain silk once written, the whole name and its state in its tooltip — the tape deck, the tempo stepper, and the pattern
 and tempo wells at the right.
 
 | Word | Where | Meaning |
 |---|---|---|
-| `SAVED` / `UNSAVED` | by the wordmark | whether what is on screen is on disk |
+| the song name's colour | after the `?` | amber: unsaved; plain silk: on disk |
 | `SONG <name>` | the middle | the session's name; `SONG untitled` when it has none |
 | a notice | the middle | something just happened — `saved Acid 2`, `saved a copy as Acid 2`, `could not import: …` — for a few seconds, then the name returns |
 | `A1` … `H8` | the pattern well | the pattern playing |
@@ -124,7 +129,7 @@ OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 | `failed: <reason>` | the stream is not running, and why |
 | `CLOSE` | put the card away |
 
-**The songs card:** `SONGS`, `DEMO SONGS`, `MY SONGS`, `SAVE`, `SAVE A COPY`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the
+**The bank browser:** `BANKS`, `DEMO BANKS`, `MY BANKS`, `SAVE`, `SAVE A COPY`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the
 `x` / `SURE` on each of your own rows.
 
 **The help card** has four sections — `STEPS`, `KEYBOARD`, `MIDI`, `NOTES`.

@@ -35,7 +35,8 @@ done
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
-            'media.io/color-palette/music-color-palette.html' "that page's work"; do
+            'media.io/color-palette/music-color-palette.html' "that page's work" \
+            'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done
 echo "guide: ok"

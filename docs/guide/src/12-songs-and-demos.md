@@ -1,15 +1,15 @@
 # Songs and demos
 
-`SONGS` opens the card that keeps your work: a name field with `SAVE` and `SAVE A COPY` beside it, two lists, and four
+`BANKS` opens the browser that keeps your work: a name field with `SAVE` and `SAVE A COPY` beside it, two lists, and four
 keys along the bottom.
 
 ## The two lists
 
-**`DEMO SONGS`** are the five that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and
+**`DEMO BANKS`** are the five that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and
 **Funk**. They are read-only — there is no way to overwrite one — and each is a patch plus eight patterns in `A1` to `A8`
 ([`11-the-bank`](11-the-bank.md)). Clicking one loads it as a **new** song: named `New song`, not yet on disk, `UNSAVED`.
 
-**`MY SONGS`** are the songs you have named. Click a row to load one. If what is on screen has unsaved changes, the first
+**`MY BANKS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
 click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
 
 Every row has a small `x` at its right end. One click turns it into `SURE`; the second deletes the song. The demos have no
@@ -25,7 +25,7 @@ format's limit this round, and the picker says so on its own line: `NAMES AND EX
 ## What a save does to a name
 
 This is the part worth reading twice, because it is where work is kept or lost. **Saving is manual by default** — the
-lamp says `UNSAVED` until you do it — and what a save writes depends entirely on the name field.
+name stays amber until you do it — and what a save writes depends entirely on the name field.
 
 | The name field holds | What `SAVE` does |
 |---|---|
