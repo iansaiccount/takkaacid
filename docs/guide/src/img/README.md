@@ -43,8 +43,8 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/top-strip.png` | the top strip in its 3a order: volume, wordmark, gear, `?`, the song name on its plate, the tape deck, the tempo stepper, the pattern readout | `-crop 1960x112+0+92 +repage` |
 | `img/knob-row.png` | the seven tone knobs and their captions | `-crop 1960x480+0+200` |
 | `img/step-row.png` | the sixteen step keys, their LEDs and their numbers | `-crop 1960x280+0+792` |
-| `img/switches.png` | `BANK PATTERN MODE CLEAR SAVE SONGS STEP` | `-crop 1960x132+0+1056` |
-| `img/transport.png` | `RUN STOP TEMPO - TEMPO + LEARN` | `-crop 1960x104+0+1192` |
+| `img/switches.png` | `BANK PATTERN MODE CLEAR SAVE BANKS STEP` | `-crop 1960x132+0+1056` |
+| `img/transport.png` | the row in its 3a form: `REVERSE TBC TRANS - TRANS + LEARN` — the transport itself now lives in the top band's tape deck | `-crop 1960x104+0+1192` |
 
 The five band crops and `strip.png` come from the same session as `first-sound.png` (the strip crop from the two-device
 state, because one cell does not show what a strip is).
