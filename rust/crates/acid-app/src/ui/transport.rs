@@ -30,8 +30,6 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))
 }
 
-/// Cells in the transport row: RUN, STOP, TEMPO −, TEMPO +, LEARN.
-///
 /// Cells in the bottom row: REVERSE, TRANS −, the transpose's readout, TRANS +, TBC, LEARN. Six — the same count as the
 /// switches row above it, so the two rows share one column grid and read as one keypad rather than as a row of keys and a strip
 /// of leftovers. The volume knob lives in the top strip's corner; the transport is the deck in the top band.

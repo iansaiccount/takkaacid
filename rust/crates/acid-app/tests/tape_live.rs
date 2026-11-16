@@ -122,15 +122,67 @@ fn the_deck_draws_shapes_and_no_words() {
     }
 }
 
-/// A lit deck is the transport's, not a guess: play lights while the rack plays, pause while it is paused.
+/// A lit deck is the transport's, not a guess: Play's **face** is the raised one while the rack plays, and the plain key face
+/// while it does not. The first version of this test asserted a `store`/`load` round trip and never looked at a pixel, so a `lit`
+/// hard-wired to `false` passed it.
 #[test]
 fn the_deck_lights_from_the_transport() {
-    let shared = SharedState::new();
-    let mut panel = PanelState::default();
-    let ctx = Context::default();
-    for state in Transport::ALL {
-        shared.set_transport(state);
-        run(&ctx, &mut panel, &shared, vec![]);
-        assert_eq!(shared.transport(), state);
+    use acid_app::device::Scheme;
+    use acid_app::ui::theme;
+    use eframe::egui::Shape;
+
+    fn fills(shapes: &[Shape], rect: Rect, out: &mut Vec<eframe::egui::Color32>) {
+        for shape in shapes {
+            match shape {
+                Shape::Rect(shape) if rect.contains(shape.rect.center()) => out.push(shape.fill),
+                Shape::Vec(inner) => fills(inner, rect, out),
+                _ => {}
+            }
+        }
     }
+
+    // An amber scheme, where a raised face and a plain key face differ: in black they are close, and the test would be weaker.
+    let shared = SharedState::new();
+    let mut panel = PanelState {
+        scheme: Scheme::AmbientMoss,
+        ..PanelState::default()
+    };
+    let ctx = Context::default();
+    let palette = theme::palette(Scheme::AmbientMoss);
+    let play = panel::tape_cells(layout(screen()).top)[1];
+
+    let mut painted = Vec::new();
+    shared.set_transport(Transport::Playing);
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+    out.textures_delta.clear();
+    painted.extend(out.shapes.iter().map(|clipped| clipped.shape.clone()));
+    let mut playing = Vec::new();
+    fills(&painted, play, &mut playing);
+    assert!(
+        playing.contains(&palette.panel_raised),
+        "a playing deck's Play key is the raised face: {playing:?}"
+    );
+
+    shared.set_transport(Transport::Stopped);
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+    out.textures_delta.clear();
+    let mut stopped = Vec::new();
+    let shapes: Vec<Shape> = out
+        .shapes
+        .iter()
+        .map(|clipped| clipped.shape.clone())
+        .collect();
+    fills(&shapes, play, &mut stopped);
+    assert!(
+        stopped.contains(&palette.key_face) && !stopped.contains(&palette.panel_raised),
+        "and a stopped deck's is the plain one: {stopped:?}"
+    );
 }

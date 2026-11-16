@@ -727,7 +727,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // COPY writes the same text `Ctrl+C` writes — the gesture and the key are one format, and `main` puts it on the OS
         // clipboard from the same function — so the two cannot drift.
         let copy_cell = switches::cell(l.switches, switches::Switch::Copy);
-        let holding = state.copied.as_deref() == Some(pattern_text(shared).as_str());
+        let slot = display::format_pattern(state.pattern_id);
+        let holding = state.copied.as_deref() == Some(pattern_text(shared, &slot).as_str());
         let pressed = switch_key(
             ui,
             state,
@@ -751,10 +752,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             );
         }
         if pressed {
-            let text = pattern_text(shared);
+            let text = pattern_text(shared, &slot);
             ui.ctx().copy_text(text.clone());
             state.copied = Some(text);
-            let slot = display::format_pattern(state.pattern_id);
             state.notify(format!("copied {slot}"));
         }
     }
@@ -1116,10 +1116,11 @@ fn open_banks(state: &mut PanelState) {
     };
 }
 
-/// The pattern on the panel, as the clipboard's text: one format, written by the COPY key and by `Ctrl+C` alike.
-fn pattern_text(shared: &SharedState) -> String {
+/// The pattern on the panel, as the clipboard's text — the same text, `from` included, that `Ctrl+C` writes. A copy that did
+/// not name its slot pastes as "a pattern", which is the notice a build that could not say would give.
+fn pattern_text(shared: &SharedState, slot: &str) -> String {
     crate::clipboard::encode(&crate::clipboard::Clip::Pattern {
         pattern: *shared.pattern(),
-        from: None,
+        from: Some(slot.to_string()),
     })
 }

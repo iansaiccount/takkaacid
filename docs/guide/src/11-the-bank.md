@@ -17,8 +17,8 @@ sparser reading of it to build a break on, and the same four for the fill. `B1` 
 - **A learned controller** (CC 21 unless you have taught it somewhere else — [`14-midi`](14-midi.md)). This one is made for playing:
   see below.
 
-The **`BANK`**, **`PATTERN`** and **`MODE`** keys in the switch row are engraved but silent — there is no bank browser
-behind them yet. The keys and the controller are how the bank moves today.
+The **`BANK`** and **`PATTERN`** keys in the switch row are engraved but silent — there is no bank browser behind them
+yet, though `BANKS` opens the list of saved ones. The keys and the controller are how the bank moves today.
 
 ## The swap that waits for the bar
 

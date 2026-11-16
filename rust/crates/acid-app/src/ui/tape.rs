@@ -48,10 +48,8 @@ impl TapeKey {
 
     /// Whether pressing it does anything yet. The unwired three are drawn in the unlit face and their tip says "not wired".
     pub fn wired(self) -> bool {
-        match self {
-            TapeKey::Play | TapeKey::Pause | TapeKey::Stop => true,
-            TapeKey::Back | TapeKey::Forward | TapeKey::Record => false,
-        }
+        // One answer, not two: a key is wired because it asks for something.
+        self.request().is_some()
     }
 
     /// The request a press asks for, if it asks for one.

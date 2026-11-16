@@ -184,6 +184,74 @@ fn the_song_label_is_a_fixed_corridor_after_the_buttons() {
     );
 }
 
+/// The session name is the only thing on the face that says whether the session is at risk, so its **colour** is the
+/// state: `led_accent` while there are unsaved changes, `silkscreen` once it is written. Round 3a shipped that with no test; this
+/// is it.
+#[test]
+fn the_name_says_saved_or_unsaved_by_its_own_colour() {
+    use eframe::egui::Shape;
+
+    fn name_colour(shapes: &[Shape], out: &mut Vec<(String, eframe::egui::Color32)>) {
+        for shape in shapes {
+            match shape {
+                Shape::Text(text) => {
+                    out.push((text.galley.text().to_string(), text.fallback_color))
+                }
+                Shape::Vec(inner) => name_colour(inner, out),
+                _ => {}
+            }
+        }
+    }
+
+    let painted = |panel: &mut PanelState, shared: &SharedState| {
+        let ctx = Context::default();
+        let input = RawInput {
+            screen_rect: Some(screen()),
+            events: vec![],
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            draw_panel(panel, shared, ui);
+        });
+        output.textures_delta.clear();
+        let shapes: Vec<Shape> = output.shapes.iter().map(|c| c.shape.clone()).collect();
+        let mut said = Vec::new();
+        name_colour(&shapes, &mut said);
+        said
+    };
+
+    let shared = SharedState::new();
+    let mut panel = PanelState {
+        // A **named** session with unsaved changes: an unnamed one paints `SONG` in dim, which is a third state and not this
+        // test's. The first version left the name empty and read the dim colour, which is how this test earned its own fix.
+        dirty: true,
+        ..PanelState::default()
+    };
+    panel.songs.name = Some("New song".to_string());
+    let said = painted(&mut panel, &shared);
+    let unsaved = said
+        .iter()
+        .find(|(text, _)| text.starts_with("SONG"))
+        .unwrap_or_else(|| panic!("the name is on the face: {said:?}"));
+    assert_eq!(
+        unsaved.1,
+        acid_app::ui::theme::BLACK.led_accent,
+        "an unsaved session's name is in the accent"
+    );
+
+    panel.dirty = false;
+    let said = painted(&mut panel, &shared);
+    let saved = said
+        .iter()
+        .find(|(text, _)| text.starts_with("SONG"))
+        .expect("the name is still on the face");
+    assert_eq!(
+        saved.1,
+        acid_app::ui::theme::BLACK.silkscreen,
+        "a written session's name is plain silk"
+    );
+}
+
 /// A notice longer than the label keeps its beginning. The clip rect used to cut the message at both ends, so the player
 /// read neither the verb at the front nor the detail at the back.
 #[test]

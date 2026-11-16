@@ -12,7 +12,7 @@ while it is paused.
 
 The tempo readout sits in the top strip, in BPM, from **40–300**. Two things move it a BPM at a time:
 
-- the small `-` and `+` either side of the tempo's number, one BPM each way.
+- the small, stacked `-` and `+` beside the tempo's number, one BPM each way.
 - `up` and `down` on the computer keyboard.
 
 There is a third way in, and it is not a nudge: a learned controller fader throws the tempo wherever you leave it
@@ -48,7 +48,7 @@ step 1, with the clock
 on the downbeat, so the first note you hear after a start is always the first note of the bar. Nothing is quantised: your
 presses land when you press them.
 
-The pattern itself is untouched by any of this — but the touch of a transport key does mark the session unsaved, because
-whether the line was running is part of the session that gets saved.
+The pattern itself is untouched by any of this. The transport is performance, not part of the file: playing, pausing and
+stopping mark nothing unsaved, because the session that gets saved has no field for them.
 
 [`10-performance-row`](10-performance-row.md) is what to reach for while the line is playing.

@@ -49,7 +49,8 @@ Three tables and the files: every gesture, the factory controller map, and the w
 
 **The panel's own keys:** `REVERSE` `TRANS -` `TRANS +` `TBC` `LEARN` in the bottom row; `CLEAR` `RANDOM` in the performance row
 beside the octave keys; `SAVE` `BANKS` `STEP` `COPY` `PASTE` in
-the switch row (`BANK` `PATTERN` `MODE` are engraved and do nothing yet); `OCT -` `OCT +` `RANDOM` on the performance row.
+the switch row (`BANK` and `PATTERN` are engraved and do nothing yet); `OCT -` `OCT +` `CLEAR` `RANDOM` on the performance
+row, with `SHUFFLE`, density and scale at its right.
 **The strip above the panel:** a click on a cell selects that device, its `M` mutes it, and `+` at the right end adds one.
 
 ## The factory controller map
@@ -85,8 +86,8 @@ and tempo wells at the right.
 | Word | Where | Meaning |
 |---|---|---|
 | the song name's colour | after the `?` | amber: unsaved; plain silk: on disk |
-| `SONG <name>` | the middle | the session's name; `SONG untitled` when it has none |
-| a notice | the middle | something just happened — `saved Acid 2`, `saved a copy as Acid 2`, `could not import: …` — for a few seconds, then the name returns |
+| `SONG <name>` | after the `?` | the session's name; `SONG` alone when it has none |
+| a notice | after the `?` | something just happened — `saved Acid 2`, `saved a copy as Acid 2`, `could not import: …` — for a few seconds, then the name returns |
 | `A1` … `H8` | the pattern well | the pattern playing |
 | a number | the tempo well | the tempo in BPM |
 
@@ -109,7 +110,7 @@ OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 **The picker.** `ADD DEVICE`, a row per kind (`ACID`), `CLOSE`, and the line under the rows:
 `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.
 
-**The clipboard's notices**, in the top strip's middle: `copied A1`, `pasted A1 into A2`, `the clipboard has no pattern`.
+**The clipboard's notices**, in the same corridor as the name: `copied A1`, `pasted A1 into A2`, `the clipboard has no pattern`.
 
 **The settings card.**
 

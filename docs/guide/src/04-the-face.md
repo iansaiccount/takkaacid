@@ -21,7 +21,7 @@ another. [`18-a-rack-of-devices`](18-a-rack-of-devices.md) is that page.
 - **the song name**, in the band's left cluster: amber while you have unsaved changes, plain silk once the session is on
   disk. [`03-first-sound`](03-first-sound.md) explains the two states.
 - **The gear** and the **`?`** — the two round keys that open the settings card and the help card.
-- **`SONG`** and the session's name, in the band's left cluster, on a lit plate while there are unsaved changes. It is the song's name, not a file path; a session with no name shows
+- **`SONG`** and the session's name, in the band's left cluster. It is the song's name, not a file path; a session with no name shows
   what a new song is called.
 - **Two readouts** at the right: the pattern that is playing (`A1` … `H8`), and the tempo in BPM. Both are seven-segment
   displays, and both answer the pointer: hover one and it says what it is.
@@ -35,9 +35,9 @@ Seven knobs, in the order the panel draws them: **SAW** (the wave), **TUNING**, 
 
 ## The performance row
 
-The things you reach for while the line is running: **`OCT -`** and **`OCT +`** to move the whole line an octave, the
-**SHUFFLE** knob, **`RANDOM`** with its density and its scale, and the scale knob itself, which prints the scale it is
-sitting on (`CHROM` for chromatic). [`10-performance-row`](10-performance-row.md) is that page.
+The things you reach for while the line is running: **`OCT -`** and **`OCT +`** to move the whole line an octave,
+**`CLEAR`** to empty the pattern (in two clicks), **`RANDOM`**, the **`SHUFFLE`** knob, and the density and scale knobs — the
+last printing the scale it is sitting on (`CHROM` for chromatic). [`10-performance-row`](10-performance-row.md) is that page.
 
 ## The step row
 
@@ -55,17 +55,18 @@ nothing for it to glide into.
 
 ![The switches](img/switches.png)
 
-Seven keys. Four of them work today: **`CLEAR`** empties the pattern (in two clicks), **`SAVE`** writes it to disk,
-**`BANKS`** opens the bank browser, and **`STEP`** turns on the mode where the computer keyboard types a line instead of
-playing it. The other three — **`BANK`**, **`PATTERN`** and **`MODE`** — are engraved and silent: there is nothing behind
-them yet, and the bank is moved from the keyboard or a learned controller instead ([`11-the-bank`](11-the-bank.md)).
+Seven keys. Five of them work today: **`COPY`** and **`PASTE`** move the pattern through the clipboard
+([`21-copy-and-paste`](21-copy-and-paste.md)), **`SAVE`** writes the session to disk, **`BANKS`** opens the bank browser, and
+**`STEP`** turns on the mode where the computer keyboard types a line instead of playing it. The other two — **`BANK`** and
+**`PATTERN`** — are engraved and silent: there is nothing behind them yet, and the bank is moved from the keyboard or a
+learned controller instead ([`11-the-bank`](11-the-bank.md)).
 
 ## The transport
 
 ![The transport](img/transport.png)
 
-**`REVERSE`**, **`TRANS -`**, **`TRANS +`**, the transpose's readout between them, **`TBC`** and **`LEARN`**. The first two are
-this device's direction and the rack's transpose; `LEARN` is how a MIDI
+**`REVERSE`**, **`TRANS -`**, **`TRANS +`**, the transpose's readout between them, **`TBC`** and **`LEARN`**. `REVERSE` is
+this device's direction and the transpose pair moves the whole rack; `LEARN` is how a MIDI
 controller gets taught a control ([`14-midi`](14-midi.md)).
 
 ## The panel is one piece, and it scales

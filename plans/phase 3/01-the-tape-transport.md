@@ -315,3 +315,35 @@ were checked against the tree one by one; all four code findings were real.
   test), `Control::Run`'s orphaned tip, the transpose having no readout before the keypad rework (now it has one), `PAUSE` from
   `Stopped` being a silent dead key, `AGENTS.md` still saying `phase 2/` is in flight, and `00-phase-3.md`'s "Stopped — position at
   the first step of the bar", which is not what `Engine::stop` does.
+
+## The final review's findings, and what stands
+
+The final whole-branch read (`98dd3210`) returned **BLOCK**, with 34 findings. Its P1s were real and are fixed:
+
+- **The book's stale sentences** it named (the switches row in three pages, "on a lit plate" in three places, "in the middle" in
+  four, the `dirty` sentence the earlier review killed back again in 09, the space bar described as a stop in 03, the tempo pair
+  described as flanking the number, `SONG untitled` a face that never prints it, and six lying rows in `img/README.md`) — all
+  rewritten, and the page that documents the switch row now names `COPY`/`PASTE`, with page 21 saying they are the same two
+  gestures with a pointer.
+- **`REVERSE` marked the session unsaved** — the exact bug the earlier review removed, back in the row. Gone, with the reason in
+  a comment beside it.
+- **`COPY` wrote a different clip from `Ctrl+C`** (`from: None` against `Some(slot)`), so a paste said "pasted a pattern into A2"
+  where the gesture says "pasted A1 into A2". `pattern_text` names its slot now.
+- **`TapeKey::wired()`** asks `request()`; the `"NOTHING TO DO"` arm it made unreachable is the leftover, recorded below.
+- **`the_deck_lights_from_the_transport` could not fail** — it asserted a `store`/`load` round trip and looked at no pixel. It reads
+  the fill of Play's cell now, in an amber scheme where the two faces differ, and it was checked by making an unnamed session
+  paint the dim `SONG` and watching the new sibling test fail for the right reason.
+- **Round 3a's headline had no test**: `the_name_says_saved_or_unsaved_by_its_own_colour` asserts the painted colour of the name
+  in both states. Writing it found the third state (unnamed → dim) and that a test which sets `dirty` but not a name was testing
+  the wrong branch.
+- **The two rows are not one grid.** `TRANSPORT_CELLS` is 6 against `Switch::ALL.len()`'s 7, so the cells are wider and the rows
+  meet only at the right wall. Both the code comment and this Progress said otherwise; both are corrected, and the choice — a
+  seven-cell bottom row, or a switch dropped to make six — is a face for the player.
+
+**Still owed, from the same review, and recorded rather than lost:** the row's positional `cells[..]` destructuring wants a `Cell`
+catalogue like `Switch`'s (F30); `PASTE`'s `RequestPaste`, the transpose's rack-level clamp and the readout's inertness have no
+test (F21, F23, F27); the name-as-door's second click proves the shield rather than the toggle (F22); `Control::Run`'s orphaned
+tip and the `"NOTHING TO DO"` arm (F12's neighbour); the help card's "saved on exit and 2 s after a change" still contradicts
+`AUTOSAVE` (F12); "What a restart costs" omits the direction and the transpose (F13); `check.sh` pins only positive facts, so none
+of F1–F8 could fail the gate (F16); `ui/songs.rs`, `songs::Songs`, `Switch::Songs` and the `song-*` ids keep the old name while
+the caption says `BANKS` (F33); and `COPY`'s per-frame encoding allocates on the UI thread (F31).

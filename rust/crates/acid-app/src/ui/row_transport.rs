@@ -43,8 +43,9 @@ pub(super) fn draw(
             },
             p,
         ) {
+            // Not `dirty`: the direction lives in `SharedState` and no save file has a field for it. The transpose keys
+            // beside it do not dirty for the same reason, and one of them dirtying is a file written for nothing.
             state.transport_request = Some(transport::Request::Reverse(!reversed));
-            state.dirty = true;
         }
         // TBC: a cell kept for the player. It says so rather than doing nothing, because a silent key reads as broken.
         if switch_key(
