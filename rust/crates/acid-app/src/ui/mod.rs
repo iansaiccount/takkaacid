@@ -543,9 +543,17 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         } else {
             "SONG\nThis session has no name yet".to_string()
         };
-        let response = ui.interact(label, ui.scope_id().with("song-name"), egui::Sense::hover());
+        // The name is a door as well as a label: the bank browser is how a session is loaded and saved, and the icons that
+        // used to open it were cut in round 3a for room the deck needed. A label that answers a click is the cheapest way back in.
+        let response = ui.interact(label, ui.scope_id().with("song-name"), egui::Sense::click());
         if response.hovered() {
-            response.on_hover_text(said);
+            response
+                .clone()
+                .on_hover_text(format!("{said}\nClick for the banks"));
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        if response.clicked() {
+            open_banks(state);
         }
     }
     // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
@@ -757,7 +765,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     {
         let songs_cell = switches::cell(l.switches, switches::Switch::Songs);
-        // The card lists what is on disk, so opening it reads the songs directory once.
+        // The card lists what is on disk, so opening it reads the songs directory once — in `open_banks`, because the
+        // session name is the second way in and the two must not drift.
         if switch_key(
             ui,
             state,
@@ -770,20 +779,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             },
             p,
         ) {
-            state.songs.card = match state.songs.card {
-                Some(_) => None,
-                None => Some(songs::Songs {
-                    names: crate::persist::list_songs(&crate::persist::data_dir()),
-                    // The demos are built into the binary, so the card only needs their names to list them.
-                    demos: crate::demo::songs()
-                        .iter()
-                        .map(|demo| demo.name.to_string())
-                        .collect(),
-                    name: state.songs.name.clone().unwrap_or_default(),
-                    open: state.songs.file.clone(),
-                    ..songs::Songs::default()
-                }),
-            };
+            open_banks(state);
         }
     }
     {
@@ -1065,4 +1061,24 @@ fn draw_settings(
         Some(settings::Click::Ask(request)) => state.settings_request = Some(request),
         None => {}
     }
+}
+
+/// Open the bank browser, or close it: the one rule for the card, whose two doors are the `BANKS` key and the session name.
+///
+/// Opening reads the songs directory, so it is not something to do twice a frame; nothing else remembers what is on disk.
+fn open_banks(state: &mut PanelState) {
+    state.songs.card = match state.songs.card {
+        Some(_) => None,
+        None => Some(songs::Songs {
+            names: crate::persist::list_songs(&crate::persist::data_dir()),
+            // The demos are built into the binary, so the card only needs their names to list them.
+            demos: crate::demo::songs()
+                .iter()
+                .map(|demo| demo.name.to_string())
+                .collect(),
+            name: state.songs.name.clone().unwrap_or_default(),
+            open: state.songs.file.clone(),
+            ..songs::Songs::default()
+        }),
+    };
 }

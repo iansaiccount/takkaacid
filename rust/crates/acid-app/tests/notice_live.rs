@@ -229,3 +229,54 @@ fn a_notice_that_fits_is_untouched() {
     let found = lines.iter().any(|(text, _)| text == "saved Acid 1");
     assert!(found, "a short notice is painted as written: {lines:?}");
 }
+
+/// The name answers a click by opening the bank browser, and a second click closes it — the same toggle the `BANKS` key is.
+///
+/// This is the way back into loading and saving after round 3a removed the two document icons for room the deck needed: without
+/// it the only door was a switch in the row below, which a player looking at the session name would not find.
+#[test]
+fn clicking_the_session_name_opens_the_bank_browser() {
+    use eframe::egui::{Event, Modifiers, PointerButton};
+
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let ctx = Context::default();
+    let label = panel::song_label_rect(layout(screen()).top, scale(screen()));
+
+    // A frame with events of its own: this file's `frame` helper publishes none, and a click is two events and two frames.
+    let run = |panel: &mut PanelState, events: Vec<Event>| {
+        let input = RawInput {
+            screen_rect: Some(screen()),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            draw_panel(panel, &shared, ui);
+        });
+        out.textures_delta.clear();
+    };
+    let click = |panel: &mut PanelState| {
+        let at = label.center();
+        let button = |pressed: bool| Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::default(),
+        };
+        run(panel, vec![Event::PointerMoved(at)]);
+        run(panel, vec![button(true)]);
+        run(panel, vec![button(false)]);
+    };
+
+    click(&mut panel);
+    assert!(
+        panel.songs.card.is_some(),
+        "the name opens the bank browser"
+    );
+
+    click(&mut panel);
+    assert!(
+        panel.songs.card.is_none(),
+        "and a second click closes it, like the BANKS key"
+    );
+}
