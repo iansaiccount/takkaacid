@@ -39,7 +39,7 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
 
 /// LEARN is the fifth transport key.
 fn learn_centre() -> Pos2 {
-    knob_cells(layout(screen()).transport, TRANSPORT_CELLS)[4].center()
+    knob_cells(layout(screen()).transport, TRANSPORT_CELLS)[TRANSPORT_CELLS - 1].center()
 }
 
 /// The CUT OFF knob is the third cell of the knob row.

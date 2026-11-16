@@ -87,21 +87,6 @@ pub(super) fn draw(
             }
         }
 
-        // The transpose reads out between the two clusters: it is the one performance value with no key of its own, and a
-        // player pressing TRANS +/- needs to see where the rack has got to.
-        let readout = l.perform.area.center();
-        ui.painter().text(
-            readout,
-            egui::Align2::CENTER_CENTER,
-            format!("TRANS {:+#}", shared.transpose()),
-            theme::legend(11.0 * s),
-            if shared.transpose() == 0 {
-                p.silkscreen_dim
-            } else {
-                p.led_accent
-            },
-        );
-
         // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and a learned controller
         // writes the same atomic, so the fader and the hand meet in one place.
         //

@@ -166,7 +166,7 @@ fn the_transpose_keys_ask_for_a_semitone_each_way() {
         panel.transport_request,
         Some(transport::Request::Transpose(1))
     );
-    click_transport(&shared, &mut panel, 2); // TRANS -
+    click_transport(&shared, &mut panel, 1); // TRANS -, the left of the pair
     assert_eq!(
         panel.transport_request,
         Some(transport::Request::Transpose(-1))
@@ -179,7 +179,8 @@ fn the_tbc_key_says_what_it_is() {
     // broken, and this one has no feature to be silent about.
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    click_transport(&shared, &mut panel, 1);
+    // TBC is the cell after the transpose pair, since the readout took the middle.
+    click_transport(&shared, &mut panel, 4);
     assert_eq!(
         panel.transport_request, None,
         "TBC asks the rack for nothing"

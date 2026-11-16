@@ -74,7 +74,8 @@ fn learn_centre() -> Pos2 {
         acid_app::ui::layout::layout(window()).transport,
         acid_app::ui::transport::TRANSPORT_CELLS,
     );
-    cells[4].center()
+    // LEARN is the row's last cell: the transpose readout took the middle, so the count and the place both moved.
+    cells[acid_app::ui::transport::TRANSPORT_CELLS - 1].center()
 }
 
 #[test]

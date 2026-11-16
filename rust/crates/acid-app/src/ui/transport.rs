@@ -32,9 +32,10 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
 
 /// Cells in the transport row: RUN, STOP, TEMPO −, TEMPO +, LEARN.
 ///
-/// The fifth cell is the MIDI learn key, not a volume: the volume knob lives in the top strip's corner, and the name this
-/// comment used to carry was a leftover from before learn had a cell.
-pub const TRANSPORT_CELLS: usize = 5;
+/// Cells in the bottom row: REVERSE, TRANS −, the transpose's readout, TRANS +, TBC, LEARN. Six — the same count as the
+/// switches row above it, so the two rows share one column grid and read as one keypad rather than as a row of keys and a strip
+/// of leftovers. The volume knob lives in the top strip's corner; the transport is the deck in the top band.
+pub const TRANSPORT_CELLS: usize = 6;
 /// A key on one of the cards. Every card is painted in the black scheme whatever the face behind it does, so this is the one
 /// place that says so — a card that took the face's palette would go amber over an amber device.
 pub fn card_button(ui: &mut egui::Ui, id: &str, rect: Rect, label: &str, lit: bool) -> Response {

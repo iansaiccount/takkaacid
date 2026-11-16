@@ -19,7 +19,15 @@ pub(super) fn draw(
     // the transport and fans it out to every device, so a row that wrote the displayed device's atomic would be undone by
     // the next sync.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
-    if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {
+    if let [
+        reverse_cell,
+        transpose_down,
+        readout,
+        transpose_up,
+        tbc_cell,
+        learn_cell,
+    ] = cells[..]
+    {
         // REVERSE is the displayed device's direction, read from its own state and asked for as a request: the engine takes
         // it at the bar line, so the key may be lit for a bar before the line turns.
         let reversed = shared.is_reversed();
@@ -28,7 +36,7 @@ pub(super) fn draw(
             state,
             Key {
                 id: "reverse",
-                rect: run,
+                rect: reverse_cell,
                 label: "REVERSE",
                 lit: reversed,
                 control: tips::Control::Reverse,
@@ -44,7 +52,7 @@ pub(super) fn draw(
             state,
             Key {
                 id: "tbc",
-                rect: stop,
+                rect: tbc_cell,
                 label: "TBC",
                 lit: false,
                 control: tips::Control::Tbc,
@@ -59,7 +67,7 @@ pub(super) fn draw(
             state,
             Key {
                 id: "transpose-down",
-                rect: tempo_down,
+                rect: transpose_down,
                 label: "TRANS -",
                 lit: shared.transpose() < 0,
                 control: tips::Control::TransposeDown,
@@ -73,7 +81,7 @@ pub(super) fn draw(
             state,
             Key {
                 id: "transpose-up",
-                rect: tempo_up,
+                rect: transpose_up,
                 label: "TRANS +",
                 lit: shared.transpose() > 0,
                 control: tips::Control::TransposeUp,
@@ -83,6 +91,32 @@ pub(super) fn draw(
             state.transport_request = Some(transport::Request::Transpose(1));
         }
 
+        // The transpose reads out between the two keys that move it, in a well of its own: the value and the keys that change
+        // it are one cluster, the way the tempo's `+` and `−` sit either side of its number in the top band.
+        {
+            let well = readout;
+            let painter = ui.painter();
+            painter.rect_filled(well, 3.0, p.well);
+            painter.rect_stroke(
+                well,
+                3.0,
+                p.silkscreen_stroke(1.0),
+                egui::StrokeKind::Inside,
+            );
+            let semitones = shared.transpose();
+            painter.text(
+                well.center(),
+                egui::Align2::CENTER_CENTER,
+                format!("{semitones:+}"),
+                theme::legend(14.0),
+                if semitones == 0 {
+                    p.silkscreen_dim
+                } else {
+                    p.led_accent
+                },
+            );
+        }
+
         // The last transport cell is the MIDI LEARN key (see `ui::learn`), so the row keeps its five keys while
         // the volume knob lives in the top strip's corner.
         if switch_key(
@@ -90,7 +124,7 @@ pub(super) fn draw(
             state,
             Key {
                 id: "learn",
-                rect: volume_cell,
+                rect: learn_cell,
                 label: learn::label(state.learn),
                 lit: state.learn != learn::Step::Idle,
                 control: tips::Control::Learn,
