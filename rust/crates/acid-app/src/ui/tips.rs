@@ -243,8 +243,8 @@ const TIPS: [Tip; 39] = [
         shortcut: None,
     },
     Tip {
-        title: "SONGS",
-        what: "Name, save, copy, import, export, load or delete a song.",
+        title: "BANKS",
+        what: "Browse, load, save, copy, import, export or delete a bank. A bank is one device's patterns and knobs.",
         shortcut: None,
     },
     Tip {

@@ -77,7 +77,7 @@ pub fn paint(
     painter.text(
         egui::Pos2::new(left, y),
         egui::Align2::LEFT_TOP,
-        "SONGS",
+        "BANKS",
         theme::legend(13.0 * scale),
         theme::BLACK.silkscreen,
     );
@@ -143,7 +143,7 @@ pub fn paint(
 
     // The demos first: they are what a player reaches for when they want a sound, and they are not files, so there is no
     // cross and no rename. Loading one replaces the session, which takes two clicks while it is unsaved.
-    section(ui, scale, "DEMO SONGS", left, &mut y);
+    section(ui, scale, "DEMO BANKS", left, &mut y);
     for index in 0..songs.demos.len() {
         let name = songs.demos[index].clone();
         let row = Rect::from_min_size(
@@ -167,7 +167,7 @@ pub fn paint(
     }
 
     // Then the player's own songs: the name loads it, the cross beside it deletes it (twice, because there is no undo).
-    section(ui, scale, "MY SONGS", left, &mut y);
+    section(ui, scale, "MY BANKS", left, &mut y);
     for index in 0..songs.names.len() {
         let name = songs.names[index].clone();
         let row = Rect::from_min_size(

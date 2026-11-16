@@ -764,7 +764,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             Key {
                 id: "songs",
                 rect: songs_cell,
-                label: "SONGS",
+                label: "BANKS",
                 lit: state.songs.card.is_some(),
                 control: tips::Control::Songs,
             },

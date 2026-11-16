@@ -52,7 +52,7 @@ impl Switch {
             Switch::Mode => "MODE",
             Switch::Clear => "CLEAR",
             Switch::Save => "SAVE",
-            Switch::Songs => "SONGS",
+            Switch::Songs => "BANKS",
             Switch::Step => "STEP",
         }
     }
