@@ -48,7 +48,7 @@ pub fn volume_knob_rect(top: Rect) -> Rect {
 /// How wide the wordmark's corner is, as a multiple of the band's height. The wordmark is one constant word at one size, so
 /// this is *its* width and not a share of the band: a fraction left a corner wider than the word in it, and the player saw the
 /// gap as space between the logo and everything else.
-const BRAND_WIDTH: f32 = 2.65;
+const BRAND_WIDTH: f32 = 2.15;
 /// How much of the band the session name's corridor takes, measured from the wordmark's corner. Fixed, not fitted to the
 /// name: a corridor that grew with its contents would move the deck every time a song was named, and the fit inside a fixed
 /// corridor is what the tooltip exists to complete.
@@ -58,7 +58,7 @@ const NAME_FRACTION: f32 = 0.10;
 const CLUSTER_BUTTON: f32 = 18.0 / 56.0;
 /// How wide the tempo's number is, as a fraction of the band. Narrower than it was: the section now also holds the two nudge
 /// keys, and every pixel the number gives up is a pixel the deck keeps.
-const TEMPO_WELL: f32 = 0.10;
+const TEMPO_WELL: f32 = 0.13;
 
 /// The wordmark's corner of the top strip: right of the volume knob, so the two never collide.
 pub fn brand_rect(top: Rect) -> Rect {
@@ -149,8 +149,9 @@ const TAPE_KEY_MIN: f32 = 0.18;
 pub fn tape_cells(top: Rect) -> [Rect; TAPE_COUNT] {
     // From the help dot to the pattern readout: the room the saved word and the name's tail used to spend, now the deck's.
     let left = song_label_rect(top, 1.0).right() + theme::GAP;
-    // The stepper sits between the deck and the pattern readout, so the deck stops at the stepper's `−`.
-    let right = tempo_stepper_cells(top)[0].left() - theme::GAP;
+    // The stepper sits between the deck and the pattern readout, and the record key needs air before the section: two
+    // gaps, not one, or the tempo's outline reads as part of the deck.
+    let right = tempo_stepper_cells(top)[0].left() - theme::GAP * 2.0;
     let span = (right - left).max(1.0);
     let tallest = top.height() * TAPE_KEY_MAX;
     let shortest = (top.height() * TAPE_KEY_MIN).max(1.0);

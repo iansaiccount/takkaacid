@@ -531,17 +531,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         ),
         None => ("SONG".to_string(), p.silkscreen_dim),
     };
-    if notice.is_none() && unsaved {
-        // The plate, not a heavier word: the bundled font has one weight, so "bold" is a lit key's language. It hugs the name
-        // rather than the corridor — a plate the width of the corridor reads as a display well, not as a word that is lit.
-        let font = theme::legend(10.0 * s);
-        let galley = ui.painter().layout_no_wrap(line.clone(), font, colour);
-        let width = galley.size().x.min(label.width());
-        let plate =
-            egui::Rect::from_min_size(label.left_center(), egui::vec2(width, label.height()))
-                .expand2(egui::vec2(3.0 * s, 2.0 * s));
-        ui.painter().rect_filled(plate, 3.0 * s, p.panel_raised);
-    }
+    // The name is drawn in `led_accent` while there are unsaved changes and in plain silk when there are none. The plate the
+    // design first proposed was cut by the player, who read it as a stray rectangle under the name rather than as emphasis;
+    // the state still reaches the pointer, because the tooltip ends `(unsaved)` or `(saved)`.
     if notice.is_none() {
         // The only dynamic tooltip on this face: it carries a name the player typed, so it cannot come from `ui::tips`.
         let full = song_label(state.songs.name.as_deref());
