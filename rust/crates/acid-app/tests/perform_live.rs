@@ -75,7 +75,7 @@ fn the_shuffle_knob_writes_the_swing_the_clock_uses() {
     let ctx = Context::default();
     let shared = lit_shared();
     let mut panel = PanelState::default();
-    let at = cell(2);
+    let at = cell(4);
     assert_eq!(shared.swing.get(), 0.0);
 
     // A hand on the knob: a warm-up frame, the press, then the move.
@@ -173,7 +173,7 @@ fn the_density_knob_sets_how_full_a_roll_is() {
     let mut panel = PanelState::default();
     assert_eq!(panel.density, acid_app::ui::randomise::DEFAULT_DENSITY);
 
-    drag(&ctx, &mut panel, &shared, 4, 30.0);
+    drag(&ctx, &mut panel, &shared, 5, 30.0);
     assert!(
         panel.density > 0.5,
         "the knob should have turned up: {}",
@@ -196,7 +196,7 @@ fn the_scale_knob_snaps_to_a_catalogue_entry() {
     let mut panel = PanelState::default();
     assert_eq!(panel.scale, Scale::Chromatic);
 
-    drag(&ctx, &mut panel, &shared, 5, 30.0);
+    drag(&ctx, &mut panel, &shared, 6, 30.0);
     assert_ne!(panel.scale, Scale::Chromatic, "the knob should have moved");
     // The face rests on a detent, never between two scales.
     assert_eq!(panel.scale_knob, scale_position(panel.scale));

@@ -2,7 +2,6 @@
 
 use acid_app::state::SharedState;
 use acid_app::ui::layout::layout;
-use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::pattern::Step;
 use acid_core::pitch::Pitch;
@@ -22,9 +21,10 @@ fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: V
     output.textures_delta.clear();
 }
 
-/// The CLEAR button is the fourth cell of the switches row.
+/// CLEAR is the third cell of the performance row since it moved beside the octave keys — asked of the layout, so the
+/// next move changes one line.
 fn clear_centre() -> Pos2 {
-    switches::cell(layout(screen()).switches, Switch::Clear).center()
+    acid_app::ui::layout::layout(screen()).perform.cells[2].center()
 }
 
 fn step_centre(index: usize) -> Pos2 {
@@ -161,6 +161,13 @@ fn a_click_on_the_panel_elsewhere_leaves_the_pattern_alone() {
 #[test]
 fn the_clear_button_sits_where_the_layout_says() {
     // Cheap guard for the harness: a button outside the window could never be clicked.
-    let cell = switches::cell(layout(screen()).switches, Switch::Clear);
+    let cell = acid_app::ui::layout::layout(screen()).perform.cells[2];
     assert!(screen().contains_rect(cell));
+    assert!(
+        acid_app::ui::layout::layout(screen())
+            .perform
+            .area
+            .contains_rect(cell),
+        "CLEAR belongs to the performance row now"
+    );
 }

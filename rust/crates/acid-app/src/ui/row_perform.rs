@@ -23,8 +23,9 @@ pub(super) fn draw(
     if let [
         octave_down,
         octave_up,
-        shuffle_cell,
+        clear_cell,
         randomise_cell,
+        shuffle_cell,
         density_cell,
         scale_cell,
     ] = l.perform.cells[..]
@@ -57,6 +58,49 @@ pub(super) fn draw(
                 state.dirty = true;
             }
         }
+
+        // CLEAR empties the pattern on screen. It is the one action here with no undo, so it takes two clicks
+        // (`ui::clear`), and it lives beside the octave keys because it is a thing done to the pattern rather than to the roll.
+        let now = std::time::Instant::now();
+        let armed = super::clear::is_armed(state.clear_armed_at, now);
+        if switch_key(
+            ui,
+            state,
+            Key {
+                id: "clear-pattern",
+                rect: clear_cell,
+                label: if armed { "CLEAR?" } else { "CLEAR" },
+                lit: armed,
+                control: tips::Control::Clear,
+            },
+            p,
+        ) {
+            match super::clear::click(state.clear_armed_at, now) {
+                super::clear::Click::Armed => state.clear_armed_at = Some(now),
+                super::clear::Click::Cleared => {
+                    super::clear::disarm(state);
+                    let empty = Arc::new(acid_core::pattern::Pattern::empty());
+                    shared.set_pattern(Arc::clone(&empty));
+                    state.pattern = empty;
+                    state.dirty = true;
+                }
+            }
+        }
+
+        // The transpose reads out between the two clusters: it is the one performance value with no key of its own, and a
+        // player pressing TRANS +/- needs to see where the rack has got to.
+        let readout = l.perform.area.center();
+        ui.painter().text(
+            readout,
+            egui::Align2::CENTER_CENTER,
+            format!("TRANS {:+#}", shared.transpose()),
+            theme::legend(11.0 * s),
+            if shared.transpose() == 0 {
+                p.silkscreen_dim
+            } else {
+                p.led_accent
+            },
+        );
 
         // SHUFFLE is a knob, not a key: it is the `swing` value the clock has always used, and a learned controller
         // writes the same atomic, so the fader and the hand meet in one place.

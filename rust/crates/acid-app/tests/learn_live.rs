@@ -197,7 +197,7 @@ fn the_tempo_and_pattern_readouts_can_be_taught() {
 fn the_switches_row_has_no_reset_key() {
     // RESET rewrote the whole map from a dark key beside LEARN; it was removed rather than moved, so the row is seven
     // keys and none of them prints it.
-    assert_eq!(switches::Switch::ALL.len(), 7);
+    assert_eq!(switches::Switch::ALL.len(), 6);
     for switch in switches::Switch::ALL {
         assert_ne!(switch.label(), "RESET", "{switch:?} is back");
     }
@@ -209,7 +209,7 @@ fn clicking_the_shuffle_knob_while_choosing_asks_for_a_shuffle_fader() {
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    let shuffle = layout(screen()).perform.cells[2].center();
+    let shuffle = layout(screen()).perform.cells[4].center();
 
     // Outside a learn the knob is a knob: this click is a press-and-release with no drag, so nothing moves, and no
     // binding starts.
@@ -237,7 +237,7 @@ fn the_shuffle_knob_stays_on_the_panel_while_a_learn_is_choosing() {
     click(&ctx, &mut panel, &shared, learn_centre());
     assert_eq!(panel.learn, Step::Choosing);
 
-    let at = layout(screen()).perform.cells[2].center();
+    let at = layout(screen()).perform.cells[4].center();
     let input = RawInput {
         screen_rect: Some(screen()),
         events: vec![Event::PointerMoved(at)],

@@ -716,46 +716,16 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         );
     }
     {
-        let clear_cell = switches::cell(l.switches, switches::Switch::Clear);
-        let now = std::time::Instant::now();
-        let armed = clear::is_armed(state.clear_armed_at, now);
-        let label = if armed { "CLEAR?" } else { "CLEAR" };
-        if switch_key(
-            ui,
-            state,
-            Key {
-                id: "clear-pattern",
-                rect: clear_cell,
-                label,
-                lit: armed,
-                control: tips::Control::Clear,
-            },
-            p,
-        ) {
-            match clear::click(state.clear_armed_at, now) {
-                clear::Click::Armed => state.clear_armed_at = Some(now),
-                clear::Click::Cleared => {
-                    clear::disarm(state);
-                    let empty = Arc::new(Pattern::empty());
-                    shared.set_pattern(Arc::clone(&empty));
-                    state.pattern = empty;
-                    state.dirty = true;
-                }
-            }
-        }
-    }
-    {
+        // SAVE writes the session; whether it worked is `main`'s to know, so it asks and leaves `dirty` alone.
         let save_cell = switches::cell(l.switches, switches::Switch::Save);
-        // Lit while something is unsaved, so the key doubles as the "there is work to keep" lamp.
-        let dirty = state.dirty;
         if switch_key(
             ui,
             state,
             Key {
-                id: "save-session",
+                id: "save",
                 rect: save_cell,
                 label: "SAVE",
-                lit: dirty,
+                lit: false,
                 control: tips::Control::Save,
             },
             p,
