@@ -48,7 +48,7 @@ pub fn volume_knob_rect(top: Rect) -> Rect {
 /// How wide the wordmark's corner is, as a multiple of the band's height. The wordmark is one constant word at one size, so
 /// this is *its* width and not a share of the band: a fraction left a corner wider than the word in it, and the player saw the
 /// gap as space between the logo and everything else.
-const BRAND_WIDTH: f32 = 2.15;
+const BRAND_WIDTH: f32 = 1.95;
 /// How much of the band the session name's corridor takes, measured from the wordmark's corner. Fixed, not fitted to the
 /// name: a corridor that grew with its contents would move the deck every time a song was named, and the fit inside a fixed
 /// corridor is what the tooltip exists to complete.
