@@ -17,8 +17,12 @@ pub struct Sequencer {
     pattern: Arc<Pattern>,
     /// Current step, always `0..STEPS_PER_PATTERN`.
     position: usize,
-    /// Read the pattern from its other end. A direction, not a different pattern: nothing is stored, copied or saved.
+    /// Read the pattern from its other end. A direction, not a different pattern: nothing is stored, copied or saved. It only
+    /// ever changes on a bar line — see [`Sequencer::set_reverse`].
     reverse: bool,
+    /// A direction asked for while the bar is running. It waits for the wrap: flipping under the line would put the two halves
+    /// of a bar out of phase, and a bar is the unit the whole instrument agrees on.
+    reverse_pending: Option<bool>,
     /// Whether the step that was just played carried a slide, so the next note glides into place.
     prev_slide: bool,
     running: bool,
@@ -35,6 +39,7 @@ impl Sequencer {
             pattern: Arc::new(Pattern::empty()),
             position: 0,
             reverse: false,
+            reverse_pending: None,
             prev_slide: false,
             running: false,
             trigger_pending: false,
@@ -102,9 +107,20 @@ impl Sequencer {
         self.running
     }
 
-    /// Run the line backwards from the next step that sounds. The step the clock is on does not move.
+    /// Ask for a direction. A stopped transport takes it at once; a running one takes it on the next bar line, so the change
+    /// lands where every other device's bar also lands. The step the clock is on does not move either way.
     pub fn set_reverse(&mut self, reverse: bool) {
-        self.reverse = reverse;
+        if self.running {
+            self.reverse_pending = Some(reverse);
+        } else {
+            self.reverse = reverse;
+            self.reverse_pending = None;
+        }
+    }
+
+    /// Whether a direction is waiting for the bar.
+    pub fn reverse_is_pending(&self) -> bool {
+        self.reverse_pending.is_some()
     }
 
     pub fn is_reverse(&self) -> bool {
@@ -186,7 +202,15 @@ impl Sequencer {
 
             let crossed = self.clock.advance_by(take);
             if crossed > 0 {
+                let before = self.position;
                 self.position = (self.position + crossed) % STEPS_PER_PATTERN;
+                // The bar line is where a direction may change: the step that sounds next is the first of a new bar, and both
+                // halves of the old one played in the direction the bar began in.
+                if (self.position < before || (self.position == 0 && crossed > 0))
+                    && let Some(next) = self.reverse_pending.take()
+                {
+                    self.reverse = next;
+                }
                 self.trigger(voice, self.position);
             }
         }

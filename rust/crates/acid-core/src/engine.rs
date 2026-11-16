@@ -246,6 +246,16 @@ impl Engine {
         self.sequencer.set_reverse(reverse);
     }
 
+    /// Whether the direction asked for is waiting for the next bar line.
+    pub fn reverse_is_pending(&self) -> bool {
+        self.sequencer.reverse_is_pending()
+    }
+
+    /// The direction the line is playing in now.
+    pub fn is_reverse(&self) -> bool {
+        self.sequencer.is_reverse()
+    }
+
     /// The one place that turns the saved knob and the unsaved transpose into one semitone offset at the voice.
     fn apply_tuning(&mut self) {
         let knob = param::tuning_semitones(self.knobs.tuning);
