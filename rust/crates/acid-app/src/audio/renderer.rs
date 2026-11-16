@@ -137,7 +137,13 @@ impl AudioRenderer {
         if let Some(step) = self.pending_seek.take()
             && params.transport != crate::device::Transport::Stopped
         {
+            // A seek arms the clock, which is what a joining device wants on a *running* rack and exactly what it must not do
+            // on a paused one: it would run while the rack — and its own mirror — said paused. Take the step, then put the
+            // silence back.
             self.engine.start_at(step);
+            if params.transport != crate::device::Transport::Playing {
+                self.engine.pause();
+            }
         }
 
         // MIDI: a rising gate starts a note, a falling one releases it. Only edges act, so a held note is

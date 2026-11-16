@@ -147,7 +147,6 @@ impl eframe::App for TakkaApp {
                     self.rack.set_tempo_bpm(next);
                 }
             }
-            self.panel.dirty = true;
         }
         let status = self.rack.state().status();
         let text = match &status {
