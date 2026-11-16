@@ -250,7 +250,14 @@ stored reversed pattern.
       rewind), and the three unwired keys answer on the keyboard — `,`, `.` and `R` — and on a click: both halves say the same
       words from one place each (`dispatch::not_wired`, and `tape::draw`'s notice). `main` already drains `Play`/`Pause`/`Stop`
       to the rack. Still owed: the tests for the space/keydown paths, and the words decision below.
-- [ ] Task 5 — the bottom row
+- [ ] **Task 5 — the bottom row** (started). The **engine half** has landed: `Sequencer::set_reverse` makes the clock read its
+      pattern from the other end while the position, the bar and `last_position` keep their meaning — a direction, not a copied
+      pattern, so nothing is stored or saved; and `Engine::set_transpose` adds semitones on top of the TUNING knob through one
+      `apply_tuning`, clamped to an octave, deliberately outside the patch. Proven by `tests/reverse_and_transpose.rs`: a pattern
+      whose step 0 is a rest and step 15 a note sounds silent forwards and sounds backwards on the same step; flipping the
+      direction leaves the clock's step alone; and the transpose never rewrites the knob. Still owed: `SharedState::reversed` and
+      `Rack::transpose` with their fan-out, `transport::Request::Reverse`/`Transpose`, the five new cells in `row_transport`
+      (`REVERSE TBC TRANSPOSE− TRANSPOSE+`, with `LEARN` staying), their tips, and the panel test for the row.
 - [ ] Task 6 — `SONGS` → `BANKS`
 - [ ] Task 7 — documents and screenshots
 - [ ] Task 8 — the gate and the mutation checks

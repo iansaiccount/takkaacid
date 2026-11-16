@@ -17,6 +17,8 @@ pub struct Sequencer {
     pattern: Arc<Pattern>,
     /// Current step, always `0..STEPS_PER_PATTERN`.
     position: usize,
+    /// Read the pattern from its other end. A direction, not a different pattern: nothing is stored, copied or saved.
+    reverse: bool,
     /// Whether the step that was just played carried a slide, so the next note glides into place.
     prev_slide: bool,
     running: bool,
@@ -32,6 +34,7 @@ impl Sequencer {
             clock: Clock::new(sample_rate),
             pattern: Arc::new(Pattern::empty()),
             position: 0,
+            reverse: false,
             prev_slide: false,
             running: false,
             trigger_pending: false,
@@ -99,6 +102,15 @@ impl Sequencer {
         self.running
     }
 
+    /// Run the line backwards from the next step that sounds. The step the clock is on does not move.
+    pub fn set_reverse(&mut self, reverse: bool) {
+        self.reverse = reverse;
+    }
+
+    pub fn is_reverse(&self) -> bool {
+        self.reverse
+    }
+
     /// Carry on from the step a silence kept, arming the clock and the gate like any other start.
     ///
     /// The position is **not** moved — that is the whole of the difference from [`Sequencer::start_at`], which is handed the
@@ -120,7 +132,13 @@ impl Sequencer {
 
     /// Apply the trigger rule for one step and remember whether it slides.
     fn trigger(&mut self, voice: &mut Voice, position: usize) {
-        let step = self.pattern.steps[position];
+        // Backwards reads the pattern from its other end while the clock keeps walking forward: the position, the bar and
+        // `last_position` all still mean what they meant, and only the step that sounds is mirrored.
+        let step = self.pattern.steps[if self.reverse {
+            STEPS_PER_PATTERN - 1 - position
+        } else {
+            position
+        }];
         // A rest, and a note transposed outside the instrument's range, are the same thing to the voice: silence. The
         // step keeps its flags and its note, so transposing back brings it in again.
         if !step.on || !step.audible() {
