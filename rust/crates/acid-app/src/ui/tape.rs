@@ -95,6 +95,15 @@ pub fn draw(
     }
 
     let stepper = panel::tempo_stepper_cells(top);
+    // One plate behind the pair and the number: the tempo is a section, not three keys that happen to be near each other.
+    // An outline, not a fill: the number is painted by the display code before this runs, and a plate would bury it. The
+    // stroke is what says the pair and the number are one section.
+    ui.painter().rect_stroke(
+        panel::tempo_section_rect(top),
+        3.0 * scale,
+        p.silkscreen_stroke(scale),
+        StrokeKind::Inside,
+    );
     for (which, rect) in [(0usize, stepper[0]), (2usize, stepper[2])] {
         let id = if which == 0 {
             "tape-tempo-down"

@@ -56,6 +56,9 @@ const NAME_FRACTION: f32 = 0.10;
 /// How big the settings gear and the help dot are, as a multiple of the band's height — the size the two round buttons have
 /// always been drawn at (18 of 56), kept band-relative so every piece of this band is measured one way.
 const CLUSTER_BUTTON: f32 = 18.0 / 56.0;
+/// How wide the tempo's number is, as a fraction of the band. Narrower than it was: the section now also holds the two nudge
+/// keys, and every pixel the number gives up is a pixel the deck keeps.
+const TEMPO_WELL: f32 = 0.10;
 
 /// The wordmark's corner of the top strip: right of the volume knob, so the two never collide.
 pub fn brand_rect(top: Rect) -> Rect {
@@ -132,15 +135,6 @@ pub const TEMPO_STEPPER_CELLS: usize = 3;
 const TAPE_KEY_MAX: f32 = 0.62;
 /// The narrowest, for a window so small that the band has almost nothing to give: below this the shapes stop reading.
 const TAPE_KEY_MIN: f32 = 0.18;
-/// The daylight between two keys of the deck. Small enough to read as one block of keys, wide enough that two shapes never
-/// touch at 1× — a deck's keys abut, they do not merge.
-const TAPE_GAP: f32 = 2.0;
-
-/// A nudge key of the tempo stepper: the size the band's small keys have always been, not the deck's grown size. The deck
-/// spreads; the `−` and `+` are two small keys beside a readout and would eat the deck's room if they grew with it.
-fn tape_key(top: Rect) -> f32 {
-    (top.height() * 0.36).max(1.0)
-}
 
 /// The deck: `TAPE_COUNT` square keys, left of the tempo stepper.
 ///
@@ -179,26 +173,32 @@ pub fn tape_cells(top: Rect) -> [Rect; TAPE_COUNT] {
     cells
 }
 
-/// The tempo stepper: `−`, the readout well, `+`, between the deck and the pattern readout.
+/// The tempo section: one plate holding the number and the two nudge keys, stacked with `+` above `−` at its left.
 ///
-/// The readout is the middle cell, so the display code and the learn highlight keep the rect they always had; the two nudge
-/// keys sit outside it, and no key is scaled by the panel's text scale — a cell gap is not stroke thickness (see
-/// `layout::knob_cells`, which does the same at every size).
+/// The pair used to flank the number, one on each side, and at the band's left edge of the deck they read as two loose keys
+/// rather than as the tempo's. Stacked inside the section they cannot: the two half-band keys add up to the section's own
+/// height, and the plate behind all three says they belong together.
 pub fn tempo_stepper_cells(top: Rect) -> [Rect; TEMPO_STEPPER_CELLS] {
-    let size = tape_key(top);
-    let y = top.center().y - size * 0.5;
-    let plus_right = pattern_display_rect(top).left() - theme::GAP;
-    let well_right = plus_right - size - TAPE_GAP;
-    let well_left = well_right - top.width() * 0.14;
-    let down_left = well_left - TAPE_GAP - size;
-    [
-        Rect::from_min_size(Pos2::new(down_left, y), egui::vec2(size, size)),
-        Rect::from_min_max(
-            Pos2::new(well_left, top.top()),
-            Pos2::new(well_right, top.bottom()),
-        ),
-        Rect::from_min_size(Pos2::new(plus_right - size, y), egui::vec2(size, size)),
-    ]
+    // Each key is half the band, so the pair is exactly the section's height.
+    let half = (top.height() * 0.5).max(1.0);
+    let right = pattern_display_rect(top).left() - theme::GAP;
+    let well = Rect::from_min_max(
+        Pos2::new(right - top.width() * TEMPO_WELL, top.top()),
+        Pos2::new(right, top.bottom()),
+    );
+    let x = well.left() - theme::GAP - half;
+    let up = Rect::from_min_size(Pos2::new(x, top.top()), egui::vec2(half, half));
+    let down = Rect::from_min_size(Pos2::new(x, top.bottom() - half), egui::vec2(half, half));
+    [down, well, up]
+}
+
+/// The plate the three share: the pair and the number, with a little air around them.
+pub fn tempo_section_rect(top: Rect) -> Rect {
+    let cells = tempo_stepper_cells(top);
+    Rect::from_min_max(
+        Pos2::new(cells[2].left() - 2.0 * top.height() / 56.0, top.top()),
+        Pos2::new(cells[1].right(), top.bottom()),
+    )
 }
 
 /// The pattern display well: the band's right wall, where it has always been.
