@@ -420,10 +420,10 @@ fn replacing_an_unsaved_session_with_a_saved_song_takes_two_clicks() {
 #[test]
 fn the_header_names_the_session_and_its_state() {
     use acid_app::ui::songs::now_line;
-    assert_eq!(now_line(None, true), "NOW: untitled · UNSAVED");
-    assert_eq!(now_line(None, false), "NOW: untitled · UNSAVED");
-    assert_eq!(now_line(Some("New song"), true), "NOW: New song · UNSAVED");
-    assert_eq!(now_line(Some("Acid 1"), false), "NOW: Acid 1 · SAVED");
+    assert_eq!(now_line(None, true), "NOW: untitled - UNSAVED");
+    assert_eq!(now_line(None, false), "NOW: untitled - UNSAVED");
+    assert_eq!(now_line(Some("New song"), true), "NOW: New song - UNSAVED");
+    assert_eq!(now_line(Some("Acid 1"), false), "NOW: Acid 1 - SAVED");
 }
 
 /// A session that has never been saved is a first run or a demo: the header must not call it untitled while the name

@@ -318,8 +318,8 @@ fn save_name(songs: &Songs) -> Option<String> {
 /// no file yet, and they are unsaved, not untitled.
 pub fn now_line(session: Option<&str>, dirty: bool) -> String {
     match (session, dirty) {
-        (Some(name), true) => format!("NOW: {name} · UNSAVED"),
-        (Some(name), false) => format!("NOW: {name} · SAVED"),
-        (None, _) => "NOW: untitled · UNSAVED".to_string(),
+        (Some(name), true) => format!("NOW: {name} - UNSAVED"),
+        (Some(name), false) => format!("NOW: {name} - SAVED"),
+        (None, _) => "NOW: untitled - UNSAVED".to_string(),
     }
 }
