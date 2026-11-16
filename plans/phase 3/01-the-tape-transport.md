@@ -271,3 +271,47 @@ shortcut line still says "start or stop, same as RUN / STOP", which stopped bein
 The minimal truthful fix is a `TapePlay`/`TapeStop` pair of tips (wording the keys the face already shows: PLAY, PAUSE, STOP),
 appended like the four tape entries so no index moves. It is one word on a face the player will read, so it is asked rather than
 settled: **PLAY and STOP, or keep the RUN/STOP tips for the deck too?**
+
+## After the gate: what the player asked for, and what the phase review found
+
+The whole-branch review (`ed1bfbf2`) returned **do not merge**, with four P1s in the code and a fifth in the book. Its claims
+were checked against the tree one by one; all four code findings were real.
+
+### Fixed from the review
+
+- **The `dirty` rule had a contradictory twin.** `ui::mod` said only a tempo nudge marks the song unsaved; `main` marked it unsaved
+  for *every* transport request, so the first PLAY turned the name amber and autosave scheduled a write for a change the save file
+  cannot hold. Main's line and the row's are gone; the one rule stands.
+- **A device joining a paused rack started playing**: the seek arms the clock, which is right on a running rack and wrong on a
+  paused one. It takes the step and then the silence.
+- **The help card contradicted the deck's own tooltip** on the same face ("SPACE: start or stop, same as RUN / STOP" against
+  "play or pause, same as PLAY / PAUSE"). The card says what the face does, and the word its test pins is `unsaved`.
+- **A direction waiting for the bar was lost by a stop**: pending stayed pending, the key stayed lit, the next play ran forwards
+  for a bar. `stop` takes the pending direction.
+- Also: `TapeKey::wired()` asks `request()` now (one answer), and the row's doc comments describe the row that exists.
+
+### The rest of the player's list, done
+
+- **The session name opens the bank browser** (`8c58542`). Round 3a cut the two document icons for the deck's room and took the
+  only *visible* way into loading and saving with them; `open_banks` is the one rule for opening the card now, and both doors —
+  the `BANKS` key and the name — call it. The name answers a click, shows a pointing hand, and its tip ends `Click for the banks`.
+- **The performance row groups by what it does** (`1883c20`): `OCT -  OCT +  CLEAR  RANDOM` on the left, `SHUFFLE  DENSITY
+  SCALE` on the right. Shuffle joins the dials that shape a roll; CLEAR leaves the switches row for the octave keys' cluster, since
+  emptying the pattern is done *to* the pattern. The transpose read out between the clusters for one commit.
+- **The device's two button rows share one grid** (`097a1ee`): six cells each, so the pair reads as one keypad. The bottom row is
+  `REVERSE  TRANS -  [+3]  TRANS +  TBC  LEARN` — the value **between** the two keys that move it, the way the tempo's `+`/`-`
+  sit either side of its number. LEARN is asked for as *the row's last cell* in every test, so adding a cell cannot silently point
+  a learn at the wrong key (it did, and six tests said so).
+
+### Still owed, and the reason this phase cannot merge yet
+
+- **The book** (review finding 1). The review listed every false sentence with file:line: 03, 04, 05, 09, 10, 12, 17, 18 and 20
+  describe `RUN`/`STOP`/`SAVED`/`SONGS` and a transport that no longer lives in the bottom row; `img/README.md`'s rows describe
+  pictures that have since been retaken; `check.sh` gained no fact that would catch any of it. This is plan 01's task 7, and it is
+  genuinely undone.
+- **`COPY` and `PASTE`** in the switches row (increment 2): `COPY` in `MODE`'s place, `PASTE` in the cell `CLEAR` left. `MODE` is
+  a dead engraving until then.
+- The review's smaller findings, recorded rather than lost: the `·` glyph in the sessions card (a font glyph, pinned by its own
+  test), `Control::Run`'s orphaned tip, the transpose having no readout before the keypad rework (now it has one), `PAUSE` from
+  `Stopped` being a silent dead key, `AGENTS.md` still saying `phase 2/` is in flight, and `00-phase-3.md`'s "Stopped — position at
+  the first step of the bar", which is not what `Engine::stop` does.
