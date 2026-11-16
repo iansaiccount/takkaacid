@@ -538,10 +538,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // The only dynamic tooltip on this face: it carries a name the player typed, so it cannot come from `ui::tips`.
         let full = song_label(state.songs.name.as_deref());
         let said = if named {
-            format!(
-                "SONG {full}\n({})",
-                if unsaved { "unsaved" } else { "saved" }
-            )
+            // `full` already begins with `SONG`: prefixing it again is what made the hover read `SONG SONG New song`.
+            format!("{full}\n({})", if unsaved { "unsaved" } else { "saved" })
         } else {
             "SONG\nThis session has no name yet".to_string()
         };
