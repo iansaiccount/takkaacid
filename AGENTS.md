@@ -62,6 +62,13 @@ DISPLAY=:86 WINIT_X11_SCALE_FACTOR=2 LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY= \
 `TAKKA_ACID_DATA_DIR` must be a fresh directory so the picture shows a first run and nothing of the photographer's own.
 The window is 1960 × 1340 (980 × 670 logical, doubled): `xdotool search --name takka` finds it, `xdotool mousemove X Y` and
 `xdotool click 1` drive it with X and Y **doubled** from logical coordinates, and `import -window <id> NAME.png` grabs it.
+
+**Check the display before you trust a grab.** On this machine something pre-starts `Xvfb` on display numbers at **1280 × 800**,
+and a request for a bigger screen on a taken display fails quietly ("Server is already active") while the app and the grab both
+use the small one — a whole round's screenshots were 1280 × 800 for that reason. So: pick a display, run
+`DISPLAY=:N xdotool getdisplaygeometry`, and only launch the app if it says `2000 1400` or more; `xdotool search --name takka`
+followed by `xdotool getwindowgeometry` must then say `1960x1340`. If it does not, the picture is the wrong size and no amount
+of cropping will fix it.
 A crop is a second grab with `-crop`, never a cut-out of a finished image. Rect coordinates come from the layout
 (`ui/layout.rs`, `ui/strip.rs`, `ui/device_card.rs`), not from reading a screenshot; and park the pointer away from the panel
 before a grab, or a hover tooltip lands in the book.

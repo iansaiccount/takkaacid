@@ -148,3 +148,12 @@ The capture recipe in `AGENTS.md` no longer produces a 1960 × 1340 window on th
 says so, and so does the grab. Every screenshot of this band is therefore of the wrong size and the wrong scale, and the recipe
 needs correcting (the winit/eframe version in use does not honour that variable the way the note assumes) before task 4 can be
 finished. The three images are **not** retaken, and this round stays unpushed until they are.
+
+**The blocker, resolved.** The recipe was right and the *display* was wrong: something on this machine pre-starts `Xvfb` at
+1280 × 800 on display numbers, and a request for a bigger screen on a taken display fails quietly ("Server is already active")
+while the app and the grab both use the small one. `DISPLAY=:90 xdotool getdisplaygeometry` says `2000 1400`, the window comes
+out 1960 × 1340, and the three pictures were retaken there. The trap is written into `AGENTS.md`'s capture recipe so the next
+round checks the geometry before trusting a grab.
+
+- [x] **Task 4 — the documents.** The three pictures retaken at 1960 × 1340 in the new order (`top-strip.png`,
+      `first-sound.png`, `running.png`), their rows in `img/README.md` updated, and the capture trap recorded.
