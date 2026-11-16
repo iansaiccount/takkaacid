@@ -132,35 +132,61 @@ fn tempo_nudges_land_on_whole_bpm_within_range() {
 }
 
 #[test]
-fn the_run_button_asks_for_the_transport() {
-    // The rack owns the transport; the row asks for a change and `main` fans it out. A row that wrote the displayed
-    // device's own atomic would be undone by the next sync.
+fn the_reverse_key_asks_for_a_direction() {
+    // The row asks; the device's own engine takes the direction at the bar line. A row that wrote the atomic would be undone
+    // by the next fan-out, which is the rule every key in this row follows.
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     click_transport(&shared, &mut panel, 0);
     assert_eq!(
         panel.transport_request,
-        Some(transport::Request::Play),
-        "RUN must ask the rack to start"
+        Some(transport::Request::Reverse(true)),
+        "REVERSE off asks for the line to run backwards"
     );
-    assert!(!shared.is_playing(), "and must not write the device itself");
-    click_transport(&shared, &mut panel, 1);
-    assert_eq!(panel.transport_request, Some(transport::Request::Stop));
+    assert!(
+        !shared.is_reversed(),
+        "and must not write the device itself"
+    );
+
+    // Lit from the state the device is in, so a second press asks for the way back.
+    shared.set_reversed(true);
+    click_transport(&shared, &mut panel, 0);
+    assert_eq!(
+        panel.transport_request,
+        Some(transport::Request::Reverse(false))
+    );
 }
 
 #[test]
-fn the_tempo_buttons_ask_for_a_nudge() {
+fn the_transpose_keys_ask_for_a_semitone_each_way() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    click_transport(&shared, &mut panel, 3); // TEMPO +
+    click_transport(&shared, &mut panel, 3); // TRANS +
     assert_eq!(
         panel.transport_request,
-        Some(transport::Request::NudgeTempo(1))
+        Some(transport::Request::Transpose(1))
     );
-    click_transport(&shared, &mut panel, 2); // TEMPO −
+    click_transport(&shared, &mut panel, 2); // TRANS -
     assert_eq!(
         panel.transport_request,
-        Some(transport::Request::NudgeTempo(-1))
+        Some(transport::Request::Transpose(-1))
+    );
+}
+
+#[test]
+fn the_tbc_key_says_what_it_is() {
+    // A cell kept for the player, with nothing decided behind it. It says so rather than doing nothing: a silent key reads as
+    // broken, and this one has no feature to be silent about.
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    click_transport(&shared, &mut panel, 1);
+    assert_eq!(
+        panel.transport_request, None,
+        "TBC asks the rack for nothing"
+    );
+    assert_eq!(
+        panel.notice_now(std::time::Instant::now()),
+        Some("TBC IS NOT DECIDED YET")
     );
 }
 
@@ -169,7 +195,7 @@ fn the_tempo_buttons_ask_for_a_nudge() {
 /// by construction, so a black-scheme test could not tell the two halves apart.
 #[test]
 fn a_hovered_key_rings_itself_in_ink_that_reads_on_its_face() {
-    // The transport is stopped, so STOP is the lit key and RUN is the unlit one: both halves in one frame.
+    // REVERSE unlit is the well key, REVERSE lit is the raised one: both halves in one frame.
     let shared = SharedState::new();
     let mut panel = PanelState {
         scheme: Scheme::AmbientMoss,
@@ -189,7 +215,8 @@ fn a_hovered_key_rings_itself_in_ink_that_reads_on_its_face() {
         outlines(&output, cells[index])
     };
 
-    let stop = ring(&mut panel, 1);
+    shared.set_reversed(true);
+    let stop = ring(&mut panel, 0);
     assert!(
         stop.contains(&theme::palette(Scheme::AmbientMoss).lit_ink),
         "a lit key's ring must be ink for its raised face: {stop:?}"
@@ -199,6 +226,7 @@ fn a_hovered_key_rings_itself_in_ink_that_reads_on_its_face() {
         "and not the accent, which is ink for the face and unreadable on a raised key: {stop:?}"
     );
 
+    shared.set_reversed(false);
     let run = ring(&mut panel, 0);
     assert!(
         run.contains(&theme::palette(Scheme::AmbientMoss).led_accent),

@@ -16,6 +16,10 @@ pub enum Request {
     Play,
     /// Stop the clock and keep the step. Play resumes from it; Stop returns to the bar.
     Pause,
+    /// Run this device's line the other way. The engine takes it at the bar line, so a mid-bar press waits.
+    Reverse(bool),
+    /// Move the whole rack a semitone, as a performance control.
+    Transpose(i32),
     Stop,
     /// One BPM, in the direction of the key.
     NudgeTempo(i8),

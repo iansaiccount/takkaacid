@@ -63,6 +63,9 @@ pub struct AudioRenderer {
     /// The transport the engine was last told about. The engine cannot tell a stop from a pause — both silence it and keep its
     /// step — so what a *change* means is decided here, where the previous state is still known.
     transport: crate::device::Transport,
+    /// What the engine was last told about the two performers, so a block that changes nothing costs nothing.
+    reversed: bool,
+    transpose: i32,
     state: Arc<SharedState>,
     /// Interleaving scratch, sized once at open so a block never allocates.
     mono: Vec<f32>,
@@ -90,6 +93,8 @@ impl AudioRenderer {
         Self {
             engine,
             transport: crate::device::Transport::Stopped,
+            reversed: false,
+            transpose: 0,
             state,
             mono: vec![0.0; max_block.max(1)],
             pattern,
@@ -117,6 +122,15 @@ impl AudioRenderer {
         let params = self.state.snapshot();
         apply(&params, &mut self.engine);
         self.settle_transport(params.transport);
+        // The performers: a direction the sequencer applies at the bar line, and a transpose the voice hears at once.
+        if params.reversed != self.reversed {
+            self.engine.set_reverse(params.reversed);
+            self.reversed = params.reversed;
+        }
+        if params.transpose != self.transpose {
+            self.engine.set_transpose(params.transpose);
+            self.transpose = params.transpose;
+        }
 
         // A device that joined a running rack starts where it was told to. After `apply`, because `apply` is what starts an
         // engine whose transport has just begun.

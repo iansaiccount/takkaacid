@@ -104,6 +104,10 @@ pub struct Parameters {
     pub tempo_bpm: f32,
     pub swing: f32,
     pub transport: crate::device::Transport,
+    /// The direction this device's line runs in — asked for, and taken at the bar line.
+    pub reversed: bool,
+    /// The rack's performance transpose, on top of the saved TUNING knob. Deliberately not part of the patch.
+    pub transpose: i32,
 }
 
 /// The seam between the two threads.
@@ -116,6 +120,10 @@ pub struct SharedState {
     /// The state this device is in. A device in a rack mirrors the rack's — `Rack::sync_transport` is its only writer — and
     /// a device on its own (every test, and the audio crate's own harness) owns its transport and moves it itself.
     pub transport: AtomicU8,
+    /// A direction asked for: the engine's sequencer takes it at the bar line, so this is a request the audio thread reads.
+    pub reversed: AtomicBool,
+    /// The rack's performance transpose, mirrored here like the transport. Never saved.
+    pub transpose: std::sync::atomic::AtomicI32,
     /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
     /// sequencer keeps running underneath, so unmuting rejoins on the beat instead of restarting the pattern.
     pub mute: AtomicBool,
@@ -182,6 +190,8 @@ impl SharedState {
     pub fn with_tempo(tempo: Arc<AtomicF32>) -> Arc<Self> {
         Arc::new(Self {
             transport: AtomicU8::new(crate::device::Transport::Stopped.byte()),
+            reversed: AtomicBool::new(false),
+            transpose: std::sync::atomic::AtomicI32::new(0),
             mute: AtomicBool::new(false),
             position: AtomicUsize::new(0),
             tempo_bpm: tempo,
@@ -230,6 +240,25 @@ impl SharedState {
         self.transport().is_playing()
     }
 
+    /// The direction this device has been asked for: the sequencer applies it at the bar line, never mid-bar.
+    pub fn is_reversed(&self) -> bool {
+        self.reversed.load(Ordering::Relaxed)
+    }
+
+    pub fn set_reversed(&self, reversed: bool) {
+        self.reversed.store(reversed, Ordering::Relaxed);
+    }
+
+    /// The rack's performance transpose, in semitones. Not part of the patch and not saved.
+    pub fn transpose(&self) -> i32 {
+        self.transpose.load(Ordering::Relaxed)
+    }
+
+    pub fn set_transpose(&self, semitones: i32) {
+        self.transpose
+            .store(semitones.clamp(-12, 12), Ordering::Relaxed);
+    }
+
     pub fn is_muted(&self) -> bool {
         self.mute.load(Ordering::Relaxed)
     }
@@ -252,6 +281,8 @@ impl SharedState {
             tempo_bpm: self.tempo_bpm.get(),
             swing: self.swing.get(),
             transport: self.transport(),
+            reversed: self.is_reversed(),
+            transpose: self.transpose(),
         }
     }
 

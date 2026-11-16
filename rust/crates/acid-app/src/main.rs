@@ -131,6 +131,17 @@ impl eframe::App for TakkaApp {
                 panel_ui::transport::Request::Stop => self
                     .rack
                     .set_transport(acid_app::device::Transport::Stopped),
+                // The two performers: a direction this device's line runs in, and a semitone for the whole rack. Both are
+                // performance, neither is saved, and the engine takes the direction at the bar line.
+                panel_ui::transport::Request::Reverse(reversed) => {
+                    if let Some(device) = self.rack.devices().get(self.panel.strip.selected) {
+                        device.state.set_reversed(reversed);
+                    }
+                }
+                panel_ui::transport::Request::Transpose(semitones) => {
+                    let next = (self.rack.transpose() + semitones).clamp(-12, 12);
+                    self.rack.set_transpose(next);
+                }
                 panel_ui::transport::Request::NudgeTempo(direction) => {
                     let next = panel_ui::transport::nudge_tempo(self.rack.tempo_bpm(), direction);
                     self.rack.set_tempo_bpm(next);

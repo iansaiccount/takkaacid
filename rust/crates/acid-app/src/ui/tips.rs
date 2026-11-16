@@ -79,11 +79,19 @@ pub enum Control {
     /// The deck's PLAY key. The transport row's `RUN` is a different key with a different job, so it has its own words; the
     /// deck's STOP is the same key's job as the row's and shares its row.
     TapePlay,
+    /// The row's REVERSE key: this device's line, backwards, from the next bar.
+    Reverse,
+    /// The row's TBC key: a cell kept for the player, with nothing decided behind it.
+    Tbc,
+    /// The row's TRANS -: the whole rack down a semitone, as a performance control.
+    TransposeDown,
+    /// The row's TRANS +: the whole rack up a semitone.
+    TransposeUp,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 35] = [
+    pub const ALL: [Control; 39] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -119,6 +127,10 @@ impl Control {
         Control::TapeForward,
         Control::TapeRecord,
         Control::TapePlay,
+        Control::Reverse,
+        Control::Tbc,
+        Control::TransposeDown,
+        Control::TransposeUp,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -146,6 +158,10 @@ impl Control {
             Control::TapeForward => TIPS[32],
             Control::TapeRecord => TIPS[33],
             Control::TapePlay => TIPS[34],
+            Control::Reverse => TIPS[35],
+            Control::Tbc => TIPS[36],
+            Control::TransposeDown => TIPS[37],
+            Control::TransposeUp => TIPS[38],
             Control::OctaveDown => TIPS[17],
             Control::OctaveUp => TIPS[18],
             Control::Shuffle => TIPS[19],
@@ -180,7 +196,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 35] = [
+const TIPS: [Tip; 39] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -355,6 +371,26 @@ const TIPS: [Tip; 35] = [
         title: "PLAY",
         what: "Start the bar again from a stop, or carry on from the step a pause kept.",
         shortcut: Some("SPACE: play or pause, same as PLAY / PAUSE"),
+    },
+    Tip {
+        title: "REVERSE",
+        what: "Runs this device's line backwards. It takes effect at the next bar, so the bar keeps its own time.",
+        shortcut: None,
+    },
+    Tip {
+        title: "TBC",
+        what: "A cell kept for the player: nothing is decided for it yet.",
+        shortcut: None,
+    },
+    Tip {
+        title: "TRANS -",
+        what: "Moves the whole rack down a semitone. A performance control: the TUNING knobs are untouched and nothing is saved.",
+        shortcut: None,
+    },
+    Tip {
+        title: "TRANS +",
+        what: "Moves the whole rack up a semitone. A performance control: the TUNING knobs are untouched and nothing is saved.",
+        shortcut: None,
     },
 ];
 

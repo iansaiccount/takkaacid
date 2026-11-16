@@ -20,66 +20,67 @@ pub(super) fn draw(
     // the next sync.
     let cells = layout::knob_cells(l.transport, transport::TRANSPORT_CELLS);
     if let [run, stop, tempo_down, tempo_up, volume_cell] = cells[..] {
-        let playing = shared.is_playing();
+        // REVERSE is the displayed device's direction, read from its own state and asked for as a request: the engine takes
+        // it at the bar line, so the key may be lit for a bar before the line turns.
+        let reversed = shared.is_reversed();
         if switch_key(
             ui,
             state,
             Key {
-                id: "run",
+                id: "reverse",
                 rect: run,
-                label: "RUN",
-                lit: playing,
-                control: tips::Control::Run,
+                label: "REVERSE",
+                lit: reversed,
+                control: tips::Control::Reverse,
             },
             p,
         ) {
-            state.transport_request = Some(transport::Request::Play);
+            state.transport_request = Some(transport::Request::Reverse(!reversed));
             state.dirty = true;
         }
+        // TBC: a cell kept for the player. It says so rather than doing nothing, because a silent key reads as broken.
         if switch_key(
             ui,
             state,
             Key {
-                id: "stop",
+                id: "tbc",
                 rect: stop,
-                label: "STOP",
-                lit: !playing,
-                control: tips::Control::Stop,
+                label: "TBC",
+                lit: false,
+                control: tips::Control::Tbc,
             },
             p,
         ) {
-            state.transport_request = Some(transport::Request::Stop);
-            state.dirty = true;
+            state.notify("TBC IS NOT DECIDED YET");
         }
+        // The transpose pair: the whole rack, a semitone at a time, as performance and never as the patch.
         if switch_key(
             ui,
             state,
             Key {
-                id: "tempo-down",
+                id: "transpose-down",
                 rect: tempo_down,
-                label: "TEMPO -",
-                lit: false,
-                control: tips::Control::TempoDown,
+                label: "TRANS -",
+                lit: shared.transpose() < 0,
+                control: tips::Control::TransposeDown,
             },
             p,
         ) {
-            state.transport_request = Some(transport::Request::NudgeTempo(-1));
-            state.dirty = true;
+            state.transport_request = Some(transport::Request::Transpose(-1));
         }
         if switch_key(
             ui,
             state,
             Key {
-                id: "tempo-up",
+                id: "transpose-up",
                 rect: tempo_up,
-                label: "TEMPO +",
-                lit: false,
-                control: tips::Control::TempoUp,
+                label: "TRANS +",
+                lit: shared.transpose() > 0,
+                control: tips::Control::TransposeUp,
             },
             p,
         ) {
-            state.transport_request = Some(transport::Request::NudgeTempo(1));
-            state.dirty = true;
+            state.transport_request = Some(transport::Request::Transpose(1));
         }
 
         // The last transport cell is the MIDI LEARN key (see `ui::learn`), so the row keeps its five keys while
