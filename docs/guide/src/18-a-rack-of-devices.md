@@ -42,8 +42,11 @@ Each device is a whole machine, not a subset of one:
   controllers (that is its card's business, [`19-a-devices-card`](19-a-devices-card.md));
 - its own **name**, and its own **colour**.
 
-What they share is the clock and the sound card. `PLAY`, in the deck, starts them all, the tempo is one tempo, and a device added while the
-line is running comes in on the step the others are on rather than at the top of the bar. Two devices playing one pattern
+What they share is the clock and the sound card. `PLAY`, in the deck, starts them all, the tempo is one tempo, and a device
+added while the line is running **waits for the bar**: it makes no sound until the bar the rack is in finishes, then begins on
+the downbeat with every other device, so it never comes in half a bar out of step. While it waits, its cell in the strip is
+already lit — it is playing the rack's transport, and the bar is what it is waiting for — and its step LEDs sit at the first
+step until they start moving together with everyone else's. Two devices playing one pattern
 therefore sound like one machine with two voices; two devices with different patterns sound like two machines playing
 together.
 

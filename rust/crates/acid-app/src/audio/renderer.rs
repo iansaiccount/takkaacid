@@ -75,9 +75,9 @@ pub struct AudioRenderer {
     max_block: usize,
     /// Whether a MIDI note was held at the last block, so only changes trigger a note.
     midi_gate_on: bool,
-    /// A step this device should start on at the next block: a device joining a running rack comes in on the bar
-    /// the rack is on rather than on step 0. Applied after `apply`, so it overrides the start that a rising gate issues.
-    pending_seek: Option<usize>,
+    /// A start this device should make on the next block: `(step, samples of silence first)`. A device joining a running
+    /// rack waits for the bar line, which can fall inside a block, and begins its first step on that sample.
+    pending_start: Option<(usize, usize)>,
 }
 
 impl AudioRenderer {
@@ -101,16 +101,28 @@ impl AudioRenderer {
             channels: channels.max(1),
             max_block: max_block.max(1),
             midi_gate_on: false,
-            pending_seek: None,
+            pending_start: None,
         }
     }
 
     /// Start this device's clock on `step` at the next block, instead of on the downbeat.
     ///
-    /// Used when a device joins a rack that is already playing: the mixer hands it the reference device's published step,
-    /// so it comes in on the bar. Harmless while stopped — a seek that lands before the transport starts is dropped.
+    /// This is the **paused** rack's path: the mixer hands it the step the rack is holding, so the next play starts it with
+    /// everyone else rather than at zero. A device joining a rack that is *playing* waits for the bar line instead — see
+    /// [`AudioRenderer::start_later`]. Harmless while stopped: a start that lands before the transport begins is dropped.
     pub fn seek(&mut self, step: usize) {
-        self.pending_seek = Some(step);
+        self.start_later(step, 0);
+    }
+
+    /// Start on `step` after `silence` samples of the next block: the bar line's own sample, not the block's.
+    pub fn start_later(&mut self, step: usize, silence: usize) {
+        self.pending_start = Some((step, silence));
+    }
+
+    /// Where step 0 began in the last block, in samples from its start. This device's bar line is the rack's, so it is what
+    /// the mixer releases every device waiting to join on.
+    pub fn bar_line(&self) -> Option<usize> {
+        self.engine.bar_line()
     }
 
     pub fn engine(&self) -> &Engine {
@@ -134,13 +146,13 @@ impl AudioRenderer {
 
         // A device that joined a running rack starts where it was told to. After `apply`, because `apply` is what starts an
         // engine whose transport has just begun.
-        if let Some(step) = self.pending_seek.take()
+        if let Some((step, silence)) = self.pending_start.take()
             && params.transport != crate::device::Transport::Stopped
         {
             // A seek arms the clock, which is what a joining device wants on a *running* rack and exactly what it must not do
             // on a paused one: it would run while the rack — and its own mirror — said paused. Take the step, then put the
             // silence back.
-            self.engine.start_at(step);
+            self.engine.start_later(step, silence);
             if params.transport != crate::device::Transport::Playing {
                 self.engine.pause();
             }

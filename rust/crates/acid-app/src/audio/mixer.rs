@@ -13,7 +13,7 @@ use acid_core::param::Smooth;
 use arc_swap::ArcSwap;
 
 use super::renderer::AudioRenderer;
-use crate::device::BusState;
+use crate::device::{BusState, Transport};
 use crate::state::SharedState;
 
 /// How fast a mute is a fade rather than a cut: the same 10 ms the VOLUME knob uses, so the two sound alike.
@@ -26,6 +26,19 @@ struct Slot {
     renderer: AudioRenderer,
     /// The mute gain. Ramped, so muting is a fade over `MUTE_MS` and not a click.
     mute: Smooth,
+    /// Whether this device is waiting to join a rack that is already playing. A waiting slot is not rendered at all, so its
+    /// engine never starts, and it is released on the reference device's bar line — see [`Mixer::render_mono`].
+    waiting: bool,
+}
+
+/// Render one slot into `frame` and add it to `chunk` under its mute ramp.
+fn render_slot(slot: &mut Slot, frame: &mut [f32], chunk: &mut [f32]) {
+    // Muting publishes nothing: the device's own atomic is read here, once per block.
+    let target = if slot.state.is_muted() { 0.0 } else { 1.0 };
+    slot.renderer.render_mono(frame);
+    for (sample, device) in chunk.iter_mut().zip(frame.iter()) {
+        *sample += device * slot.mute.process(target);
+    }
 }
 
 /// Every device, rendered and summed.
@@ -78,12 +91,23 @@ impl Mixer {
         for chunk in out.chunks_mut(self.max_block) {
             chunk.fill(0.0);
             let frame = &mut scratch[..chunk.len()];
-            for slot in &mut self.slots {
-                // Muting publishes nothing: the device's own atomic is read here, once per block.
-                let target = if slot.state.is_muted() { 0.0 } else { 1.0 };
-                slot.renderer.render_mono(frame);
-                for (sample, device) in chunk.iter_mut().zip(frame.iter()) {
-                    *sample += device * slot.mute.process(target);
+            // The reference device renders first. Every playing device is in step with it, so its bar line is the rack's, and
+            // a device waiting to join is released on it — in this same block, on the sample the bar turned.
+            if let Some((reference, rest)) = self.slots.split_first_mut() {
+                render_slot(reference, frame, chunk);
+                let bar = reference.renderer.bar_line();
+                for slot in rest {
+                    if slot.waiting {
+                        match bar {
+                            Some(at) => {
+                                slot.renderer.start_later(0, at);
+                                slot.waiting = false;
+                            }
+                            // No bar line in this block: it keeps waiting, and keeps making no sound.
+                            None => continue,
+                        }
+                    }
+                    render_slot(slot, frame, chunk);
                 }
             }
             for sample in chunk.iter_mut() {
@@ -112,9 +136,7 @@ impl Mixer {
 
         let reference = published.slots.first().map(|state| Journey {
             step: state.position.load(Ordering::Relaxed),
-            // Paused counts: a device that joins a paused rack has to land on the step the rack is holding, or the next play
-            // starts it at zero while every other device resumes mid-bar.
-            playing: state.transport() != crate::device::Transport::Stopped,
+            transport: state.transport(),
         });
         let mut kept = std::mem::take(&mut self.slots);
         let mut slots = Vec::with_capacity(published.slots.len());
@@ -128,13 +150,19 @@ impl Mixer {
                 None => {
                     let mut renderer =
                         AudioRenderer::new(self.sample_rate, 1, Arc::clone(state), self.max_block);
-                    // A device joining a running rack comes in on the bar the rack is on, not on its own step 0. The
-                    // reference device is already there, so it needs no seek.
+                    // A device joining a *playing* rack waits for the bar line rather than starting on the step the rack
+                    // is on: started at once, its clock would be a step out of phase and its bar would not be the others'.
+                    let mut waiting = false;
                     if index > 0
                         && let Some(reference) = reference
-                        && reference.playing
                     {
-                        renderer.seek(reference.step);
+                        match reference.transport {
+                            Transport::Playing => waiting = true,
+                            // A paused rack has no bar line to wait for. The joiner takes the step the resume will use, so
+                            // the next play starts it with everyone else rather than at zero.
+                            Transport::Paused => renderer.seek(reference.step),
+                            Transport::Stopped => {}
+                        }
                     }
                     self.rebuilds += 1;
                     let initial = if state.is_muted() { 0.0 } else { 1.0 };
@@ -142,10 +170,16 @@ impl Mixer {
                         state: Arc::clone(state),
                         renderer,
                         mute: Smooth::new(initial, MUTE_MS, self.sample_rate),
+                        waiting,
                     }
                 }
             };
             slots.push(slot);
+        }
+        // A slot that has become the reference is rendered whatever this says — `waiting` is read only for the slots after
+        // it — but the flag would be a lie on a device that is no longer waiting for anything.
+        if let Some(first) = slots.first_mut() {
+            first.waiting = false;
         }
         self.slots = slots;
     }
@@ -155,5 +189,5 @@ impl Mixer {
 #[derive(Copy, Clone)]
 struct Journey {
     step: usize,
-    playing: bool,
+    transport: Transport,
 }

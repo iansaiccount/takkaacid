@@ -30,6 +30,12 @@ pub struct Sequencer {
     trigger_pending: bool,
     /// `stop` closed the transport but had no voice: the next `render` closes the gate.
     gate_close_pending: bool,
+    /// Where step 0 began inside the last `render`, in samples from its start. The rack's bar line is this device's — every
+    /// playing device is in step with every other — and a device waiting to join is released on it.
+    bar_line: Option<usize>,
+    /// A start that waits out a number of samples first: `(step, samples still to wait)`. Set by
+    /// [`Sequencer::start_later`], and the only way to begin a step part-way through a block.
+    pending_later: Option<(usize, usize)>,
 }
 
 impl Sequencer {
@@ -44,6 +50,8 @@ impl Sequencer {
             running: false,
             trigger_pending: false,
             gate_close_pending: false,
+            bar_line: None,
+            pending_later: None,
         }
     }
 
@@ -72,12 +80,58 @@ impl Sequencer {
 
     /// Start on `step` rather than on the downbeat.
     ///
-    /// A device added while the rack is already running joins on the step the rack is on instead of restarting the bar. It
-    /// is the same start otherwise — the clock is put back on a boundary, and the step it lands on sounds — so a seek is
-    /// never a silent restart. `step` wraps: callers may hand a long-running count, not an index.
+    /// A device joining a **paused** rack lands on the step the resume will use, so the next play starts it with everyone
+    /// else. One joining a **playing** rack is held silent until the bar line and starts with [`Sequencer::start_later`]
+    /// instead: started here, it would play from the rack's current step, a step out of phase until the bar wrapped. The
+    /// clock is put back on a boundary and the step it lands on sounds, so a seek is never a silent restart. `step` wraps:
+    /// callers may hand a long-running count, not an index.
     pub fn start_at(&mut self, step: usize) {
         self.position = step % STEPS_PER_PATTERN;
         self.arm();
+    }
+
+    /// Start on `step` once `silence` samples of the current block have gone by.
+    ///
+    /// This is how a device joins a rack that is already running. It has to wait for the rack's bar line, and a bar line can
+    /// fall inside a block: waiting for the whole block would begin its first step a few milliseconds late against the rest of
+    /// the rack, and starting at the top of the block would begin it early. `silence` is the bar line's own offset.
+    ///
+    /// It overrides a start already issued this block — `running` goes back down and the pending trigger with it — because the
+    /// caller has decided where inside the block the first step belongs.
+    pub fn start_later(&mut self, step: usize, silence: usize) {
+        if silence == 0 {
+            self.start_at(step);
+            return;
+        }
+        self.running = false;
+        self.trigger_pending = false;
+        self.gate_close_pending = false;
+        self.pending_later = Some((step % STEPS_PER_PATTERN, silence));
+    }
+
+    /// Where step 0 began in the last [`Sequencer::render`], in samples from its start, if it began in that block at all.
+    pub fn bar_line(&self) -> Option<usize> {
+        self.bar_line
+    }
+
+    /// Render up to the sample a delayed start was told to begin on, and arm it there. Answers the offset the rest of the
+    /// block begins at: zero when no start is pending, and `out.len()` when the start is still to come in a later block.
+    ///
+    /// Nothing sounds and the clock does not move while it waits. The voice still renders, so a release tail from a previous
+    /// run fades rather than being cut.
+    fn wait_out_start(&mut self, voice: &mut Voice, out: &mut [f32]) -> usize {
+        let Some((step, left)) = self.pending_later else {
+            return 0;
+        };
+        let waiting = left.min(out.len());
+        voice.render(&mut out[..waiting]);
+        if waiting < left {
+            self.pending_later = Some((step, left - waiting));
+            return waiting;
+        }
+        self.pending_later = None;
+        self.start_at(step);
+        waiting
     }
 
     /// Arm the clock and the gate for a step to sound: **the one place** that says what starting a step means.
@@ -96,6 +150,9 @@ impl Sequencer {
     /// Stop the transport. The gate closes on the next render, which then fades the release tail out
     /// rather than cutting it.
     pub fn stop(&mut self) {
+        // A start that was waiting out part of a block goes with the stop: `start_later` has already put `running` down, so
+        // the guard below would leave it to fire into the next render.
+        self.pending_later = None;
         if self.running {
             self.running = false;
             self.trigger_pending = false;
@@ -178,6 +235,9 @@ impl Sequencer {
     ///
     /// When stopped, this still renders the voice so a stop fades the release tail instead of cutting it.
     pub fn render(&mut self, voice: &mut Voice, out: &mut [f32]) {
+        self.bar_line = None;
+        let head = self.wait_out_start(voice, out);
+        let out = &mut out[head..];
         if self.gate_close_pending {
             voice.note_off();
             self.gate_close_pending = false;
@@ -185,6 +245,11 @@ impl Sequencer {
         if self.trigger_pending {
             self.trigger(voice, self.position);
             self.trigger_pending = false;
+            // A start on the downbeat *is* a bar line, and the rack goes by what its devices announce: this is the one that
+            // releases a device waiting to join after a stop.
+            if self.position == 0 {
+                self.bar_line = Some(head);
+            }
         }
         if !self.running {
             voice.render(out);
@@ -204,8 +269,11 @@ impl Sequencer {
             if crossed > 0 {
                 let before = self.position;
                 self.position = (self.position + crossed) % STEPS_PER_PATTERN;
-                // The bar line is where a direction may change: the step that sounds next is the first of a new bar, and both
-                // halves of the old one played in the direction the bar began in.
+                // The bar line: where a direction may change, and where a device waiting to join is let in. Both halves of
+                // the old bar played in the direction that bar began in.
+                if self.position == 0 {
+                    self.bar_line = Some(head + offset);
+                }
                 if (self.position < before || (self.position == 0 && crossed > 0))
                     && let Some(next) = self.reverse_pending.take()
                 {
