@@ -48,9 +48,8 @@ pub const TRANSPORT_CELLS: usize = Cell::ALL.len();
 
 Then:
 
-- `row_transport` asks for the seven rects by name and the destructuring is gone; the geometry still comes from one
-  `knob_cells` call per frame, because `cell` derives the row from the catalogue every time and seven calls would allocate
-  seven vectors for one row.
+- `row_transport` asks for its seven rects by name and the destructuring is gone — seven `transport::cell` calls, one per
+  cell, which is what the switches row already does (`ui/mod.rs` asks `switches::cell` once per key, inside its loop).
 - Every test asks `transport::cell(area, transport::Cell::Learn)`; `click_transport` takes a `Cell` rather than a `usize`;
   `TRANSPORT_CELLS` stops being a test's way of naming a key.
 
@@ -66,6 +65,7 @@ geometry only.
 | `Cell::Readout` is a cell with no key | The catalogue names a thing that cannot be pressed. It is a real rect in the row (the well the transpose reads out in), and a test clicks it to prove it answers nothing, so it belongs to the row's identity. |
 | `TRANSPORT_CELLS` is kept, derived from `Cell::ALL.len()` | A second name for the row's width. It is the same derivation `layout::KNOB_COUNT` makes, and the number now cannot drift from the catalogue because it is computed from it. |
 | No behaviour change at all | If the row's geometry was accidentally coupled to the destructuring, this round would move it. Both are one `knob_cells` call with the same count, and the live tests click the row's cells by name, so a cell that moved lands on a neighbour and fails. |
+| One `cell()` call per cell, not one `knob_cells` and seven indexes | Six more small `Vec`s per frame on the UI thread, which allocates per row already. The alternative — `row[which.index()]` in `row_transport` — is the catalogue's mapping written a second time outside the catalogue, which is the bug class this round exists to remove. |
 
 ## The tests that make it safe
 
@@ -76,6 +76,9 @@ In `ui/transport.rs` (unit):
    one's right edge, walking `ALL`.
 3. `the_bottom_row_is_as_wide_as_the_switch_row_above_it` — `Cell::ALL.len() == Switch::ALL.len()`, the player's choice from
    plan 01 (the two rows share one column grid), pinned where a cell count would be changed.
+4. `the_row_reads_left_to_right_as_the_face_does` — the face's order written out (REVERSE, TRANS −, readout, TRANS +, TBC,
+   spare, LEARN), each cell's left edge left of the next's. Added after the mutation below showed that agreement between `ALL`
+   and `index()` is not the same claim as the order the face uses.
 
 Existing tests, unchanged in what they assert, moved to names: `transport_live` (three sites plus `click_transport`),
 `learn_live::learn_centre`, `learn_highlight_live::learn_centre`.
@@ -86,8 +89,13 @@ which is what the review verified it does.
 
 Mutation checks: (a) give `Spare` 4 and `Tbc` 5 in `index()` and leave `ALL` alone → test 1 fails; (b) swap `Cell::Tbc` and
 `Cell::Spare` inside `ALL` → tests 1 and 2 fail (run, below); (c) add an eighth cell with its `index()` arm and its `ALL`
-entry → test 3 fails; (d) swap `TransposeDown` and `TransposeUp` in `index()` only → after task 2, `transport_live`'s transpose
-test asks for the wrong key and fails. Each reverted.
+entry → test 3 fails; (d) swap `TransposeDown` and `TransposeUp` in `index()` alone → test 4 fails. Each reverted.
+
+**Mutation (d) found a hole rather than confirming one.** Swapping the two transpose arms in `index()` changed the face and the
+tests together — the drawing asks the same catalogue the clicker does — so `transport_live`'s transpose test passed while the
+keys moved, and only tests 1 and 2 noticed, because they compare `index()` against `ALL`. That is a tautology about the
+catalogue, not about the face. Test 4 is the one that states the order the face has, and it was watched failing on the swap
+(`TransposeDown does not sit left of Readout`) before the swap was reverted.
 
 No behaviour is documented and no screenshot changes: this round renames nothing a player reads, so the book is untouched and
 this plan's Progress says why.
@@ -128,3 +136,35 @@ this plan's Progress says why.
       which only becomes true at task 2, so it says "ask by name"; and the ledger promised a "golden-geometry test" that no
       test list contained, replaced with what actually guards the geometry — the live tests click the row's cells by name, so a
       cell that moved lands on its neighbour. Also taken: `02-the-top-band` was missing from the phase overview's round list.
+- [x] **Task 2 — the row and its tests ask by name.** `row_transport` asks the catalogue for its seven rects (one
+      `transport::cell` call per cell, the way the switches row asks `switches::cell` once per key) and the
+      `if let [...] = cells[..]` guard is gone; `click_transport` takes a `transport::Cell` and its call sites name one; both
+      `learn_centre` helpers ask for `Cell::Learn`; `TRANSPORT_CELLS` is no longer a test's way of finding a key — it now has no
+      production reader at all, because `cell()` takes its count from `ALL` (a later round may delete it; nothing depends on it).
+      Behaviour identical: same seven rects, same order, same six `egui` ids, same labels and lit rules. Under `git diff -w` the
+      row is its module doc, three comments (the stale `RUN`/`STOP` one, the new "one rect per cell" one, and LEARN's), the
+      removal of the `knob_cells` call and of the `if let […] = cells[..]` guard with its braces, and the de-indent that follows
+      from it — no drawing statement moved. 688 tests.
+      **Mutation (d) found a hole in the plan, not a bug.** Swapping `TransposeDown`/`TransposeUp` in `index()` alone moved the
+      face *and* the clicker together — both ask the same catalogue — so `transport_live`'s transpose test stayed green while the
+      keys changed places; only tests 1 and 2 noticed, and they only compare `index()` against `ALL`. Added
+      `the_row_reads_left_to_right_as_the_face_does`, the face's order written out as rects, and watched it fail on the swap
+      (`TransposeDown does not sit left of Readout`). The plan's mutation list and test list were corrected to say so.
+      **Review: OK with notes** — no Critical or Important. Six Minors; five taken here: the order test's hand-kept list could
+      not fail when a cell was added, so it asserts its own length against `ALL`; the replacement LEARN comment claimed a
+      mechanism the code does not have (a cell added after `Learn` does not move `Learn`), so it now says what does happen;
+      this record was missing; nothing pinned the cell→legend bindings, so two of the seven lines swapped paint a key's word
+      over its neighbour's rect while every click still lands — `each_legend_is_painted_in_the_cell_that_names_it` reads the
+      painted text and was watched failing on `readout = cell(…, TransposeUp)` (`no "+0" painted inside Readout`); and
+      `Cell::Spare` was named but never pressed, so `both_tbc_keys_say_what_they_are` loops over the pair. A confirm review of
+      the fixes added four more, all taken: the legend test cannot see a `Tbc`/`Spare` swap — both print `TBC` and both notify
+      the same words, so the two binding lines could trade rects unnoticed, which is inherent to a face that engraves the pair
+      identically and is said in the test's own comment; its `"+0"` needle assumes a fresh session's transpose of zero and the
+      readout's `{:+}` format, and its containment is measured on the glyph box's corner rather than the cell's centre, so a
+      legend wider than its cell would fail it for a layout reason — recorded rather than removed, since setting a transpose
+      would drop the first coupling and the other two are what the test is; and two more stale counts in files this round did
+      touch, `ui/mod.rs`'s "the five keys under the switches" (the row has seven) and `transport_live.rs`'s "answers at five
+      cells and stays silent at the sixth" (seven cells, and the readout is the third), both corrected.
+      **Recorded, not fixed:** `learn_live.rs` still finds the CUT OFF knob as `cells[2]` with a comment beside it, and
+      `tests/save_live.rs:48` still says the switches row "holds five cells" against `Switch::ALL`'s seven — the same
+      hand-kept-count habit this round removed from the transport row, in rows this round does not own.

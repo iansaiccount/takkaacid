@@ -196,4 +196,34 @@ mod tests {
         assert_eq!(Cell::ALL.len(), Switch::ALL.len());
         assert_eq!(TRANSPORT_CELLS, Cell::ALL.len());
     }
+
+    #[test]
+    fn the_row_reads_left_to_right_as_the_face_does() {
+        // The face's order, written out: REVERSE, TRANS −, the readout between the two keys that move it, TBC, the spare, then
+        // LEARN. That `ALL` and `index()` agree is not the same claim — both could be reordered together, and every other test
+        // here, and every live test, would follow them: the drawing asks the same catalogue the clicker does, so a swapped
+        // pair moves the key on the face rather than landing a click on its neighbour.
+        let ordered = [
+            Cell::Reverse,
+            Cell::TransposeDown,
+            Cell::Readout,
+            Cell::TransposeUp,
+            Cell::Tbc,
+            Cell::Spare,
+            Cell::Learn,
+        ];
+        assert_eq!(
+            ordered.len(),
+            Cell::ALL.len(),
+            "a cell is missing from the face's order in this test"
+        );
+        for pair in ordered.windows(2) {
+            assert!(
+                cell(area(), pair[0]).left() < cell(area(), pair[1]).left(),
+                "{:?} does not sit left of {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
+    }
 }

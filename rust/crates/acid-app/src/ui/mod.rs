@@ -581,7 +581,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     );
     row_knobs::draw(state, shared, ui, &l, s, p);
     row_perform::draw(state, shared, ui, &l, s, p);
-    // VOLUME has its own corner of the top strip, before the wordmark, so the transport row keeps its five keys.
+    // VOLUME has its own corner of the top strip, before the wordmark, so the row below never needed a cell for it.
     let volume_rect = panel::volume_knob_rect(l.top);
     let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));
     volume_ui.set_clip_rect(volume_rect);
@@ -833,7 +833,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.step_mode = !state.step_mode;
         }
     }
-    // The transport row: the five keys under the switches, drawn after everything above them, so a later widget wins a
+    // The transport row: the seven keys under the switches, drawn after everything above them, so a later widget wins a
     // hit-test tie and the panel behaves in the order it always has.
     row_transport::draw(state, shared, ui, &l, p);
 
