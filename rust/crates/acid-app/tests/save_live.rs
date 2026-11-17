@@ -45,7 +45,8 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
     run_on(ctx, panel, shared, vec![release(at)]);
 }
 
-/// The switches row now holds five cells: BANK, PATTERN, MODE, CLEAR, SAVE.
+/// SAVE's key comes from the switches catalogue, so this test does not care how many cells the row has or where the key sits
+/// in it.
 fn save_centre() -> Pos2 {
     switches::cell(layout(screen()).switches, Switch::Save).center()
 }

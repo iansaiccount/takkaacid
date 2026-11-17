@@ -12,6 +12,11 @@ it safe, a numbered task list and non-goals. The gate is the phase 2 one, unchan
 - [`01-the-tape-transport`](01-the-tape-transport.md) — the tape in the top band, pause as a real state, the bottom row turned
   over to `REVERSE`, `TBC`, `TRANSPOSE −`, `TRANSPOSE +`, the not-yet-wired keys drawn and named, and `SONGS` renamed to
   `BANKS`.
+- [`02-the-top-band`](02-the-top-band.md) — the band spread out: one left cluster, the deck grown into the room the old
+  word gave up, and the session name carrying saved-or-unsaved by its own colour. Round 3a, taken before plan 01's task 4.
+- [`03-the-bottom-row-catalogue`](03-the-bottom-row-catalogue.md) — the bottom row's keys get a catalogue of their own, so no
+  code and no test finds `REVERSE`, `TRANS −`, the readout or `LEARN` by counting cells. Finding F30 of plan 01's final
+  review, stacked on the pushed branch.
 
 ## What comes after, and is not this phase
 

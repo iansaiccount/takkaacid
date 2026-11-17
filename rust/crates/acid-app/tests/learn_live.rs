@@ -3,10 +3,10 @@
 use acid_app::knobs::Knob;
 use acid_app::midi::cc::{self, CcTarget};
 use acid_app::state::SharedState;
-use acid_app::ui::layout::{knob_cells, layout};
+use acid_app::ui::layout::layout;
 use acid_app::ui::learn::Step;
 use acid_app::ui::switches;
-use acid_app::ui::transport::TRANSPORT_CELLS;
+use acid_app::ui::transport;
 use acid_app::ui::{PanelState, draw_panel, panel};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect};
 use std::sync::atomic::Ordering;
@@ -37,14 +37,14 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
     run_on(ctx, panel, shared, vec![button(false)]);
 }
 
-/// LEARN is the fifth transport key.
+/// LEARN is the row's last cell, asked for by name rather than counted.
 fn learn_centre() -> Pos2 {
-    knob_cells(layout(screen()).transport, TRANSPORT_CELLS)[TRANSPORT_CELLS - 1].center()
+    transport::cell(layout(screen()).transport, transport::Cell::Learn).center()
 }
 
-/// The CUT OFF knob is the third cell of the knob row.
+/// The CUT OFF knob, found by its name in the knob catalogue rather than by its place in the row.
 fn cutoff_centre() -> Pos2 {
-    layout(screen()).knobs.cells[2].center()
+    layout(screen()).knobs.cells[Knob::Cutoff.index()].center()
 }
 
 fn volume_centre() -> Pos2 {

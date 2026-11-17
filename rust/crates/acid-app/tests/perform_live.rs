@@ -36,7 +36,8 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
     run_on(ctx, panel, shared, vec![pointer(at, false)]);
 }
 
-/// A row of four cells: octave down, octave up, shuffle, randomise.
+/// The performance row: two clusters, the played keys on the left then the dials on the right, addressed by index because
+/// this row has no catalogue yet.
 fn cell(index: usize) -> Pos2 {
     layout(window()).perform.cells[index].center()
 }
