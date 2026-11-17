@@ -7,7 +7,6 @@ use acid_app::device::{BusState, DeviceKind, Rack};
 use acid_app::midi::route::InputFilter;
 use acid_app::persist;
 use acid_app::state::SharedState;
-use acid_core::pattern::STEPS_PER_PATTERN as STEPS;
 
 fn rack_of(n: usize) -> Rack {
     let mut rack = Rack::from_saved(&persist::SavedState::default());
@@ -239,42 +238,157 @@ fn removing_a_device_stops_its_sound() {
     assert_eq!(mixer.slots(), 1);
 }
 
+fn position(rack: &Rack, index: usize) -> usize {
+    rack.devices()[index]
+        .state
+        .position
+        .load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A device added mid-bar makes no sound and does not start until the rack's bar line, then begins on that sample in step
+/// with everyone. Started where the others were, its clock would be a step out of phase until the bar wrapped — which is what
+/// this test used to assert, before the player asked for the wait.
 #[test]
-fn a_device_added_mid_run_comes_in_on_the_bar_the_others_are_on() {
+fn a_device_added_mid_bar_waits_for_the_bar_and_lands_on_it() {
     let mut rack = rack_of(1);
     rack.set_transport(acid_app::device::Transport::Playing);
-    rack.set_tempo_bpm(300.0); // a sixteenth every 2_400 samples, so steps pass quickly
+    rack.set_tempo_bpm(300.0); // a sixteenth every 2_400 samples, so a bar passes in a few blocks of 480
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
-    let mut out = vec![0.0; 4_096];
-    for _ in 0..16 {
+    // 500-sample blocks against a 2 400-sample step, so a bar line falls *inside* a block rather than on its edge — the case
+    // the delayed start exists for.
+    let mut out = vec![0.0; 500];
+    for _ in 0..20 {
         mixer.render_mono(&mut out);
     }
-    let reference = rack.devices()[0]
-        .state
-        .position
-        .load(std::sync::atomic::Ordering::Relaxed);
+    let at_join = position(&rack, 0);
+    assert!(at_join > 1, "the reference should be mid-bar: {at_join}");
+
+    rack.add(DeviceKind::Acid).expect("a second");
+
+    let mut landed = None;
+    // Two bars' worth of blocks: a sixteenth at 300 BPM is 2 400 samples, so a bar is 77 blocks of 500.
+    for block in 0..160 {
+        mixer.render_mono(&mut out);
+        let reference = position(&rack, 0);
+        let joined = position(&rack, 1);
+        if landed.is_none() {
+            // Waiting: the joiner's engine has never run, so its step is still the one it was built on.
+            assert_eq!(
+                joined, 0,
+                "block {block}: the joiner started before the bar line"
+            );
+            if reference == 0 {
+                landed = Some(block);
+                assert_eq!(
+                    joined, 0,
+                    "block {block}: the joiner begins on the bar line"
+                );
+            }
+            continue;
+        }
+        assert_eq!(
+            joined, reference,
+            "block {block}: the rack fell out of step after the join"
+        );
+    }
+    let landed = landed.expect("the bar must turn within a bar's worth of blocks");
     assert!(
-        reference > 1,
-        "the reference device should have moved on: {reference}"
+        landed > 1,
+        "the joiner waited for the bar, not for one block: {landed}"
+    );
+}
+
+/// Waiting is silence, not a device that is there and muted: the mix of a rack with a device waiting to join is the mix of
+/// the same rack without it.
+#[test]
+fn a_device_waiting_for_the_bar_adds_nothing_to_the_mix() {
+    let mut alone = rack_of(1);
+    let mut rack = rack_of(1);
+    for r in [&mut alone, &mut rack] {
+        r.set_transport(acid_app::device::Transport::Playing);
+        r.set_tempo_bpm(300.0);
+    }
+    let mut thin = Mixer::new(48_000.0, MAX_BLOCK, alone.bus());
+    let mut full = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
+    let mut thin_out = vec![0.0; 1_024];
+    let mut full_out = vec![0.0; 1_024];
+    // The premise, checked rather than assumed: the two racks are byte-identical while they are the same rack.
+    for _ in 0..4 {
+        thin.render_mono(&mut thin_out);
+        full.render_mono(&mut full_out);
+        assert_eq!(
+            full_out, thin_out,
+            "the two racks must be in lockstep before the add"
+        );
+    }
+
+    rack.add(DeviceKind::Acid).expect("a second");
+    thin.render_mono(&mut thin_out);
+    full.render_mono(&mut full_out);
+    assert_eq!(
+        position(&rack, 1),
+        0,
+        "a waiting device has not started at all — this is a skip, not a muted note"
+    );
+    assert_eq!(
+        full_out, thin_out,
+        "a device waiting for the bar line must not be heard before it"
+    );
+}
+
+/// A paused rack has no bar line to wait for, so a device that joins one still takes the step the resume will use — the rule
+/// this mixer kept from the review that found a paused rack leaking a running device.
+#[test]
+fn a_device_added_to_a_paused_rack_joins_the_step_it_is_holding() {
+    let mut rack = rack_of(1);
+    rack.set_transport(acid_app::device::Transport::Playing);
+    rack.set_tempo_bpm(300.0);
+    let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
+    let mut out = vec![0.0; 480];
+    for _ in 0..20 {
+        mixer.render_mono(&mut out);
+    }
+    rack.set_transport(acid_app::device::Transport::Paused);
+    mixer.render_mono(&mut out);
+    let held = position(&rack, 0);
+    assert!(
+        held > 1,
+        "the pause should keep a step that is not the bar's: {held}"
     );
 
-    // `add` fans the rack's transport and tempo out, so the join is the only thing under test here.
     rack.add(DeviceKind::Acid).expect("a second");
     mixer.render_mono(&mut out);
+    assert_eq!(
+        position(&rack, 1),
+        held,
+        "the joiner takes the step the resume will use"
+    );
+}
 
-    let joined = rack.devices()[1]
-        .state
-        .position
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let reference_now = rack.devices()[0]
-        .state
-        .position
-        .load(std::sync::atomic::Ordering::Relaxed);
-    // The seek aligns the *step*, not the sample inside it: the joining device's clock restarted, so it may cross into the
-    // next step a few samples apart from the reference. One step of slack is the honest assertion.
-    let ahead = (joined + STEPS - reference_now) % STEPS;
-    assert!(
-        ahead <= 1 || ahead == STEPS - 1,
-        "a joining device must land within a step of the rack: joined {joined}, reference {reference_now}"
+/// A device that is still waiting when the rack stops and plays again is let in on the *new* downbeat: a start on step 0 is
+/// a bar line, so the restart releases it rather than leaving it to wait a whole bar of the new run.
+#[test]
+fn a_waiting_device_joins_the_restart_on_the_downbeat() {
+    let mut rack = rack_of(1);
+    rack.set_transport(acid_app::device::Transport::Playing);
+    rack.set_tempo_bpm(300.0);
+    let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
+    let mut out = vec![0.0; 500];
+    for _ in 0..20 {
+        mixer.render_mono(&mut out);
+    }
+    rack.add(DeviceKind::Acid).expect("a second");
+    mixer.render_mono(&mut out);
+    assert_eq!(position(&rack, 1), 0, "it is still waiting");
+
+    rack.set_transport(acid_app::device::Transport::Stopped);
+    mixer.render_mono(&mut out);
+    rack.set_transport(acid_app::device::Transport::Playing);
+    mixer.render_mono(&mut out);
+
+    assert_eq!(
+        position(&rack, 1),
+        position(&rack, 0),
+        "the restart is a bar line: the waiting device must begin on it"
     );
 }

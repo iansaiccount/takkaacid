@@ -181,7 +181,9 @@ fn key_key(
     let lit = match key {
         TapeKey::Play => transport == crate::device::Transport::Playing,
         TapeKey::Pause => transport == crate::device::Transport::Paused,
-        _ => false,
+        // Four light nothing: `STOP` is where the transport is not, and the three that are not wired have no transport to
+        // light from. A key lit by a state it does not drive would be the face telling the player it did something.
+        TapeKey::Stop | TapeKey::Back | TapeKey::Forward | TapeKey::Record => false,
     };
     let face = if lit { p.panel_raised } else { p.key_face };
     let ink = if !key.wired() {

@@ -141,3 +141,67 @@ fn the_same_bar_forwards_opens_on_its_note() {
         "forwards, the downbeat is the note at step 0"
     );
 }
+
+/// A direction asked for mid-bar but not yet taken is the line's, not the bar's: a stop between the ask and the bar line
+/// must not lose it, or the next play runs the old way under a key that is still lit for the new one.
+#[test]
+fn a_direction_asked_for_mid_bar_survives_a_stop() {
+    let mut engine = Engine::new(SR);
+    engine.set_pattern(last_step_only());
+    engine.start();
+    let mut block = vec![0.0; 2_048];
+    engine.render(&mut block);
+    assert!(
+        !engine.is_playing_something(),
+        "forwards, step 0 is the rest"
+    );
+
+    // Asked for under the line: it waits for the bar, which a stop arrives before.
+    engine.set_reverse(true);
+    assert!(engine.reverse_is_pending(), "the direction is waiting");
+    engine.stop();
+    engine.start();
+
+    let mut block = vec![0.0; 2_048];
+    engine.render(&mut block);
+    assert!(
+        engine.is_reverse(),
+        "the stop took the direction it was waiting for"
+    );
+    assert!(
+        engine.is_playing_something(),
+        "and the new bar runs in it: step 0 reads step 15, the note"
+    );
+}
+
+/// A pause is not a bar line: a direction asked for mid-bar keeps waiting through it, because the bar it was asked in arrives
+/// when the line resumes and both halves of that bar belong to the direction it began in.
+#[test]
+fn a_direction_asked_for_mid_bar_waits_out_a_pause() {
+    let mut engine = Engine::new(SR);
+    engine.set_pattern(last_step_only());
+    engine.start();
+    let mut block = vec![0.0; 2_048];
+    engine.render(&mut block);
+
+    engine.set_reverse(true);
+    assert!(engine.reverse_is_pending(), "asked for under the line");
+    engine.pause();
+    assert!(
+        engine.reverse_is_pending(),
+        "a pause leaves the direction waiting for the bar"
+    );
+    assert!(
+        !engine.is_reverse(),
+        "and the bar it was asked in keeps its own direction"
+    );
+
+    engine.resume();
+    assert!(!engine.is_reverse(), "the resume carries on in it");
+    // The wrap takes the direction, as it does for any bar: a pause only postponed the question. One long block rather than
+    // sixteen exact ones, because a sixteenth is not a whole number of samples and the boundary would fall just past the end.
+    let step = timing::step_duration_samples(0, engine.bpm(), SR, 0.0) as usize;
+    let mut bar_and_a_bit = vec![0.0; step * (STEPS_PER_PATTERN + 1)];
+    engine.render(&mut bar_and_a_bit);
+    assert!(engine.is_reverse(), "the next bar line takes it");
+}

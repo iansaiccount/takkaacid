@@ -95,15 +95,18 @@ pub(super) fn draw(
     }
 
     // The transpose reads out between the two keys that move it, in a well of its own: the value and the keys that change
-    // it are one cluster, the way the tempo's `+` and `−` sit either side of its number in the top band.
+    // it are one cluster, the way the tempo's `-` and `+` stack beside its number in the top band. The well scales off its
+    // own rect like the keys beside it, so a small window shows a smaller number rather than a key-sized one in a row that
+    // shrank around it.
     {
         let well = readout;
+        let scale = transport::key_scale(well);
         let painter = ui.painter();
-        painter.rect_filled(well, 3.0, p.well);
+        painter.rect_filled(well, 3.0 * scale, p.well);
         painter.rect_stroke(
             well,
-            3.0,
-            p.silkscreen_stroke(1.0),
+            3.0 * scale,
+            p.silkscreen_stroke(scale),
             egui::StrokeKind::Inside,
         );
         let semitones = shared.transpose();
@@ -111,7 +114,7 @@ pub(super) fn draw(
             well.center(),
             egui::Align2::CENTER_CENTER,
             format!("{semitones:+}"),
-            theme::legend(14.0),
+            theme::legend(14.0 * scale),
             if semitones == 0 {
                 p.silkscreen_dim
             } else {

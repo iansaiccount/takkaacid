@@ -504,9 +504,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // the next fan-out.
     if let Some(request) = tape::draw(ui, state, shared, l.top, s, p) {
         state.transport_request = Some(request);
-        // The save file carries the tempo and not the transport, so only a nudge changes the song: play, pause and stop are
-        // performance, and dirtying the document for them would write a file for nothing.
-        state.dirty |= matches!(request, transport::Request::NudgeTempo(_));
+        // `dirty` is not set here: the tempo's request is applied in `main` through `transport::apply_nudge`, so a nudge
+        // from the arrow keys dirties the session the same way the stepper in this deck does.
     }
 
     // The middle of the strip says one thing at a time: the song the session is working on, or — for a few seconds — what
@@ -522,8 +521,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     let notice = state.notice_now(now);
     let label = panel::song_label_rect(l.top, s);
-    // The name carries the save state now that the word is gone (round 3a): the accent and a raised plate while there are
-    // changes on disk's behalf, plain silk when the session is written, and `SONG` alone while it has never been named.
+    // The name carries the save state now that the word is gone (round 3a): the accent while there are unsaved changes,
+    // plain silk when the session is written, and `SONG` alone while it has never been named.
     let unsaved = state.dirty;
     let named = state.songs.name.is_some();
     let (line, colour) = match notice {
@@ -564,8 +563,6 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             open_banks(state);
         }
     }
-    // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
-    // of the face. Cutting it with the clip rect alone lost both ends; this keeps the beginning and says it was cut.
     // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
     // of the face. Cutting it with the clip rect alone lost both ends; this keeps the beginning and says it was cut.
     // One font for the measurement and the paint, or the fit would be honest only while two expressions stayed equal.
@@ -837,10 +834,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // hit-test tie and the panel behaves in the order it always has.
     row_transport::draw(state, shared, ui, &l, p);
 
-    // A small `?` at the end of the wordmark opens the help card, and the card covers the panel while it is
-    // showing — it is the only thing that needs no explanation of its own.
     // The help dot and the settings gear, side by side at the end of the wordmark: two round buttons that need no
-    // explanation of their own. Both paint unclipped — the clip that belongs to the status band is not theirs.
+    // explanation of their own. Neither is clipped: the top strip's clip belongs to the name and the notice, not to them.
     let help_dot = panel::help_rect(l.top, s);
     let gear_dot = panel::gear_rect(l.top, s);
     let help_response = ui.interact(

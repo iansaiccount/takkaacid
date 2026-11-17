@@ -31,6 +31,21 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))
 }
 
+/// Move the rack's tempo one BPM in `direction`, and answer whether the session is now unsaved (it is: the tempo is in the
+/// save file).
+///
+/// **The one place a `Request` moves the tempo.** The deck's stepper and the arrow keys both arrive here, so neither can
+/// answer "is this a change worth writing" differently from the other. A learned fader does not: it writes the tempo cell
+/// from the MIDI thread and never builds a `Request`, so it does not dirty the session — recorded in plan 04's Progress, with
+/// the reason the honest fix is a round of its own.
+pub fn apply_nudge(rack: &mut crate::device::Rack, direction: i8) -> bool {
+    let next = nudge_tempo(rack.tempo_bpm(), direction);
+    rack.set_tempo_bpm(next);
+    // True even when the number did not move because it was already at the end of its range: the question this answers is
+    // which control wrote, not whether the value differs — a file written for a clamped nudge is the smaller wrong.
+    true
+}
+
 /// One cell of the bottom row, left to right.
 ///
 /// The row was a positional list — a `Vec<Rect>` destructured into seven names, and tests that clicked `cells[6]` with a
@@ -138,7 +153,10 @@ pub fn transport_button(
 }
 
 /// A key's own scale, from its height: the corner radius, the stroke and the legend all follow it.
-fn key_scale(rect: Rect) -> f32 {
+///
+/// Public because the transpose's well sits in the same row and scales off its own rect too — a second spelling of this
+/// arithmetic would let the well and the keys beside it drift apart at a small window.
+pub fn key_scale(rect: Rect) -> f32 {
     (rect.height() / 44.0).clamp(0.65, 1.6)
 }
 
@@ -197,6 +215,27 @@ mod tests {
         assert_eq!(TRANSPORT_CELLS, Cell::ALL.len());
     }
 
+    #[test]
+    fn a_tempo_nudge_moves_the_rack_and_marks_the_session_unsaved() {
+        let mut rack = crate::device::Rack::from_saved(&crate::persist::SavedState::default());
+        let before = rack.tempo_bpm();
+        assert!(
+            apply_nudge(&mut rack, 1),
+            "a nudge changes the tempo, and the tempo is in the save file"
+        );
+        assert_eq!(rack.tempo_bpm(), nudge_tempo(before, 1));
+        assert!(
+            apply_nudge(&mut rack, -1),
+            "and so does the other direction"
+        );
+        assert_eq!(rack.tempo_bpm(), before);
+
+        // At the end of the range the number cannot move; the answer is about which control wrote, not whether it moved, so
+        // a file written for a clamped nudge is the smaller wrong.
+        rack.set_tempo_bpm(300.0);
+        assert!(apply_nudge(&mut rack, 1), "a nudge at the top still wrote");
+        assert_eq!(rack.tempo_bpm(), 300.0);
+    }
     #[test]
     fn the_row_reads_left_to_right_as_the_face_does() {
         // The face's order, written out: REVERSE, TRANS −, the readout between the two keys that move it, TBC, the spare, then

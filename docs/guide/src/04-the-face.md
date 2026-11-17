@@ -21,8 +21,10 @@ another. [`18-a-rack-of-devices`](18-a-rack-of-devices.md) is that page.
 - **the song name**, in the band's left cluster: amber while you have unsaved changes, plain silk once the session is on
   disk. [`03-first-sound`](03-first-sound.md) explains the two states.
 - **The gear** and the **`?`** — the two round keys that open the settings card and the help card.
-- **`SONG`** and the session's name, in the band's left cluster. It is the song's name, not a file path; a session with no name shows
-  what a new song is called.
+- **The tape deck**, six keys drawn as shapes rather than letters: `BACK`, `PLAY`, `PAUSE`, `STOP`, `FWD` and `REC`;
+  `PLAY` and `PAUSE` light from the transport, and the three that are not wired stay dim.
+  [`09-playing`](09-playing.md) is the page for them.
+- **The tempo stepper** beside the pattern readout: a small `-` and `+` stacked at the number's left, a BPM at a press.
 - **Two readouts** at the right: the pattern that is playing (`A1` … `H8`), and the tempo in BPM. Both are seven-segment
   displays, and both answer the pointer: hover one and it says what it is.
 
@@ -65,9 +67,10 @@ learned controller instead ([`11-the-bank`](11-the-bank.md)).
 
 ![The transport](img/transport.png)
 
-**`REVERSE`**, **`TRANS -`**, **`TRANS +`**, the transpose's readout between them, **`TBC`** and **`LEARN`**. `REVERSE` is
-this device's direction and the transpose pair moves the whole rack; `LEARN` is how a MIDI
-controller gets taught a control ([`14-midi`](14-midi.md)).
+**`REVERSE`**, **`TRANS -`** and **`TRANS +`** with the transpose's own readout between them, **`TBC` twice**, and
+**`LEARN`**. `REVERSE` is this device's direction and the transpose pair moves the whole rack; `LEARN` is how a MIDI
+controller gets taught a control ([`14-midi`](14-midi.md)). The deck above is the transport
+([`09-playing`](09-playing.md)); this row is the performance.
 
 ## The panel is one piece, and it scales
 

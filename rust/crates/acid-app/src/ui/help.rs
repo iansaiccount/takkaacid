@@ -63,7 +63,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "the strip: click picks a device; M is its MUTE; + adds one",
                 "four devices; names and extra devices are not saved yet",
                 "the song name is amber while unsaved, plain silk once saved",
-                "saved on exit and 2 s after a change",
+                "saved on exit; AUTOSAVE writes as you go",
                 "BANKS: new, save, save a copy, import, export, load, delete",
                 "LEARN: press it, click a knob, move a fader",
             ],

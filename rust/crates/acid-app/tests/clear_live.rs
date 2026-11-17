@@ -171,3 +171,45 @@ fn the_clear_button_sits_where_the_layout_says() {
         "CLEAR belongs to the performance row now"
     );
 }
+
+/// An armed CLEAR is disarmed by anything that changes the pattern. A roll is the one that costs most if it is not: the second
+/// click would empty the line that has just landed rather than the one the player armed it against.
+#[test]
+fn a_roll_disarms_an_armed_clear() {
+    let now = std::time::Instant::now();
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        clear_centre(),
+        Modifiers::default(),
+    );
+    assert!(
+        acid_app::ui::clear::is_armed(panel.clear_armed_at, now),
+        "the first click arms it"
+    );
+
+    let randomise = layout(screen()).perform.cells[3].center();
+    click(&ctx, &mut panel, &shared, randomise, Modifiers::default());
+    assert!(
+        !acid_app::ui::clear::is_armed(panel.clear_armed_at, now),
+        "a roll changes the pattern, so the arm is stale"
+    );
+
+    // The next CLEAR click arms again rather than emptying the line the roll just wrote.
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        clear_centre(),
+        Modifiers::default(),
+    );
+    assert!(
+        shared.pattern().steps.iter().any(|step| step.on),
+        "the rolled line is still there"
+    );
+}

@@ -135,17 +135,36 @@ impl Engine {
         self.start_at(0);
     }
 
-    /// Start the transport on `step`, so a device joining a running rack comes in on the bar rather than on the downbeat.
+    /// Start the transport on `step`: the **paused** rack's path, where a joining device lands on the step the resume will
+    /// use. A device joining a *playing* rack is held for its bar line and starts with [`Engine::start_later`].
     pub fn start_at(&mut self, step: usize) {
         self.playing = true;
         self.sequencer.start_at(step);
     }
 
+    /// Start the transport on `step` after `silence` samples of the next block: a device joining a rack mid-block begins on
+    /// the bar line's own sample rather than at the top of the block.
+    pub fn start_later(&mut self, step: usize, silence: usize) {
+        self.playing = true;
+        self.sequencer.start_later(step, silence);
+    }
+
+    /// Where step 0 began in the last block, in samples from its start, if it began at all.
+    ///
+    /// The rack's bar line is its devices' — every playing device is in step with every other — so this is what a device
+    /// waiting to join waits for.
+    pub fn bar_line(&self) -> Option<usize> {
+        self.sequencer.bar_line()
+    }
+
     /// Stop the transport and close the gate. Closing it here as well as in the sequencer means a stop
     /// silences immediately even if no render follows.
+    /// A direction waiting for the bar is taken with the stop: the next start returns to the top of the bar, so that bar is
+    /// the first chance the direction will get. A pause does not take it — the bar it was asked in arrives on the resume.
     pub fn stop(&mut self) {
         self.playing = false;
         self.sequencer.stop();
+        self.sequencer.settle_direction();
     }
 
     /// Stop the clock and keep the step, so [`Engine::resume`] carries on from it.

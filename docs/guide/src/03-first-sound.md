@@ -17,8 +17,8 @@ whether your work is safe, so learn to glance at it:
 Press **`PLAY`**, in the tape deck at the top of the panel, or press the space bar — `SPACE` plays and pauses.
 
 The line starts. `PLAY` stays lit while it plays and `PAUSE` lights instead the moment you pause it. Press `SPACE` again to
-pause
-stop: the line holds where it is, and the next start begins from the top of the bar.
+pause: the line holds where it is, and the next play carries on from there. (The deck's `STOP` is the one that goes back to
+the top of the bar.)
 
 That is the entire first lesson. The demo is a real pattern: you can pull it apart step by step, change the sound under
 it, and keep it under your own name when you like it.

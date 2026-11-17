@@ -41,24 +41,26 @@ fn the_deck_answers_where_the_layout_puts_it() {
     let shared = SharedState::new();
     let top = layout(screen()).top;
     let cells = panel::tape_cells(top);
+    let at = |key: tape::TapeKey| {
+        cells[tape::TapeKey::ALL
+            .iter()
+            .position(|k| *k == key)
+            .expect("the catalogue is the index")]
+    };
 
-    let expected: Vec<Option<transport::Request>> = vec![
-        None,                            // Back
-        Some(transport::Request::Play),  // Play
-        Some(transport::Request::Pause), // Pause
-        Some(transport::Request::Stop),  // Stop
-        None,                            // Forward
-        None,                            // Record
-    ];
-
-    for (key, expected) in tape::TapeKey::ALL.iter().zip(expected) {
+    for key in tape::TapeKey::ALL {
+        // Written out per key rather than zipped with a list: a zip truncates silently when a key is added, and this is the
+        // test that says what each key asks for.
+        let expected = match key {
+            tape::TapeKey::Play => Some(transport::Request::Play),
+            tape::TapeKey::Pause => Some(transport::Request::Pause),
+            tape::TapeKey::Stop => Some(transport::Request::Stop),
+            tape::TapeKey::Back | tape::TapeKey::Forward | tape::TapeKey::Record => None,
+        };
         let mut panel = PanelState::default();
         let ctx = Context::default();
         run(&ctx, &mut panel, &shared, vec![]);
-        let rect = cells[tape::TapeKey::ALL
-            .iter()
-            .position(|k| k == key)
-            .expect("the catalogue is the index")];
+        let rect = at(key);
         click(&ctx, &mut panel, &shared, rect.center());
         assert_eq!(
             panel.transport_request, expected,
@@ -66,7 +68,7 @@ fn the_deck_answers_where_the_layout_puts_it() {
         );
     }
 
-    // And the stepper: `−` and `+` either side of the readout.
+    // And the stepper: `−` and `+` stacked beside the readout, not either side of it.
     let stepper = panel::tempo_stepper_cells(top);
     for (rect, direction) in [(stepper[0], -1), (stepper[2], 1)] {
         let mut panel = PanelState::default();

@@ -46,8 +46,6 @@ The same shape for audio: `IN USE:` on the left, and the stream's own words on t
 healthy, or `failed: …` followed by the reason when the stream has stopped. There is no `none` row here, because an audio
 stream needs a device to land on.
 
-## What the card does not say
-
 ## `CLOSE`
 
 Bottom right, and `Escape` and a click outside the card do the same. The card has no other exit: the folds and the device
