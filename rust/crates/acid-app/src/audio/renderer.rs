@@ -125,6 +125,12 @@ impl AudioRenderer {
         self.engine.bar_line()
     }
 
+    /// Whether a start is still waiting for its block. A start issued for a device whose own transport has just stopped is
+    /// put back rather than dropped, and the mixer re-marks that slot `waiting` when it sees this.
+    pub fn has_pending_start(&self) -> bool {
+        self.pending_start.is_some()
+    }
+
     pub fn engine(&self) -> &Engine {
         &self.engine
     }
@@ -146,15 +152,20 @@ impl AudioRenderer {
 
         // A device that joined a running rack starts where it was told to. After `apply`, because `apply` is what starts an
         // engine whose transport has just begun.
-        if let Some((step, silence)) = self.pending_start.take()
-            && params.transport != crate::device::Transport::Stopped
-        {
-            // A seek arms the clock, which is what a joining device wants on a *running* rack and exactly what it must not do
-            // on a paused one: it would run while the rack — and its own mirror — said paused. Take the step, then put the
-            // silence back.
-            self.engine.start_later(step, silence);
-            if params.transport != crate::device::Transport::Playing {
-                self.engine.pause();
+        if let Some((step, silence)) = self.pending_start.take() {
+            if params.transport == crate::device::Transport::Stopped {
+                // A release that arrives as the rack stops is not dropped: it goes back, so the mixer can keep the slot
+                // waiting and it joins on the next bar line. Dropped, the device would play from step 0 under a rack that
+                // resumed mid-bar — the out-of-phase bug this whole path exists to prevent.
+                self.pending_start = Some((step, silence));
+            } else {
+                // A seek arms the clock, which is what a joining device wants on a *running* rack and exactly what it must
+                // not do on a paused one: it would run while the rack — and its own mirror — said paused. Take the step,
+                // then put the silence back.
+                self.engine.start_later(step, silence);
+                if params.transport != crate::device::Transport::Playing {
+                    self.engine.pause();
+                }
             }
         }
 

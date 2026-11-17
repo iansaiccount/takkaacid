@@ -1,6 +1,7 @@
 //! Knob drags must reach `SharedState`, because that is the only path to the engine: `draw_panel` writes the
 //! value, `AudioRenderer::render_mono` snapshots it and `apply` pushes it into the engine's knobs.
 
+use acid_app::knobs::Knob;
 use acid_app::state::SharedState;
 use acid_app::ui::{PanelState, draw_panel, layout};
 use acid_core::oscillator::Waveform;
@@ -10,9 +11,9 @@ fn window() -> egui::Rect {
 }
 
 /// Drive `draw_panel` through a warm-up frame, a press on `cell`, and a vertical drag of `dy` pixels.
-fn drag_knob(shared: &SharedState, panel: &mut PanelState, index: usize, dy: f32) -> f32 {
+fn drag_knob(shared: &SharedState, panel: &mut PanelState, knob: Knob, dy: f32) -> f32 {
     let ctx = egui::Context::default();
-    let pos = layout::layout(window()).knobs.cells[index].center();
+    let pos = layout::layout(window()).knobs.cells[knob.index()].center();
     let press = egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
@@ -33,19 +34,19 @@ fn drag_knob(shared: &SharedState, panel: &mut PanelState, index: usize, dy: f32
         let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
         output.textures_delta.clear();
     }
-    panel.knobs[index]
+    panel.knobs[knob.index()]
 }
 
 /// Drag a knob in several frames, the way a hand actually moves, and return the knob's final value.
 fn drag_knob_in_steps(
     shared: &SharedState,
     panel: &mut PanelState,
-    index: usize,
+    knob: Knob,
     step_pixels: f32,
     steps: usize,
 ) -> f32 {
     let ctx = egui::Context::default();
-    let pos = layout::layout(window()).knobs.cells[index].center();
+    let pos = layout::layout(window()).knobs.cells[knob.index()].center();
     let press = egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
@@ -66,7 +67,7 @@ fn drag_knob_in_steps(
         let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
         output.textures_delta.clear();
     }
-    panel.knobs[index]
+    panel.knobs[knob.index()]
 }
 
 /// The WAVEFORM knob is a switch with four detents. A drag arrives over many frames, so the value has to accumulate —
@@ -78,7 +79,7 @@ fn dragging_the_waveform_knob_moves_one_wave_per_detent() {
     assert_eq!(shared.waveform(), Waveform::Saw, "launch waveform");
 
     // 180 px of travel over four detents: 60 px is one wave, so 4 x 20 px steps reach the square and stop on it.
-    drag_knob_in_steps(&shared, &mut panel, 0, 20.0, 4);
+    drag_knob_in_steps(&shared, &mut panel, Knob::Waveform, 20.0, 4);
     assert_eq!(
         shared.waveform(),
         Waveform::Square,
@@ -87,13 +88,14 @@ fn dragging_the_waveform_knob_moves_one_wave_per_detent() {
     // The pointer sits between detents while the hand is down; the value is snapped when it comes up (the arithmetic is
     // covered by `the_waveform_knob_is_a_switch_with_a_detent_per_wave`).
     assert!(
-        panel.knobs[0] > 1.0 / 3.0 && panel.knobs[0] < 2.0 / 3.0,
+        panel.knobs[Knob::Waveform.index()] > 1.0 / 3.0
+            && panel.knobs[Knob::Waveform.index()] < 2.0 / 3.0,
         "the drag accumulated: {}",
-        panel.knobs[0]
+        panel.knobs[Knob::Waveform.index()]
     );
 
     // Another step's worth carries on to the sine.
-    drag_knob_in_steps(&shared, &mut panel, 0, 20.0, 4);
+    drag_knob_in_steps(&shared, &mut panel, Knob::Waveform, 20.0, 4);
     assert_eq!(shared.waveform(), Waveform::Sine);
 }
 
@@ -104,21 +106,21 @@ fn the_waveform_knob_stops_at_the_ends_of_the_catalogue() {
     let mut panel = PanelState::default();
 
     // All the way up: the triangle, and no further.
-    drag_knob_in_steps(&shared, &mut panel, 0, 40.0, 12);
+    drag_knob_in_steps(&shared, &mut panel, Knob::Waveform, 40.0, 12);
     assert_eq!(shared.waveform(), Waveform::Triangle);
-    assert!((panel.knobs[0] - 1.0).abs() < 0.01);
+    assert!((panel.knobs[Knob::Waveform.index()] - 1.0).abs() < 0.01);
 
     // All the way back down: the saw, and no further.
-    drag_knob_in_steps(&shared, &mut panel, 0, -40.0, 12);
+    drag_knob_in_steps(&shared, &mut panel, Knob::Waveform, -40.0, 12);
     assert_eq!(shared.waveform(), Waveform::Saw);
-    assert!(panel.knobs[0].abs() < 0.01);
+    assert!(panel.knobs[Knob::Waveform.index()].abs() < 0.01);
 }
 
 #[test]
 fn dragging_the_tuning_knob_publishes_to_the_shared_state() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    drag_knob(&shared, &mut panel, 1, 18.0); // one tenth of the travel, upwards
+    drag_knob(&shared, &mut panel, Knob::Tuning, 18.0); // one tenth of the travel, upwards
     assert!(
         (shared.tuning.get() - 0.6).abs() < 0.02,
         "the engine reads tuning from SharedState: {}",
@@ -129,22 +131,22 @@ fn dragging_the_tuning_knob_publishes_to_the_shared_state() {
 #[test]
 fn every_knob_reaches_its_own_shared_field() {
     let shared = SharedState::new();
-    for (index, read) in [
+    for (knob, read) in [
         (
-            2usize,
+            Knob::Cutoff,
             (|s: &SharedState| s.cutoff.get()) as fn(&SharedState) -> f32,
         ),
-        (3, |s: &SharedState| s.resonance.get()),
-        (4, |s: &SharedState| s.env_mod.get()),
-        (5, |s: &SharedState| s.decay.get()),
-        (6, |s: &SharedState| s.accent.get()),
+        (Knob::Resonance, |s: &SharedState| s.resonance.get()),
+        (Knob::EnvMod, |s: &SharedState| s.env_mod.get()),
+        (Knob::Decay, |s: &SharedState| s.decay.get()),
+        (Knob::Accent, |s: &SharedState| s.accent.get()),
     ] {
         let mut panel = PanelState::default();
         let before = read(&shared);
-        drag_knob(&shared, &mut panel, index, 18.0);
+        drag_knob(&shared, &mut panel, knob, 18.0);
         assert!(
             (read(&shared) - before - 0.1).abs() < 0.02,
-            "knob {index} did not move its own field: {} -> {}",
+            "knob {knob:?} did not move its own field: {} -> {}",
             before,
             read(&shared)
         );
@@ -206,14 +208,18 @@ fn the_waveform_face_follows_a_learned_controller() {
     };
 
     frame(&mut panel);
-    assert_eq!(panel.knobs[0], 0.0, "the launch wave is on the first face");
+    assert_eq!(
+        panel.knobs[Knob::Waveform.index()],
+        0.0,
+        "the launch wave is on the first face"
+    );
 
     // What the MIDI thread does with a learned fader: one atomic write.
     shared.set_waveform(Waveform::Sine);
     frame(&mut panel);
 
     assert_eq!(
-        panel.knobs[0],
+        panel.knobs[Knob::Waveform.index()],
         waveform_position(Waveform::Sine),
         "the face follows the switch"
     );

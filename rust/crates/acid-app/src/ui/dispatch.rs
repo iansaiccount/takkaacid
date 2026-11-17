@@ -8,7 +8,7 @@
 use acid_core::bank::PatternBank;
 use eframe::egui::{Event, Key};
 
-use super::{PanelState, learn, selection, shortcuts, transport};
+use super::{PanelState, learn, selection, shortcuts, tape, transport};
 use crate::device::MAX_DEVICES;
 use crate::state::SharedState;
 
@@ -144,7 +144,9 @@ pub fn handle(
         shortcuts::Shortcut::SeekBack
         | shortcuts::Shortcut::SeekForward
         | shortcuts::Shortcut::Record => {
-            panel.notify(not_wired(shortcut));
+            if let Some(words) = not_wired(shortcut) {
+                panel.notify(words);
+            }
             return Handled::Shortcut(shortcut);
         }
         shortcuts::Shortcut::NextPattern
@@ -393,13 +395,16 @@ pub fn clipboard(
     out
 }
 
-/// What a deck key with no feature behind it says when it is pressed. One place, so the keys' words and their tips cannot
-/// drift apart — `ui::tips` promises the same thing in the same words.
-fn not_wired(shortcut: shortcuts::Shortcut) -> &'static str {
+/// What an unwired deck shortcut says when it is pressed, or `None` for a shortcut that is wired.
+///
+/// The words are the deck's own (`ui::tape`), so the key and the shortcut answer with one sentence rather than two that can
+/// drift. `None` is the honest answer for a wired shortcut: its notice never comes from here, and the arm it replaced said
+/// `"NOTHING TO DO"` — a string no keystroke could ever produce.
+fn not_wired(shortcut: shortcuts::Shortcut) -> Option<&'static str> {
     match shortcut {
-        shortcuts::Shortcut::SeekBack => "BACK IS NOT WIRED YET",
-        shortcuts::Shortcut::SeekForward => "FORWARD IS NOT WIRED YET",
-        shortcuts::Shortcut::Record => "RECORD IS NOT WIRED YET",
+        shortcuts::Shortcut::SeekBack => Some(tape::BACK_NOT_WIRED),
+        shortcuts::Shortcut::SeekForward => Some(tape::FORWARD_NOT_WIRED),
+        shortcuts::Shortcut::Record => Some(tape::RECORD_NOT_WIRED),
         // The wired shortcuts never reach this function. Spelled out rather than `_`, because a new shortcut that is not the
         // deck's should be a compile error here, not a wrong notice.
         shortcuts::Shortcut::PlayStop
@@ -409,7 +414,7 @@ fn not_wired(shortcut: shortcuts::Shortcut) -> &'static str {
         | shortcuts::Shortcut::PrevPattern
         | shortcuts::Shortcut::ToggleSettings
         | shortcuts::Shortcut::ToggleHelp
-        | shortcuts::Shortcut::ToggleDeviceCard => "NOTHING TO DO",
+        | shortcuts::Shortcut::ToggleDeviceCard => None,
     }
 }
 
@@ -751,5 +756,30 @@ mod tests {
             Some(crate::device::Request::Select(2)),
             "the third digit is the third device"
         );
+    }
+
+    #[test]
+    fn only_the_three_unwired_shortcuts_answer_with_words() {
+        // The `None` half is what keeps a wired key from printing a notice as well as acting. No keystroke can reach it today,
+        // so nothing but this test says it.
+        for shortcut in [
+            shortcuts::Shortcut::SeekBack,
+            shortcuts::Shortcut::SeekForward,
+            shortcuts::Shortcut::Record,
+        ] {
+            assert!(not_wired(shortcut).is_some(), "{shortcut:?} is not wired");
+        }
+        for shortcut in [
+            shortcuts::Shortcut::PlayStop,
+            shortcuts::Shortcut::TempoUp,
+            shortcuts::Shortcut::TempoDown,
+            shortcuts::Shortcut::NextPattern,
+            shortcuts::Shortcut::PrevPattern,
+            shortcuts::Shortcut::ToggleSettings,
+            shortcuts::Shortcut::ToggleHelp,
+            shortcuts::Shortcut::ToggleDeviceCard,
+        ] {
+            assert!(not_wired(shortcut).is_none(), "{shortcut:?} is wired");
+        }
     }
 }

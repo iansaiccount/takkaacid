@@ -13,6 +13,14 @@ use eframe::egui::Ui;
 
 use super::PanelState;
 
+/// The words the three unwired deck keys answer with, in one place.
+///
+/// The keyboard's shortcuts for the same three keys say the same thing, so they read these rather than repeating them: two
+/// copies of a sentence drift, and the one nobody pins is the one that rots.
+pub const BACK_NOT_WIRED: &str = "BACK IS NOT WIRED YET";
+pub const FORWARD_NOT_WIRED: &str = "FORWARD IS NOT WIRED YET";
+pub const RECORD_NOT_WIRED: &str = "RECORD IS NOT WIRED YET";
+
 /// The deck's keys, left to right, the way a tape deck reads.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TapeKey {
@@ -61,6 +69,20 @@ impl TapeKey {
             TapeKey::Back | TapeKey::Forward | TapeKey::Record => None,
         }
     }
+
+    /// What a press says when it asks for nothing, or `None` for a key that is wired.
+    ///
+    /// `None` is the honest answer for a wired key: its notice never comes from here, and the alternative — a third string for
+    /// "this cannot happen" — was a lie no compiler could see. The words themselves are the consts above, which the keyboard's
+    /// shortcuts read too.
+    pub fn notice(self) -> Option<&'static str> {
+        match self {
+            TapeKey::Back => Some(BACK_NOT_WIRED),
+            TapeKey::Forward => Some(FORWARD_NOT_WIRED),
+            TapeKey::Record => Some(RECORD_NOT_WIRED),
+            TapeKey::Play | TapeKey::Pause | TapeKey::Stop => None,
+        }
+    }
 }
 
 /// Paint the deck and the tempo stepper. Returns what a press asked for, if anything.
@@ -79,15 +101,10 @@ pub fn draw(
         tips::hover(&response, state.tooltips, key.tip());
         if response.clicked() {
             asked = key.request();
-            if asked.is_none() {
-                // A key with nothing behind it still answers: a silent key reads as broken, and the notice is the promise
-                // being honest. The words live beside the tips, in `ui::tips`.
-                state.notify(match key {
-                    TapeKey::Back => "BACK IS NOT WIRED YET",
-                    TapeKey::Forward => "FORWARD IS NOT WIRED YET",
-                    TapeKey::Record => "RECORD IS NOT WIRED YET",
-                    TapeKey::Play | TapeKey::Pause | TapeKey::Stop => "NOTHING TO DO",
-                });
+            // A key with nothing behind it still answers: a silent key reads as broken, and the notice is the promise being
+            // honest. A wired key has a request, so it has no notice.
+            if let Some(words) = key.notice() {
+                state.notify(words);
             }
         }
     }
@@ -276,4 +293,29 @@ fn arrow(x: f32, y: f32, unit: f32, direction: f32, ink: egui::Color32) -> Shape
         ink,
         Stroke::NONE,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_three_unwired_keys_answer_with_their_words() {
+        assert_eq!(TapeKey::Back.notice(), Some(BACK_NOT_WIRED));
+        assert_eq!(TapeKey::Forward.notice(), Some(FORWARD_NOT_WIRED));
+        assert_eq!(TapeKey::Record.notice(), Some(RECORD_NOT_WIRED));
+        for words in [BACK_NOT_WIRED, FORWARD_NOT_WIRED, RECORD_NOT_WIRED] {
+            assert!(words.is_ascii(), "the face may not print a glyph");
+        }
+    }
+
+    #[test]
+    fn a_wired_key_has_no_notice() {
+        // One keystroke away from a key that both plays and prints words: the notice belongs to the unwired three, and
+        // `None` is what says so.
+        for key in [TapeKey::Play, TapeKey::Pause, TapeKey::Stop] {
+            assert_eq!(key.notice(), None, "{key:?} is wired");
+            assert!(key.wired(), "{key:?} asks for something");
+        }
+    }
 }

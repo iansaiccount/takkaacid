@@ -252,4 +252,13 @@ fn the_shuffle_knob_stays_on_the_panel_while_a_learn_is_choosing() {
         eframe::egui::CursorIcon::ResizeVertical,
         "the shuffle knob is not there to click"
     );
+
+    // The cursor only says *a* knob was under the pointer — the density and scale dials would satisfy it too. The binding is
+    // what the click was for, so that is what the test asserts.
+    click(&ctx, &mut panel, &shared, at);
+    assert_eq!(
+        panel.learn,
+        Step::Listening(CcTarget::Swing),
+        "the shuffle knob is the target a click on it picks"
+    );
 }

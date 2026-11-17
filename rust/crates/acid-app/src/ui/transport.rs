@@ -35,15 +35,41 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
 /// save file).
 ///
 /// **The one place a `Request` moves the tempo.** The deck's stepper and the arrow keys both arrive here, so neither can
-/// answer "is this a change worth writing" differently from the other. A learned fader does not: it writes the tempo cell
-/// from the MIDI thread and never builds a `Request`, so it does not dirty the session — recorded in plan 04's Progress, with
-/// the reason the honest fix is a round of its own.
+/// answer "is this a change worth writing" differently from the other. A learned fader reaches the same answer by a different
+/// road: it writes the cell from the MIDI thread, which cannot touch panel state, and leaves `SharedState::tempo_written` for
+/// the panel to take — `draw_panel` for the device on screen, `take_tempo_moved` for the rest of the rack.
 pub fn apply_nudge(rack: &mut crate::device::Rack, direction: i8) -> bool {
     let next = nudge_tempo(rack.tempo_bpm(), direction);
     rack.set_tempo_bpm(next);
     // True even when the number did not move because it was already at the end of its range: the question this answers is
     // which control wrote, not whether the value differs — a file written for a clamped nudge is the smaller wrong.
     true
+}
+
+/// What a `PAUSE` says when there is nothing to pause. A key that refuses in silence reads as broken.
+pub const NOTHING_TO_PAUSE: &str = "NOTHING TO PAUSE";
+
+/// Pause the rack, or answer `false` because there is nothing to pause.
+///
+/// The rule is the rack's (`Rack::set_transport` refuses a pause from `Stopped`, because the engine keeps its step through a
+/// stop and a pause taken there would resume mid-bar); this asks it rather than keeping a second copy of it, and the words
+/// stay here, beside the `Request` they answer. In the library rather than in `main` so the answer has a test.
+pub fn pause(rack: &mut crate::device::Rack) -> bool {
+    rack.set_transport(crate::device::Transport::Paused)
+}
+
+/// Take the "a controller moved the tempo" flag from **every** device, and answer whether any of them had one.
+///
+/// The tempo is one cell for the whole rack, so the fader that moved it may have written its flag on a device the panel is not
+/// showing — a second device hearing its own channel is enough. `draw_panel` drains the drawn device, which is the common
+/// path; `main` calls this so the rest cannot leave a fader-moved tempo unsaved.
+pub fn take_tempo_moved(rack: &crate::device::Rack) -> bool {
+    let mut any = false;
+    for device in rack.devices() {
+        // `|=` and not `||`: both sides must run, or a later device's flag would stay set for another frame.
+        any |= device.state.take_tempo_written();
+    }
+    any
 }
 
 /// One cell of the bottom row, left to right.
@@ -90,11 +116,6 @@ impl Cell {
         }
     }
 }
-
-/// Cells in the bottom row: `Cell::ALL.len()`.
-///
-/// The same as the switches row above it, so the two rows share one column grid and read as one keypad.
-pub const TRANSPORT_CELLS: usize = Cell::ALL.len();
 
 /// The rect of one cell of the bottom row.
 pub fn cell(area: Rect, which: Cell) -> Rect {
@@ -212,7 +233,26 @@ mod tests {
         // The player's choice from plan 01: two rows of seven share one column grid rather than meeting only at the right
         // wall. A cell added to one row and not the other is a face that reads as two grids again.
         assert_eq!(Cell::ALL.len(), Switch::ALL.len());
-        assert_eq!(TRANSPORT_CELLS, Cell::ALL.len());
+    }
+
+    #[test]
+    fn a_pause_with_nothing_to_pause_answers_so() {
+        let mut rack = crate::device::Rack::from_saved(&crate::persist::SavedState::default());
+        // A stopped rack: the engine keeps its step through a stop, so a pause taken here would resume mid-bar. It is refused,
+        // and that refusal is what `main` turns into a notice — a key that refuses in silence reads as broken.
+        assert!(!pause(&mut rack), "there is nothing to pause");
+        assert_eq!(rack.transport(), crate::device::Transport::Stopped);
+
+        rack.set_transport(crate::device::Transport::Playing);
+        assert!(pause(&mut rack), "a playing rack pauses");
+        assert_eq!(rack.transport(), crate::device::Transport::Paused);
+        // A pause of a pause is a pause: there is still something there to pause.
+        assert!(pause(&mut rack));
+        assert_eq!(rack.transport(), crate::device::Transport::Paused);
+        assert!(
+            NOTHING_TO_PAUSE.is_ascii(),
+            "the face may not print a glyph"
+        );
     }
 
     #[test]

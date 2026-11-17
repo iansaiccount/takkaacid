@@ -204,7 +204,10 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
     // A pause taken from Stopped is refused: the engine keeps its step through a stop, so a pause from there would resume
     // mid-bar on the next play instead of starting the bar. The plan's key table says PAUSE from Stopped does nothing.
     rack.set_transport(acid_app::device::Transport::Stopped);
-    rack.set_transport(acid_app::device::Transport::Paused);
+    assert!(
+        !rack.set_transport(acid_app::device::Transport::Paused),
+        "the rack refuses a pause from a stop, and says so"
+    );
     assert_eq!(
         rack.transport(),
         acid_app::device::Transport::Stopped,

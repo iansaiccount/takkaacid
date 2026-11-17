@@ -108,7 +108,15 @@ impl Mixer {
                         }
                     }
                     render_slot(slot, frame, chunk);
+                    // The release may not have taken — the device's own transport can stop between the reference's render
+                    // and this slot's, in this block. The renderer keeps the start in that case, so the slot goes back to
+                    // waiting and joins on the next bar line rather than playing from step 0 under a rack mid-bar.
+                    slot.waiting = slot.renderer.has_pending_start();
                 }
+                // Slot 0 is rendered unconditionally, so `waiting` and a kept start are only managed for the slots after it. A
+                // removal can promote a waiting slot to 0, and its kept start would then be consumed at the head of the block
+                // rather than on a bar line. Reachable only in that window; noted rather than managed, because the alternative
+                // is a second copy of this loop for one slot.
             }
             for sample in chunk.iter_mut() {
                 *sample = self.master.process(*sample);

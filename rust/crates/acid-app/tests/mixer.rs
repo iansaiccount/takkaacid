@@ -392,3 +392,58 @@ fn a_waiting_device_joins_the_restart_on_the_downbeat() {
         "the restart is a bar line: the waiting device must begin on it"
     );
 }
+
+/// A release that arrives while the device's own transport says stopped is not thrown away: the slot goes back to waiting and
+/// joins on the next bar line. Dropped, the device would start at step 0 the moment its mirror played again, under a rack that
+/// was mid-bar — the out-of-phase bug the whole waiting path exists to prevent.
+#[test]
+fn a_release_that_arrives_while_the_device_is_stopped_keeps_it_waiting() {
+    let mut rack = rack_of(1);
+    rack.set_transport(acid_app::device::Transport::Playing);
+    rack.set_tempo_bpm(300.0);
+    let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
+    let mut out = vec![0.0; 500];
+    for _ in 0..20 {
+        mixer.render_mono(&mut out);
+    }
+
+    rack.add(DeviceKind::Acid).expect("a second");
+    // The race, made deterministic: the device's own mirror says stopped while the rack plays on, so its release arrives for a
+    // device that is not playing.
+    rack.devices()[1]
+        .state
+        .set_transport(acid_app::device::Transport::Stopped);
+    for _ in 0..160 {
+        mixer.render_mono(&mut out);
+    }
+    assert_eq!(
+        position(&rack, 1),
+        0,
+        "a stopped device cannot be let in, however many bar lines pass"
+    );
+
+    // Its mirror plays again. A dropped release would start it at once, mid-bar; a kept one holds it for the next bar line.
+    rack.devices()[1]
+        .state
+        .set_transport(acid_app::device::Transport::Playing);
+    let mut joined_on_the_bar = false;
+    for block in 0..160 {
+        mixer.render_mono(&mut out);
+        let reference = position(&rack, 0);
+        let joined = position(&rack, 1);
+        if !joined_on_the_bar {
+            if reference != 0 {
+                assert_eq!(joined, 0, "block {block}: it started before the bar line");
+                continue;
+            }
+            joined_on_the_bar = true;
+            assert_eq!(joined, 0, "block {block}: it begins on the bar line");
+            continue;
+        }
+        assert_eq!(
+            joined, reference,
+            "block {block}: the rack fell out of step after the join"
+        );
+    }
+    assert!(joined_on_the_bar, "it must join, and on a bar line");
+}
