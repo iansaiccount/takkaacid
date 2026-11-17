@@ -347,3 +347,60 @@ tip and the `"NOTHING TO DO"` arm (F12's neighbour); the help card's "saved on e
 `AUTOSAVE` (F12); "What a restart costs" omits the direction and the transpose (F13); `check.sh` pins only positive facts, so none
 of F1–F8 could fail the gate (F16); `ui/songs.rs`, `songs::Songs`, `Switch::Songs` and the `song-*` ids keep the old name while
 the caption says `BANKS` (F33); and `COPY`'s per-frame encoding allocates on the UI thread (F31).
+
+## Handover — where this round stands
+
+**Branch** `phase-3`, **PR #4** into `main` (38+ commits). **Gates green at the head:** `cargo test --workspace` (683 tests),
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`, `./docs/guide/check.sh`.
+
+### Shipped after the final review
+
+The final whole-branch read returned BLOCK; its P1s are fixed (`f27eb47`), and then the player's last two asks (`8463837`), and
+then the PR body's own "known and recorded" list, worked down (`03eda12`, `044fe2a`):
+
+- **The book's stale sentences** the review named — the switches row in three pages, "on a lit plate" ×3, "in the middle" ×4, the
+  paragraph that documented the `dirty` bug as a feature, the space bar as a stop, the tempo pair flanking the number,
+  `SONG untitled`, and six lying `img/README.md` rows — all rewritten; page 21 now says `COPY`/`PASTE` are the same two gestures
+  with a pointer.
+- **`REVERSE` marking the session unsaved** — the exact bug an earlier review removed, back in the row. Gone.
+- **`COPY` writing a different clip from `Ctrl+C`** (`from: None` vs `Some(slot)`) — `pattern_text` names its slot, so a paste says
+  "pasted A1 into A2" again.
+- **The lit test that couldn't fail** now reads Play's painted face, in an amber scheme where the two faces differ.
+- **Round 3a's untested headline** — `the_name_says_saved_or_unsaved_by_its_own_colour`; writing it found the third state (unnamed
+  paints a dim `SONG`) and that my first version tested the wrong branch.
+- **The bottom row is seven cells** (`REVERSE TRANS- [+n] TRANS+ TBC TBC LEARN`) on the switch row's seven, so the two share one
+  column grid — the player chose this over the misalignment.
+- **The help card's autosave line** says what the app does ("saved on exit; AUTOSAVE, in the settings card, writes as you go"),
+  and the settings page's apology for it is gone.
+- **`Control::Run`'s orphaned tip** deleted, with the positional table reindexed behind it.
+- **`check.sh`** gained three *negative* guards (no "on a lit plate", no "in the middle of the top strip", no retired
+  `RUN`/`STOP`/`SAVED` phrasing) — the gate can now fail on a stale sentence, not only on a missing fact.
+- **"What a restart costs"** names each device's direction and the rack's transpose.
+- **Three untested behaviours** now have tests: the transpose readout answers nothing when clicked; the rack's transpose clamps to
+  an octave and reaches every device through the fan-out; `PASTE` asks egui for a paste (`ViewportCommand::RequestPaste`).
+- **`ui/songs.rs` → `ui/banks.rs`**, `banks::Banks`, `Switch::Banks`, `bank-*` ids. `PanelState::songs` keeps its name on purpose:
+  that field is also the session document.
+
+### The one open item
+
+**The bottom row is still a positional list.** `row_transport.rs` destructures `cells[..]` into seven names, and the tests address
+cells by magic index with a comment naming the key (`transport_live.rs`, `learn_live.rs`'s `learn_centre`,
+`learn_highlight_live.rs`). `ui/switches.rs` exists because that pattern broke tests once already. The fix is a catalogue in
+`ui/transport.rs`:
+
+```rust
+pub enum Cell { Reverse, TransposeDown, Readout, TransposeUp, Tbc, Spare, Learn }
+impl Cell { pub const ALL: [Cell; 7] = [...]; pub fn index(self) -> usize { match self { ... } } }
+pub fn cell(area: Rect, which: Cell) -> Rect { layout::knob_cells(area, Cell::ALL.len())[which.index()] }
+pub const TRANSPORT_CELLS: usize = Cell::ALL.len();
+```
+
+then `row_transport` asks for names instead of destructuring, and every test asks `cell(l.transport, Cell::Learn)` rather than
+`cells[6]`. It is a refactor with index churn across three test files — deliberately left for a fresh session rather than started
+at the end of a long one, which is how this branch produced two self-inflicted red trees.
+
+### How to resume
+
+Read this Progress, then `git log --oneline main..phase-3`, then the tests named above. The gates are the three workspace commands
+plus `docs/guide/check.sh`; a fresh subagent reviews every commit (AGENTS.md). The PR body lists what the phase does and its
+history of what the reviews caught — worth reading before changing the face.
