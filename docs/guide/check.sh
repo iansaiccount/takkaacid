@@ -35,13 +35,23 @@ done
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
 # The phase replaced the saved word and moved the name out of the middle; both are claims a rewrite can put back, and neither is
 # a positive fact, so each needs its own guard.
-! grep -rqF 'on a lit plate' src || { echo "the guide promises a plate the face does not paint"; exit 1; }
+! grep -rqE 'on (its )?lit plate' src || { echo "the guide promises a plate the face does not paint"; exit 1; }
 ! grep -rqF 'in the middle of the top strip' src || { echo "the guide puts the name back in the middle"; exit 1; }
 ! grep -rqE '`(RUN|STOP)` (is|stays) lit|`SAVED` / `UNSAVED`' src || { echo "the guide describes the retired transport keys"; exit 1; }
+# A device no longer comes in on the step the rack happens to be on: it waits for the bar (plan 04).
+! grep -rqF 'comes in on the step the others are on' src || { echo "the guide has a device joining mid-bar again"; exit 1; }
+# The same kind of miss, three more ways: a retired word printed as the face spells it on a page whose subject was the saved
+# state, the bank browser under its old name, and the stop's rule told as the pause's. Each is narrowed to the sentence that
+# was the lie — `UNSAVED` is still engraved on the browser's header, and a stop really does return to the top of the bar.
+! grep -rqF 'not yet on disk, `UNSAVED`' src || { echo "the guide spells a word the face no longer prints"; exit 1; }
+! grep -rqF 'MY SONGS' src || { echo "the guide names the bank browser as it was, not as it is"; exit 1; }
+! grep -rqF 'the next start begins from the top of the bar' src || { echo "the guide gives the pause the stop's rule"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \
-            'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE'; do
+            'it makes no sound until the bar the rack is in finishes' \
+            'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE' \
+            'the next play carries on from there' 'tape deck' 'writes as you go'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done
 echo "guide: ok"

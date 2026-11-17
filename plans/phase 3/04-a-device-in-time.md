@@ -142,3 +142,61 @@ Through `Mixer::render_mono`, a real rack, real blocks (`tests/mixer.rs`'s patte
       and the waiter's in the same block (`renderer.rs` takes `pending_start` and then tests the transport). Microsecond-wide,
       and the honest fix is the renderer reporting whether it started, or the mixer re-marking the slot — a design change, not
       a line. It costs one bar of the old out-of-phase bug in that window.
+
+
+- [x] **Task 2 — the two rules with no gate.** (F2) a direction asked for mid-bar is taken by a **stop** and not by a
+      **pause**: `Sequencer::settle_direction` is called from `Engine::stop` alone, so a stop's next start — which returns to
+      the bar anyway — runs in the direction the key asked for, while a pause leaves the direction waiting, because the bar it
+      was asked in still arrives on the resume. (F3) the tempo's `dirty` now lives in `transport::apply_nudge`, which moves the
+      tempo and answers "this changed the document"; `main`'s `NudgeTempo` arm is one line calling it, so the deck's stepper and
+      the arrow keys cannot answer differently. 698 tests.
+      **Mutations run:** moving `settle_direction` back into `Sequencer::stop` — the shape the first draft had, and the review's
+      Critical finding — fails `a_direction_asked_for_mid_bar_waits_out_a_pause` (`a pause leaves the direction waiting for the
+      bar`); removing it from `Engine::stop` altogether fails `a_direction_asked_for_mid_bar_survives_a_stop`. Both reverted.
+      **Recorded, not fixed:** a tempo moved by a *learned fader* still does not dirty the session — the CC handler writes the
+      tempo cell from midir's thread and never builds a `Request`, so it never reaches `apply_nudge`. The honest fixes are a flag
+      on `SharedState` the panel folds in each frame, or a dirty that compares the document with what was saved; the second is
+      the better one and both are a round of their own. Cost of leaving it: with `AUTOSAVE` on, a fader-moved tempo waits for
+      the exit save and the name stays plain silk while it does.
+
+- [x] **Task 3 — the book and the ledger of pictures.** (F1) the first page's stranded `pause` / `stop:` sentence now says a
+      pause keeps the step and names `STOP` as the key that returns to the bar. (F4) the help card says "saved on exit;
+      AUTOSAVE writes as you go", and page 17's apology for the old line is rewritten to match. (F5) five `img/README.md` rows
+      corrected — the plate, `RUN`, `SONGS`/`MY SONGS`, the bottom row's order — and the `check.sh` guard widened to
+      `on (its )?lit plate`, which is the miss that let "on its lit plate" through. (F6) page 04's top strip names the tape deck
+      and the tempo stepper and no longer names the song twice; its deck bullet says plainly that only `PLAY` and `PAUSE` light.
+      (F10) the empty heading in `13-settings.md` is gone. (F11) page 12 stops printing `UNSAVED` in backticks and says the name
+      sits in amber. (F12) pages 04 and 20 name both `TBC` cells and the readout between the transpose keys. (F13) page 10 gains
+      `CLEAR`. (F16) the capture recipe starts `Xvfb :90` and runs on `:90`.
+      **Found while writing F13, and fixed:** an armed `CLEAR` survived a `RANDOM` and an octave move, so the second click
+      emptied the line that had just landed instead of the one the player armed it against. Both now disarm it
+      (`ui/row_perform.rs`), `a_roll_disarms_an_armed_clear` covers the roll, and deleting the disarm makes it fail (run,
+      reverted). Page 10's sentence is true as written and now names the octave move too.
+      **`check.sh`** gained four facts and three **negative** guards — and the guards were narrowed after the review: they now
+      pin the sentences that were the lie (`not yet on disk, `UNSAVED``, `the next start begins from the top of the bar`) rather
+      than banning words the face still engraves (`UNSAVED` on the browser's header) or the truth about a stop. The page-18
+      fact is a phrase only that page carries, because "waits for the bar" is also page 11's heading.
+
+- [x] **Task 4 — the small code findings.** (F7) `TapeKey`'s `lit` arm written out in full — and writing it out found that
+      `STOP` was leaning on the `_` arm too, which is the arm's whole cost. (F8) the transpose well takes its scale from its own
+      rect (`transport::key_scale`, now public), so the number, its corner and its stroke shrink with the keys beside it.
+      (F9) both comments that put the tempo's `-`/`+` "either side" of its number say they are stacked beside it. (F14) the three
+      botched comments repaired: one duplicated two-line comment collapsed to one, the help dot's paragraph rewritten to say what
+      is true of the clip (the strip's clip belongs to the name and the notice, not to the dots), and the paragraph that
+      repeated "the card covers the panel" folded into the same comment. (F15) `tape_live`'s hand-kept positional list became an
+      exhaustive `match` per key, and the deck's rect is found through `TapeKey::ALL`.
+      **F17 is a record, not a rename.** `banks.rs`'s ids stay `song-*`, deliberately — an `egui::Id` is behaviour and the rename
+      buys nothing a player sees — and `01-the-tape-transport.md` now says so in both places it used to claim the rename happened
+      (its `SONGS` becomes `BANKS` section and its Progress). The first draft of this entry claimed that correction without
+      making it, which is the same failure the round exists to close; the review caught it.
+
+- [x] **The gate.** `cargo test --workspace` 698 passed, `cargo clippy --workspace --all-targets -- -D warnings`,
+      `cargo fmt --check`, `./docs/guide/check.sh` → `guide: ok`.
+      **Reviews.** Task 1 was reviewed per commit. Tasks 2–4 were read as one batch before any of the three commits landed,
+      because they are small, disjoint and were written together — the batch returned **BLOCK**, and what it found is above:
+      the pause regression in my own F2 fix (Critical), a comment repair that deleted the wrong line, a claimed record
+      correction that was not in the tree, three comments promising a learned fader would dirty the session, a "test" for F3
+      that tested nothing but the mapping, and page 10's promise that `RANDOM` disarms `CLEAR`. Each was fixed before the
+      commits, with the test named above where one exists. Findings 7–10 (the deck's lights, the two over-broad guards, the
+      fact that did not pin its page, and the name `touches_the_save_file`) were taken too; that last one was deleted rather
+      than renamed, because its only call site was inside the arm it was testing, so it could never have been false.

@@ -90,8 +90,10 @@ promise being honest, and `PanelState::notice` is the channel for exactly this.
 
 ### `SONGS` becomes `BANKS`
 
-The switch's caption, the card's title and its two section headings (`DEMO BANKS`, `MY BANKS`), the module (`ui/songs.rs` →
-`ui/banks.rs`, `songs::Songs` → `banks::Banks`), the `egui::Id`s (`song-*` → `bank-*`), and the guide's page 12. What is saved
+The switch's caption, the card's title and its two section headings (`DEMO BANKS`, `MY BANKS`), and the module (`ui/songs.rs` →
+`ui/banks.rs`, `songs::Songs` → `banks::Banks`), and the guide's page 12. **The `egui::Id`s keep their `song-*` words**, and so
+does `PanelState::songs`: the ids are behaviour (a renamed id is a press that lands nowhere mid-drag) and they name the session
+document, which is one device's bank — the same reason `persist::save_song` keeps its words. What is saved
 does **not** change: `persist::save_song`, `import_song`, `export_song` and `SavedState` keep their words, because they name the
 session document — and today that document is one device's bank, which is exactly why the panel's list is not called songs any
 more. Renaming the save file's words would be a `SAVE_VERSION` bump spent on a word.
@@ -378,8 +380,9 @@ then the PR body's own "known and recorded" list, worked down (`03eda12`, `044fe
 - **"What a restart costs"** names each device's direction and the rack's transpose.
 - **Three untested behaviours** now have tests: the transpose readout answers nothing when clicked; the rack's transpose clamps to
   an octave and reaches every device through the fan-out; `PASTE` asks egui for a paste (`ViewportCommand::RequestPaste`).
-- **`ui/songs.rs` → `ui/banks.rs`**, `banks::Banks`, `Switch::Banks`, `bank-*` ids. `PanelState::songs` keeps its name on purpose:
-  that field is also the session document.
+- **`ui/songs.rs` → `ui/banks.rs`**, `banks::Banks`, `Switch::Banks`. **The `egui` ids are still `song-*`**, and
+  `PanelState::songs` keeps its name: that field is also the session document, and an id is behaviour — renaming one is a press
+  that lands nowhere while a drag is in flight, so it is not a rename to spend on a spelling. Plan 04's Progress records it.
 
 ### The one open item
 

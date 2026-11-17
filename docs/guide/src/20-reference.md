@@ -47,10 +47,9 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | `Ctrl+C` / `Ctrl+V` | copy the pattern on the panel / paste one into it |
 | `escape` | close the topmost card — the picker, the device card, settings, help, the bank browser — then give up on a `LEARN` |
 
-**The panel's own keys:** `REVERSE` `TRANS -` `TRANS +` `TBC` `LEARN` in the bottom row; `CLEAR` `RANDOM` in the performance row
-beside the octave keys; `SAVE` `BANKS` `STEP` `COPY` `PASTE` in
-the switch row (`BANK` and `PATTERN` are engraved and do nothing yet); `OCT -` `OCT +` `CLEAR` `RANDOM` on the performance
-row, with `SHUFFLE`, density and scale at its right.
+**The panel's own keys:** `REVERSE`, `TRANS -`, the transpose's readout, `TRANS +` and `TBC` twice, then `LEARN`, in the
+bottom row; `OCT -` `OCT +` `CLEAR` `RANDOM` in the performance row's left cluster, with `SHUFFLE`, density and scale at its
+right; `SAVE` `BANKS` `STEP` `COPY` `PASTE` in the switch row (`BANK` and `PATTERN` are engraved and do nothing yet).
 **The strip above the panel:** a click on a cell selects that device, its `M` mutes it, and `+` at the right end adds one.
 
 ## The factory controller map

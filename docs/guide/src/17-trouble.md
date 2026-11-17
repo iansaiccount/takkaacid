@@ -67,10 +67,10 @@ The session lives in a data directory:
 Inside it, `state.json` is the session and `songs/` holds one file per named song. Both are read at startup: a run with a
 different `TAKKA_ACID_DATA_DIR` sees none of the work from a run with the default one.
 
-**And the warning worth repeating:** saving is manual by default. The help card's notes say the session is saved on exit
-and again two seconds after a change; only the exit save always happens — the two-second one needs `AUTOSAVE` on, and it
-is off unless you turned it on. If you lost work, that is the most likely reason, and [`13-settings`](13-settings.md) is where the switch
-lives.
+**And the warning worth repeating:** saving is manual by default. The help card's own note says the session is saved on exit
+and that `AUTOSAVE`, in the settings card, writes as you go; only the exit save always happens — the as-you-go save needs
+`AUTOSAVE` on, and it is off unless you turned it on. If you lost work, that is the most likely reason, and
+[`13-settings`](13-settings.md) is where the switch lives.
 
 ## Reporting a bug
 
