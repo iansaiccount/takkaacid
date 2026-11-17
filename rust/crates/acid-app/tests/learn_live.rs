@@ -42,9 +42,9 @@ fn learn_centre() -> Pos2 {
     transport::cell(layout(screen()).transport, transport::Cell::Learn).center()
 }
 
-/// The CUT OFF knob is the third cell of the knob row.
+/// The CUT OFF knob, found by its name in the knob catalogue rather than by its place in the row.
 fn cutoff_centre() -> Pos2 {
-    layout(screen()).knobs.cells[2].center()
+    layout(screen()).knobs.cells[Knob::Cutoff.index()].center()
 }
 
 fn volume_centre() -> Pos2 {

@@ -107,6 +107,9 @@ this plan's Progress says why.
 2. **The row and its tests ask by name.** `row_transport` looks its cells up; `transport_live`'s `click_transport` takes a
    `Cell` and its three call sites name one; both `learn_centre` helpers ask for `Cell::Learn`; `TRANSPORT_CELLS` is no
    longer a test's way of finding a key. **Green commit.**
+3. **The two positional lookups the reviews recorded, before the push.** `learn_live.rs`'s CUT OFF asks the knob catalogue
+   (`Knob::Cutoff.index()`) instead of `cells[2]`, and `save_live.rs`'s doc comment stops claiming the switches row holds five
+   cells — it names the catalogue the key already comes from. **Green commit.**
 
 ## Non-goals
 
@@ -165,6 +168,25 @@ this plan's Progress says why.
       would drop the first coupling and the other two are what the test is; and two more stale counts in files this round did
       touch, `ui/mod.rs`'s "the five keys under the switches" (the row has seven) and `transport_live.rs`'s "answers at five
       cells and stays silent at the sixth" (seven cells, and the readout is the third), both corrected.
-      **Recorded, not fixed:** `learn_live.rs` still finds the CUT OFF knob as `cells[2]` with a comment beside it, and
-      `tests/save_live.rs:48` still says the switches row "holds five cells" against `Switch::ALL`'s seven — the same
-      hand-kept-count habit this round removed from the transport row, in rows this round does not own.
+      **Recorded here, fixed in task 3:** `learn_live.rs` found the CUT OFF knob as `cells[2]` with a comment beside it, and
+      `tests/save_live.rs:48` said the switches row "holds five cells" against `Switch::ALL`'s seven — the same hand-kept
+      habit this round removed from the transport row. The player asked for both before the push rather than in a later round.
+- [x] **Task 3 — the two recorded lookups.** `learn_live.rs`'s CUT OFF asks the knob catalogue (`cells[Knob::Cutoff.index()]`),
+      so the row can be reordered without moving the learn; `save_live.rs`'s comment stops counting the switches row and says what
+      the test relies on instead — that `save_centre` asks `switches::cell` for `Switch::Save`. No behaviour changes and no test
+      assertions change: the same rects, found by name. 688 tests.
+      **Still positional, and recorded rather than fixed:** the performance row has no catalogue at all — `row_perform.rs`
+      destructures `l.perform.cells[..]` exactly as the transport row used to, and three test files ask it by index, two sites
+      each: `clear_centre` is `perform.cells[2]` (`clear_live.rs:27`, `:164`), shuffle is `perform.cells[4]` (`learn_live.rs`
+      both `:212` and `:240`), and `perform_live.rs` drives the whole row through a `cell(index)` helper. `knob_live.rs` also
+      still drives the knob row by bare index — a row that *does* have a catalogue, so that one is a test-side tidy rather than
+      a missing catalogue. Naming the performance row is the next round of this shape, and it is bigger than this one: the
+      row's two clusters and their gap are part of its layout, so a `Perform` catalogue would carry a split as well as an
+      order.
+      **Review of task 3: OK with notes.** Both fixes verified against the code (the CUT OFF lookup lands on the same rect,
+      `Knob::index()` being pinned to `ALL` by `knobs.rs`'s own test), no assertion touched. Its P2s were all record-keeping and
+      are taken here: the two index sites per row are named as pairs, `knob_live.rs` is named, and two adjacent stale comments
+      this round was standing next to are corrected — `perform_live.rs`'s "a row of four cells: octave down, octave up, shuffle,
+      randomise" (it is seven, in two clusters, and shuffle is not in the left one) and `clear_live.rs`'s "CLEAR is the third
+      cell of the performance row", which now says what it is: an index in a row that has no catalogue yet. Neither changes what
+      a test clicks.

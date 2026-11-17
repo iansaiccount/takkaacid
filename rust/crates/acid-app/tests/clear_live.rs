@@ -21,8 +21,8 @@ fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: V
     output.textures_delta.clear();
 }
 
-/// CLEAR is the third cell of the performance row since it moved beside the octave keys — asked of the layout, so the
-/// next move changes one line.
+/// CLEAR sits at the left cluster's end, beside the octave keys. The performance row has no catalogue yet, so this is its
+/// index in the row — one line when it moves.
 fn clear_centre() -> Pos2 {
     acid_app::ui::layout::layout(screen()).perform.cells[2].center()
 }
