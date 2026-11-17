@@ -15,6 +15,7 @@ pub mod learn;
 pub mod modal;
 pub mod panel;
 pub mod pattern_swap;
+pub mod perform;
 pub mod randomise;
 pub mod row_knobs;
 pub mod row_perform;
