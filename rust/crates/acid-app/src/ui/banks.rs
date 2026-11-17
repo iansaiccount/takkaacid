@@ -10,7 +10,7 @@ use super::{theme, transport};
 
 /// What the card is showing.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Songs {
+pub struct Banks {
     /// The songs already on disk, sorted.
     pub names: Vec<String>,
     /// The name being typed.
@@ -53,7 +53,7 @@ pub fn paint(
     ui: &mut Ui,
     panel: Rect,
     scale: f32,
-    songs: &mut Songs,
+    songs: &mut Banks,
     session: Option<&str>,
     session_dirty: bool,
 ) -> Option<Request> {
@@ -292,7 +292,7 @@ fn load_row(
 
 /// Arm or carry out a load. Replacing a session that is not on disk takes two clicks, the way deleting a file does.
 fn guarded_load(
-    songs: &mut Songs,
+    songs: &mut Banks,
     key: String,
     request: Request,
     session_dirty: bool,
@@ -310,7 +310,7 @@ fn guarded_load(
 const NEW_KEY: &str = "new";
 
 /// The name a SAVE should use: what the player typed, or the song the session is already on when the field is blank.
-fn save_name(songs: &Songs) -> Option<String> {
+fn save_name(songs: &Banks) -> Option<String> {
     crate::persist::song_name(&songs.name).or_else(|| songs.open.clone())
 }
 

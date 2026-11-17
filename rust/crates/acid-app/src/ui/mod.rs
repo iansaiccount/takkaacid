@@ -1,5 +1,6 @@
 // The palette and layout constants are the panel's vocabulary: they are introduced here and consumed
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
+pub mod banks;
 pub mod clear;
 pub mod controls;
 pub mod device_card;
@@ -22,7 +23,6 @@ pub mod scale;
 pub mod selection;
 pub mod settings;
 pub mod shortcuts;
-pub mod songs;
 pub mod step_key;
 pub mod strip;
 pub mod switches;
@@ -161,9 +161,9 @@ pub struct PanelState {
 #[derive(Default)]
 pub struct SongState {
     /// The card while it is open, `None` when it is closed.
-    pub card: Option<songs::Songs>,
+    pub card: Option<banks::Banks>,
     /// What the card asked for; consumed by `main`, which owns the files.
-    pub request: Option<songs::Request>,
+    pub request: Option<banks::Request>,
     /// The song this session is working on, once it has a name.
     pub name: Option<String>,
     /// The song file this session is saved as, if it is one. A demo arrives with `None`: it is a new song under a name, and
@@ -797,7 +797,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
     {
-        let songs_cell = switches::cell(l.switches, switches::Switch::Songs);
+        let songs_cell = switches::cell(l.switches, switches::Switch::Banks);
         // The card lists what is on disk, so opening it reads the songs directory once — in `open_banks`, because the
         // session name is the second way in and the two must not drift.
         if switch_key(
@@ -896,13 +896,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // and a demo have a name and no file, and the header must not call them untitled while the field says otherwise.
         let session = state.songs.name.clone();
         if let Some(card) = state.songs.card.as_mut() {
-            request = songs::paint(ui, l.panel, s, card, session.as_deref(), state.dirty);
+            request = banks::paint(ui, l.panel, s, card, session.as_deref(), state.dirty);
         }
         if shield.clicked() {
-            request = Some(songs::Request::Close);
+            request = Some(banks::Request::Close);
         }
         match request {
-            Some(songs::Request::Close) => state.songs.card = None,
+            Some(banks::Request::Close) => state.songs.card = None,
             Some(other) => state.songs.request = Some(other),
             None => {}
         }
@@ -1102,7 +1102,7 @@ fn draw_settings(
 fn open_banks(state: &mut PanelState) {
     state.songs.card = match state.songs.card {
         Some(_) => None,
-        None => Some(songs::Songs {
+        None => Some(banks::Banks {
             names: crate::persist::list_songs(&crate::persist::data_dir()),
             // The demos are built into the binary, so the card only needs their names to list them.
             demos: crate::demo::songs()
@@ -1111,7 +1111,7 @@ fn open_banks(state: &mut PanelState) {
                 .collect(),
             name: state.songs.name.clone().unwrap_or_default(),
             open: state.songs.file.clone(),
-            ..songs::Songs::default()
+            ..banks::Banks::default()
         }),
     };
 }
