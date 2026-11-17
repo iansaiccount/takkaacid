@@ -12,7 +12,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 - **Scratch data directory:** `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-46`, emptied before the first launch, so the session
   is a first run — the Slow Acid demo, named "New song", unsaved, pattern `A1`, 118 BPM. The theme round added a second
   device on `FESTIVAL CITRUS`, which is why the strip pictures show a teal cell beside a black one.
-- **Display:** offscreen, `Xvfb :82 -screen 0 2000x1400x24`, with
+- **Display:** offscreen, `Xvfb :90 -screen 0 2000x1400x24`, with
   `DISPLAY=:82 WINIT_X11_SCALE_FACTOR=2 LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=`. The window is the design size in
   logical pixels (980 × 670) and renders at 1960 × 1340, so the silkscreen stays legible when a page scales it down.
 - **Grab:** `import -window <id> NAME.png` — the whole window, which is 1960 × 1340. A crop is a second grab of the same
@@ -29,22 +29,22 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 
 | Image | State | How it was reached |
 |---|---|---|
-| `img/first-sound.png` | a first run: one device in the strip, `UNSAVED`, `SONG New song`, pattern `A1`, the Slow Acid demo, stopped | launch, wait for the window |
+| `img/first-sound.png` | a first run: one device in the strip, `SONG New song` on its lit plate (the session is unsaved), pattern `A1`, the Slow Acid demo, stopped | launch, wait for the window |
 | `img/running.png` | the transport running, `RUN` lit rather than `STOP` | `space` from the first-sound state |
 | `img/help-card.png` | the help card over the panel | `F1` |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
-| `img/songs-card.png` | the songs card: `New song`, the five demos, an empty `MY SONGS` | click `SONGS` |
+| `img/banks-card.png` | the songs card: `New song`, the five demos, an empty `MY SONGS` | click `SONGS` |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
 | `img/picker.png` | the picker: the `ACID` row and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
 | `img/two-devices.png` | two devices, `ACID 1` black and selected, `ACID 2` on `FESTIVAL CITRUS` | from the picker, click `ACID`; `ctrl+2`; `F3`; click `COLOUR`; click the `FESTIVAL CITRUS` row; `Escape`; `ctrl+1` |
 | `img/strip.png` | the same strip, cropped: a black cell, a teal one, and `+` | `-crop 1960x76+0+24` in the state above |
 | `img/clipboard-notice.png` | the status line reading `pasted A1 into A2` | `ctrl+c`, `shift+Right`, `ctrl+v`, grabbed within the second, before the notice clears |
-| `img/top-strip.png` | the top strip: volume, wordmark, `SAVED`/`UNSAVED`, gear, `?`, song name, pattern and tempo | `-crop 1960x112+0+92` |
+| `img/top-strip.png` | the top strip in its 3a order: volume, wordmark, gear, `?`, the song name on its plate, the tape deck, the tempo stepper, the pattern readout | `-crop 1960x112+0+92 +repage` |
 | `img/knob-row.png` | the seven tone knobs and their captions | `-crop 1960x480+0+200` |
 | `img/step-row.png` | the sixteen step keys, their LEDs and their numbers | `-crop 1960x280+0+792` |
-| `img/switches.png` | `BANK PATTERN MODE CLEAR SAVE SONGS STEP` | `-crop 1960x132+0+1056` |
-| `img/transport.png` | `RUN STOP TEMPO - TEMPO + LEARN` | `-crop 1960x104+0+1192` |
+| `img/switches.png` | `BANK PATTERN COPY PASTE SAVE BANKS STEP` | `-crop 1960x132+0+1056` |
+| `img/transport.png` | the row in its 3a form: `REVERSE TBC TRANS - TRANS + LEARN` — the transport itself now lives in the top band's tape deck | `-crop 1960x104+0+1192` |
 
 The five band crops and `strip.png` come from the same session as `first-sound.png` (the strip crop from the two-device
 state, because one cell does not show what a strip is).

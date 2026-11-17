@@ -116,11 +116,11 @@ fn the_question_dot_still_opens_the_help_card() {
     assert!(panel.help_visible, "the ? dot did not open the card");
 }
 
-/// Where `draw_panel` puts the help dot: the wordmark's right edge minus 10 points, on the strip's midline.
+/// Where `draw_panel` puts the help dot: asked of the layout, not re-derived. The band moved in round 3a, and a test that
+/// knew the old arithmetic ("the wordmark's right edge minus ten points") would have gone on passing against a rect nothing
+/// paints — the second hand-kept list this repo has paid for twice.
 fn help_dot() -> Pos2 {
-    let l = acid_app::ui::layout::layout(screen());
-    Pos2::new(
-        acid_app::ui::panel::brand_rect(l.top).right() - 10.0,
-        l.top.center().y,
-    )
+    let window = screen();
+    let l = acid_app::ui::layout::layout(window);
+    acid_app::ui::panel::help_rect(l.top, acid_app::ui::layout::scale(window)).center()
 }

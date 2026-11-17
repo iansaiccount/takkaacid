@@ -42,7 +42,6 @@ pub enum Control {
     Save,
     Songs,
     Step,
-    Run,
     Stop,
     TempoDown,
     TempoUp,
@@ -68,11 +67,34 @@ pub enum Control {
     /// The caret on the selected cell: the way into that device's card. Appended, so no existing position in the table
     /// moves — the cell says which device is on the panel, and the caret says how to open it, which are two questions.
     DeviceCaret,
+    /// The deck's BACK key: a seek backwards. Appended, like the strip's own three, so no position moves.
+    TapeBack,
+    /// The deck's PAUSE key: silent, with the bar kept.
+    TapePause,
+    /// The deck's FORWARD key: a seek forwards.
+    TapeForward,
+    /// The deck's RECORD key: nothing to record into yet, and its tip says so.
+    TapeRecord,
+    /// The deck's PLAY key. The transport row's `RUN` is a different key with a different job, so it has its own words; the
+    /// deck's STOP is the same key's job as the row's and shares its row.
+    TapePlay,
+    /// The row's REVERSE key: this device's line, backwards, from the next bar.
+    Reverse,
+    /// The row's TBC key: a cell kept for the player, with nothing decided behind it.
+    Tbc,
+    /// The row's TRANS -: the whole rack down a semitone, as a performance control.
+    TransposeDown,
+    /// The row's TRANS +: the whole rack up a semitone.
+    TransposeUp,
+    /// The row's COPY: the pattern on the panel onto the clipboard, as text.
+    Copy,
+    /// The row's PASTE: whatever pattern the clipboard holds onto the pattern on the panel.
+    Paste,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 30] = [
+    pub const ALL: [Control; 40] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -84,7 +106,6 @@ impl Control {
         Control::Save,
         Control::Songs,
         Control::Step,
-        Control::Run,
         Control::Stop,
         Control::TempoDown,
         Control::TempoUp,
@@ -103,6 +124,17 @@ impl Control {
         Control::DeviceMute,
         Control::DeviceAdd,
         Control::DeviceCaret,
+        Control::TapeBack,
+        Control::TapePause,
+        Control::TapeForward,
+        Control::TapeRecord,
+        Control::TapePlay,
+        Control::Reverse,
+        Control::Tbc,
+        Control::TransposeDown,
+        Control::TransposeUp,
+        Control::Copy,
+        Control::Paste,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -119,25 +151,35 @@ impl Control {
             Control::Save => TIPS[8],
             Control::Songs => TIPS[9],
             Control::Step => TIPS[10],
-            Control::Run => TIPS[11],
-            Control::Stop => TIPS[12],
-            Control::TempoDown => TIPS[13],
-            Control::TempoUp => TIPS[14],
-            Control::Learn => TIPS[15],
-            Control::Tooltips => TIPS[16],
-            Control::OctaveDown => TIPS[17],
-            Control::OctaveUp => TIPS[18],
-            Control::Shuffle => TIPS[19],
-            Control::Randomise => TIPS[20],
-            Control::Density => TIPS[21],
-            Control::Scale => TIPS[22],
-            Control::Tempo => TIPS[23],
-            Control::Pattern => TIPS[24],
-            Control::Autosave => TIPS[25],
-            Control::DeviceCell => TIPS[26],
-            Control::DeviceMute => TIPS[27],
-            Control::DeviceAdd => TIPS[28],
-            Control::DeviceCaret => TIPS[29],
+            Control::Stop => TIPS[11],
+            Control::TempoDown => TIPS[12],
+            Control::TempoUp => TIPS[13],
+            Control::Learn => TIPS[14],
+            Control::Tooltips => TIPS[15],
+            Control::TapeBack => TIPS[29],
+            Control::TapePause => TIPS[30],
+            Control::TapeForward => TIPS[31],
+            Control::TapeRecord => TIPS[32],
+            Control::TapePlay => TIPS[33],
+            Control::Reverse => TIPS[34],
+            Control::Tbc => TIPS[35],
+            Control::TransposeDown => TIPS[36],
+            Control::TransposeUp => TIPS[37],
+            Control::Copy => TIPS[38],
+            Control::Paste => TIPS[39],
+            Control::OctaveDown => TIPS[16],
+            Control::OctaveUp => TIPS[17],
+            Control::Shuffle => TIPS[18],
+            Control::Randomise => TIPS[19],
+            Control::Density => TIPS[20],
+            Control::Scale => TIPS[21],
+            Control::Tempo => TIPS[22],
+            Control::Pattern => TIPS[23],
+            Control::Autosave => TIPS[24],
+            Control::DeviceCell => TIPS[25],
+            Control::DeviceMute => TIPS[26],
+            Control::DeviceAdd => TIPS[27],
+            Control::DeviceCaret => TIPS[28],
         }
     }
 
@@ -159,7 +201,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 30] = [
+const TIPS: [Tip; 40] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -206,8 +248,8 @@ const TIPS: [Tip; 30] = [
         shortcut: None,
     },
     Tip {
-        title: "SONGS",
-        what: "Name, save, copy, import, export, load or delete a song.",
+        title: "BANKS",
+        what: "Browse, load, save, copy, import, export or delete a bank. A bank is one device's patterns and knobs.",
         shortcut: None,
     },
     Tip {
@@ -216,14 +258,9 @@ const TIPS: [Tip; 30] = [
         shortcut: None,
     },
     Tip {
-        title: "RUN",
-        what: "Starts the transport from the pattern's first step.",
-        shortcut: Some("SPACE: start or stop, same as RUN / STOP"),
-    },
-    Tip {
         title: "STOP",
         what: "Stops the transport and returns to the first step.",
-        shortcut: Some("SPACE: start or stop, same as RUN / STOP"),
+        shortcut: None,
     },
     Tip {
         title: "TEMPO -",
@@ -310,6 +347,61 @@ const TIPS: [Tip; 30] = [
         what: "The device you are looking at: its name, what it hears, and the way to remove it.",
         shortcut: Some("F3: the same, from the keyboard"),
     },
+    Tip {
+        title: "BACK",
+        what: "Step the playhead back a bar. Not wired yet: the key is drawn so its place is settled.",
+        shortcut: Some(","),
+    },
+    Tip {
+        title: "PAUSE",
+        what: "Stop the clock and keep the bar. A play carries on from the step it kept.",
+        shortcut: Some("space"),
+    },
+    Tip {
+        title: "FORWARD",
+        what: "Step the playhead on a bar. Not wired yet: the key is drawn so its place is settled.",
+        shortcut: Some("."),
+    },
+    Tip {
+        title: "RECORD",
+        what: "Record what the instrument plays. Not wired yet: nothing exists to record into.",
+        shortcut: Some("R"),
+    },
+    Tip {
+        title: "PLAY",
+        what: "Start the bar again from a stop, or carry on from the step a pause kept.",
+        shortcut: Some("SPACE: play or pause, same as PLAY / PAUSE"),
+    },
+    Tip {
+        title: "REVERSE",
+        what: "Runs this device's line backwards. It takes effect at the next bar, so the bar keeps its own time.",
+        shortcut: None,
+    },
+    Tip {
+        title: "TBC",
+        what: "A cell kept for the player: nothing is decided for it yet.",
+        shortcut: None,
+    },
+    Tip {
+        title: "TRANS -",
+        what: "Moves the whole rack down a semitone. A performance control: the TUNING knobs are untouched and nothing is saved.",
+        shortcut: None,
+    },
+    Tip {
+        title: "TRANS +",
+        what: "Moves the whole rack up a semitone. A performance control: the TUNING knobs are untouched and nothing is saved.",
+        shortcut: None,
+    },
+    Tip {
+        title: "COPY",
+        what: "Copies the pattern on the panel to the clipboard as text, so it can go into another slot, another device, or another window.",
+        shortcut: Some("CTRL+C"),
+    },
+    Tip {
+        title: "PASTE",
+        what: "Pastes the clipboard's pattern into the pattern on the panel. A pattern is text, so this works across windows.",
+        shortcut: Some("CTRL+V"),
+    },
 ];
 
 /// The help for `control`, or nothing at all when the player has turned the hints off.
@@ -353,16 +445,16 @@ mod tests {
         }
         // The knobs are the front of the panel; the last entries are the settings card's two switches.
         assert_eq!(Control::for_knob(Knob::Waveform), Control::ALL[0]);
-        assert_eq!(Control::Tooltips, Control::ALL[16]);
-        assert_eq!(Control::Autosave, Control::ALL[25]);
+        assert_eq!(Control::Tooltips, Control::ALL[15]);
+        assert_eq!(Control::Autosave, Control::ALL[24]);
     }
 
     #[test]
     fn the_two_readouts_have_their_own_help() {
         // The pattern and tempo readouts can be hovered and can be taught, so both need a tip. They are appended to the
         // table so no existing control's position moves.
-        assert_eq!(Control::ALL[23], Control::Tempo);
-        assert_eq!(Control::ALL[24], Control::Pattern);
+        assert_eq!(Control::ALL[22], Control::Tempo);
+        assert_eq!(Control::ALL[23], Control::Pattern);
         assert_eq!(Control::Tempo.tip().title, "TEMPO");
         assert_eq!(Control::Pattern.tip().title, "PATTERN");
         assert!(
@@ -406,10 +498,15 @@ mod tests {
 
     #[test]
     fn the_text_names_the_control_its_job_and_only_a_real_shortcut() {
-        let text = Control::Run.tip().text();
-        assert!(text.starts_with("RUN\n"));
-        assert!(text.contains("transport"));
-        assert!(text.ends_with("SPACE: start or stop, same as RUN / STOP"));
+        // The space bar is claimed by the key that has it: the deck's PLAY. RUN's tip is gone with its key, which is why
+        // there is no assertion here about a control the face does not draw.
+        let play = Control::TapePlay.tip();
+        assert!(play.text().starts_with("PLAY\n"));
+        assert!(
+            play.shortcut.is_some_and(|key| key.starts_with("SPACE")),
+            "PLAY owns the space bar: {:?}",
+            play.shortcut
+        );
 
         // A knob has no key, and its text must not pretend otherwise.
         let knob = Control::Cutoff.tip();

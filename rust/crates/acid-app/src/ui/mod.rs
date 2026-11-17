@@ -1,5 +1,6 @@
 // The palette and layout constants are the panel's vocabulary: they are introduced here and consumed
 // from Phase 06 onwards, so the dead-code lint is waived for the module rather than per constant.
+pub mod banks;
 pub mod clear;
 pub mod controls;
 pub mod device_card;
@@ -18,15 +19,14 @@ pub mod randomise;
 pub mod row_knobs;
 pub mod row_perform;
 pub mod row_transport;
-pub mod save;
 pub mod scale;
 pub mod selection;
 pub mod settings;
 pub mod shortcuts;
-pub mod songs;
 pub mod step_key;
 pub mod strip;
 pub mod switches;
+pub mod tape;
 pub mod text;
 pub mod tips;
 
@@ -87,6 +87,9 @@ pub struct PanelState {
     pub volume: f32,
     /// When CLEAR was first clicked: a second click inside the window empties the pattern on screen.
     pub clear_armed_at: Option<std::time::Instant>,
+    /// The pattern text this panel last put on the clipboard, so the COPY key can read as pressed while the clipboard still
+    /// holds the pattern on screen. `None` until something is copied — a paste from elsewhere is not this panel's copy.
+    pub copied: Option<String>,
     /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
     pub save_requested: bool,
     /// Set by the transport row; consumed by `main`, which owns the rack's transport. A request rather than a write: the
@@ -158,9 +161,9 @@ pub struct PanelState {
 #[derive(Default)]
 pub struct SongState {
     /// The card while it is open, `None` when it is closed.
-    pub card: Option<songs::Songs>,
+    pub card: Option<banks::Banks>,
     /// What the card asked for; consumed by `main`, which owns the files.
-    pub request: Option<songs::Request>,
+    pub request: Option<banks::Request>,
     /// The song this session is working on, once it has a name.
     pub name: Option<String>,
     /// The song file this session is saved as, if it is one. A demo arrives with `None`: it is a new song under a name, and
@@ -196,6 +199,7 @@ impl Default for PanelState {
             help_visible: false,
             selected: 0,
             clear_armed_at: None,
+            copied: None,
             save_requested: false,
             transport_request: None,
             songs: SongState::default(),
@@ -495,6 +499,16 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         midi::cc::CcTarget::Pattern,
     );
 
+    // The tape deck and the tempo stepper, between the session name and the pattern readout. Its presses are *requests* for
+    // the same reason the switches' are: the rack owns the transport, and a key that wrote a device's atomic would be undone by
+    // the next fan-out.
+    if let Some(request) = tape::draw(ui, state, shared, l.top, s, p) {
+        state.transport_request = Some(request);
+        // The save file carries the tempo and not the transport, so only a nudge changes the song: play, pause and stop are
+        // performance, and dirtying the document for them would write a file for nothing.
+        state.dirty |= matches!(request, transport::Request::NudgeTempo(_));
+    }
+
     // The middle of the strip says one thing at a time: the song the session is working on, or — for a few seconds — what
     // just happened. Notices used to share the line with a MIDI status readout; that readout now lives in the settings card,
     // so the line is the notice's or the song's, never a fight between them.
@@ -508,17 +522,48 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     }
     let notice = state.notice_now(now);
     let label = panel::song_label_rect(l.top, s);
+    // The name carries the save state now that the word is gone (round 3a): the accent and a raised plate while there are
+    // changes on disk's behalf, plain silk when the session is written, and `SONG` alone while it has never been named.
+    let unsaved = state.dirty;
+    let named = state.songs.name.is_some();
     let (line, colour) = match notice {
         Some(message) => (message.to_string(), p.led_accent),
-        None => (
+        // `song_label` already carries the `SONG` prefix; a second one made the band read `SONG SONG New song`.
+        None if named => (
             song_label(state.songs.name.as_deref()),
-            if state.songs.file.is_some() {
-                p.silkscreen_dim
-            } else {
-                p.silkscreen_dim.gamma_multiply(0.55)
-            },
+            if unsaved { p.led_accent } else { p.silkscreen },
         ),
+        None => ("SONG".to_string(), p.silkscreen_dim),
     };
+    // The name is drawn in `led_accent` while there are unsaved changes and in plain silk when there are none. The plate the
+    // design first proposed was cut by the player, who read it as a stray rectangle under the name rather than as emphasis;
+    // the state still reaches the pointer, because the tooltip ends `(unsaved)` or `(saved)`.
+    if notice.is_none() {
+        // The only dynamic tooltip on this face: it carries a name the player typed, so it cannot come from `ui::tips`.
+        let full = song_label(state.songs.name.as_deref());
+        let said = if named {
+            // `full` already begins with `SONG`: prefixing it again is what made the hover read `SONG SONG New song`.
+            format!("{full}\n({})", if unsaved { "unsaved" } else { "saved" })
+        } else {
+            "SONG\nThis session has no name yet".to_string()
+        };
+        // The name is a door as well as a label: the bank browser is how a session is loaded and saved, and the icons that
+        // used to open it were cut in round 3a for room the deck needed. A label that answers a click is the cheapest way back in.
+        let response = ui.interact(
+            label,
+            ui.scope_id().with("song-title"),
+            egui::Sense::click(),
+        );
+        if response.hovered() {
+            response
+                .clone()
+                .on_hover_text(format!("{said}\nClick for the banks"));
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        if response.clicked() {
+            open_banks(state);
+        }
+    }
     // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
     // of the face. Cutting it with the clip rect alone lost both ends; this keeps the beginning and says it was cut.
     // Measured, not guessed: the label rect holds a song's name or a notice, and a notice can be longer than the rest
@@ -526,16 +571,17 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // One font for the measurement and the paint, or the fit would be honest only while two expressions stayed equal.
     let font = theme::legend(10.0 * s);
     let line = text::fit(ui.painter(), &line, font.clone(), label.width());
+    // Left-aligned in the corridor: a name is read from its first letter, and a centred one jumps every time it is typed.
     ui.painter().with_clip_rect(label).text(
-        label.center(),
-        egui::Align2::CENTER_CENTER,
+        egui::Pos2::new(label.left(), label.center().y),
+        egui::Align2::LEFT_CENTER,
         line,
         font,
         colour,
     );
     row_knobs::draw(state, shared, ui, &l, s, p);
     row_perform::draw(state, shared, ui, &l, s, p);
-    // VOLUME has its own corner of the top strip, before the wordmark, so the transport row keeps its five keys.
+    // VOLUME has its own corner of the top strip, before the wordmark, so the row below never needed a cell for it.
     let volume_rect = panel::volume_knob_rect(l.top);
     let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));
     volume_ui.set_clip_rect(volume_rect);
@@ -678,46 +724,71 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         );
     }
     {
-        let clear_cell = switches::cell(l.switches, switches::Switch::Clear);
-        let now = std::time::Instant::now();
-        let armed = clear::is_armed(state.clear_armed_at, now);
-        let label = if armed { "CLEAR?" } else { "CLEAR" };
-        if switch_key(
+        // COPY writes the same text `Ctrl+C` writes — the gesture and the key are one format, and `main` puts it on the OS
+        // clipboard from the same function — so the two cannot drift.
+        let copy_cell = switches::cell(l.switches, switches::Switch::Copy);
+        let slot = display::format_pattern(state.pattern_id);
+        let holding = state.copied.as_deref() == Some(pattern_text(shared, &slot).as_str());
+        let pressed = switch_key(
             ui,
             state,
             Key {
-                id: "clear-pattern",
-                rect: clear_cell,
-                label,
-                lit: armed,
-                control: tips::Control::Clear,
+                id: "copy-pattern",
+                rect: copy_cell,
+                label: "COPY",
+                lit: false,
+                control: tips::Control::Copy,
             },
             p,
-        ) {
-            match clear::click(state.clear_armed_at, now) {
-                clear::Click::Armed => state.clear_armed_at = Some(now),
-                clear::Click::Cleared => {
-                    clear::disarm(state);
-                    let empty = Arc::new(Pattern::empty());
-                    shared.set_pattern(Arc::clone(&empty));
-                    state.pattern = empty;
-                    state.dirty = true;
-                }
-            }
+        );
+        if holding {
+            // Indented while the clipboard holds the pattern on screen: a second border inside the key, the way a pressed
+            // collar sits inside a real switch. It is the only feedback that says "this is already copied".
+            ui.painter().rect_stroke(
+                copy_cell.shrink(2.0 * s),
+                2.0 * s,
+                p.silkscreen_stroke(1.0 * s),
+                egui::StrokeKind::Inside,
+            );
+        }
+        if pressed {
+            let text = pattern_text(shared, &slot);
+            ui.ctx().copy_text(text.clone());
+            state.copied = Some(text);
+            state.notify(format!("copied {slot}"));
         }
     }
     {
-        let save_cell = switches::cell(l.switches, switches::Switch::Save);
-        // Lit while something is unsaved, so the key doubles as the "there is work to keep" lamp.
-        let dirty = state.dirty;
+        // PASTE asks egui for a paste, so the event path that `Ctrl+V` uses does the work — including refusing when a text
+        // field has focus. A key with its own paste would be a second behaviour to keep in step.
+        let paste_cell = switches::cell(l.switches, switches::Switch::Paste);
         if switch_key(
             ui,
             state,
             Key {
-                id: "save-session",
+                id: "paste-pattern",
+                rect: paste_cell,
+                label: "PASTE",
+                lit: false,
+                control: tips::Control::Paste,
+            },
+            p,
+        ) {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+        }
+    }
+    {
+        // SAVE writes the session; whether it worked is `main`'s to know, so it asks and leaves `dirty` alone.
+        let save_cell = switches::cell(l.switches, switches::Switch::Save);
+        if switch_key(
+            ui,
+            state,
+            Key {
+                id: "save",
                 rect: save_cell,
                 label: "SAVE",
-                lit: dirty,
+                lit: false,
                 control: tips::Control::Save,
             },
             p,
@@ -726,34 +797,22 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         }
     }
     {
-        let songs_cell = switches::cell(l.switches, switches::Switch::Songs);
-        // The card lists what is on disk, so opening it reads the songs directory once.
+        let songs_cell = switches::cell(l.switches, switches::Switch::Banks);
+        // The card lists what is on disk, so opening it reads the songs directory once — in `open_banks`, because the
+        // session name is the second way in and the two must not drift.
         if switch_key(
             ui,
             state,
             Key {
                 id: "songs",
                 rect: songs_cell,
-                label: "SONGS",
+                label: "BANKS",
                 lit: state.songs.card.is_some(),
                 control: tips::Control::Songs,
             },
             p,
         ) {
-            state.songs.card = match state.songs.card {
-                Some(_) => None,
-                None => Some(songs::Songs {
-                    names: crate::persist::list_songs(&crate::persist::data_dir()),
-                    // The demos are built into the binary, so the card only needs their names to list them.
-                    demos: crate::demo::songs()
-                        .iter()
-                        .map(|demo| demo.name.to_string())
-                        .collect(),
-                    name: state.songs.name.clone().unwrap_or_default(),
-                    open: state.songs.file.clone(),
-                    ..songs::Songs::default()
-                }),
-            };
+            open_banks(state);
         }
     }
     {
@@ -774,19 +833,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             state.step_mode = !state.step_mode;
         }
     }
-    // The top strip says which of the two it is; `SAVED` in dim silk, `UNSAVED` in amber.
-    let (save_label, save_colour) = save::state_label(state.dirty, p);
-    // The lamp says one word: SAVED in dim silk, UNSAVED in amber, inside its own corner of the strip.
-    ui.painter()
-        .with_clip_rect(panel::save_indicator_rect(l.top, s))
-        .text(
-            panel::save_indicator_rect(l.top, s).right_center(),
-            egui::Align2::RIGHT_CENTER,
-            save_label,
-            theme::legend(10.0 * s),
-            save_colour,
-        );
-    // The transport row: the five keys under the switches, drawn after everything above them, so a later widget wins a
+    // The transport row: the seven keys under the switches, drawn after everything above them, so a later widget wins a
     // hit-test tie and the panel behaves in the order it always has.
     row_transport::draw(state, shared, ui, &l, p);
 
@@ -849,13 +896,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // and a demo have a name and no file, and the header must not call them untitled while the field says otherwise.
         let session = state.songs.name.clone();
         if let Some(card) = state.songs.card.as_mut() {
-            request = songs::paint(ui, l.panel, s, card, session.as_deref(), state.dirty);
+            request = banks::paint(ui, l.panel, s, card, session.as_deref(), state.dirty);
         }
         if shield.clicked() {
-            request = Some(songs::Request::Close);
+            request = Some(banks::Request::Close);
         }
         match request {
-            Some(songs::Request::Close) => state.songs.card = None,
+            Some(banks::Request::Close) => state.songs.card = None,
             Some(other) => state.songs.request = Some(other),
             None => {}
         }
@@ -1047,4 +1094,33 @@ fn draw_settings(
         Some(settings::Click::Ask(request)) => state.settings_request = Some(request),
         None => {}
     }
+}
+
+/// Open the bank browser, or close it: the one rule for the card, whose two doors are the `BANKS` key and the session name.
+///
+/// Opening reads the songs directory, so it is not something to do twice a frame; nothing else remembers what is on disk.
+fn open_banks(state: &mut PanelState) {
+    state.songs.card = match state.songs.card {
+        Some(_) => None,
+        None => Some(banks::Banks {
+            names: crate::persist::list_songs(&crate::persist::data_dir()),
+            // The demos are built into the binary, so the card only needs their names to list them.
+            demos: crate::demo::songs()
+                .iter()
+                .map(|demo| demo.name.to_string())
+                .collect(),
+            name: state.songs.name.clone().unwrap_or_default(),
+            open: state.songs.file.clone(),
+            ..banks::Banks::default()
+        }),
+    };
+}
+
+/// The pattern on the panel, as the clipboard's text — the same text, `from` included, that `Ctrl+C` writes. A copy that did
+/// not name its slot pastes as "a pattern", which is the notice a build that could not say would give.
+fn pattern_text(shared: &SharedState, slot: &str) -> String {
+    crate::clipboard::encode(&crate::clipboard::Clip::Pattern {
+        pattern: *shared.pattern(),
+        from: Some(slot.to_string()),
+    })
 }

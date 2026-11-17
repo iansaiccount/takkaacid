@@ -10,7 +10,7 @@ use super::{theme, transport};
 
 /// What the card is showing.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Songs {
+pub struct Banks {
     /// The songs already on disk, sorted.
     pub names: Vec<String>,
     /// The name being typed.
@@ -53,7 +53,7 @@ pub fn paint(
     ui: &mut Ui,
     panel: Rect,
     scale: f32,
-    songs: &mut Songs,
+    songs: &mut Banks,
     session: Option<&str>,
     session_dirty: bool,
 ) -> Option<Request> {
@@ -77,7 +77,7 @@ pub fn paint(
     painter.text(
         egui::Pos2::new(left, y),
         egui::Align2::LEFT_TOP,
-        "SONGS",
+        "BANKS",
         theme::legend(13.0 * scale),
         theme::BLACK.silkscreen,
     );
@@ -143,7 +143,7 @@ pub fn paint(
 
     // The demos first: they are what a player reaches for when they want a sound, and they are not files, so there is no
     // cross and no rename. Loading one replaces the session, which takes two clicks while it is unsaved.
-    section(ui, scale, "DEMO SONGS", left, &mut y);
+    section(ui, scale, "DEMO BANKS", left, &mut y);
     for index in 0..songs.demos.len() {
         let name = songs.demos[index].clone();
         let row = Rect::from_min_size(
@@ -167,7 +167,7 @@ pub fn paint(
     }
 
     // Then the player's own songs: the name loads it, the cross beside it deletes it (twice, because there is no undo).
-    section(ui, scale, "MY SONGS", left, &mut y);
+    section(ui, scale, "MY BANKS", left, &mut y);
     for index in 0..songs.names.len() {
         let name = songs.names[index].clone();
         let row = Rect::from_min_size(
@@ -292,7 +292,7 @@ fn load_row(
 
 /// Arm or carry out a load. Replacing a session that is not on disk takes two clicks, the way deleting a file does.
 fn guarded_load(
-    songs: &mut Songs,
+    songs: &mut Banks,
     key: String,
     request: Request,
     session_dirty: bool,
@@ -310,7 +310,7 @@ fn guarded_load(
 const NEW_KEY: &str = "new";
 
 /// The name a SAVE should use: what the player typed, or the song the session is already on when the field is blank.
-fn save_name(songs: &Songs) -> Option<String> {
+fn save_name(songs: &Banks) -> Option<String> {
     crate::persist::song_name(&songs.name).or_else(|| songs.open.clone())
 }
 
@@ -318,8 +318,8 @@ fn save_name(songs: &Songs) -> Option<String> {
 /// no file yet, and they are unsaved, not untitled.
 pub fn now_line(session: Option<&str>, dirty: bool) -> String {
     match (session, dirty) {
-        (Some(name), true) => format!("NOW: {name} · UNSAVED"),
-        (Some(name), false) => format!("NOW: {name} · SAVED"),
-        (None, _) => "NOW: untitled · UNSAVED".to_string(),
+        (Some(name), true) => format!("NOW: {name} - UNSAVED"),
+        (Some(name), false) => format!("NOW: {name} - SAVED"),
+        (None, _) => "NOW: untitled - UNSAVED".to_string(),
     }
 }

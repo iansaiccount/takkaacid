@@ -4,7 +4,7 @@
 //! as the thing behind the card rather than as a picture of one.
 
 use acid_app::state::SharedState;
-use acid_app::ui::songs::Songs;
+use acid_app::ui::banks::Banks;
 use acid_app::ui::{PanelState, draw_panel, theme};
 use eframe::egui::{
     Color32, Context, Event, FullOutput, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape,
@@ -73,7 +73,7 @@ fn face_is_dimmed(output: &FullOutput) -> bool {
 /// The three cards, each open, each built from `PanelState` alone so the test needs no window.
 fn three_open_cards() -> [(&'static str, PanelState); 3] {
     let mut songs = PanelState::default();
-    songs.songs.card = Some(Songs::default());
+    songs.songs.card = Some(Banks::default());
     [
         (
             "help",

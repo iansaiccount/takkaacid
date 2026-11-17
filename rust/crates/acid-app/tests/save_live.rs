@@ -45,7 +45,8 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
     run_on(ctx, panel, shared, vec![release(at)]);
 }
 
-/// The switches row now holds five cells: BANK, PATTERN, MODE, CLEAR, SAVE.
+/// SAVE's key comes from the switches catalogue, so this test does not care how many cells the row has or where the key sits
+/// in it.
 fn save_centre() -> Pos2 {
     switches::cell(layout(screen()).switches, Switch::Save).center()
 }
@@ -81,15 +82,15 @@ fn a_click_elsewhere_does_not_ask_for_a_write() {
 }
 
 #[test]
-fn the_indicator_sits_inside_the_top_strip_and_clear_of_the_help_dot() {
+fn the_name_sits_inside_the_top_strip_and_clear_of_the_help_dot() {
     // Cheap guard for the layout: a word painted outside its band would be invisible or overlap the `?`.
     let top = layout(screen()).top;
-    let rect = acid_app::ui::panel::save_indicator_rect(top, acid_app::ui::layout::scale(screen()));
+    let rect = acid_app::ui::panel::song_label_rect(top, acid_app::ui::layout::scale(screen()));
     assert!(top.contains_rect(rect));
     let help_dot = egui_help_dot(top);
     assert!(
         !rect.intersects(help_dot),
-        "the saved word must not sit under the ? that opens the card"
+        "the session name must not sit under the ? that opens the card"
     );
 }
 
@@ -100,4 +101,52 @@ fn egui_help_dot(top: Rect) -> Rect {
         Pos2::new(brand.right() - 10.0, top.center().y),
         vec2(18.0, 18.0),
     )
+}
+
+/// The PASTE key does not paste itself: it asks egui for a paste, so the event path `Ctrl+V` uses does the work — including
+/// refusing while a text field has focus. This pins that it asks, because a key that silently did nothing would look wired.
+#[test]
+fn the_paste_key_asks_egui_for_a_paste() {
+    use acid_app::ui::switches::{self, Switch};
+
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let ctx = Context::default();
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        events: vec![],
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+    output.textures_delta.clear();
+
+    let at = switches::cell(layout(screen()).switches, Switch::Paste).center();
+    let button = |pressed: bool| eframe::egui::Event::PointerButton {
+        pos: at,
+        button: eframe::egui::PointerButton::Primary,
+        pressed,
+        modifiers: eframe::egui::Modifiers::default(),
+    };
+    for events in [
+        vec![eframe::egui::Event::PointerMoved(at)],
+        vec![button(true)],
+        vec![button(false)],
+    ] {
+        let input = RawInput {
+            screen_rect: Some(screen()),
+            events,
+            ..Default::default()
+        };
+        output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+        output.textures_delta.clear();
+    }
+    let asked = output.viewport_output.values().any(|viewport| {
+        viewport
+            .commands
+            .contains(&eframe::egui::ViewportCommand::RequestPaste)
+    });
+    assert!(
+        asked,
+        "the PASTE key must ask egui for a paste, not paste behind its back"
+    );
 }

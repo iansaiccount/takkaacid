@@ -3,10 +3,10 @@
 use acid_app::knobs::Knob;
 use acid_app::midi::cc::{self, CcTarget};
 use acid_app::state::SharedState;
-use acid_app::ui::layout::{knob_cells, layout};
+use acid_app::ui::layout::layout;
 use acid_app::ui::learn::Step;
 use acid_app::ui::switches;
-use acid_app::ui::transport::TRANSPORT_CELLS;
+use acid_app::ui::transport;
 use acid_app::ui::{PanelState, draw_panel, panel};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect};
 use std::sync::atomic::Ordering;
@@ -37,14 +37,14 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
     run_on(ctx, panel, shared, vec![button(false)]);
 }
 
-/// LEARN is the fifth transport key.
+/// LEARN is the row's last cell, asked for by name rather than counted.
 fn learn_centre() -> Pos2 {
-    knob_cells(layout(screen()).transport, TRANSPORT_CELLS)[4].center()
+    transport::cell(layout(screen()).transport, transport::Cell::Learn).center()
 }
 
-/// The CUT OFF knob is the third cell of the knob row.
+/// The CUT OFF knob, found by its name in the knob catalogue rather than by its place in the row.
 fn cutoff_centre() -> Pos2 {
-    layout(screen()).knobs.cells[2].center()
+    layout(screen()).knobs.cells[Knob::Cutoff.index()].center()
 }
 
 fn volume_centre() -> Pos2 {
@@ -209,7 +209,7 @@ fn clicking_the_shuffle_knob_while_choosing_asks_for_a_shuffle_fader() {
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    let shuffle = layout(screen()).perform.cells[2].center();
+    let shuffle = layout(screen()).perform.cells[4].center();
 
     // Outside a learn the knob is a knob: this click is a press-and-release with no drag, so nothing moves, and no
     // binding starts.
@@ -237,7 +237,7 @@ fn the_shuffle_knob_stays_on_the_panel_while_a_learn_is_choosing() {
     click(&ctx, &mut panel, &shared, learn_centre());
     assert_eq!(panel.learn, Step::Choosing);
 
-    let at = layout(screen()).perform.cells[2].center();
+    let at = layout(screen()).perform.cells[4].center();
     let input = RawInput {
         screen_rect: Some(screen()),
         events: vec![Event::PointerMoved(at)],

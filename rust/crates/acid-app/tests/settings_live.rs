@@ -432,7 +432,7 @@ fn opening_settings_closes_help_and_the_songs_card() {
         help_visible: true,
         ..PanelState::default()
     };
-    panel.songs.card = Some(acid_app::ui::songs::Songs::default());
+    panel.songs.card = Some(acid_app::ui::banks::Banks::default());
 
     press(&mut panel, &shared, &mut bank, Key::F2, false);
 
@@ -661,7 +661,7 @@ fn escape_closes_one_thing_at_a_time_and_the_card_comes_first() {
     assert!(dispatch::escape(&mut panel, &shared));
     assert!(!panel.help_visible, "then help");
 
-    panel.songs.card = Some(acid_app::ui::songs::Songs::default());
+    panel.songs.card = Some(acid_app::ui::banks::Banks::default());
     assert!(dispatch::escape(&mut panel, &shared));
     assert!(panel.songs.card.is_none(), "then the songs card");
 

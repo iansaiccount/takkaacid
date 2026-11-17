@@ -181,7 +181,7 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
     rack.add(DeviceKind::Acid).expect("a second");
 
     assert!(!rack.is_playing());
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     assert!(rack.is_playing());
     for device in rack.devices() {
         assert!(
@@ -189,7 +189,29 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
             "every device starts on the same frame"
         );
     }
-    rack.set_playing(false);
+    // A pause is a third state, not a second way of saying stopped: the mirror carries it, and the device is not playing.
+    rack.set_transport(acid_app::device::Transport::Paused);
+    assert_eq!(rack.transport(), acid_app::device::Transport::Paused);
+    for device in rack.devices() {
+        assert_eq!(
+            device.state.transport(),
+            acid_app::device::Transport::Paused,
+            "the fan-out carries the pause, not just the silence"
+        );
+        assert!(!device.state.is_playing(), "a paused device is not playing");
+    }
+
+    // A pause taken from Stopped is refused: the engine keeps its step through a stop, so a pause from there would resume
+    // mid-bar on the next play instead of starting the bar. The plan's key table says PAUSE from Stopped does nothing.
+    rack.set_transport(acid_app::device::Transport::Stopped);
+    rack.set_transport(acid_app::device::Transport::Paused);
+    assert_eq!(
+        rack.transport(),
+        acid_app::device::Transport::Stopped,
+        "a pause from a stopped rack is not a state, it is a no-op"
+    );
+
+    rack.set_transport(acid_app::device::Transport::Stopped);
     for device in rack.devices() {
         assert!(!device.state.is_playing());
     }
@@ -209,7 +231,7 @@ fn the_transport_is_the_racks_and_the_devices_follow_it() {
 #[test]
 fn a_device_added_while_the_transport_runs_starts_in_it() {
     let mut rack = one();
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     rack.set_tempo_bpm(152.0);
     let index = rack.add(DeviceKind::Acid).expect("a second");
     let device = &rack.devices()[index];
@@ -505,4 +527,31 @@ fn a_device_carries_its_own_scheme() {
         Scheme::SynthNeon,
         "nor the one it was not about"
     );
+}
+
+/// The transpose is one number for the rack, clamped to an octave, and it reaches every device — including one that joined later,
+/// because it rides the transport's fan-out.
+#[test]
+fn the_transpose_clamps_to_an_octave_and_reaches_every_device() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+
+    rack.set_transpose(13);
+    assert_eq!(rack.transpose(), 12, "an octave up is the ceiling");
+    for device in rack.devices() {
+        assert_eq!(
+            device.state.transpose(),
+            12,
+            "every device hears the rack's transpose"
+        );
+    }
+
+    rack.set_transpose(-99);
+    assert_eq!(rack.transpose(), -12, "and an octave down the floor");
+    for device in rack.devices() {
+        assert_eq!(device.state.transpose(), -12);
+    }
+
+    rack.set_transpose(0);
+    assert_eq!(rack.transpose(), 0);
 }

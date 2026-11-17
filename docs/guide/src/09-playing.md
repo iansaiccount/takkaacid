@@ -2,8 +2,9 @@
 
 ![The transport](img/transport.png)
 
-**`RUN`** starts the line and **`STOP`** stops it; the space bar is both. The transport says what is happening rather than
-what happened last: `RUN` is lit while the line runs, `STOP` is lit while it is stopped.
+**`PLAY`** starts the line, **`PAUSE`** stops the clock and keeps the bar, and **`STOP`** puts it back at the top. The space bar
+plays and pauses. The deck says what is happening rather than what happened last: `PLAY` is lit while the line runs, `PAUSE`
+while it is paused.
 
 ![The panel while the transport runs](img/running.png)
 
@@ -11,7 +12,7 @@ what happened last: `RUN` is lit while the line runs, `STOP` is lit while it is 
 
 The tempo readout sits in the top strip, in BPM, from **40–300**. Two things move it a BPM at a time:
 
-- `TEMPO -` and `TEMPO +`, one press each way.
+- the small, stacked `-` and `+` beside the tempo's number, one BPM each way.
 - `up` and `down` on the computer keyboard.
 
 There is a third way in, and it is not a nudge: a learned controller fader throws the tempo wherever you leave it
@@ -42,11 +43,12 @@ A stopped line lights no position: the row shows which steps carry notes and not
 
 ## Starting and stopping
 
-`STOP` leaves the pattern where it is, but `RUN` does not resume from there — it starts again from step 1, with the clock
+`PAUSE` leaves the step where it is and `PLAY` carries on from it; `STOP` does not resume — the next play starts again from
+step 1, with the clock
 on the downbeat, so the first note you hear after a start is always the first note of the bar. Nothing is quantised: your
 presses land when you press them.
 
-The pattern itself is untouched by any of this — but the touch of a transport key does mark the session unsaved, because
-whether the line was running is part of the session that gets saved.
+The pattern itself is untouched by any of this. The transport is performance, not part of the file: playing, pausing and
+stopping mark nothing unsaved, because the session that gets saved has no field for them.
 
 [`10-performance-row`](10-performance-row.md) is what to reach for while the line is playing.

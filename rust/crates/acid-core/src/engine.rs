@@ -67,6 +67,8 @@ pub struct Engine {
     /// The VOLUME knob's taper, smoothed so a sweep does not step.
     volume: param::Smooth,
     playing: bool,
+    /// Semitones of performance transpose, on top of the saved TUNING knob. Not part of the patch.
+    transpose: i32,
     knobs: Knobs,
 }
 
@@ -90,6 +92,7 @@ impl Engine {
             limiter: Limiter::new(sample_rate),
             volume: param::Smooth::new(param::master_volume(knobs.volume), 10.0, sample_rate),
             playing: false,
+            transpose: 0,
             knobs,
         }
     }
@@ -143,6 +146,26 @@ impl Engine {
     pub fn stop(&mut self) {
         self.playing = false;
         self.sequencer.stop();
+    }
+
+    /// Stop the clock and keep the step, so [`Engine::resume`] carries on from it.
+    ///
+    /// The same silence as [`Engine::stop`], because below this line the two are the same thing. The third state exists
+    /// because of what follows: a stop is answered with `start`, which returns to the top of the bar, and a pause with
+    /// `resume`, which does not.
+    pub fn pause(&mut self) {
+        self.playing = false;
+        self.sequencer.stop();
+    }
+
+    /// Carry on from the step a pause kept. Unlike [`Engine::start`] this does not return to the top of the bar.
+    ///
+    /// **Not for coming out of a stop.** The engine keeps its step through a stop as well, so it cannot tell the two states
+    /// apart: a caller that resumes from `Stopped` gets the stale step rather than the bar's first. Play from `Stopped` is
+    /// [`Engine::start`]; the app's `Rack::transport` is what knows which of the two the player pressed.
+    pub fn resume(&mut self) {
+        self.playing = true;
+        self.sequencer.resume();
     }
 
     /// Swap the playing pattern without disturbing position, glide history or the clock.
@@ -204,8 +227,40 @@ impl Engine {
     /// TUNING knob, in knob domain: `0.5` is centre.
     pub fn set_tuning(&mut self, knob: f32) {
         self.knobs.tuning = knob.clamp(0.0, 1.0);
+        self.apply_tuning();
+    }
+
+    /// The performance transpose: semitones added to whatever the TUNING knob already says, and deliberately never saved.
+    /// The knob is the patch; this is the rehearsal.
+    pub fn set_transpose(&mut self, semitones: i32) {
+        self.transpose = semitones.clamp(-12, 12);
+        self.apply_tuning();
+    }
+
+    pub fn transpose(&self) -> i32 {
+        self.transpose
+    }
+
+    /// Run the sequencer's line backwards: a direction on the clock, not a different pattern.
+    pub fn set_reverse(&mut self, reverse: bool) {
+        self.sequencer.set_reverse(reverse);
+    }
+
+    /// Whether the direction asked for is waiting for the next bar line.
+    pub fn reverse_is_pending(&self) -> bool {
+        self.sequencer.reverse_is_pending()
+    }
+
+    /// The direction the line is playing in now.
+    pub fn is_reverse(&self) -> bool {
+        self.sequencer.is_reverse()
+    }
+
+    /// The one place that turns the saved knob and the unsaved transpose into one semitone offset at the voice.
+    fn apply_tuning(&mut self) {
+        let knob = param::tuning_semitones(self.knobs.tuning);
         self.voice
-            .set_tuning_semitones(param::tuning_semitones(self.knobs.tuning));
+            .set_tuning_semitones(knob + self.transpose as f32);
     }
 
     pub fn tuning(&self) -> f32 {

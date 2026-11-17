@@ -23,7 +23,7 @@ fn one_device_through_the_mixer_is_the_device_it_was() {
     // The regression that makes this whole phase safe: nothing about the sound of a single device may change.
     let rack = rack_of(1);
     let state = rack.state_arc();
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
 
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
     let mut mixed = vec![0.0; 4_096];
@@ -52,7 +52,7 @@ fn two_devices_sum_to_something_louder_than_one() {
     for device in rack.devices() {
         device.state.volume.set(0.3);
     }
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
     let mut out = vec![0.0; 4_096];
     mixer.render_mono(&mut out);
@@ -60,7 +60,7 @@ fn two_devices_sum_to_something_louder_than_one() {
 
     let one = rack_of(1);
     one.devices()[0].state.volume.set(0.3);
-    one.set_playing(true);
+    one.set_transport(acid_app::device::Transport::Playing);
     let mut single = Mixer::new(48_000.0, MAX_BLOCK, one.bus());
     let mut out = vec![0.0; 4_096];
     single.render_mono(&mut out);
@@ -80,7 +80,7 @@ fn unmuting_a_running_device_is_audible_and_it_kept_time_meanwhile() {
     let loud = rack_of(2);
     let quiet = rack_of(2);
     for rack in [&loud, &quiet] {
-        rack.set_playing(true);
+        rack.set_transport(acid_app::device::Transport::Playing);
     }
     quiet.devices()[1].state.set_mute(true);
     let loud_b = std::sync::Arc::clone(&loud.devices()[1].state);
@@ -129,7 +129,7 @@ fn unmuting_a_running_device_is_audible_and_it_kept_time_meanwhile() {
 fn a_device_born_muted_does_not_click_on_its_first_block() {
     let rack = rack_of(1);
     let state = std::sync::Arc::clone(&rack.devices()[0].state);
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     state.set_mute(true);
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
     let mut out = vec![0.0; 512];
@@ -147,7 +147,7 @@ fn two_devices_cannot_reach_twice_the_ceiling() {
     for device in rack.devices() {
         device.state.volume.set(1.0);
     }
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
     let mut out = vec![0.0; 48_000];
     mixer.render_mono(&mut out);
@@ -205,7 +205,7 @@ fn a_bus_of_the_same_length_with_a_different_device_is_not_treated_as_unchanged(
 #[test]
 fn a_third_device_joins_without_disturbing_the_first_two() {
     let mut rack = rack_of(2);
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
     let mut out = vec![0.0; 4_096];
     for _ in 0..8 {
@@ -228,7 +228,7 @@ fn a_third_device_joins_without_disturbing_the_first_two() {
 #[test]
 fn removing_a_device_stops_its_sound() {
     let mut rack = rack_of(2);
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
     let mut out = vec![0.0; 4_096];
     for _ in 0..8 {
@@ -242,7 +242,7 @@ fn removing_a_device_stops_its_sound() {
 #[test]
 fn a_device_added_mid_run_comes_in_on_the_bar_the_others_are_on() {
     let mut rack = rack_of(1);
-    rack.set_playing(true);
+    rack.set_transport(acid_app::device::Transport::Playing);
     rack.set_tempo_bpm(300.0); // a sixteenth every 2_400 samples, so steps pass quickly
     let mut mixer = Mixer::new(48_000.0, MAX_BLOCK, rack.bus());
     let mut out = vec![0.0; 4_096];

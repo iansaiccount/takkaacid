@@ -17,6 +17,12 @@ pub struct Sequencer {
     pattern: Arc<Pattern>,
     /// Current step, always `0..STEPS_PER_PATTERN`.
     position: usize,
+    /// Read the pattern from its other end. A direction, not a different pattern: nothing is stored, copied or saved. It only
+    /// ever changes on a bar line — see [`Sequencer::set_reverse`].
+    reverse: bool,
+    /// A direction asked for while the bar is running. It waits for the wrap: flipping under the line would put the two halves
+    /// of a bar out of phase, and a bar is the unit the whole instrument agrees on.
+    reverse_pending: Option<bool>,
     /// Whether the step that was just played carried a slide, so the next note glides into place.
     prev_slide: bool,
     running: bool,
@@ -32,6 +38,8 @@ impl Sequencer {
             clock: Clock::new(sample_rate),
             pattern: Arc::new(Pattern::empty()),
             position: 0,
+            reverse: false,
+            reverse_pending: None,
             prev_slide: false,
             running: false,
             trigger_pending: false,
@@ -68,12 +76,18 @@ impl Sequencer {
     /// is the same start otherwise — the clock is put back on a boundary, and the step it lands on sounds — so a seek is
     /// never a silent restart. `step` wraps: callers may hand a long-running count, not an index.
     pub fn start_at(&mut self, step: usize) {
-        self.running = true;
-        // The clock kept counting through the stop, so it has to be put back on a boundary: otherwise the first step after
-        // RUN is whatever fraction of a step the previous run happened to leave, and with swing it can even be the short half
-        // of the pair.
-        self.clock.restart();
         self.position = step % STEPS_PER_PATTERN;
+        self.arm();
+    }
+
+    /// Arm the clock and the gate for a step to sound: **the one place** that says what starting a step means.
+    ///
+    /// The clock kept counting through a silence, so it is put back on a boundary: otherwise the first step after a start is
+    /// whatever fraction of a step the previous run happened to leave, and with swing it can even be the short half of the
+    /// pair. A fifth field of arming is added here once, not in every way of starting.
+    fn arm(&mut self) {
+        self.clock.restart();
+        self.running = true;
         self.prev_slide = false;
         self.trigger_pending = true;
         self.gate_close_pending = false;
@@ -93,6 +107,36 @@ impl Sequencer {
         self.running
     }
 
+    /// Ask for a direction. A stopped transport takes it at once; a running one takes it on the next bar line, so the change
+    /// lands where every other device's bar also lands. The step the clock is on does not move either way.
+    pub fn set_reverse(&mut self, reverse: bool) {
+        if self.running {
+            self.reverse_pending = Some(reverse);
+        } else {
+            self.reverse = reverse;
+            self.reverse_pending = None;
+        }
+    }
+
+    /// Whether a direction is waiting for the bar.
+    pub fn reverse_is_pending(&self) -> bool {
+        self.reverse_pending.is_some()
+    }
+
+    pub fn is_reverse(&self) -> bool {
+        self.reverse
+    }
+
+    /// Carry on from the step a silence kept, arming the clock and the gate like any other start.
+    ///
+    /// The position is **not** moved — that is the whole of the difference from [`Sequencer::start_at`], which is handed the
+    /// step to start on. The sequencer cannot tell a stop from a pause, because on this side of the seam they are the same
+    /// thing: silent, with the step kept. Which one the player asked for is [`acid_core::engine::Engine`]'s question, and it
+    /// answers it by calling `resume` or `start` — never by reading a flag from here.
+    pub fn resume(&mut self) {
+        self.arm();
+    }
+
     /// The step being played, `0..16`.
     pub fn position(&self) -> usize {
         self.position
@@ -104,7 +148,13 @@ impl Sequencer {
 
     /// Apply the trigger rule for one step and remember whether it slides.
     fn trigger(&mut self, voice: &mut Voice, position: usize) {
-        let step = self.pattern.steps[position];
+        // Backwards reads the pattern from its other end while the clock keeps walking forward: the position, the bar and
+        // `last_position` all still mean what they meant, and only the step that sounds is mirrored.
+        let step = self.pattern.steps[if self.reverse {
+            STEPS_PER_PATTERN - 1 - position
+        } else {
+            position
+        }];
         // A rest, and a note transposed outside the instrument's range, are the same thing to the voice: silence. The
         // step keeps its flags and its note, so transposing back brings it in again.
         if !step.on || !step.audible() {
@@ -152,7 +202,15 @@ impl Sequencer {
 
             let crossed = self.clock.advance_by(take);
             if crossed > 0 {
+                let before = self.position;
                 self.position = (self.position + crossed) % STEPS_PER_PATTERN;
+                // The bar line is where a direction may change: the step that sounds next is the first of a new bar, and both
+                // halves of the old one played in the direction the bar began in.
+                if (self.position < before || (self.position == 0 && crossed > 0))
+                    && let Some(next) = self.reverse_pending.take()
+                {
+                    self.reverse = next;
+                }
                 self.trigger(voice, self.position);
             }
         }

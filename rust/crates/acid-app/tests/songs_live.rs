@@ -1,8 +1,8 @@
 //! The songs card: it lists the songs on disk, reports SAVE AS and LOAD, and never touches the disk itself.
 
 use acid_app::state::SharedState;
+use acid_app::ui::banks::{Banks, Request};
 use acid_app::ui::layout::{layout, scale};
-use acid_app::ui::songs::{Request, Songs};
 use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, SongState, draw_panel, theme};
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
@@ -111,10 +111,10 @@ fn close_centre() -> Pos2 {
 fn open_card(names: Vec<&str>, name: &str) -> PanelState {
     PanelState {
         songs: SongState {
-            card: Some(Songs {
+            card: Some(Banks {
                 names: names.into_iter().map(str::to_string).collect(),
                 name: name.to_string(),
-                ..Songs::default()
+                ..Banks::default()
             }),
             ..SongState::default()
         },
@@ -222,7 +222,7 @@ fn the_songs_key_opens_and_closes_the_card() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
     // Six cells now: BANK, PATTERN, MODE, CLEAR, SAVE, SONGS.
-    let songs = switches::cell(layout(screen()).switches, Switch::Songs).center();
+    let songs = switches::cell(layout(screen()).switches, Switch::Banks).center();
 
     click(&ctx, &mut panel, &shared, songs);
     assert!(panel.songs.card.is_some(), "the SONGS key opens the card");
@@ -246,7 +246,7 @@ fn the_card_the_request_and_the_name_are_one_piece_of_state() {
         &ctx,
         &mut panel,
         &shared,
-        switches::cell(layout(screen()).switches, Switch::Songs).center(),
+        switches::cell(layout(screen()).switches, Switch::Banks).center(),
     );
     assert!(panel.songs.card.is_some(), "the SONGS key opens the card");
     assert!(panel.songs.request.is_none(), "opening asks for nothing");
@@ -419,11 +419,11 @@ fn replacing_an_unsaved_session_with_a_saved_song_takes_two_clicks() {
 /// — a first run, a demo — is unsaved, not untitled.
 #[test]
 fn the_header_names_the_session_and_its_state() {
-    use acid_app::ui::songs::now_line;
-    assert_eq!(now_line(None, true), "NOW: untitled · UNSAVED");
-    assert_eq!(now_line(None, false), "NOW: untitled · UNSAVED");
-    assert_eq!(now_line(Some("New song"), true), "NOW: New song · UNSAVED");
-    assert_eq!(now_line(Some("Acid 1"), false), "NOW: Acid 1 · SAVED");
+    use acid_app::ui::banks::now_line;
+    assert_eq!(now_line(None, true), "NOW: untitled - UNSAVED");
+    assert_eq!(now_line(None, false), "NOW: untitled - UNSAVED");
+    assert_eq!(now_line(Some("New song"), true), "NOW: New song - UNSAVED");
+    assert_eq!(now_line(Some("Acid 1"), false), "NOW: Acid 1 - SAVED");
 }
 
 /// A session that has never been saved is a first run or a demo: the header must not call it untitled while the name

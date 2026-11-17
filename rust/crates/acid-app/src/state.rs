@@ -3,7 +3,7 @@
 //! Everything here is either an atomic or a short-lived mutex the audio thread never touches, so the
 //! audio callback can never be blocked by the user moving a knob.
 
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::notes::NoteQueue;
@@ -103,7 +103,11 @@ pub struct Parameters {
     pub volume: f32,
     pub tempo_bpm: f32,
     pub swing: f32,
-    pub playing: bool,
+    pub transport: crate::device::Transport,
+    /// The direction this device's line runs in — asked for, and taken at the bar line.
+    pub reversed: bool,
+    /// The rack's performance transpose, on top of the saved TUNING knob. Deliberately not part of the patch.
+    pub transpose: i32,
 }
 
 /// The seam between the two threads.
@@ -113,7 +117,13 @@ pub struct Parameters {
 /// only the UI thread touches it.
 #[derive(Debug)]
 pub struct SharedState {
-    pub playing: AtomicBool,
+    /// The state this device is in. A device in a rack mirrors the rack's — `Rack::sync_transport` is its only writer — and
+    /// a device on its own (every test, and the audio crate's own harness) owns its transport and moves it itself.
+    pub transport: AtomicU8,
+    /// A direction asked for: the engine's sequencer takes it at the bar line, so this is a request the audio thread reads.
+    pub reversed: AtomicBool,
+    /// The rack's performance transpose, mirrored here like the transport. Never saved.
+    pub transpose: std::sync::atomic::AtomicI32,
     /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
     /// sequencer keeps running underneath, so unmuting rejoins on the beat instead of restarting the pattern.
     pub mute: AtomicBool,
@@ -179,7 +189,9 @@ impl SharedState {
     /// fanned out into a copy that a frame could turn stale.
     pub fn with_tempo(tempo: Arc<AtomicF32>) -> Arc<Self> {
         Arc::new(Self {
-            playing: AtomicBool::new(false),
+            transport: AtomicU8::new(crate::device::Transport::Stopped.byte()),
+            reversed: AtomicBool::new(false),
+            transpose: std::sync::atomic::AtomicI32::new(0),
             mute: AtomicBool::new(false),
             position: AtomicUsize::new(0),
             tempo_bpm: tempo,
@@ -214,12 +226,37 @@ impl SharedState {
         })
     }
 
-    pub fn is_playing(&self) -> bool {
-        self.playing.load(Ordering::Relaxed)
+    /// The state the rack is in, as this device last heard it.
+    pub fn transport(&self) -> crate::device::Transport {
+        crate::device::Transport::from_mirror(self.transport.load(Ordering::Relaxed))
     }
 
-    pub fn set_playing(&self, playing: bool) {
-        self.playing.store(playing, Ordering::Relaxed);
+    pub fn set_transport(&self, transport: crate::device::Transport) {
+        self.transport.store(transport.byte(), Ordering::Relaxed);
+    }
+
+    /// Whether the clock is running. A pause is not playing.
+    pub fn is_playing(&self) -> bool {
+        self.transport().is_playing()
+    }
+
+    /// The direction this device has been asked for: the sequencer applies it at the bar line, never mid-bar.
+    pub fn is_reversed(&self) -> bool {
+        self.reversed.load(Ordering::Relaxed)
+    }
+
+    pub fn set_reversed(&self, reversed: bool) {
+        self.reversed.store(reversed, Ordering::Relaxed);
+    }
+
+    /// The rack's performance transpose, in semitones. Not part of the patch and not saved.
+    pub fn transpose(&self) -> i32 {
+        self.transpose.load(Ordering::Relaxed)
+    }
+
+    pub fn set_transpose(&self, semitones: i32) {
+        self.transpose
+            .store(semitones.clamp(-12, 12), Ordering::Relaxed);
     }
 
     pub fn is_muted(&self) -> bool {
@@ -228,12 +265,6 @@ impl SharedState {
 
     pub fn set_mute(&self, muted: bool) {
         self.mute.store(muted, Ordering::Relaxed);
-    }
-
-    pub fn toggle_playing(&self) -> bool {
-        let next = !self.is_playing();
-        self.set_playing(next);
-        next
     }
 
     /// Every control at once, as the audio callback wants them: eleven relaxed loads, no allocation.
@@ -249,7 +280,9 @@ impl SharedState {
             volume: self.volume.get(),
             tempo_bpm: self.tempo_bpm.get(),
             swing: self.swing.get(),
-            playing: self.is_playing(),
+            transport: self.transport(),
+            reversed: self.is_reversed(),
+            transpose: self.transpose(),
         }
     }
 
@@ -351,13 +384,26 @@ mod tests {
         assert!(!s.is_muted());
     }
 
+    /// The mirror is a state, not a bool: a paused device is silent and is not playing, and the byte survives the round trip
+    /// that `Rack::sync_transport` performs on it every time the rack moves.
     #[test]
-    fn playing_toggles_and_reports() {
+    fn the_transport_mirror_carries_all_three_states() {
+        use crate::device::Transport;
+
         let s = SharedState::new();
+        assert_eq!(s.transport(), Transport::Stopped);
         assert!(!s.is_playing());
-        assert!(s.toggle_playing());
-        assert!(s.is_playing());
-        assert!(!s.toggle_playing());
+
+        for state in Transport::ALL {
+            s.set_transport(state);
+            assert_eq!(s.transport(), state, "{state:?} must survive the mirror");
+            assert_eq!(s.is_playing(), state == Transport::Playing, "{state:?}");
+        }
+
+        // A byte nobody wrote reads as Stopped rather than as some third state: a transport is not a thing to guess at.
+        s.set_transport(Transport::Paused);
+        s.transport.store(9, std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(s.transport(), Transport::Stopped);
     }
 
     #[test]

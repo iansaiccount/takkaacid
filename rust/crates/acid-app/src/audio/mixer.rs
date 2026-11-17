@@ -112,7 +112,9 @@ impl Mixer {
 
         let reference = published.slots.first().map(|state| Journey {
             step: state.position.load(Ordering::Relaxed),
-            playing: state.is_playing(),
+            // Paused counts: a device that joins a paused rack has to land on the step the rack is holding, or the next play
+            // starts it at zero while every other device resumes mid-bar.
+            playing: state.transport() != crate::device::Transport::Stopped,
         });
         let mut kept = std::mem::take(&mut self.slots);
         let mut slots = Vec::with_capacity(published.slots.len());

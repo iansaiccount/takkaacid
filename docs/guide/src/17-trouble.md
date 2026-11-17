@@ -5,7 +5,7 @@ This page is the order to check things in.
 
 ## There is no sound at all
 
-1. **Is the line running?** `RUN` lit, `STOP` dark. `SPACE` toggles it.
+1. **Is the line running?** `PLAY` lit, `PAUSE` dark. `SPACE` plays and pauses; `STOP` puts the bar back at the top.
 2. **Does the pattern have notes?** A pattern of rests is silent and looks almost the same as a pattern — the keycaps
    print `--` and their LEDs are dark. Press `RANDOM` and see whether a line comes back; `CLEAR` cannot help: it empties a pattern, it does not fill one.
 3. **Is the filter shut?** Cutoff at the bottom with a sine wave is a very quiet machine. Turn `CUT OFF` up.

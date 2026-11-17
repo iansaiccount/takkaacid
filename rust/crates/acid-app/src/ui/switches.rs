@@ -12,10 +12,10 @@ use super::layout;
 pub enum Switch {
     Bank,
     Pattern,
-    Mode,
-    Clear,
+    Copy,
+    Paste,
     Save,
-    Songs,
+    Banks,
     Step,
 }
 
@@ -24,10 +24,10 @@ impl Switch {
     pub const ALL: [Switch; 7] = [
         Switch::Bank,
         Switch::Pattern,
-        Switch::Mode,
-        Switch::Clear,
+        Switch::Copy,
+        Switch::Paste,
         Switch::Save,
-        Switch::Songs,
+        Switch::Banks,
         Switch::Step,
     ];
 
@@ -36,10 +36,10 @@ impl Switch {
         match self {
             Switch::Bank => 0,
             Switch::Pattern => 1,
-            Switch::Mode => 2,
-            Switch::Clear => 3,
+            Switch::Copy => 2,
+            Switch::Paste => 3,
             Switch::Save => 4,
-            Switch::Songs => 5,
+            Switch::Banks => 5,
             Switch::Step => 6,
         }
     }
@@ -49,17 +49,17 @@ impl Switch {
         match self {
             Switch::Bank => "BANK",
             Switch::Pattern => "PATTERN",
-            Switch::Mode => "MODE",
-            Switch::Clear => "CLEAR",
+            Switch::Copy => "COPY",
+            Switch::Paste => "PASTE",
             Switch::Save => "SAVE",
-            Switch::Songs => "SONGS",
+            Switch::Banks => "BANKS",
             Switch::Step => "STEP",
         }
     }
 
-    /// Whether the key does anything: BANK, PATTERN and MODE are engraving for now.
+    /// Whether the key does anything: BANK and PATTERN are engraving for now. Every other key acts.
     pub fn is_live(self) -> bool {
-        !matches!(self, Switch::Bank | Switch::Pattern | Switch::Mode)
+        !matches!(self, Switch::Bank | Switch::Pattern)
     }
 }
 
@@ -101,11 +101,16 @@ mod tests {
     }
 
     #[test]
-    fn only_the_first_three_are_engraving() {
+    fn only_the_first_two_are_engraving() {
         assert!(!Switch::Bank.is_live());
         assert!(!Switch::Pattern.is_live());
-        assert!(!Switch::Mode.is_live());
-        for switch in [Switch::Clear, Switch::Save, Switch::Songs, Switch::Step] {
+        for switch in [
+            Switch::Copy,
+            Switch::Paste,
+            Switch::Save,
+            Switch::Banks,
+            Switch::Step,
+        ] {
             assert!(switch.is_live(), "{switch:?} should be live");
         }
     }

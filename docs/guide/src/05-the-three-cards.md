@@ -26,9 +26,9 @@ card's business. [`13-settings`](13-settings.md) walks the card.
 
 **Out:** `CLOSE` in the bottom-right corner, `Escape`, or a click outside the card.
 
-## Songs — `SONGS`
+## Banks — `BANKS`
 
-![The songs card](img/songs-card.png)
+![The bank browser](img/banks-card.png)
 
 The card with the most on it: the name field and `SAVE` / `SAVE A COPY`, the five demo songs, your own songs, and `NEW`,
 `IMPORT`, `EXPORT` and `CLOSE`. [`12-songs-and-demos`](12-songs-and-demos.md) walks that one.

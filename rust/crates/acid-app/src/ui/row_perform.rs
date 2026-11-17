@@ -23,8 +23,9 @@ pub(super) fn draw(
     if let [
         octave_down,
         octave_up,
-        shuffle_cell,
+        clear_cell,
         randomise_cell,
+        shuffle_cell,
         density_cell,
         scale_cell,
     ] = l.perform.cells[..]
@@ -55,6 +56,34 @@ pub(super) fn draw(
                 state.pattern = Arc::new(moved);
                 shared.set_pattern(Arc::clone(&state.pattern));
                 state.dirty = true;
+            }
+        }
+
+        // CLEAR empties the pattern on screen. It is the one action here with no undo, so it takes two clicks
+        // (`ui::clear`), and it lives beside the octave keys because it is a thing done to the pattern rather than to the roll.
+        let now = std::time::Instant::now();
+        let armed = super::clear::is_armed(state.clear_armed_at, now);
+        if switch_key(
+            ui,
+            state,
+            Key {
+                id: "clear-pattern",
+                rect: clear_cell,
+                label: if armed { "CLEAR?" } else { "CLEAR" },
+                lit: armed,
+                control: tips::Control::Clear,
+            },
+            p,
+        ) {
+            match super::clear::click(state.clear_armed_at, now) {
+                super::clear::Click::Armed => state.clear_armed_at = Some(now),
+                super::clear::Click::Cleared => {
+                    super::clear::disarm(state);
+                    let empty = Arc::new(acid_core::pattern::Pattern::empty());
+                    shared.set_pattern(Arc::clone(&empty));
+                    state.pattern = empty;
+                    state.dirty = true;
+                }
             }
         }
 

@@ -19,14 +19,14 @@ fn every_knob_survives_a_snapshot() {
     s.tempo_bpm.set(142.0);
     s.swing.set(0.5);
     s.set_waveform(Waveform::Square);
-    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
+    s.set_transport(acid_app::device::Transport::Playing);
 
     let p = s.snapshot();
     assert_eq!(p.waveform, Waveform::Square);
     assert!((p.tuning - 0.25).abs() < 1e-6);
     assert!((p.cutoff - 0.75).abs() < 1e-6);
     assert!((p.tempo_bpm - 142.0).abs() < 1e-6);
-    assert!(p.playing);
+    assert_eq!(p.transport, acid_app::device::Transport::Playing);
 }
 
 #[test]

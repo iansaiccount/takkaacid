@@ -15,7 +15,7 @@ fn window() -> egui::Rect {
 #[test]
 fn an_edit_made_while_rendering_is_heard_on_the_next_pass() {
     let s = SharedState::new();
-    s.playing.store(true, std::sync::atomic::Ordering::Relaxed);
+    s.set_transport(acid_app::device::Transport::Playing);
     s.tempo_bpm.set(240.0); // 3000 samples per step at 48k
     s.set_pattern(std::sync::Arc::new(Pattern::empty())); // everything silent
     let mut r = AudioRenderer::new(48_000.0, 2, s.clone(), 4_096);

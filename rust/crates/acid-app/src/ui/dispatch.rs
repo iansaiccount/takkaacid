@@ -129,16 +129,24 @@ pub fn handle(
     let Some(shortcut) = shortcuts::shortcut_for(press.key, press.shift) else {
         return Handled::Nothing;
     };
-    // Three shortcuts are the transport's, and the transport is the rack's: they ask for a change rather than writing one
-    // device's atomic, which the next fan-out would undo.
+    // The transport shortcuts are the rack's: they ask for a change rather than writing one device's atomic, which the next
+    // fan-out would undo. The three unwired keys are not the transport's yet, so they answer with a notice instead.
     let transport = match shortcut {
+        // Space is play/pause, not play/stop: a deck's space bar does not rewind, and STOP has its own key.
         shortcuts::Shortcut::PlayStop => Some(if shared.is_playing() {
-            transport::Request::Stop
+            transport::Request::Pause
         } else {
             transport::Request::Play
         }),
         shortcuts::Shortcut::TempoUp => Some(transport::Request::NudgeTempo(1)),
         shortcuts::Shortcut::TempoDown => Some(transport::Request::NudgeTempo(-1)),
+        // The three keys with no feature behind them answer with the truth. A silent key reads as broken.
+        shortcuts::Shortcut::SeekBack
+        | shortcuts::Shortcut::SeekForward
+        | shortcuts::Shortcut::Record => {
+            panel.notify(not_wired(shortcut));
+            return Handled::Shortcut(shortcut);
+        }
         shortcuts::Shortcut::NextPattern
         | shortcuts::Shortcut::PrevPattern
         | shortcuts::Shortcut::ToggleSettings
@@ -383,6 +391,26 @@ pub fn clipboard(
         }
     }
     out
+}
+
+/// What a deck key with no feature behind it says when it is pressed. One place, so the keys' words and their tips cannot
+/// drift apart — `ui::tips` promises the same thing in the same words.
+fn not_wired(shortcut: shortcuts::Shortcut) -> &'static str {
+    match shortcut {
+        shortcuts::Shortcut::SeekBack => "BACK IS NOT WIRED YET",
+        shortcuts::Shortcut::SeekForward => "FORWARD IS NOT WIRED YET",
+        shortcuts::Shortcut::Record => "RECORD IS NOT WIRED YET",
+        // The wired shortcuts never reach this function. Spelled out rather than `_`, because a new shortcut that is not the
+        // deck's should be a compile error here, not a wrong notice.
+        shortcuts::Shortcut::PlayStop
+        | shortcuts::Shortcut::TempoUp
+        | shortcuts::Shortcut::TempoDown
+        | shortcuts::Shortcut::NextPattern
+        | shortcuts::Shortcut::PrevPattern
+        | shortcuts::Shortcut::ToggleSettings
+        | shortcuts::Shortcut::ToggleHelp
+        | shortcuts::Shortcut::ToggleDeviceCard => "NOTHING TO DO",
+    }
 }
 
 #[cfg(test)]

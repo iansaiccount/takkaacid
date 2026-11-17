@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 
 use acid_core::timing::clamp_bpm;
 use arc_swap::ArcSwap;
@@ -307,15 +307,62 @@ pub enum Request {
 }
 
 /// A list of devices, the one the panel is showing, and what the other threads read.
+/// The three things a transport can be. Stopped and Paused are both silent; they differ in what a play does next.
+///
+/// This is the rack's, and each device's copy is a mirror of it (`SharedState::transport`). The audio thread reads the mirror
+/// and decides what a change means for the engine: a play out of `Paused` resumes on the kept step, a play out of `Stopped`
+/// starts the bar again. Below the engine there is only one silence, which is why this is where the distinction lives.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Transport {
+    #[default]
+    Stopped = 0,
+    Playing = 1,
+    Paused = 2,
+}
+
+impl Transport {
+    /// The catalogue: every state, in the order the deck's keys and the byte numbering follow.
+    pub const ALL: [Transport; 3] = [Transport::Stopped, Transport::Playing, Transport::Paused];
+
+    /// The byte an atomic carries, written out in full so a fourth state fails to compile *here* rather than arriving at the
+    /// audio thread as `Stopped` with the panel lit. The catalogue owns the numbering.
+    pub fn byte(self) -> u8 {
+        match self {
+            Transport::Stopped => 0,
+            Transport::Playing => 1,
+            Transport::Paused => 2,
+        }
+    }
+
+    /// The state a byte carries, read through [`Transport::ALL`] so the decode cannot drift from the encode. An unknown byte
+    /// reads as `Stopped`: a transport is not a thing to guess at.
+    pub fn from_mirror(byte: u8) -> Self {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|state| state.byte() == byte)
+            .unwrap_or(Transport::Stopped)
+    }
+
+    /// Whether the clock runs. False for a pause: a paused deck is not playing, it is merely still on its step.
+    pub fn is_playing(self) -> bool {
+        self == Transport::Playing
+    }
+}
+
 pub struct Rack {
     devices: Vec<Device>,
     selected: usize,
     /// The number the next device will be given. A high-water mark: a removal never frees one, so two devices never share a
     /// default name and "the one I muted" is still the one that was muted.
     next_number: usize,
-    /// The rack's transport. Every device follows it, so RUN starts them all on one frame — the downbeats coincide rather
-    /// than drifting apart by a block.
-    playing: AtomicBool,
+    /// The rack's transport, as one of three states. An atomic because the rack is read from the panel and from the MIDI
+    /// thread; the devices' own copies are mirrors of it, never a second opinion. Every device follows it, so a play starts
+    /// them all on one frame — the downbeats coincide rather than drifting apart by a block.
+    transport: AtomicU8,
+    /// The rack's performance transpose, in semitones: one number for every device, like the tempo, and never saved.
+    transpose: AtomicI32,
     /// The rack's tempo: one cell, and the same cell in every device's `SharedState`. The panel, an external clock and a
     /// tempo controller all write it, and every engine reads it at its next block, so no fan-out and no frame stands between
     /// a hand and the sound. Swing stays each device's own.
@@ -345,7 +392,8 @@ impl Rack {
             devices: vec![device],
             selected: 0,
             next_number,
-            playing: AtomicBool::new(false),
+            transport: AtomicU8::new(Transport::Stopped.byte()),
+            transpose: AtomicI32::new(0),
             tempo_bpm,
             bus: Arc::new(ArcSwap::from_pointee(BusState {
                 slots: Vec::new(),
@@ -502,21 +550,39 @@ impl Rack {
         candidate
     }
 
-    /// Whether the rack's transport is running. No device may disagree: the devices' own flags are mirrors of this one.
-    pub fn is_playing(&self) -> bool {
-        self.playing.load(Ordering::Relaxed)
+    /// The rack's transport. No device may disagree: their copies are mirrors of this one.
+    pub fn transport(&self) -> Transport {
+        Transport::from_mirror(self.transport.load(Ordering::Relaxed))
     }
 
-    /// Start or stop every device, on the same frame. This is what makes the downbeats coincide.
-    pub fn set_playing(&self, playing: bool) {
-        self.playing.store(playing, Ordering::Relaxed);
+    /// Whether the clock is running. False for a pause.
+    pub fn is_playing(&self) -> bool {
+        self.transport().is_playing()
+    }
+
+    /// Move every device to the same transport state, on the same frame. This is what makes the downbeats coincide.
+    ///
+    /// Pausing a stopped rack is refused: the engine keeps its step through a stop, so a pause taken from there would resume
+    /// mid-bar on the next play, and the plan's key table says a pause from `Stopped` does nothing. The refusal lives here
+    /// because here is where the two states are both known.
+    pub fn set_transport(&self, transport: Transport) {
+        if transport == Transport::Paused && self.transport() == Transport::Stopped {
+            return;
+        }
+        self.transport.store(transport.byte(), Ordering::Relaxed);
         self.sync_transport();
     }
 
-    pub fn toggle_playing(&self) -> bool {
-        let next = !self.is_playing();
-        self.set_playing(next);
-        next
+    /// The rack's performance transpose, in semitones.
+    pub fn transpose(&self) -> i32 {
+        self.transpose.load(Ordering::Relaxed)
+    }
+
+    /// Move the whole rack by a semitone. A performance control: the patch's TUNING knob is untouched and nothing is saved.
+    pub fn set_transpose(&self, semitones: i32) {
+        self.transpose
+            .store(semitones.clamp(-12, 12), Ordering::Relaxed);
+        self.sync_transport();
     }
 
     pub fn tempo_bpm(&self) -> f32 {
@@ -538,12 +604,16 @@ impl Rack {
 
     /// Fan the transport out to every device.
     ///
-    /// Only `playing` needs it: the tempo is one cell every device already holds, so there is no tempo to carry. Called when
-    /// the rack's transport changes and when a device joins, never per frame.
+    /// Only the transport needs it: the tempo is one cell every device already holds, so there is no tempo to carry. Called
+    /// when the rack's transport changes and when a device joins, never per frame.
     pub fn sync_transport(&self) {
-        let playing = self.is_playing();
+        let transport = self.transport();
+        let transpose = self.transpose();
         for device in &self.devices {
-            device.state.playing.store(playing, Ordering::Relaxed);
+            device.state.set_transport(transport);
+            // The transpose rides the same fan-out: it is one number for the rack, and a device that joined late has to hear
+            // the one the others are playing.
+            device.state.set_transpose(transpose);
         }
     }
 }

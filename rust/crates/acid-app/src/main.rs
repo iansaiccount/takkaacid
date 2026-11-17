@@ -122,14 +122,31 @@ impl eframe::App for TakkaApp {
         // fan-out would immediately undo.
         if let Some(request) = self.panel.transport_request.take() {
             match request {
-                panel_ui::transport::Request::Play => self.rack.set_playing(true),
-                panel_ui::transport::Request::Stop => self.rack.set_playing(false),
+                panel_ui::transport::Request::Play => self
+                    .rack
+                    .set_transport(acid_app::device::Transport::Playing),
+                panel_ui::transport::Request::Pause => {
+                    self.rack.set_transport(acid_app::device::Transport::Paused)
+                }
+                panel_ui::transport::Request::Stop => self
+                    .rack
+                    .set_transport(acid_app::device::Transport::Stopped),
+                // The two performers: a direction this device's line runs in, and a semitone for the whole rack. Both are
+                // performance, neither is saved, and the engine takes the direction at the bar line.
+                panel_ui::transport::Request::Reverse(reversed) => {
+                    if let Some(device) = self.rack.devices().get(self.panel.strip.selected) {
+                        device.state.set_reversed(reversed);
+                    }
+                }
+                panel_ui::transport::Request::Transpose(semitones) => {
+                    let next = (self.rack.transpose() + semitones).clamp(-12, 12);
+                    self.rack.set_transpose(next);
+                }
                 panel_ui::transport::Request::NudgeTempo(direction) => {
                     let next = panel_ui::transport::nudge_tempo(self.rack.tempo_bpm(), direction);
                     self.rack.set_tempo_bpm(next);
                 }
             }
-            self.panel.dirty = true;
         }
         let status = self.rack.state().status();
         let text = match &status {
@@ -248,8 +265,8 @@ impl eframe::App for TakkaApp {
         if let Some(request) = self.panel.songs.request.take() {
             let dir = persist::data_dir();
             match request {
-                panel_ui::songs::Request::Close => {}
-                panel_ui::songs::Request::Save(typed) => {
+                panel_ui::banks::Request::Close => {}
+                panel_ui::banks::Request::Save(typed) => {
                     // One button: an unchanged name keeps the song, a new name writes a new file and leaves the old one
                     // where it is, so a save can never move a song out from under its own name.
                     match persist::save_target(self.panel.songs.file.as_deref(), &typed) {
@@ -265,7 +282,7 @@ impl eframe::App for TakkaApp {
                         None => {}
                     }
                 }
-                panel_ui::songs::Request::New => {
+                panel_ui::banks::Request::New => {
                     self.save();
                     let saved = persist::new_song();
                     let device = self.rack.device_mut();
@@ -289,11 +306,11 @@ impl eframe::App for TakkaApp {
                     }
                     self.panel.notify("new song");
                 }
-                panel_ui::songs::Request::SaveCopy(typed) => {
+                panel_ui::banks::Request::SaveCopy(typed) => {
                     let name = persist::free_song_name(&dir, &typed);
                     self.write_song(&dir, &name, true);
                 }
-                panel_ui::songs::Request::Import => {
+                panel_ui::banks::Request::Import => {
                     let picked = rfd::FileDialog::new()
                         .add_filter("takka-acid song", &["json"])
                         .set_title("Import a song")
@@ -309,7 +326,7 @@ impl eframe::App for TakkaApp {
                         }
                     }
                 }
-                panel_ui::songs::Request::Export => {
+                panel_ui::banks::Request::Export => {
                     let suggested = self
                         .panel
                         .songs
@@ -329,7 +346,7 @@ impl eframe::App for TakkaApp {
                         }
                     }
                 }
-                panel_ui::songs::Request::Delete(name) => {
+                panel_ui::banks::Request::Delete(name) => {
                     match persist::delete_song(&dir, &name) {
                         Ok(()) => {
                             // The song is gone; the session is not, but it is no longer that song.
@@ -358,8 +375,8 @@ impl eframe::App for TakkaApp {
                         }
                     }
                 }
-                panel_ui::songs::Request::Load(name) => self.load_song_now(&dir, &name),
-                panel_ui::songs::Request::LoadDemo(index) => {
+                panel_ui::banks::Request::Load(name) => self.load_song_now(&dir, &name),
+                panel_ui::banks::Request::LoadDemo(index) => {
                     if let Some(demo) = demo::songs().into_iter().nth(index) {
                         self.save();
                         let device = self.rack.device_mut();

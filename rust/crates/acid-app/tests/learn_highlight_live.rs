@@ -4,7 +4,9 @@
 //! the panel uses it, which is the point of choosing it.
 
 use acid_app::state::SharedState;
+use acid_app::ui::layout::layout;
 use acid_app::ui::theme;
+use acid_app::ui::transport;
 use acid_app::ui::{PanelState, draw_panel, panel};
 use eframe::egui::{self, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect};
 
@@ -70,11 +72,7 @@ fn click(at: Pos2) -> Vec<Vec<Event>> {
 }
 
 fn learn_centre() -> Pos2 {
-    let cells = acid_app::ui::layout::knob_cells(
-        acid_app::ui::layout::layout(window()).transport,
-        acid_app::ui::transport::TRANSPORT_CELLS,
-    );
-    cells[4].center()
+    transport::cell(layout(window()).transport, transport::Cell::Learn).center()
 }
 
 #[test]
