@@ -149,6 +149,10 @@ impl Sequencer {
 
     /// Stop the transport. The gate closes on the next render, which then fades the release tail out
     /// rather than cutting it.
+    ///
+    /// A **stop** and a **pause** are the same silence on this side of the seam (see `Engine`), so this says nothing about a
+    /// direction that is waiting for the bar: `Engine::stop` follows it with [`Sequencer::settle_direction`], and a pause does
+    /// not, because the bar the direction was asked in is still coming when the line resumes.
     pub fn stop(&mut self) {
         // A start that was waiting out part of a block goes with the stop: `start_later` has already put `running` down, so
         // the guard below would leave it to fire into the next render.
@@ -162,6 +166,18 @@ impl Sequencer {
 
     pub fn is_running(&self) -> bool {
         self.running
+    }
+
+    /// Take a direction that was waiting for the bar, without waiting for it.
+    ///
+    /// This is a **stop**'s move, and only a stop's: the next start after a stop returns to the top of the bar, so a direction
+    /// asked for mid-bar would otherwise be lost, and the new bar would run the old way under the key that asked for the new
+    /// one. A **pause** must not take it: the bar it was asked in is still going to arrive when the line resumes, and both
+    /// halves of that bar belong to the direction it began in.
+    pub fn settle_direction(&mut self) {
+        if let Some(next) = self.reverse_pending.take() {
+            self.reverse = next;
+        }
     }
 
     /// Ask for a direction. A stopped transport takes it at once; a running one takes it on the next bar line, so the change

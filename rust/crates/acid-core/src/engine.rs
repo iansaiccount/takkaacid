@@ -159,9 +159,12 @@ impl Engine {
 
     /// Stop the transport and close the gate. Closing it here as well as in the sequencer means a stop
     /// silences immediately even if no render follows.
+    /// A direction waiting for the bar is taken with the stop: the next start returns to the top of the bar, so that bar is
+    /// the first chance the direction will get. A pause does not take it — the bar it was asked in arrives on the resume.
     pub fn stop(&mut self) {
         self.playing = false;
         self.sequencer.stop();
+        self.sequencer.settle_direction();
     }
 
     /// Stop the clock and keep the step, so [`Engine::resume`] carries on from it.
