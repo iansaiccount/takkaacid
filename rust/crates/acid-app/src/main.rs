@@ -143,8 +143,9 @@ impl eframe::App for TakkaApp {
                     self.rack.set_transpose(next);
                 }
                 panel_ui::transport::Request::NudgeTempo(direction) => {
-                    let next = panel_ui::transport::nudge_tempo(self.rack.tempo_bpm(), direction);
-                    self.rack.set_tempo_bpm(next);
+                    // The tempo is in the save file, so a nudge changes the document. `apply_nudge` moves it and answers
+                    // that, so the deck's stepper and the arrow keys cannot answer differently.
+                    self.panel.dirty |= panel_ui::transport::apply_nudge(&mut self.rack, direction);
                 }
             }
         }

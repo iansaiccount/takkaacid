@@ -56,6 +56,9 @@ pub(super) fn draw(
                 state.pattern = Arc::new(moved);
                 shared.set_pattern(Arc::clone(&state.pattern));
                 state.dirty = true;
+                // An octave move changes the pattern, so an armed CLEAR is stale: the second click would empty the line the
+                // player has just transposed rather than the one they armed it against.
+                super::clear::disarm(state);
             }
         }
 
@@ -177,6 +180,9 @@ pub(super) fn draw(
             state.pattern = Arc::new(rolled);
             shared.set_pattern(Arc::clone(&state.pattern));
             state.dirty = true;
+            // A roll changes the pattern, so an armed CLEAR is stale: the second click would empty the line that just landed
+            // rather than the one the player armed it against.
+            super::clear::disarm(state);
         }
     }
 }
