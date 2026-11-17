@@ -15,7 +15,7 @@ if let [octave_down, octave_up, clear_cell, randomise_cell, shuffle_cell, densit
 ```
 
 and the row's two counts are hand-kept numbers in `layout.rs`: `PERFORM_LEFT = 4` and `PERFORM_RIGHT = 3`, with
-`PERFORM_COUNT` derived from them. Three test files reach in by index, two sites each:
+`PERFORM_COUNT` derived from them. Three test files reach in by index, six sites between them:
 
 | file | site | means |
 |---|---|---|
@@ -75,7 +75,7 @@ second module is legal, and the call sites would read `perform::cell(area, Cell:
 |---|---|
 | The catalogue owns the cluster split, not `layout` | `perform_cells` now takes its two counts from a UI module's arrays, so the geometry half of the layout depends on a row's contents. It already depends on `KNOB_COUNT` the same way, and the alternative is a second hand-kept fact beside the first. |
 | `LEFT` and `RIGHT` are written out, and `ALL` repeats them | One list repeats another, which the repo has paid for twice. The repetition is confined to one file, and the test below asserts `ALL == LEFT ++ RIGHT`, so a control added to one and not the other fails. The alternative — building `ALL` from the two arrays at compile time — needs a const concat trick that reads worse than the test. |
-| `in_the_left_cluster()` is written out rather than inferred from `index() < LEFT.len()` | Two hand-kept facts (order and side) that could disagree. It is written out so a reordered cluster fails to compile rather than silently re-clustering; the geometry test pins the two clusters' rects as a consequence. |
+| `in_the_left_cluster()` is written out rather than inferred from `index() < LEFT.len()` | Two hand-kept facts (order and side) that could disagree. It is written out so **adding a control fails to compile**; a *reorder* compiles and is caught by test 3 instead. The geometry test pins the two clusters' rects as a consequence. |
 
 ## The tests that make it safe
 
@@ -108,8 +108,10 @@ book does not change and no screenshot is retaken; the round is invisible to a p
 - **Any change to the row's controls, captions or geometry.** Seven cells, two clusters, the same gap.
 - **A knob catalogue change.** `Knob` already owns its row; the shuffle, density and scale *knobs* are drawn by
   `perform_knob` and their learn targets stay in `midi::cc`.
-- **`row_perform`'s `if let [...] = l.perform.cells[..]` guard as a feature.** It matched any length and drew nothing when the
-  count was wrong; it goes, as the transport row's did.
+- **`row_perform`'s `if let [...] = l.perform.cells[..]` guard as a feature.** A fixed-length slice pattern matches exactly
+  seven, and `perform_cells` always built seven, so the guard's no-draw branch was unreachable; removing it turns an unreachable
+  no-draw into an unreachable panic and nothing else. (An earlier draft of this plan said it "matched any length", which is
+  wrong, and the review said so.)
 - **The lib-side `Row.cells` field.** `PanelLayout::perform` keeps its `cells`; the catalogue is the way tests find one.
 
 ## Progress
@@ -132,3 +134,23 @@ book does not change and no screenshot is retaken; the round is invisible to a p
       (`layout::perform_cells(area()).len() == Perform::ALL.len()`); and the module doc said `cells[4]` where the three test
       files clicked 2, 3 and 4. Recorded, not fixed: the ledger's line about `in_the_left_cluster()` says a reorder "fails to
       compile", which is only true of *adding* a variant (a reorder is caught by test 3 instead) — corrected below.
+
+- [x] **Task 2 — the row and its tests ask by name.** `row_perform` asks `perform::cell` for its seven rects and the
+      `if let [...] = l.perform.cells[..]` guard is gone; `clear_live`'s three sites, `learn_live`'s two and `perform_live`'s
+      `cell(index)`/`drag(..., index, ...)` helpers all take a `Perform`. Behaviour identical — same rects, same clusters, same
+      captions and the same seven unconditional `egui` ids (plus `learn-shuffle` while a learn is choosing) — and
+      `git diff -w` of the row is the head, two comments and the de-indent. 701 tests.
+      **Review: BLOCK, on exactly the thing this round exists to remove.** The diff converted two of `clear_live`'s three
+      sites: `a_roll_disarms_an_armed_clear` still found RANDOM as `perform.cells[3]`, while this entry claimed all three had
+      moved. Fixed before the commit, and the entry now says three because it is three. Taken with it: the plan's non-goal said
+      the old guard "matched any length" — a fixed-length slice pattern matches exactly seven, so the guard was inert rather
+      than dangerous (corrected above); `clear_live`'s "CLEAR sits at the left cluster's end" was false (`RANDOM` holds that
+      slot); the row's comment said adding a control does not move rects, which it does — what the catalogue keeps is the name;
+      and `let cells = l.perform.area` named a band `cells` while taking an area. Recorded, not fixed: `learn_live`'s
+      `the_shuffle_knob_stays_on_the_panel_while_a_learn_is_choosing` asserts only `CursorIcon::ResizeVertical`, which the
+      density and scale dials would also satisfy, so a wrong-but-still-a-knob name there would pass — its name is right today,
+      and the assertion is the weaker half.
+      **Mutations:** the catalogue's own three (see task 1) cover the order, the shape and the cluster split. For this commit the
+      evidence is that the live tests still click what they always clicked: every `perform_live`, `clear_live` and `learn_live`
+      assertion about a control's effect is unchanged, so a name that pointed at the wrong rect would move the effect the test
+      measures.
