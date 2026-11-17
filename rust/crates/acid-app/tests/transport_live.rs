@@ -234,3 +234,47 @@ fn a_hovered_key_rings_itself_in_ink_that_reads_on_its_face() {
         "an unlit key's ring must be the accent on its well: {run:?}"
     );
 }
+
+/// The transpose's readout is a cell with nothing to click: the row answers at five cells and stays silent at the sixth, which is
+/// what makes it a display rather than a key that does nothing.
+#[test]
+fn the_transpose_readout_answers_nothing() {
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let cells = layout::knob_cells(
+        layout::layout(window()).transport,
+        transport::TRANSPORT_CELLS,
+    );
+    let at = cells[2].center();
+    let ctx = egui::Context::default();
+    frame(&ctx, &mut panel, &shared, vec![]);
+    frame(
+        &ctx,
+        &mut panel,
+        &shared,
+        vec![
+            egui::Event::PointerMoved(at),
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            },
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            },
+        ],
+    );
+    assert_eq!(
+        panel.transport_request, None,
+        "the readout is not a key: it asks the rack for nothing"
+    );
+    assert_eq!(
+        panel.notice_now(std::time::Instant::now()),
+        None,
+        "and says nothing either, because it is not a key that has no answer"
+    );
+}

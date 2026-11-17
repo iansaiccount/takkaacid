@@ -42,7 +42,6 @@ pub enum Control {
     Save,
     Songs,
     Step,
-    Run,
     Stop,
     TempoDown,
     TempoUp,
@@ -95,7 +94,7 @@ pub enum Control {
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 41] = [
+    pub const ALL: [Control; 40] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -107,7 +106,6 @@ impl Control {
         Control::Save,
         Control::Songs,
         Control::Step,
-        Control::Run,
         Control::Stop,
         Control::TempoDown,
         Control::TempoUp,
@@ -153,36 +151,35 @@ impl Control {
             Control::Save => TIPS[8],
             Control::Songs => TIPS[9],
             Control::Step => TIPS[10],
-            Control::Run => TIPS[11],
-            Control::Stop => TIPS[12],
-            Control::TempoDown => TIPS[13],
-            Control::TempoUp => TIPS[14],
-            Control::Learn => TIPS[15],
-            Control::Tooltips => TIPS[16],
-            Control::TapeBack => TIPS[30],
-            Control::TapePause => TIPS[31],
-            Control::TapeForward => TIPS[32],
-            Control::TapeRecord => TIPS[33],
-            Control::TapePlay => TIPS[34],
-            Control::Reverse => TIPS[35],
-            Control::Tbc => TIPS[36],
-            Control::TransposeDown => TIPS[37],
-            Control::TransposeUp => TIPS[38],
-            Control::Copy => TIPS[39],
-            Control::Paste => TIPS[40],
-            Control::OctaveDown => TIPS[17],
-            Control::OctaveUp => TIPS[18],
-            Control::Shuffle => TIPS[19],
-            Control::Randomise => TIPS[20],
-            Control::Density => TIPS[21],
-            Control::Scale => TIPS[22],
-            Control::Tempo => TIPS[23],
-            Control::Pattern => TIPS[24],
-            Control::Autosave => TIPS[25],
-            Control::DeviceCell => TIPS[26],
-            Control::DeviceMute => TIPS[27],
-            Control::DeviceAdd => TIPS[28],
-            Control::DeviceCaret => TIPS[29],
+            Control::Stop => TIPS[11],
+            Control::TempoDown => TIPS[12],
+            Control::TempoUp => TIPS[13],
+            Control::Learn => TIPS[14],
+            Control::Tooltips => TIPS[15],
+            Control::TapeBack => TIPS[29],
+            Control::TapePause => TIPS[30],
+            Control::TapeForward => TIPS[31],
+            Control::TapeRecord => TIPS[32],
+            Control::TapePlay => TIPS[33],
+            Control::Reverse => TIPS[34],
+            Control::Tbc => TIPS[35],
+            Control::TransposeDown => TIPS[36],
+            Control::TransposeUp => TIPS[37],
+            Control::Copy => TIPS[38],
+            Control::Paste => TIPS[39],
+            Control::OctaveDown => TIPS[16],
+            Control::OctaveUp => TIPS[17],
+            Control::Shuffle => TIPS[18],
+            Control::Randomise => TIPS[19],
+            Control::Density => TIPS[20],
+            Control::Scale => TIPS[21],
+            Control::Tempo => TIPS[22],
+            Control::Pattern => TIPS[23],
+            Control::Autosave => TIPS[24],
+            Control::DeviceCell => TIPS[25],
+            Control::DeviceMute => TIPS[26],
+            Control::DeviceAdd => TIPS[27],
+            Control::DeviceCaret => TIPS[28],
         }
     }
 
@@ -204,7 +201,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 41] = [
+const TIPS: [Tip; 40] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -258,11 +255,6 @@ const TIPS: [Tip; 41] = [
     Tip {
         title: "STEP",
         what: "Key down writes the selected step, key up walks to the next one.",
-        shortcut: None,
-    },
-    Tip {
-        title: "RUN",
-        what: "Starts the transport from the pattern's first step.",
         shortcut: None,
     },
     Tip {
@@ -453,16 +445,16 @@ mod tests {
         }
         // The knobs are the front of the panel; the last entries are the settings card's two switches.
         assert_eq!(Control::for_knob(Knob::Waveform), Control::ALL[0]);
-        assert_eq!(Control::Tooltips, Control::ALL[16]);
-        assert_eq!(Control::Autosave, Control::ALL[25]);
+        assert_eq!(Control::Tooltips, Control::ALL[15]);
+        assert_eq!(Control::Autosave, Control::ALL[24]);
     }
 
     #[test]
     fn the_two_readouts_have_their_own_help() {
         // The pattern and tempo readouts can be hovered and can be taught, so both need a tip. They are appended to the
         // table so no existing control's position moves.
-        assert_eq!(Control::ALL[23], Control::Tempo);
-        assert_eq!(Control::ALL[24], Control::Pattern);
+        assert_eq!(Control::ALL[22], Control::Tempo);
+        assert_eq!(Control::ALL[23], Control::Pattern);
         assert_eq!(Control::Tempo.tip().title, "TEMPO");
         assert_eq!(Control::Pattern.tip().title, "PATTERN");
         assert!(
@@ -506,14 +498,8 @@ mod tests {
 
     #[test]
     fn the_text_names_the_control_its_job_and_only_a_real_shortcut() {
-        // RUN's key has no shortcut any more: the deck's PLAY and PAUSE are the pair that own the space bar, so a tip that
-        // still claimed it would be a lie the player would try to use.
-        let run = Control::Run.tip();
-        assert!(run.text().starts_with("RUN\n"));
-        assert!(run.text().contains("transport"));
-        assert_eq!(run.shortcut, None);
-
-        // And the space bar is claimed by the key that has it.
+        // The space bar is claimed by the key that has it: the deck's PLAY. RUN's tip is gone with its key, which is why
+        // there is no assertion here about a control the face does not draw.
         let play = Control::TapePlay.tip();
         assert!(play.text().starts_with("PLAY\n"));
         assert!(

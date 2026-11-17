@@ -30,9 +30,14 @@ done
     [ -f "src/$page" ] || { echo "missing page: src/$page"; exit 1; }
   done
 
-# 4. the facts that must not drift (spec Review Focus 1, 2, 3, 5; phase 2's rack, card, colour and clipboard; the themes'
-#    source and its credit)
+# 4. the facts that must not drift (phase 2's rack, card, colour and clipboard; the themes' source and its credit; phase 3's
+#    deck, pause, transpose row, banks and copy/paste)
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
+# The phase replaced the saved word and moved the name out of the middle; both are claims a rewrite can put back, and neither is
+# a positive fact, so each needs its own guard.
+! grep -rqF 'on a lit plate' src || { echo "the guide promises a plate the face does not paint"; exit 1; }
+! grep -rqF 'in the middle of the top strip' src || { echo "the guide puts the name back in the middle"; exit 1; }
+! grep -rqE '`(RUN|STOP)` (is|stays) lit|`SAVED` / `UNSAVED`' src || { echo "the guide describes the retired transport keys"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \

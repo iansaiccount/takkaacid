@@ -64,5 +64,7 @@ one's.
 ## What a restart costs
 
 The session file still holds one device — the first one's patterns, patch, swing and learned controllers, plus the first MIDI
-port the app had open. Everything else about the others is in memory: their names, their patterns, their ports, their colours.
+port the app had open. Everything else is in memory: the others' names, patterns, ports and colours, and **two things the whole
+rack forgets together** — each device's `REVERSE` direction and the rack's transpose. Both are performance, not patch: they are
+deliberately outside the file, so a restart brings every device back running forwards and in tune.
 They are gone on restart, and the picker's own line says so.

@@ -528,3 +528,30 @@ fn a_device_carries_its_own_scheme() {
         "nor the one it was not about"
     );
 }
+
+/// The transpose is one number for the rack, clamped to an octave, and it reaches every device — including one that joined later,
+/// because it rides the transport's fan-out.
+#[test]
+fn the_transpose_clamps_to_an_octave_and_reaches_every_device() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+
+    rack.set_transpose(13);
+    assert_eq!(rack.transpose(), 12, "an octave up is the ceiling");
+    for device in rack.devices() {
+        assert_eq!(
+            device.state.transpose(),
+            12,
+            "every device hears the rack's transpose"
+        );
+    }
+
+    rack.set_transpose(-99);
+    assert_eq!(rack.transpose(), -12, "and an octave down the floor");
+    for device in rack.devices() {
+        assert_eq!(device.state.transpose(), -12);
+    }
+
+    rack.set_transpose(0);
+    assert_eq!(rack.transpose(), 0);
+}

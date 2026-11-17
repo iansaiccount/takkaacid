@@ -101,3 +101,51 @@ fn egui_help_dot(top: Rect) -> Rect {
         vec2(18.0, 18.0),
     )
 }
+
+/// The PASTE key does not paste itself: it asks egui for a paste, so the event path `Ctrl+V` uses does the work — including
+/// refusing while a text field has focus. This pins that it asks, because a key that silently did nothing would look wired.
+#[test]
+fn the_paste_key_asks_egui_for_a_paste() {
+    use acid_app::ui::switches::{self, Switch};
+
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let ctx = Context::default();
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        events: vec![],
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+    output.textures_delta.clear();
+
+    let at = switches::cell(layout(screen()).switches, Switch::Paste).center();
+    let button = |pressed: bool| eframe::egui::Event::PointerButton {
+        pos: at,
+        button: eframe::egui::PointerButton::Primary,
+        pressed,
+        modifiers: eframe::egui::Modifiers::default(),
+    };
+    for events in [
+        vec![eframe::egui::Event::PointerMoved(at)],
+        vec![button(true)],
+        vec![button(false)],
+    ] {
+        let input = RawInput {
+            screen_rect: Some(screen()),
+            events,
+            ..Default::default()
+        };
+        output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+        output.textures_delta.clear();
+    }
+    let asked = output.viewport_output.values().any(|viewport| {
+        viewport
+            .commands
+            .contains(&eframe::egui::ViewportCommand::RequestPaste)
+    });
+    assert!(
+        asked,
+        "the PASTE key must ask egui for a paste, not paste behind its back"
+    );
+}
