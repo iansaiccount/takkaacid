@@ -48,11 +48,6 @@ stream needs a device to land on.
 
 ## What the card does not say
 
-The help card's notes say the session is saved on exit and again a couple of seconds after a change. Only the first half
-is unconditional: the two-second write happens when `AUTOSAVE` is on, and with it off there is no such write. The panel
-behaves correctly; the help line is the one sentence in the app that says otherwise. [`17-trouble`](17-trouble.md) repeats the warning for
-anyone who has lost work to it.
-
 ## `CLOSE`
 
 Bottom right, and `Escape` and a click outside the card do the same. The card has no other exit: the folds and the device

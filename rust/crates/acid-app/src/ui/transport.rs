@@ -30,10 +30,11 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))
 }
 
-/// Cells in the bottom row: REVERSE, TRANS −, the transpose's readout, TRANS +, TBC, LEARN. Six — the same count as the
-/// switches row above it, so the two rows share one column grid and read as one keypad rather than as a row of keys and a strip
-/// of leftovers. The volume knob lives in the top strip's corner; the transport is the deck in the top band.
-pub const TRANSPORT_CELLS: usize = 6;
+/// Cells in the bottom row: REVERSE, TRANS −, the transpose's readout, TRANS +, TBC, TBC, LEARN.
+///
+/// Seven, the same as the switches row above it, so the two rows share one column grid and read as one keypad. The second `TBC`
+/// is a cell the player asked to keep: a spare, labelled honestly rather than given a job it does not have.
+pub const TRANSPORT_CELLS: usize = 7;
 /// A key on one of the cards. Every card is painted in the black scheme whatever the face behind it does, so this is the one
 /// place that says so — a card that took the face's palette would go amber over an amber device.
 pub fn card_button(ui: &mut egui::Ui, id: &str, rect: Rect, label: &str, lit: bool) -> Response {

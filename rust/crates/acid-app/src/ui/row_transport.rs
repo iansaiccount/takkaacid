@@ -25,6 +25,7 @@ pub(super) fn draw(
         readout,
         transpose_up,
         tbc_cell,
+        spare_cell,
         learn_cell,
     ] = cells[..]
     {
@@ -47,20 +48,23 @@ pub(super) fn draw(
             // beside it do not dirty for the same reason, and one of them dirtying is a file written for nothing.
             state.transport_request = Some(transport::Request::Reverse(!reversed));
         }
-        // TBC: a cell kept for the player. It says so rather than doing nothing, because a silent key reads as broken.
-        if switch_key(
-            ui,
-            state,
-            Key {
-                id: "tbc",
-                rect: tbc_cell,
-                label: "TBC",
-                lit: false,
-                control: tips::Control::Tbc,
-            },
-            p,
-        ) {
-            state.notify("TBC IS NOT DECIDED YET");
+        // TBC: two cells kept for the player — the row is seven to match the switch row above it, and a spare cell that said
+        // nothing would be a hole. Both say so rather than doing nothing, because a silent key reads as broken.
+        for (id, rect) in [("tbc", tbc_cell), ("tbc-spare", spare_cell)] {
+            if switch_key(
+                ui,
+                state,
+                Key {
+                    id,
+                    rect,
+                    label: "TBC",
+                    lit: false,
+                    control: tips::Control::Tbc,
+                },
+                p,
+            ) {
+                state.notify("TBC IS NOT DECIDED YET");
+            }
         }
         // The transpose pair: the whole rack, a semitone at a time, as performance and never as the patch.
         if switch_key(
