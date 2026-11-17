@@ -1,11 +1,12 @@
-//! The transport row: a painted rectangular key like the hardware's RUN/STOP, and the tempo nudges.
+//! The transport row: a painted rectangular key like the hardware's RUN/STOP, the tempo nudges, and the catalogue that names
+//! the row's cells.
 //!
 //! The key is drawn rather than styled from a stock widget because the panel has no stock widgets: a lit
-//! RUN is amber, a dark one is engraving on black.
+//! key's legend is ink for its raised face, a dark one is engraving on black.
 
 use egui::{Rect, Response};
 
-use super::theme;
+use super::{layout, theme};
 
 /// What the transport row asked the player for.
 ///
@@ -30,11 +31,61 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))
 }
 
-/// Cells in the bottom row: REVERSE, TRANS −, the transpose's readout, TRANS +, TBC, TBC, LEARN.
+/// One cell of the bottom row, left to right.
 ///
-/// Seven, the same as the switches row above it, so the two rows share one column grid and read as one keypad. The second `TBC`
-/// is a cell the player asked to keep: a spare, labelled honestly rather than given a job it does not have.
-pub const TRANSPORT_CELLS: usize = 7;
+/// The row was a positional list — a `Vec<Rect>` destructured into seven names, and tests that clicked `cells[6]` with a
+/// comment saying which key that was. A comment does not fail when a cell is inserted, so this is the name instead: the
+/// layout's drawing and every test ask the catalogue by name, and adding a cell without it fails to compile.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Cell {
+    Reverse,
+    TransposeDown,
+    /// The transpose's value, in a well between the two keys that move it. A cell, not a key: nothing presses it.
+    Readout,
+    TransposeUp,
+    Tbc,
+    /// The cell the player asked to keep labelled `TBC` beside the first: a spare, labelled honestly rather than given a job
+    /// it does not have. The row is seven to match the switch row above it, and a spare that said nothing would be a hole.
+    Spare,
+    Learn,
+}
+
+impl Cell {
+    /// Every cell, in drawing order.
+    pub const ALL: [Cell; 7] = [
+        Cell::Reverse,
+        Cell::TransposeDown,
+        Cell::Readout,
+        Cell::TransposeUp,
+        Cell::Tbc,
+        Cell::Spare,
+        Cell::Learn,
+    ];
+
+    /// Where the cell sits in the row.
+    pub fn index(self) -> usize {
+        match self {
+            Cell::Reverse => 0,
+            Cell::TransposeDown => 1,
+            Cell::Readout => 2,
+            Cell::TransposeUp => 3,
+            Cell::Tbc => 4,
+            Cell::Spare => 5,
+            Cell::Learn => 6,
+        }
+    }
+}
+
+/// Cells in the bottom row: `Cell::ALL.len()`.
+///
+/// The same as the switches row above it, so the two rows share one column grid and read as one keypad.
+pub const TRANSPORT_CELLS: usize = Cell::ALL.len();
+
+/// The rect of one cell of the bottom row.
+pub fn cell(area: Rect, which: Cell) -> Rect {
+    layout::knob_cells(area, Cell::ALL.len())[which.index()]
+}
+
 /// A key on one of the cards. Every card is painted in the black scheme whatever the face behind it does, so this is the one
 /// place that says so — a card that took the face's palette would go amber over an amber device.
 pub fn card_button(ui: &mut egui::Ui, id: &str, rect: Rect, label: &str, lit: bool) -> Response {
@@ -96,4 +147,53 @@ fn key_scale(rect: Rect) -> f32 {
 /// arithmetic would drift from this one.
 pub fn key_font(rect: Rect) -> egui::FontId {
     theme::legend(13.0 * key_scale(rect))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::switches::Switch;
+    use eframe::egui::{Pos2, vec2};
+
+    /// The bottom band at the design size: 980 wide less the 16 px side inset, 44 tall.
+    fn area() -> Rect {
+        Rect::from_min_size(Pos2::ZERO, vec2(948.0, 44.0))
+    }
+
+    #[test]
+    fn the_cells_are_numbered_and_drawn_in_order() {
+        for (index, cell) in Cell::ALL.iter().enumerate() {
+            assert_eq!(cell.index(), index, "{cell:?} has the wrong slot");
+        }
+    }
+
+    #[test]
+    fn every_cell_is_inside_the_row_and_clear_of_its_neighbour() {
+        let cells: Vec<Rect> = Cell::ALL.iter().map(|c| cell(area(), *c)).collect();
+        assert!(
+            (cells[0].left() - area().left()).abs() < 0.01,
+            "the row does not start at the wall"
+        );
+        assert!(
+            (cells[cells.len() - 1].right() - area().right()).abs() < 0.01,
+            "the row does not end at the wall"
+        );
+        for (index, rect) in cells.iter().enumerate() {
+            assert!(area().contains_rect(*rect), "{index} escapes the row");
+            if index > 0 {
+                assert!(
+                    cells[index - 1].right() <= rect.left() + 0.01,
+                    "{index} overlaps"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_bottom_row_is_as_wide_as_the_switch_row_above_it() {
+        // The player's choice from plan 01: two rows of seven share one column grid rather than meeting only at the right
+        // wall. A cell added to one row and not the other is a face that reads as two grids again.
+        assert_eq!(Cell::ALL.len(), Switch::ALL.len());
+        assert_eq!(TRANSPORT_CELLS, Cell::ALL.len());
+    }
 }
