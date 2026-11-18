@@ -15,6 +15,7 @@ pub mod learn;
 pub mod modal;
 pub mod panel;
 pub mod pattern_swap;
+pub mod perform;
 pub mod randomise;
 pub mod row_knobs;
 pub mod row_perform;
@@ -90,6 +91,10 @@ pub struct PanelState {
     /// The pattern text this panel last put on the clipboard, so the COPY key can read as pressed while the clipboard still
     /// holds the pattern on screen. `None` until something is copied — a paste from elsewhere is not this panel's copy.
     pub copied: Option<String>,
+    /// The pattern on screen encoded as clipboard text, kept beside the `Arc` it was encoded from. The COPY key asks every
+    /// frame whether the clipboard still holds what is on screen, and encoding it each time was a `String` per frame on the UI
+    /// thread; this way the encoding happens when the pattern changes. Never saved: it caches what is already there.
+    pub copy_text: Option<(Arc<Pattern>, PatternId, String)>,
     /// Set by the SAVE key; consumed by `main`, which writes the session and clears `dirty`.
     pub save_requested: bool,
     /// Set by the transport row; consumed by `main`, which owns the rack's transport. A request rather than a write: the
@@ -200,6 +205,7 @@ impl Default for PanelState {
             selected: 0,
             clear_armed_at: None,
             copied: None,
+            copy_text: None,
             save_requested: false,
             transport_request: None,
             songs: SongState::default(),
@@ -349,6 +355,11 @@ impl PanelState {
 /// Painting uses absolute rects from `layout`, so the panel lands in the same place whatever the Ui's own
 /// cursor is doing. Returns nothing: Phase 07 wires the controls to the engine.
 pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::Ui) {
+    // Read every frame, so a change made by a hand that is not the panel's — a learned tempo fader, writing from the MIDI
+    // thread — marks the session unsaved the same way a key does. The tempo is in the save file, which is the whole rule.
+    if shared.take_tempo_written() {
+        state.dirty = true;
+    }
     // `main` owns the rack and may have removed a device since it filled the mirror, so the count the strip draws is
     // derived here rather than trusted: the panel may be one frame behind, and it must not be one index out of bounds.
     state.strip.selected = state
@@ -725,7 +736,19 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // clipboard from the same function — so the two cannot drift.
         let copy_cell = switches::cell(l.switches, switches::Switch::Copy);
         let slot = display::format_pattern(state.pattern_id);
-        let holding = state.copied.as_deref() == Some(pattern_text(shared, &slot).as_str());
+        // Encoded once per pattern rather than once per frame: the key only asks whether the clipboard still holds what is on
+        // screen, and the encoding is a `String` of sixteen steps.
+        if !state.copy_text.as_ref().is_some_and(|(pattern, id, _)| {
+            Arc::ptr_eq(pattern, &state.pattern) && *id == state.pattern_id
+        }) {
+            state.copy_text = Some((
+                Arc::clone(&state.pattern),
+                state.pattern_id,
+                pattern_text(shared, &slot),
+            ));
+        }
+        let current = state.copy_text.as_ref().map(|(_, _, text)| text.as_str());
+        let holding = current.is_some() && state.copied.as_deref() == current;
         let pressed = switch_key(
             ui,
             state,
@@ -749,7 +772,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             );
         }
         if pressed {
-            let text = pattern_text(shared, &slot);
+            // This frame's own encoding, so a copy costs no second `String` of the same sixteen steps. The cache is already
+            // correct, so a press leaves it alone.
+            let text = state
+                .copy_text
+                .as_ref()
+                .map(|(_, _, text)| text.clone())
+                .unwrap_or_else(|| pattern_text(shared, &slot));
             ui.ctx().copy_text(text.clone());
             state.copied = Some(text);
             state.notify(format!("copied {slot}"));
@@ -805,7 +834,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                 rect: songs_cell,
                 label: "BANKS",
                 lit: state.songs.card.is_some(),
-                control: tips::Control::Songs,
+                control: tips::Control::Banks,
             },
             p,
         ) {

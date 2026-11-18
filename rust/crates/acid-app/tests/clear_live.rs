@@ -21,10 +21,13 @@ fn run_on(ctx: &Context, panel: &mut PanelState, shared: &SharedState, events: V
     output.textures_delta.clear();
 }
 
-/// CLEAR sits at the left cluster's end, beside the octave keys. The performance row has no catalogue yet, so this is its
-/// index in the row — one line when it moves.
+/// CLEAR sits at the left cluster's end, beside the octave keys: asked for by name from the row's catalogue.
 fn clear_centre() -> Pos2 {
-    acid_app::ui::layout::layout(screen()).perform.cells[2].center()
+    acid_app::ui::perform::cell(
+        acid_app::ui::layout::layout(screen()).perform.area,
+        acid_app::ui::perform::Perform::Clear,
+    )
+    .center()
 }
 
 fn step_centre(index: usize) -> Pos2 {
@@ -161,7 +164,10 @@ fn a_click_on_the_panel_elsewhere_leaves_the_pattern_alone() {
 #[test]
 fn the_clear_button_sits_where_the_layout_says() {
     // Cheap guard for the harness: a button outside the window could never be clicked.
-    let cell = acid_app::ui::layout::layout(screen()).perform.cells[2];
+    let cell = acid_app::ui::perform::cell(
+        acid_app::ui::layout::layout(screen()).perform.area,
+        acid_app::ui::perform::Perform::Clear,
+    );
     assert!(screen().contains_rect(cell));
     assert!(
         acid_app::ui::layout::layout(screen())
@@ -193,7 +199,11 @@ fn a_roll_disarms_an_armed_clear() {
         "the first click arms it"
     );
 
-    let randomise = layout(screen()).perform.cells[3].center();
+    let randomise = acid_app::ui::perform::cell(
+        acid_app::ui::layout::layout(screen()).perform.area,
+        acid_app::ui::perform::Perform::Randomise,
+    )
+    .center();
     click(&ctx, &mut panel, &shared, randomise, Modifiers::default());
     assert!(
         !acid_app::ui::clear::is_armed(panel.clear_armed_at, now),

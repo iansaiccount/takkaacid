@@ -122,15 +122,21 @@ impl eframe::App for TakkaApp {
         // fan-out would immediately undo.
         if let Some(request) = self.panel.transport_request.take() {
             match request {
-                panel_ui::transport::Request::Play => self
-                    .rack
-                    .set_transport(acid_app::device::Transport::Playing),
-                panel_ui::transport::Request::Pause => {
-                    self.rack.set_transport(acid_app::device::Transport::Paused)
+                panel_ui::transport::Request::Play => {
+                    self.rack
+                        .set_transport(acid_app::device::Transport::Playing);
                 }
-                panel_ui::transport::Request::Stop => self
-                    .rack
-                    .set_transport(acid_app::device::Transport::Stopped),
+                panel_ui::transport::Request::Pause => {
+                    // A pause with nothing to pause says so: the rack refuses it (the engine keeps its step through a stop),
+                    // and a key that refuses in silence reads as broken.
+                    if !panel_ui::transport::pause(&mut self.rack) {
+                        self.panel.notify(panel_ui::transport::NOTHING_TO_PAUSE);
+                    }
+                }
+                panel_ui::transport::Request::Stop => {
+                    self.rack
+                        .set_transport(acid_app::device::Transport::Stopped);
+                }
                 // The two performers: a direction this device's line runs in, and a semitone for the whole rack. Both are
                 // performance, neither is saved, and the engine takes the direction at the bar line.
                 panel_ui::transport::Request::Reverse(reversed) => {
@@ -149,6 +155,10 @@ impl eframe::App for TakkaApp {
                 }
             }
         }
+        // The tempo is one cell for the whole rack, so a learned fader that moved it may have written its flag on a device
+        // the panel is not showing. `draw_panel` drains the drawn device; this drains the rest, so no fader-moved tempo is left
+        // unsaved because it was heard by a device off screen.
+        self.panel.dirty |= panel_ui::transport::take_tempo_moved(&self.rack);
         let status = self.rack.state().status();
         let text = match &status {
             AudioStatus::Starting => "starting".to_string(),

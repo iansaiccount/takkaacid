@@ -129,6 +129,10 @@ pub struct SharedState {
     pub mute: AtomicBool,
     /// Step the transport is on, `0..16`, published by the audio thread for the LEDs.
     pub position: AtomicUsize,
+    /// Whether a tempo was written by something other than the panel since the panel last looked. The learned tempo fader
+    /// writes the cell from the MIDI thread and cannot touch panel state, and the tempo is in the save file: the panel takes
+    /// this once a frame and marks the session unsaved, so a fader-moved tempo is written by `AUTOSAVE` like a key-moved one.
+    pub tempo_written: AtomicBool,
     /// The tempo this state's engine follows. In a rack it is the rack's own cell — the same `Arc` in every device — so the
     /// panel, the MIDI thread and the fan-out-free engines all read and write one atomic. A state built on its own owns one.
     pub tempo_bpm: Arc<AtomicF32>,
@@ -194,6 +198,7 @@ impl SharedState {
             transpose: std::sync::atomic::AtomicI32::new(0),
             mute: AtomicBool::new(false),
             position: AtomicUsize::new(0),
+            tempo_written: AtomicBool::new(false),
             tempo_bpm: tempo,
             swing: AtomicF32::new(0.0),
             waveform: AtomicUsize::new(0),
@@ -263,6 +268,14 @@ impl SharedState {
         self.mute.load(Ordering::Relaxed)
     }
 
+    /// Take the "a controller moved the tempo" flag, and answer whether it was set.
+    ///
+    /// The panel is the only reader, so this is a take rather than a read: a frame that finds nothing leaves `dirty` alone,
+    /// and each write dirties exactly one frame. It lives here and not in the CC handler because of the three-thread rule —
+    /// the MIDI thread writes atomics and never panel state.
+    pub fn take_tempo_written(&self) -> bool {
+        self.tempo_written.swap(false, Ordering::Relaxed)
+    }
     pub fn set_mute(&self, muted: bool) {
         self.mute.store(muted, Ordering::Relaxed);
     }

@@ -49,7 +49,7 @@ done
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \
-            'it makes no sound until the bar the rack is in finishes' \
+            'it makes no sound until the bar the rack is in finishes' 'NOTHING TO PAUSE' \
             'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE' \
             'the next play carries on from there' 'tape deck' 'writes as you go'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }

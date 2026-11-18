@@ -564,13 +564,16 @@ impl Rack {
     ///
     /// Pausing a stopped rack is refused: the engine keeps its step through a stop, so a pause taken from there would resume
     /// mid-bar on the next play, and the plan's key table says a pause from `Stopped` does nothing. The refusal lives here
-    /// because here is where the two states are both known.
-    pub fn set_transport(&self, transport: Transport) {
+    /// because here is where the two states are both known, and it **answers**, so the one caller that has to say something
+    /// about it — the panel's `PAUSE` key — reads the rule instead of keeping a copy of it. Every other change is always
+    /// taken, which is why a caller that does not care can ignore the answer.
+    pub fn set_transport(&self, transport: Transport) -> bool {
         if transport == Transport::Paused && self.transport() == Transport::Stopped {
-            return;
+            return false;
         }
         self.transport.store(transport.byte(), Ordering::Relaxed);
         self.sync_transport();
+        true
     }
 
     /// The rack's performance transpose, in semitones.

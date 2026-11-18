@@ -2,6 +2,7 @@
 
 use acid_app::state::SharedState;
 use acid_app::ui::layout::layout;
+use acid_app::ui::perform;
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
@@ -36,10 +37,9 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2) 
     run_on(ctx, panel, shared, vec![pointer(at, false)]);
 }
 
-/// The performance row: two clusters, the played keys on the left then the dials on the right, addressed by index because
-/// this row has no catalogue yet.
-fn cell(index: usize) -> Pos2 {
-    layout(window()).perform.cells[index].center()
+/// The rect of one control in the performance row, asked for by name.
+fn cell(which: perform::Perform) -> Pos2 {
+    perform::cell(layout(window()).perform.area, which).center()
 }
 
 fn lit_shared() -> std::sync::Arc<SharedState> {
@@ -58,7 +58,7 @@ fn the_octave_keys_move_the_whole_pattern_and_back() {
     let before = shared.pattern();
     let midi_before = before.steps[0].midi();
 
-    click(&ctx, &mut panel, &shared, cell(1));
+    click(&ctx, &mut panel, &shared, cell(perform::Perform::OctaveUp));
     assert_eq!(shared.pattern().steps[0].midi(), midi_before + 12);
     assert_eq!(
         panel.pattern.steps[0].midi(),
@@ -67,7 +67,12 @@ fn the_octave_keys_move_the_whole_pattern_and_back() {
     );
     assert!(panel.dirty, "a transposed pattern is worth saving");
 
-    click(&ctx, &mut panel, &shared, cell(0));
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        cell(perform::Perform::OctaveDown),
+    );
     assert_eq!(shared.pattern().steps, before.steps, "and back is exact");
 }
 
@@ -76,7 +81,7 @@ fn the_shuffle_knob_writes_the_swing_the_clock_uses() {
     let ctx = Context::default();
     let shared = lit_shared();
     let mut panel = PanelState::default();
-    let at = cell(4);
+    let at = cell(perform::Perform::Shuffle);
     assert_eq!(shared.swing.get(), 0.0);
 
     // A hand on the knob: a warm-up frame, the press, then the move.
@@ -106,7 +111,7 @@ fn randomise_rerolls_the_whole_pattern() {
     let mut panel = PanelState::default();
     let before = shared.pattern();
 
-    click(&ctx, &mut panel, &shared, cell(3));
+    click(&ctx, &mut panel, &shared, cell(perform::Perform::Randomise));
     let after = shared.pattern();
 
     assert_ne!(after, before, "nothing was randomised");
@@ -137,19 +142,30 @@ fn an_empty_pattern_survives_the_octave_keys() {
     let shared = SharedState::new();
     let mut panel = PanelState::default();
 
-    click(&ctx, &mut panel, &shared, cell(1));
+    click(&ctx, &mut panel, &shared, cell(perform::Perform::OctaveUp));
     assert!(
         shared.pattern().steps.iter().all(|step| !step.on),
         "an empty pattern stays silent"
     );
 
-    click(&ctx, &mut panel, &shared, cell(0));
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        cell(perform::Perform::OctaveDown),
+    );
     assert_eq!(*shared.pattern(), Pattern::empty());
 }
 
 /// Drag a knob in a performance cell: a warm-up frame, the press, then the move.
-fn drag(ctx: &Context, panel: &mut PanelState, shared: &SharedState, index: usize, dy: f32) {
-    let at = cell(index);
+fn drag(
+    ctx: &Context,
+    panel: &mut PanelState,
+    shared: &SharedState,
+    which: perform::Perform,
+    dy: f32,
+) {
+    let at = cell(which);
     run_on(ctx, panel, shared, vec![]);
     run_on(
         ctx,
@@ -174,7 +190,7 @@ fn the_density_knob_sets_how_full_a_roll_is() {
     let mut panel = PanelState::default();
     assert_eq!(panel.density, acid_app::ui::randomise::DEFAULT_DENSITY);
 
-    drag(&ctx, &mut panel, &shared, 5, 30.0);
+    drag(&ctx, &mut panel, &shared, perform::Perform::Density, 30.0);
     assert!(
         panel.density > 0.5,
         "the knob should have turned up: {}",
@@ -184,7 +200,7 @@ fn the_density_knob_sets_how_full_a_roll_is() {
 
     // Dense enough to fill the pattern: every step sounds.
     panel.density = 1.0;
-    click(&ctx, &mut panel, &shared, cell(3));
+    click(&ctx, &mut panel, &shared, cell(perform::Perform::Randomise));
     assert!(shared.pattern().steps.iter().all(|step| step.on));
 }
 
@@ -197,7 +213,7 @@ fn the_scale_knob_snaps_to_a_catalogue_entry() {
     let mut panel = PanelState::default();
     assert_eq!(panel.scale, Scale::Chromatic);
 
-    drag(&ctx, &mut panel, &shared, 6, 30.0);
+    drag(&ctx, &mut panel, &shared, perform::Perform::Scale, 30.0);
     assert_ne!(panel.scale, Scale::Chromatic, "the knob should have moved");
     // The face rests on a detent, never between two scales.
     assert_eq!(panel.scale_knob, scale_position(panel.scale));
@@ -215,7 +231,7 @@ fn randomise_obeys_the_density_and_scale() {
     panel.set_density(0.0);
     panel.set_scale(Scale::MinorPentatonic);
 
-    click(&ctx, &mut panel, &shared, cell(3));
+    click(&ctx, &mut panel, &shared, cell(perform::Perform::Randomise));
     let after = shared.pattern();
     let sounding: Vec<_> = after.steps.iter().filter(|step| step.on).collect();
     assert_eq!(

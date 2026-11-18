@@ -5,6 +5,7 @@ use acid_app::midi::cc::{self, CcTarget};
 use acid_app::state::SharedState;
 use acid_app::ui::layout::layout;
 use acid_app::ui::learn::Step;
+use acid_app::ui::perform;
 use acid_app::ui::switches;
 use acid_app::ui::transport;
 use acid_app::ui::{PanelState, draw_panel, panel};
@@ -209,7 +210,7 @@ fn clicking_the_shuffle_knob_while_choosing_asks_for_a_shuffle_fader() {
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = PanelState::default();
-    let shuffle = layout(screen()).perform.cells[4].center();
+    let shuffle = perform::cell(layout(screen()).perform.area, perform::Perform::Shuffle).center();
 
     // Outside a learn the knob is a knob: this click is a press-and-release with no drag, so nothing moves, and no
     // binding starts.
@@ -237,7 +238,7 @@ fn the_shuffle_knob_stays_on_the_panel_while_a_learn_is_choosing() {
     click(&ctx, &mut panel, &shared, learn_centre());
     assert_eq!(panel.learn, Step::Choosing);
 
-    let at = layout(screen()).perform.cells[4].center();
+    let at = perform::cell(layout(screen()).perform.area, perform::Perform::Shuffle).center();
     let input = RawInput {
         screen_rect: Some(screen()),
         events: vec![Event::PointerMoved(at)],
@@ -250,5 +251,14 @@ fn the_shuffle_knob_stays_on_the_panel_while_a_learn_is_choosing() {
         output.platform_output.cursor_icon,
         eframe::egui::CursorIcon::ResizeVertical,
         "the shuffle knob is not there to click"
+    );
+
+    // The cursor only says *a* knob was under the pointer — the density and scale dials would satisfy it too. The binding is
+    // what the click was for, so that is what the test asserts.
+    click(&ctx, &mut panel, &shared, at);
+    assert_eq!(
+        panel.learn,
+        Step::Listening(CcTarget::Swing),
+        "the shuffle knob is the target a click on it picks"
     );
 }

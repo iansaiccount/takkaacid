@@ -12,12 +12,15 @@ use super::theme;
 /// drawing loop's `zip`.
 pub const KNOB_COUNT: usize = crate::knobs::Knob::ALL.len();
 /// Controls in the performance row: the played keys on the left, the dials on the right.
-pub const PERFORM_COUNT: usize = PERFORM_LEFT + PERFORM_RIGHT;
+///
+/// Both counts are the catalogue's (`ui::perform`), so a control added there widens its own cluster instead of quietly joining
+/// the other one.
+pub const PERFORM_COUNT: usize = super::perform::Perform::ALL.len();
 /// Its left group: octave down, octave up, clear, randomise — the things played while the pattern runs.
-pub const PERFORM_LEFT: usize = 4;
+pub const PERFORM_LEFT: usize = super::perform::Perform::LEFT.len();
 /// Its right group: shuffle, density, scale — the things that shape the next roll. Shuffle sits here, next to the dials that
 /// shape a roll, because it shapes the roll's timing in the same way.
-pub const PERFORM_RIGHT: usize = 3;
+pub const PERFORM_RIGHT: usize = super::perform::Perform::RIGHT.len();
 /// How wide a performance cell is, as a multiple of the row's height: enough for a knob and the caption under it, tight
 /// enough that the three in a cluster read as one group rather than a third of the panel each.
 const PERFORM_CELL_WIDTH: f32 = 1.35;

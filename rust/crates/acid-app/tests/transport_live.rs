@@ -327,3 +327,29 @@ fn each_legend_is_painted_in_the_cell_that_names_it() {
         );
     }
 }
+
+/// A tempo a learned fader moves marks the session unsaved. The MIDI thread may not touch panel state, so it leaves a flag the
+/// panel takes once a frame — without it, `AUTOSAVE` never wrote a fader-moved tempo and the name stayed plain silk over a file
+/// that was out of date.
+#[test]
+fn a_tempo_a_controller_moves_marks_the_session_unsaved() {
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    let ctx = egui::Context::default();
+    assert!(!panel.dirty, "nothing has been touched");
+
+    // The tempo fader picks up before it turns: a fader parked elsewhere is not an instruction to jump, so the controller has
+    // to reach the knob's position before anything moves. Sweeping the whole span does that whatever the launch tempo is.
+    for value in [0u8, 127, 0, 127] {
+        acid_app::midi::cc::apply_cc(&shared, 72, value);
+    }
+    let moved = shared.tempo_bpm.get();
+    frame(&ctx, &mut panel, &shared, vec![]);
+    assert!(panel.dirty, "the tempo is in the save file");
+
+    // The flag is taken, not merely read: the next frame leaves the panel alone, so a save that clears `dirty` keeps it clear.
+    panel.dirty = false;
+    frame(&ctx, &mut panel, &shared, vec![]);
+    assert!(!panel.dirty, "the flag was taken, not left set");
+    assert!(moved > 0.0);
+}

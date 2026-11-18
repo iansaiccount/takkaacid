@@ -43,8 +43,9 @@ A stopped line lights no position: the row shows which steps carry notes and not
 
 ## Starting and stopping
 
-`PAUSE` leaves the step where it is and `PLAY` carries on from it; `STOP` does not resume — the next play starts again from
-step 1, with the clock
+`PAUSE` leaves the step where it is and `PLAY` carries on from it; a `PAUSE` with nothing to pause — from a stopped
+line — says `NOTHING TO PAUSE` in the strip rather than doing nothing at all. `STOP` does not resume — the next play starts
+again from step 1, with the clock
 on the downbeat, so the first note you hear after a start is always the first note of the bar. Nothing is quantised: your
 presses land when you press them.
 
