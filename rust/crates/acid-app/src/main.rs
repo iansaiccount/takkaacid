@@ -516,6 +516,8 @@ impl eframe::App for TakkaApp {
             .iter()
             .map(|device| panel_ui::strip::StripCell {
                 name: device.name.clone(),
+                // The face the panel draws is the kind's: a drum device gets the grid, an acid device the step row.
+                kind: device.kind,
                 // The panel's per-device editor slots are keyed by this, so a removal cannot hand one device's step,
                 // step mode and randomise dials to its neighbour.
                 number: device.number,

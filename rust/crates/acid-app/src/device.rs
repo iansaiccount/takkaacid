@@ -23,22 +23,25 @@ pub const MAX_DEVICES: usize = 4;
 
 /// What a device is, in the catalogue the picker reads.
 ///
-/// One entry today, and `match`es over it are written out in full on purpose: a second kind has to fail to compile wherever a
-/// decision is owed.
+/// Two entries today — the bass and the drum machine — and `match`es over it are written out in full on purpose: a third kind
+/// has to fail to compile wherever a decision is owed.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum DeviceKind {
     /// The 303 clone: one voice, one bank, one shuffle.
     Acid,
+    /// The drum machine: sixteen sample voices on the same bar, bank, transport and shuffle.
+    Drums,
 }
 
 impl DeviceKind {
     /// Every kind the picker offers, in the order it offers them.
-    pub const ALL: [DeviceKind; 1] = [DeviceKind::Acid];
+    pub const ALL: [DeviceKind; 2] = [DeviceKind::Acid, DeviceKind::Drums];
 
-    /// The caption on a picker row.
+    /// The caption on a picker row, and the stem of a default name: `ACID 3`, `DRUMS 2`.
     pub fn name(self) -> &'static str {
         match self {
             DeviceKind::Acid => "ACID",
+            DeviceKind::Drums => "DRUMS",
         }
     }
 
@@ -49,7 +52,7 @@ impl DeviceKind {
     pub fn enabled(self, count: usize) -> bool {
         // Every kind shares the rack's cap — the cap is the panel's width and the voice count, not the kind's.
         match self {
-            DeviceKind::Acid => count < MAX_DEVICES,
+            DeviceKind::Acid | DeviceKind::Drums => count < MAX_DEVICES,
         }
     }
 }
@@ -204,6 +207,11 @@ impl Device {
     /// tempo cell so there is one tempo for every engine.
     pub fn on(kind: DeviceKind, number: usize, state: Arc<SharedState>) -> Self {
         // The same pair `persist::new_song` builds, so a new device and a new song open on the same phrase.
+        //
+        // A drum device opens on this same pattern with both masks zero, which is an empty grid: the 303's notes are not
+        // drum hits, and a starter phrase for the drums is the factory banks' work (plan 01, task 9). Until task 8 gives the
+        // renderer a `Machine`, a DRUMS device still *sounds* the 303's starter line under that empty grid; that is the seam
+        // this round closes in task 8, and task 4's Progress says so rather than leaving it to be discovered by ear.
         let mut bank = PatternBank::new_empty();
         bank.replace(0, acid_core::factory::starter());
         let mut device = Self::adopted(kind, number, state, bank);

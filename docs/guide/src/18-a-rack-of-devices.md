@@ -23,8 +23,8 @@ playing, at its own tempo, with its own pattern.
 
 ## Adding one
 
-`+` at the right end of the strip asks what kind of device to add — a picker opens with the kinds there are, and today there
-is one, `ACID` — and a line under them says what a restart costs:
+`+` at the right end of the strip asks what kind of device to add — a picker opens with the kinds there are, `ACID` and
+`DRUMS` — and a line under them says what a restart costs:
 
 > `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`
 

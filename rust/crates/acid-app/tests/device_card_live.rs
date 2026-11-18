@@ -97,6 +97,7 @@ fn two_device_panel() -> PanelState {
     panel.strip.cells = vec![
         StripCell {
             name: "ACID 1".into(),
+            kind: acid_app::device::DeviceKind::Acid,
             number: 1,
             scheme: acid_app::device::Scheme::Black,
             running: false,
@@ -104,6 +105,7 @@ fn two_device_panel() -> PanelState {
         },
         StripCell {
             name: "BASS".into(),
+            kind: acid_app::device::DeviceKind::Acid,
             number: 2,
             scheme: acid_app::device::Scheme::Black,
             running: false,
@@ -935,6 +937,7 @@ fn at_the_cap_every_row_is_greyed_and_a_click_still_says_so() {
     panel.strip.cells = (0..acid_app::device::MAX_DEVICES)
         .map(|index| StripCell {
             name: format!("ACID {}", index + 1),
+            kind: acid_app::device::DeviceKind::Acid,
             number: index + 1,
             scheme: acid_app::device::Scheme::Black,
             running: false,

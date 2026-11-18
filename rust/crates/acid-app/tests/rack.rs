@@ -29,7 +29,34 @@ fn a_new_device_is_numbered_named_and_has_something_to_play() {
     // Its own engine state, not a shared one: muting it cannot mute its neighbour.
     assert!(!device.state.is_muted());
     assert_eq!(MAX_DEVICES, 4);
-    assert_eq!(DeviceKind::ALL, [DeviceKind::Acid]);
+    assert_eq!(DeviceKind::ALL, [DeviceKind::Acid, DeviceKind::Drums]);
+}
+
+/// A drum device is a machine of its own: its own kind, its own name and its own state, on the rack's tempo.
+#[test]
+fn a_new_drum_device_is_named_and_opens_on_an_empty_grid() {
+    let device = Device::new(DeviceKind::Drums, 2);
+    assert_eq!(device.kind, DeviceKind::Drums);
+    assert_eq!(device.name, "DRUMS 2");
+    assert_eq!(Device::default_name(DeviceKind::Drums, 3), "DRUMS 3");
+    assert_eq!(DeviceKind::Drums.name(), "DRUMS");
+    // The starter phrase is the 303's, and a drum device reads no hits in it: an empty grid until a step is drawn or a
+    // factory bank is loaded (task 9).
+    let pattern = device.bank.current_pattern();
+    for step in &pattern.steps {
+        for drum in acid_core::drums::Drum::ALL {
+            assert!(!step.is_hit(drum), "{drum:?} arrives already struck");
+        }
+    }
+    // The default kit is on the state, with its mutes packed into the live mask.
+    assert_eq!(device.state.kit().name, acid_core::drums::DEFAULT_KIT_NAME);
+    assert_eq!(
+        device
+            .state
+            .drum_mute
+            .load(std::sync::atomic::Ordering::Relaxed),
+        u32::from(device.state.kit().mute_mask())
+    );
 }
 
 #[test]

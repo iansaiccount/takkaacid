@@ -117,9 +117,12 @@ Arc<Kit>` mirrors `pattern()`.
 
 ### Task 4 — the face
 
-**Files:** modify `rust/crates/acid-app/src/device.rs` (`DeviceKind::Drums` + `Device::on`), `ui/mod.rs` (route by kind),
-`ui/device_card.rs` (the card's rows for a drum device); create `rust/crates/acid-app/src/ui/drum_panel.rs`; add to
-`tests/drum_live.rs` (new).
+**Files:** modify `rust/crates/acid-app/src/device.rs` (`DeviceKind::Drums` + `Device::on`), `state.rs`
+(`SharedState::set_kit`), `ui/mod.rs` (route by kind, `showing_kind`), `ui/dispatch.rs` (the keyboard's step editor is the
+303's), `ui/strip.rs` (`StripCell.kind`), `main.rs` (the strip fill); create `rust/crates/acid-app/src/ui/drum_panel.rs`; add
+to `tests/drum_live.rs` (new) and `tests/rack.rs`. `ui/device_card.rs` needed no row: every row it draws (ROLE, PORTS,
+CHANNEL, COLOUR, MUTE, REMOVE) is kind-agnostic and the kit row is task 6's — corrected here, as tasks 1 and 3 corrected
+their own lines.
 **Interfaces (consumes Tasks 1–3; produces):** `drum_panel::draw(state, shared, ui, &layout, s, p)`, and `PanelState::drum:
 DrumView { selected: Drum }` (panel state; not saved).
 - [ ] `ui/drum_panel.rs` draws: the seven relabelled knobs and the device's `SHUFFLE` dial, the `LP | BP | HP` key, `HIT`, the
@@ -346,3 +349,61 @@ no seventeenth voice, no archive export of a kit.
       it in the same commit, or there are two.
       **Invisible to the guide, deliberately:** nothing a player can reach changes. A device still starts silent until task 6
       supplies samples, the face is task 4's, and `persist::SavedState` is untouched, so no page in `docs/guide` is now wrong.
+- [x] **Task 4 — the face.** `ui/drum_panel.rs` is the drum machine's panel: the seven 303 slots repurposed left to right as
+      `ATTACK DECAY SUSTAIN RELEASE CUT OFF RESONANCE TUNE` (one written-out `Dial::for_knob`, no `Dial::ALL` beside
+      `Knob::ALL`), the `LP | BP | HP` key, the device's `SHUFFLE` dial, `HIT`, and the sixteen-row grid with a label gutter,
+      beat frames, a lit plate and row band for the selected voice, and a dim muted row. `draw_panel` routes on
+      `PanelState::showing_kind()` (from the strip, `StripCell.kind` filled by `main`, `.get(selected)` never an index) and a
+      drum device draws `drum_panel` in place of the knob, performance and step rows. `DeviceKind::Drums` is the second
+      catalogue entry (`DRUMS`, same cap); `SharedState::set_kit` is the clone-on-write publish; the keyboard's step editor,
+      the computer-key/audition path and MIDI note placement are all gated off for a drum device. **745 tests**, clippy and
+      fmt clean, `./docs/guide/check.sh` ok. Tests: 18 in `tests/drum_live.rs` — the nine the task named plus
+      `every_fourth_column_is_framed`, `turning_attack_edits_the_selected_voice`, `the_filter_key_sets_the_voices_filter`,
+      `the_hit_key_auditions_the_selected_voice`, `the_shuffle_dial_writes_the_devices_swing`,
+      `a_drum_device_does_not_draw_the_303_rows`, `a_drum_device_ignores_the_keyboard_and_the_note_queue`,
+      `every_dial_reads_and_writes_its_own_field`, `the_seven_dials_are_labelled_in_the_order_the_face_draws_them`; four unit
+      tests in `drum_panel.rs`; and `a_new_drum_device_is_named_and_opens_on_an_empty_grid` in `tests/rack.rs`.
+      **Mutations run, 26 of 26 caught, all reverted** (`.superpowers/mutate_task4.py`): the cell writing to the chase's column
+      instead of the pointer's; a click arming `Kick` whatever the row; `shift` dropped from a hit; the label not selecting; the
+      mute bit hard-coded to `Kick`; an accented strike painted as `led_on`; the plate as `panel_raised`; `ROW_INSET` widened
+      until a 0.65x cell is under 8 px; a drum dial also writing the 303's `tuning` (caught by reading *all* seven atomics, not
+      one); the filter key leaving the voice on low; `HIT` auditioning `Kick`; beat frames on every fifth column; the drum dial
+      reading the 303's `CUT OFF` instead of the voice; the step row drawn on a drum face; the tuning dial reversed; the dial
+      order permuted; the grid stopping at the knob band; rows pitched for fifteen voices; the key catalogue reordered; one dial
+      writing another's field; the selected row unbanded; a muted row keeping its accent; `SHUFFLE` not writing `swing`; the
+      computer keyboard, the note queue and the keyboard step editor each re-enabled for drums.
+      **One claim the mutations cannot prove, recorded rather than implied:** the mid-bar test's second assertion — that the
+      write starts from `shared.pattern()` rather than the frame's mirror — does not bite alone, because `draw_panel` refreshes
+      the mirror at the top of every frame, so the mirror cannot be stale by the time a cell is handled. The test's real bite
+      is the column (the mutation above), and the fresh read stays as belt-and-braces.
+      **Review: OK with fixes, every finding actioned.** Its two Important findings were both real and are fixed in this
+      commit: (1) the book said the picker had one kind — `05-the-three-cards`, `18-a-rack-of-devices` and `20-reference` now
+      name `ACID` and `DRUMS`, `img/picker.png` is retaken at 1960x1340 with both rows and its `img/README.md` row updated, and
+      `DRUMS` is pinned in `check.sh` so the next kind cannot repeat it silently (task 10's Files list does not name `05` or
+      `18`, which is why this could not wait); (2) the three input gates this task added had no test that would fail if they
+      were removed — `a_drum_device_ignores_the_keyboard_and_the_note_queue` is that test, with three mutations behind it. Of
+      its Minor findings: `cell_rect` no longer allocates a `Vec` per cell (`row_cells` builds a row's `[Rect; 16]` once, and the
+      tests' `cell_rect` indexes it, which also settles the clamp-vs-panic split); the ATTACK test now watches all seven 303
+      atomics instead of `cutoff`; the row band, a muted row's lost accent and the `SHUFFLE` write each have a test; the grid
+      test counts each label instead of accepting it once anywhere (the selected voice's name is also the caption, so a dropped
+      gutter label would have hidden); and `Dial::ALL` is deleted. The review's finding that the plan's Files line named
+      `ui/device_card.rs` and omitted `state.rs`, `ui/dispatch.rs` and `tests/rack.rs` is corrected in the task text above.
+      **Rulings.** (1) A drum knob's value lives in the kit, clone-on-write through `SharedState::set_kit`, never in a second
+      copy in the 303's atomics — one truth, and a `Kit` clone (~1.5 KB) only on the frames a hand is turning a dial, on the UI
+      thread. If wrong, the audio thread still reads one coherent kit, but a future per-voice parameter that the engine reads
+      from an atomic would have to move; the alternative (borrowing the 303's atomics as scratch) is the two-sources-of-truth
+      bug `AGENTS.md` exists to prevent. (2) The selected voice is **panel-wide** (`PanelState::drum.selected`), as the plan's
+      Interface says, not per device: two drum devices share the last voice, one click to correct, and per-device would be a
+      `PanelEdit` field plus a test. (3) A new drum device opens on the 303's starter pattern with both masks zero — an empty
+      grid — and, until task 8 gives the renderer a `Machine`, it still *sounds* that 303 line under the grid. If wrong, the
+      fix is task 9's factory drum bank for the opening pattern and task 8's machine for the sound, not a face change.
+      (4) The dial slots are the 303's seven, repurposed left to right in the spec mockup's order; if the player meant a
+      different order it is seven arms of one `match` plus the pinned test. (5) The drum dials and the `LP|BP|HP`/`HIT` keys
+      carry no hover tips yet: `ui::tips` is the 303's table, and adding drum variants belongs with task 10's page. If wrong, a
+      player hovers a drum knob and learns nothing — no wrong text, which the 303's tips would have been. (6) `STEP` stays drawn
+      on the switches row (the spec keeps every key) but is inert on a drum face, because the keyboard step editor is gated;
+      if wrong it is a lit key that does nothing until the grid grows a cursor, and the fix is one `if`. (7)
+      `ui/device_card.rs` is untouched: none of its rows is 303-specific and the kit row is task 6's.
+      **The guide moved with the face**, unlike tasks 1–3: the picker's prose, alt text and screenshot are this commit's,
+      because the picker's claim was false the moment `DRUMS` joined `DeviceKind::ALL`. The drum face itself has no page yet;
+      task 10 writes page 22.

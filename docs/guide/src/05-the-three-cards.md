@@ -46,9 +46,9 @@ pass over. [`19-a-devices-card`](19-a-devices-card.md) is that page.
 
 ## The picker — `+` on the strip
 
-![The picker: one kind of device, and what is not saved](img/picker.png)
+![The picker: two kinds of device, and what is not saved](img/picker.png)
 
-What `+` opens: a row for every kind of device there is — one today, `ACID` — and a line under them that says what a restart
+What `+` opens: a row for every kind of device there is — `ACID` and `DRUMS` — and a line under them that says what a restart
 costs. At four devices the row is greyed and a click says the rack is full. It closes itself when a row is clicked.
 [`18-a-rack-of-devices`](18-a-rack-of-devices.md) is that page.
 

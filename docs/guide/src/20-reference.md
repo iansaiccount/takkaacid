@@ -106,7 +106,7 @@ and tempo wells at the right.
 `CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `MUTE
 OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 
-**The picker.** `ADD DEVICE`, a row per kind (`ACID`), `CLOSE`, and the line under the rows:
+**The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), `CLOSE`, and the line under the rows:
 `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.
 
 **The clipboard's notices**, in the same corridor as the name: `copied A1`, `pasted A1 into A2`, `the clipboard has no pattern`.

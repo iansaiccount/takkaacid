@@ -341,6 +341,15 @@ impl SharedState {
         self.kit.load_full()
     }
 
+    /// Publish a whole kit — the drum face's clone-on-write edit, the way [`SharedState::set_step`] edits one step.
+    ///
+    /// One truth, not a second copy of a voice's envelope in the 303's atomics: the panel clones the kit on the UI thread
+    /// (~1.5 KB, only while a hand is turning a dial), writes the one field, and swaps the whole table, so the audio thread
+    /// reads either the old kit or the new one and never a half-edited voice.
+    pub fn set_kit(&self, kit: Arc<Kit>) {
+        self.kit.store(kit);
+    }
+
     /// Ask for a voice to be heard with the transport stopped. The renderer drains it at the next block.
     pub fn request_audition(&self, drum: Drum) {
         // `Drum::index` is the only spelling of a voice's slot, and this is the one place it becomes the `-1`-sentinel number.

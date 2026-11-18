@@ -117,14 +117,19 @@ pub fn handle(
         panel.device_request = Some(crate::device::Request::Select(index));
         return Handled::Rack;
     }
-    match selection::dispatch(press.key, press.shift, panel, shared) {
-        selection::Press::Applied => {
-            // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
-            super::clear::disarm(panel);
-            return Handled::Selection;
+    // A drum device's editor is the grid, not the keyboard: the step editor writes 303 pitches into a pattern and moves a
+    // border the drum face has no row to show. The transport and pattern shortcuts below are the drum machine's too, so
+    // only this arm is gated — a face's rows are gone, not every key.
+    if panel.showing_kind() == crate::device::DeviceKind::Acid {
+        match selection::dispatch(press.key, press.shift, panel, shared) {
+            selection::Press::Applied => {
+                // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
+                super::clear::disarm(panel);
+                return Handled::Selection;
+            }
+            selection::Press::Refused => return Handled::Refused,
+            selection::Press::NotOurs => {}
         }
-        selection::Press::Refused => return Handled::Refused,
-        selection::Press::NotOurs => {}
     }
     let Some(shortcut) = shortcuts::shortcut_for(press.key, press.shift) else {
         return Handled::Nothing;

@@ -35,7 +35,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
 | `img/banks-card.png` | the bank browser: `New song`, the five demo banks, an empty `MY BANKS` | click `BANKS` |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
-| `img/picker.png` | the picker: the `ACID` row and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
+| `img/picker.png` | the picker: the `ACID` and `DRUMS` rows and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
 | `img/two-devices.png` | two devices, `ACID 1` black and selected, `ACID 2` on `FESTIVAL CITRUS` | from the picker, click `ACID`; `ctrl+2`; `F3`; click `COLOUR`; click the `FESTIVAL CITRUS` row; `Escape`; `ctrl+1` |
 | `img/strip.png` | the same strip, cropped: a black cell, a teal one, and `+` | `-crop 1960x76+0+24` in the state above |

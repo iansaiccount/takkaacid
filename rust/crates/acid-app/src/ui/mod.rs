@@ -6,6 +6,7 @@ pub mod controls;
 pub mod device_card;
 pub mod dispatch;
 pub mod display;
+pub mod drum_panel;
 pub mod edit;
 pub mod help;
 pub mod keys;
@@ -82,6 +83,9 @@ pub struct PanelState {
     pub help_visible: bool,
     /// The step the keyboard edits; always in `0..16`, never saved.
     pub selected: usize,
+    /// The drum face's editor: which voice its dials are on. Panel-wide, not per device — plan 01, task 4's ruling. Not
+    /// saved: the kit it edits is in memory only this phase.
+    pub drum: drum_panel::DrumView,
     /// The port picker: what is on offer and what the player chose.
     pub picker: PickerState,
     /// The VOLUME knob, kept separate from the seven tone knobs.
@@ -203,6 +207,7 @@ impl Default for PanelState {
             picker: PickerState::default(),
             help_visible: false,
             selected: 0,
+            drum: drum_panel::DrumView::default(),
             clear_armed_at: None,
             copied: None,
             copy_text: None,
@@ -292,6 +297,23 @@ impl PanelState {
     pub fn set_density(&mut self, density: f32) {
         self.density = density.clamp(0.0, 1.0);
     }
+
+    /// What kind of machine the strip says is on the panel.
+    ///
+    /// `main` owns the rack and fills the strip each frame, so this is a reading of that mirror — the panel may be a frame
+    /// behind a removal, which is why it is a `get` and why an empty rack answers the acid face. One method for the two
+    /// places that ask: `draw_panel` decides which face to paint from it, and `dispatch` decides whether the keyboard's step
+    /// editor belongs to this machine.
+    pub fn showing_kind(&self) -> crate::device::DeviceKind {
+        self.strip
+            .cells
+            .get(
+                self.strip
+                    .selected
+                    .min(self.strip.cells.len().saturating_sub(1)),
+            )
+            .map_or(crate::device::DeviceKind::Acid, |cell| cell.kind)
+    }
 }
 
 /// What the panel remembers about one device while another is displayed.
@@ -366,6 +388,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         .strip
         .selected
         .min(state.strip.cells.len().saturating_sub(1));
+    // What kind of machine is on the panel. The strip is the only place the panel can learn it.
+    let kind = state.showing_kind();
     // The strip is a mirror, so the device under the editor can change between frames: save the outgoing device's editor and
     // load the incoming one's. Both are keyed by the device's *number*, because a removal moves every later device's
     // position and would otherwise hand the survivor the removed device's step, step mode and randomise dials. A device the
@@ -405,14 +429,21 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // A focused text field owns the keyboard, and the panel's audition keys are not an exception: with the cursor in the
     // device card's name field, `A` and shift+`A` are a letter and a capital, not a note and a step. The device card is the
     // first field on the face that a player types a *name* into, which is what made this reachable.
-    play_computer_keys(shared, ui, state);
+    //
+    // A drum device does not answer the computer keyboard at all: its notes are not the 303's pitches, and the grid is the
+    // editor. The keys are left to the shortcuts and to nothing else.
+    if kind == crate::device::DeviceKind::Acid {
+        play_computer_keys(shared, ui, state);
+    }
 
     // Every MIDI note still waiting while the panel is editing (step mode, or shift held) belongs to the selected
     // step. The queue is drained rather than peeked: two notes inside one frame are two steps, each at its own
     // velocity — one slot and a counter used to lose the first of them.
     let editing = state.step_mode || ui.input(|input| input.modifiers.shift);
     while let Some(waiting) = shared.notes.pop() {
-        if !editing {
+        // The queue is drained for every kind — a note that arrived while a drum device was on the panel must not be placed
+        // later — but only the 303 writes it into a step. A drum device's MIDI notes are a later round.
+        if !editing || kind != crate::device::DeviceKind::Acid {
             continue;
         }
         let (pitch, octave) = edit::from_midi_note(waiting.note);
@@ -442,9 +473,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // face is read back from the catalogue rather than from a slot list. The WAVEFORM knob is the exception — a switch,
     // its position is worked out where the knob is drawn, because only there is it known whether the hand or a learned
     // controller owns it.
-    for knob in Knob::ALL {
-        if knob.kind() == Kind::Dial {
-            state.knobs[knob.index()] = knob.read(shared);
+    // A drum face fills its seven slots from the selected voice's kit fields inside `drum_panel`, so this 303 read must not
+    // run and overwrite them with the 303's atomics.
+    if kind == crate::device::DeviceKind::Acid {
+        for knob in Knob::ALL {
+            if knob.kind() == Kind::Dial {
+                state.knobs[knob.index()] = knob.read(shared);
+            }
         }
     }
     state.tempo = shared.tempo_bpm.get();
@@ -587,8 +622,17 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         font,
         colour,
     );
-    row_knobs::draw(state, shared, ui, &l, s, p);
-    row_perform::draw(state, shared, ui, &l, s, p);
+    match kind {
+        crate::device::DeviceKind::Acid => {
+            row_knobs::draw(state, shared, ui, &l, s, p);
+            row_perform::draw(state, shared, ui, &l, s, p);
+        }
+        crate::device::DeviceKind::Drums => {
+            // The dials, the filter key, SHUFFLE, HIT and the grid replace the knob, performance and step rows: on a drum
+            // device the 303's rows are gone, not inert.
+            drum_panel::draw(state, shared, ui, &l, s, p);
+        }
+    }
     // VOLUME has its own corner of the top strip, before the wordmark, so the row below never needed a cell for it.
     let volume_rect = panel::volume_knob_rect(l.top);
     let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));
@@ -638,84 +682,89 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         state.dirty = true;
     }
 
-    let keys = layout::step_cells(l.steps);
-    for (i, cell) in keys.iter().enumerate() {
-        let step = state.pattern.steps[i % STEPS_PER_PATTERN];
-        let view = step_key::step_view(
-            &step,
-            i,
-            state.position,
-            state.playing,
-            i % STEPS_PER_PATTERN == state.selected,
-            state.drag.is_some_and(|(dragged, ..)| dragged == i),
-            // A slide only glides into a step that sounds, so the keycap needs to know about the next one.
-            state.pattern.steps[(i + 1) % STEPS_PER_PATTERN].on,
-        );
-        let response = step_key::step_key(ui, i, &step, &view, *cell, p);
-        let (shift, alt, ctrl) =
-            ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.ctrl));
-        // Every click moves the selection, editing or not: the outline must always say where the keyboard
-        // and the next gesture will land.
-        if response.clicked() || response.drag_started() {
-            state.selected = i % STEPS_PER_PATTERN;
-        }
-        let gesture = edit::gesture_from_input(
-            response.clicked(),
-            shift,
-            alt,
-            ctrl,
-            response.double_clicked(),
-        );
-        if let Some(gesture) = gesture
-            && gesture != edit::StepGesture::Select
-        {
-            let edited = edit::apply_gesture(step, gesture, state.last_pitch, state.last_octave);
-            if edited.on {
-                state.last_pitch = edited.pitch;
-                state.last_octave = edited.octave_offset;
-            }
-            shared.set_step(i % STEPS_PER_PATTERN, edited);
-            state.pattern = shared.pattern();
-            state.dirty = true;
-            // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
-            clear::disarm(state);
-        }
-
-        // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
-        // the drag returns to the original note instead of walking further away. Dragging a rest brings it in
-        // at the dragged pitch: with ctrl+click being the only other way to make a note, this is how a fresh
-        // note gets its pitch from the mouse.
-        if response.dragged() {
-            let (index, start_pitch, start_octave, moved) = match state.drag {
-                Some((dragged, pitch, octave, moved)) if dragged == i => {
-                    (dragged, pitch, octave, moved)
-                }
-                _ => (i, step.pitch, step.octave_offset, 0.0),
-            };
-            let moved = moved + response.drag_delta().y;
-            state.drag = Some((index, start_pitch, start_octave, moved));
-            let (pitch, octave) = edit::drag_pitch((start_pitch, start_octave), moved, shift);
-            let dragged = Step {
-                on: true,
-                pitch,
-                octave_offset: octave,
-                ..step
-            };
-            state.last_pitch = pitch;
-            state.last_octave = octave;
-            shared.set_step(index, dragged);
-            state.pattern = shared.pattern();
-            state.dirty = true;
-            clear::disarm(state);
-            ui.painter().text(
-                cell.center(),
-                egui::Align2::CENTER_CENTER,
-                edit::pitch_name(pitch, octave),
-                theme::legend(10.0 * s),
-                p.silkscreen,
+    // The step row is the 303's editor; a drum device's columns are the grid's cells, and drawing the row would give the
+    // face two editors and the player a step border nothing on the drum face shows.
+    if kind == crate::device::DeviceKind::Acid {
+        let keys = layout::step_cells(l.steps);
+        for (i, cell) in keys.iter().enumerate() {
+            let step = state.pattern.steps[i % STEPS_PER_PATTERN];
+            let view = step_key::step_view(
+                &step,
+                i,
+                state.position,
+                state.playing,
+                i % STEPS_PER_PATTERN == state.selected,
+                state.drag.is_some_and(|(dragged, ..)| dragged == i),
+                // A slide only glides into a step that sounds, so the keycap needs to know about the next one.
+                state.pattern.steps[(i + 1) % STEPS_PER_PATTERN].on,
             );
-        } else {
-            state.drag = None;
+            let response = step_key::step_key(ui, i, &step, &view, *cell, p);
+            let (shift, alt, ctrl) =
+                ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.ctrl));
+            // Every click moves the selection, editing or not: the outline must always say where the keyboard
+            // and the next gesture will land.
+            if response.clicked() || response.drag_started() {
+                state.selected = i % STEPS_PER_PATTERN;
+            }
+            let gesture = edit::gesture_from_input(
+                response.clicked(),
+                shift,
+                alt,
+                ctrl,
+                response.double_clicked(),
+            );
+            if let Some(gesture) = gesture
+                && gesture != edit::StepGesture::Select
+            {
+                let edited =
+                    edit::apply_gesture(step, gesture, state.last_pitch, state.last_octave);
+                if edited.on {
+                    state.last_pitch = edited.pitch;
+                    state.last_octave = edited.octave_offset;
+                }
+                shared.set_step(i % STEPS_PER_PATTERN, edited);
+                state.pattern = shared.pattern();
+                state.dirty = true;
+                // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
+                clear::disarm(state);
+            }
+
+            // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
+            // the drag returns to the original note instead of walking further away. Dragging a rest brings it in
+            // at the dragged pitch: with ctrl+click being the only other way to make a note, this is how a fresh
+            // note gets its pitch from the mouse.
+            if response.dragged() {
+                let (index, start_pitch, start_octave, moved) = match state.drag {
+                    Some((dragged, pitch, octave, moved)) if dragged == i => {
+                        (dragged, pitch, octave, moved)
+                    }
+                    _ => (i, step.pitch, step.octave_offset, 0.0),
+                };
+                let moved = moved + response.drag_delta().y;
+                state.drag = Some((index, start_pitch, start_octave, moved));
+                let (pitch, octave) = edit::drag_pitch((start_pitch, start_octave), moved, shift);
+                let dragged = Step {
+                    on: true,
+                    pitch,
+                    octave_offset: octave,
+                    ..step
+                };
+                state.last_pitch = pitch;
+                state.last_octave = octave;
+                shared.set_step(index, dragged);
+                state.pattern = shared.pattern();
+                state.dirty = true;
+                clear::disarm(state);
+                ui.painter().text(
+                    cell.center(),
+                    egui::Align2::CENTER_CENTER,
+                    edit::pitch_name(pitch, octave),
+                    theme::legend(10.0 * s),
+                    p.silkscreen,
+                );
+            } else {
+                state.drag = None;
+            }
         }
     }
 
