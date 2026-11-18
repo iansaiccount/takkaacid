@@ -141,10 +141,13 @@ DrumView { selected: Drum }` (panel state; not saved).
 
 ### Task 5 — the WAV decoder
 
-**Files:** create `rust/crates/acid-app/src/wav.rs`; test in the same file.
+**Files:** create `rust/crates/acid-app/src/wav.rs`; register it in `lib.rs`; test in the same file.
 **Interfaces (produces):** `pub fn decode(bytes: &[u8], target_rate: f32) -> Result<Arc<[f32]>, WavError>` — mono, at
 `target_rate`, from PCM 8/16/24/32-bit integer or 32-bit float, mono or stereo folded down, linearly resampled;
-`pub enum WavError { NotRiff, NotWave, Unsupported { what: &'static str }, TooLong }`.
+`pub enum WavError { NotRiff, NotWave, Unsupported { what: &'static str }, Truncated, TooLong }` — five variants, corrected
+from the four first written here: a cut file must be an error, and `Truncated` is the only honest way to say so (ruling 1 in
+Progress). `Unsupported` also names three refusals this list did not: a `fmt ` chunk shorter than 16 bytes, a WAVE missing its
+`fmt ` or `data` chunk, and a frame that is not packed.
 - [ ] Tests: `a_sixteen_bit_mono_file_decodes_to_the_same_samples`, `a_stereo_file_is_folded_to_mono`,
       `a_forty_four_one_file_is_resampled_to_forty_eight` (length scales, peak preserved within a tolerance),
       `a_float_file_decodes`, `eight_and_twenty_four_bit_decode`, `adpcm_is_refused_by_name` (the error names the format),
@@ -407,3 +410,59 @@ no seventeenth voice, no archive export of a kit.
       **The guide moved with the face**, unlike tasks 1–3: the picker's prose, alt text and screenshot are this commit's,
       because the picker's claim was false the moment `DRUMS` joined `DeviceKind::ALL`. The drum face itself has no page yet;
       task 10 writes page 22.
+- [x] **Task 5 — the WAV decoder.** `acid-app::wav` is a hand-rolled RIFF/WAVE reader: `decode(bytes, target_rate) ->
+      Result<Arc<[f32]>, WavError>` walks `RIFF` → `WAVE` then the chunks in order, steps over what it does not know (the
+      `LIST`/`INFO` block most encoders write before the samples), and returns one channel at the engine's rate — 8/16/24/32-bit
+      integer and 32-bit float, mono or stereo averaged, resampled linearly. Every slice goes through one checked `take` and
+      every sample through one `exact::<N>` → `from_le_bytes`, so a hostile or half-copied file is a refusal and never a panic;
+      the 24-bit path sign-extends through `<< 8 >> 8`. `std` only, no new dependency, nothing on the audio path,
+      `SAVE_VERSION` still 10. 26 tests in `wav.rs`'s own `mod tests`, every fixture built as a byte array. **771 tests**,
+      clippy and fmt clean, `./docs/guide/check.sh` ok.
+      **Mutations run, 30 of 30 caught, all reverted** (`.superpowers/mutate_task5.py`): the 16-bit scale divisor; stereo summed
+      instead of averaged; a nearest-neighbour resampler; the float arm read as an integer; the 8-bit 128 offset dropped; the
+      24-bit sign extension dropped; 24-bit called four bytes wide; 32-bit scaled by 2^15; ADPCM refused without its name;
+      `WAVE_FORMAT_EXTENSIBLE` read as PCM; the RIFF magic unchecked; the form type unchecked; the odd-chunk pad byte not
+      stepped over; a short chunk trimmed instead of refused; the cap doubled; three channels read as mono; the frame-alignment
+      check disabled; both missing-chunk refusals renamed; `fmt ` shorter than 16 bytes read as far as it goes; an empty `data`
+      chunk treated as missing; the file's own rate unchecked; the target rate unchecked; `Truncated`'s words changed; an unread
+      width and an unknown tag each taken as 16-bit; `fmt ` demanded to be exactly 16 bytes; the RIFF header's size trusted;
+      the rate ratio inverted; and the `is_finite` half of the rate guard dropped. Two runs are part of the record rather than
+      the count: swapping the form type from `WAVE` to `RIFF` **did not bite**, because `AVI ` differs from both words — an
+      equivalent expression is not a mutation, and it became `if false`; and three entries stopped matching after the review's
+      edits, which the script reports as `SKIP`, never as a pass.
+      **Review: OK with notes, every finding actioned.** Its two Important findings were both real. (1) Trap 3's `cbSize`
+      requirement was claimed in a doc comment and guarded by `body.len() < 16` with no test able to fail on it, so the normal
+      shape of a WAV that has been through a DAW was untested: `a_fmt_chunk_with_an_extension_decodes` is that test, its helper
+      refactored out of the existing `fmt ` builder, and the `!= 16` mutation proves it bites. (2) The plan's Interfaces line
+      named four variants while the code ships five — corrected above. Of its Minor findings: the frame size was computed twice
+      and is now one `Format::frame()` call; the `Sample` doc promised `-1.0..=1.0` for the float path, which passes the file's
+      numbers through as recorded (the prose now says so — clamping is task 7's renderer's decision); a decimating resample had
+      no test (`a_ninety_six_file_is_resampled_down_to_forty_eight`, where an inverted rate ratio shows up in the peak and not
+      only in the length); the `is_finite` half of the target-rate guard could not fail (a `f32::NAN` case now sits beside the
+      zero and negative ones); "the RIFF header's size is ignored" was claimed and untested (a fixture now lies about it); two
+      player-facing refusals carried backticks the status line would draw literally (`no format chunk`, `no sample data`); and
+      "allocates, once" undercounted the load-time allocations, which the module doc now says plainly. Its report-only note that
+      `exact`'s `map_err` arm is unreachable by construction is accepted and recorded here, so the 30/30 is not read as covering
+      it.
+      **Rulings.** (1) `WavError` gains a fifth variant, `Truncated`: trap 4 requires a cut file to be an error, and the four
+      variants could only say it by lying in a `what` string — the one line a player reads for why their kit did not load. Task 6
+      consumes this enum, so the variant is cheaper now than after its notice table exists. If wrong, one arm in task 6's notice
+      and one test. (2) A `data` chunk that is present and empty decodes to silence; one that is absent is refused. If wrong, a
+      file cut exactly before its `data` header loads as a silent voice instead of saying so. (3) The `fmt ` block alignment is
+      checked ("a frame that is not packed"), which the plan did not ask for: a frame wider than its samples puts every frame
+      after the first out of step, which plays as noise rather than as a file that failed to load. Zero is accepted as "not
+      filled in". If wrong, one `Unsupported` arm and one test. (4) A float file's samples are passed through as recorded — not
+      clamped, not checked for NaN or infinity — because what a hot or non-finite sample should sound like is the renderer's
+      question, and the spec puts the ceiling in task 7's limiter. If wrong, a float WAV can poison a voice's filter state and
+      the fix is one clamp plus a test. (5) `TooLong`'s cap is 1 << 20 samples (21.8 s at 48 kHz) against the spec's ≤0.6 s
+      voice, checked against the *output* length before either `Vec` exists. It bounds the output, not the mono fold, which
+      reserves at most the input file's own duration in samples — an 8-bit file can reserve four times its own byte count
+      before returning ≤1 M samples, which is bounded by the file the player handed us and not by a header. If wrong, one
+      constant. (6) A `target_rate` that is not finite and positive is refused through `Unsupported` rather than a panic, so a
+      caller's bug lands in the same vocabulary as a file's. If wrong, a nonsense rate reads as a file problem, and separating
+      it costs a sixth variant. (7) Trap 3's open question is answered by refusing `WAVE_FORMAT_EXTENSIBLE` by name: it usually
+      wraps plain PCM in a sub-format field this decoder does not read, and guessing would be the "notice names the wrong
+      format" failure the handover warns about. If wrong, a DAW export that writes extensible for ordinary 24-bit material is
+      refused by name; reading the sub-format is a wishlist entry, not this round's.
+      **Invisible to the guide, deliberately:** a decoder behind a kit nothing loads yet changes nothing a player can reach, so
+      no page in `docs/guide` becomes wrong. Task 6 is the one that moves the book — the kit row, the browser, the factory kits.

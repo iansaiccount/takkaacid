@@ -9,3 +9,4 @@ pub mod persist;
 pub mod state;
 pub mod trace;
 pub mod ui;
+pub mod wav;
