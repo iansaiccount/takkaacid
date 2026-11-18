@@ -1,3 +1,5 @@
+> **Superseded — kept for the record, not for instructions.** Read `handover-task-6.md` for where the branch stands; the plan Progress section records what shipped.
+
 # Handover — phase 4, task 5 (for a fresh session)
 
 Paste this whole file as the first message. It is written to be self-contained: the session it is for has no memory of the one
