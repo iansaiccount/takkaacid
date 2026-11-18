@@ -8,7 +8,7 @@
 use acid_core::bank::PatternBank;
 use eframe::egui::{Event, Key};
 
-use super::{PanelState, learn, selection, shortcuts, tape, transport};
+use super::{PanelState, kits, learn, selection, shortcuts, tape, transport};
 use crate::device::MAX_DEVICES;
 use crate::state::SharedState;
 
@@ -165,28 +165,20 @@ pub fn handle(
         return Handled::Shortcut(shortcut);
     }
     shortcuts::apply(shortcut, shared, bank);
-    // The settings card is panel state too, and there is room for one card: opening it clears the other three. The device
-    // card goes the same way it came — through `close_device_card`, so its mirror cannot outlive it — and the rule is
-    // symmetric because a one-way rule is a state two keystrokes away, not a corner.
+    // The settings card is panel state too, and there is room for one card. Every other card goes through
+    // `put_cards_away`, which is the one spelling of the rule — a keyboard arm that lists the others by hand forgets the
+    // next card added, and the kit browser was that card.
     if matches!(shortcut, shortcuts::Shortcut::ToggleSettings) {
-        panel.settings_open = !panel.settings_open;
-        if panel.settings_open {
-            panel.help_visible = false;
-            panel.songs.card = None;
-            panel.close_device_card();
-            panel.device_picker.open = false;
-        }
+        let opening = !panel.settings_open;
+        panel.put_cards_away();
+        panel.settings_open = opening;
     }
-    // The help card is panel state, so it is toggled here rather than in `apply` — and it follows the same one-card rule
-    // as F2 in the other direction: opening help puts the settings card away, or help would paint over a card that is
-    // still open and Escape would close the one nobody can see first.
+    // The help card follows the same rule in the other direction: opening help puts every other card away, or help would
+    // paint over a card that is still open and Escape would close the one nobody can see first.
     if matches!(shortcut, shortcuts::Shortcut::ToggleHelp) {
-        panel.help_visible = !panel.help_visible;
-        if panel.help_visible {
-            panel.settings_open = false;
-            panel.close_device_card();
-            panel.device_picker.open = false;
-        }
+        let opening = !panel.help_visible;
+        panel.put_cards_away();
+        panel.help_visible = opening;
     }
     // The device card is the topmost of the four inside the panel, so it is the second thing Escape gives up on and the
     // one F3 toggles. Opening it puts the other four away, because there is room for one card.
@@ -230,6 +222,12 @@ pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
     }
     if panel.device_card.open.is_some() {
         panel.close_device_card();
+        return true;
+    }
+    if panel.kits.open {
+        // The kit browser is the device card's sibling, opened from it and painted over the panel: Escape puts it away
+        // before the card that opened it, which is the same order they are painted in.
+        kits::close(panel);
         return true;
     }
     if panel.settings_open {

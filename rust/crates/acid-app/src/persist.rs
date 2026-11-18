@@ -4,10 +4,12 @@
 //! `patterns/<id>.json` so a human can read or hand-edit one pattern without the rest. Every write goes to
 //! a `.tmp` file and is renamed into place, so a crash mid-save can never leave a half-written save behind.
 
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use acid_core::bank::PatternBank;
+use acid_core::drums::{Drum, FilterKind, Kit, default_kit};
 use acid_core::engine::{DEFAULT_TUNING_KNOB, DEFAULT_VOLUME_KNOB};
 use acid_core::oscillator::Waveform;
 use acid_core::timing::DEFAULT_BPM;
@@ -100,7 +102,7 @@ impl Knobs {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 10;
+pub const SAVE_VERSION: u32 = 11;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -137,6 +139,14 @@ pub struct SavedState {
     /// autosave that silently overwrites the song you were about to discard is exactly the surprise this avoids.
     #[serde(default)]
     pub autosave: bool,
+    /// The kit this device plays, by name. Absent means the default kit, which a session written before the drum machine
+    /// has and which a drum device that never picked one keeps.
+    ///
+    /// **`main` is what loads it, not `apply_saved`**: decoding a kit needs the rate the running device plays at, and the
+    /// kit is a folder of WAVs rather than a field of this document. It is appended after every other field, as the drum
+    /// masks were appended to `Step`, so a version-10 file's prefix still reads.
+    #[serde(default)]
+    pub kit: Option<String>,
 }
 
 /// The factory MIDI mapping, for a file that predates the field.
@@ -169,6 +179,7 @@ impl Default for SavedState {
             density: default_density(),
             scale: 0,
             autosave: false,
+            kit: None,
         }
     }
 }
@@ -237,12 +248,17 @@ pub fn load(dir: &Path) -> Result<Option<SavedState>> {
     Ok(Some(state))
 }
 
+/// Write `bytes` to `path` through a `.tmp` and a rename, which is the one place the app writes a file it could be
+/// interrupted during. Both the save file and a kit's folder go through it, so there is one rule for "never half a file".
+fn write_through(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)
+}
+
 /// Write `bytes` to `path` without ever leaving a partial file there.
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, bytes).with_context(|| format!("writing {}", tmp.display()))?;
-    std::fs::rename(&tmp, path).with_context(|| format!("renaming to {}", path.display()))?;
-    Ok(())
+    write_through(path, bytes).with_context(|| format!("writing {}", path.display()))
 }
 
 /// Build the shared state the app runs on from a saved document.
@@ -316,6 +332,10 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         density: crate::ui::randomise::DEFAULT_DENSITY,
         scale: 0,
         autosave: false,
+        // The kit the drawn device plays. Read from the kit itself, so a session names the kit it was saved with; a device
+        // still on the default kit has no name to write.
+        kit: Some(shared.kit().name.clone())
+            .filter(|name| name != acid_core::drums::DEFAULT_KIT_NAME),
     }
 }
 
@@ -524,8 +544,17 @@ pub fn import_song(from: &Path, dir: &Path) -> Result<String> {
 /// The name, or the first `X (2)`, `X (3)`, and so on that is free: a save or an import never overwrites a song nobody
 /// opened. Public because `SAVE`, `SAVE A COPY` and `IMPORT` all land the same way, and one copy of this rule is enough.
 pub fn free_song_name(dir: &Path, wanted: &str) -> String {
+    free_name(wanted, |name| song_path(dir, name).exists())
+}
+
+/// The name, or the first `X (2)`, `X (3)` and so on that `taken` answers free.
+///
+/// One rule with three callers: a song (a file in `songs/`), a kit (a folder in `kits/`), and the copy an edit of a factory
+/// kit makes, which is a name the panel holds in memory before anything is written. A second implementation of this, or of
+/// the name rule it starts from, is the hand-kept second list this project has paid for twice.
+pub fn free_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String {
     let wanted = song_name(wanted).unwrap_or_else(|| "Untitled".to_string());
-    if !song_path(dir, &wanted).exists() {
+    if !taken(&wanted) {
         return wanted;
     }
     for copy in 2..1000 {
@@ -534,11 +563,370 @@ pub fn free_song_name(dir: &Path, wanted: &str) -> String {
         let room = 48usize.saturating_sub(suffix.chars().count());
         let stem: String = wanted.chars().take(room).collect();
         let candidate = format!("{stem}{suffix}");
-        if !song_path(dir, &candidate).exists() {
+        if !taken(&candidate) {
             return candidate;
         }
     }
     format!("{wanted} (copy)")
+}
+
+/// Where the player's kits live: one folder each, under the data directory. Kept beside [`SONGS_DIR`] because a kit and a
+/// song are the same kind of thing to a player — something on disk with a name.
+pub const KITS_DIR: &str = "kits";
+
+/// The document inside a kit's folder.
+const KIT_FILE: &str = "kit.json";
+
+/// Where kits live for this run: `<data>/kits`.
+pub fn kits_dir() -> PathBuf {
+    data_dir().join(KITS_DIR)
+}
+
+/// A kit's name, by the rule a song's name uses.
+///
+/// A name is typed into a panel and becomes a folder, so it has to be a name and never a path. This is deliberately the same
+/// function rather than a second rule with its own list of forbidden characters: the two would drift, and the drift would be
+/// a way out of `kits/`.
+pub fn kit_name(typed: &str) -> Option<String> {
+    song_name(typed)
+}
+
+/// The folder a kit of this name lives in.
+pub fn kit_folder(dir: &Path, name: &str) -> PathBuf {
+    dir.join(name)
+}
+
+/// The name a kit should land under: the one asked for, or the first `X (2)` free of both the player's folders and the names
+/// that are reserved — the three that ship, because a player's folder called `808` would shadow the kit that ships, and `Init`,
+/// because a kit of that name would be forgotten on the next save.
+pub fn free_kit_name(dir: &Path, wanted: &str) -> String {
+    free_name(wanted, |name| {
+        crate::kits::is_reserved(name) || kit_folder(dir, name).exists()
+    })
+}
+
+/// One voice of a kit, as its document stores it.
+///
+/// The playable fields are in [`KitVoice`](acid_core::drums::KitVoice)'s order and then the three provenance fields: `file`
+/// is the WAV's name in the kit's folder, `source` and `credit` say where the sample came from. The order is the document's
+/// contract, like [`SavedState`]'s — a rename or a reorder is a migration.
+///
+/// `file` empty means the voice has no sample, which is a silent voice and not a missing file. `filter` is the catalogue
+/// index of a [`FilterKind`](acid_core::drums::FilterKind), the way [`Knobs::waveform`] is a waveform's index: the file
+/// stores the position in a catalogue whose order the code owns.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KitVoiceDoc {
+    pub tune: f32,
+    pub attack_ms: f32,
+    pub decay_ms: f32,
+    pub sustain: f32,
+    pub release_ms: f32,
+    pub filter: u8,
+    pub cutoff: f32,
+    pub resonance: f32,
+    pub mute: bool,
+    pub file: String,
+    pub source: String,
+    pub credit: String,
+}
+
+/// A kit's document: `<data>/kits/<name>/kit.json`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KitDocument {
+    /// The kit's name. It is written for a human reading the folder, and it never overrides the folder's name: the folder
+    /// is what the browser lists, so a hand-edited name here must not rename a kit out from under the list.
+    pub name: String,
+    pub voices: [KitVoiceDoc; Drum::ALL.len()],
+}
+
+/// Why a kit would not load or would not save.
+/// Every variant's [`Display`](std::fmt::Display) is a sentence the status line can print as it stands, naming the voice and
+/// the file where there is one: a kit is a folder a player can own, damage and hand to a friend, so "this did not work" is
+/// never the whole answer.
+///
+/// The two variants that carry a `std::io::ErrorKind` keep it for a caller that wants to tell "no permission" from "no space";
+/// the sentence a player reads does not spell it, because an `ErrorKind`'s own words are for a programmer.
+#[derive(Clone, Debug, PartialEq)]
+pub enum KitError {
+    /// There is no `kit.json` in the folder.
+    NoDocument,
+    /// There is one and it is not a kit this build can read.
+    UnreadableDocument,
+    /// The name is not a name, or it is one of the factory kits' and those are read-only.
+    BadName,
+    /// The folder could not be written.
+    Write(std::io::ErrorKind),
+    /// The document names a file that is not in the folder.
+    Missing { voice: Drum, file: String },
+    /// The file is there and could not be read off the disk.
+    Unreadable {
+        voice: Drum,
+        file: String,
+        kind: std::io::ErrorKind,
+    },
+    /// The file is there and is not a WAV this build reads. The decoder's own words, so a bad sample has one vocabulary.
+    Undecodable {
+        voice: Drum,
+        file: String,
+        error: crate::wav::WavError,
+    },
+    /// The document names something that is not a file name — a path, or a blank.
+    NotAName { voice: Drum, file: String },
+}
+
+impl fmt::Display for KitError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoDocument => f.write_str("no kit document in that folder"),
+            Self::UnreadableDocument => f.write_str("the kit's document will not read"),
+            Self::BadName => f.write_str("that is not a name a kit can have"),
+            Self::Write(_) => f.write_str("the kit could not be written"),
+            Self::Missing { voice, file } => write!(f, "{}: {file} is missing", voice.label()),
+            Self::Unreadable { voice, file, .. } => {
+                write!(f, "{}: {file} could not be read", voice.label())
+            }
+            Self::Undecodable { voice, file, error } => {
+                write!(f, "{}: {file} - {error}", voice.label())
+            }
+            Self::NotAName { voice, file } => {
+                write!(f, "{}: {file:?} is not a file name", voice.label())
+            }
+        }
+    }
+}
+
+impl std::error::Error for KitError {}
+
+/// A kit that loaded, and the voices that did not.
+///
+/// A kit is sixteen files, and one of them being gone must not cost the player the other fifteen (Review Focus 2): what is
+/// wrong arrives here as a [`KitError`] per voice, for the panel to say in a notice, while the kit itself is the one the
+/// files that are there describe.
+#[derive(Clone, Debug)]
+pub struct LoadedKit {
+    pub kit: Kit,
+    pub problems: Vec<KitError>,
+}
+
+/// Where one voice's sample came from, kept when a kit is written again so a save cannot forget a licence.
+type Provenance = (String, String);
+
+/// Write one kit folder: the document, and one WAV per voice that has a sample.
+fn write_folder(
+    folder: &Path,
+    name: &str,
+    kit: &Kit,
+    carried: [Provenance; Drum::ALL.len()],
+    rate: f32,
+) -> Result<(), KitError> {
+    std::fs::create_dir_all(folder).map_err(|error| KitError::Write(error.kind()))?;
+
+    let mut voices: [KitVoiceDoc; Drum::ALL.len()] = std::array::from_fn(|slot| KitVoiceDoc {
+        tune: kit.voices[slot].tune,
+        attack_ms: kit.voices[slot].attack_ms,
+        decay_ms: kit.voices[slot].decay_ms,
+        sustain: kit.voices[slot].sustain,
+        release_ms: kit.voices[slot].release_ms,
+        filter: kit.voices[slot].filter.index() as u8,
+        cutoff: kit.voices[slot].cutoff,
+        resonance: kit.voices[slot].resonance,
+        mute: kit.voices[slot].mute,
+        file: String::new(),
+        source: carried[slot].0.clone(),
+        credit: carried[slot].1.clone(),
+    });
+
+    for drum in Drum::ALL {
+        let voice = &kit.voices[drum.index()];
+        if voice.sample.is_empty() {
+            // No sample, no file, and no name for one: a silent voice is silence, not a missing file.
+            continue;
+        }
+        let file = format!("{}.wav", drum.label());
+        write_file(
+            &folder.join(&file),
+            &crate::wav::encode(&voice.sample, rate),
+        )?;
+        voices[drum.index()].file = file;
+    }
+
+    let document = KitDocument {
+        name: name.to_string(),
+        voices,
+    };
+    let json = serde_json::to_vec_pretty(&document)
+        .map_err(|_| KitError::Write(std::io::ErrorKind::InvalidData))?;
+    write_file(&folder.join(KIT_FILE), &json)
+}
+
+/// Read a kit's document, or say which of the two ways it is not there.
+fn read_document(folder: &Path) -> Result<KitDocument, KitError> {
+    match std::fs::read(folder.join(KIT_FILE)) {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|_| KitError::UnreadableDocument),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(KitError::NoDocument),
+        Err(_) => Err(KitError::UnreadableDocument),
+    }
+}
+
+/// Read the kit in `folder`, decoding every voice at `rate`.
+fn read_kit(folder: &Path, name: &str, rate: f32) -> Result<LoadedKit, KitError> {
+    let document = read_document(folder)?;
+    let mut kit = default_kit();
+    // The folder names the kit, not the document: the browser lists folders, so a hand-edited name must not disagree with
+    // the list the player picked from.
+    kit.name = name.to_string();
+    let mut problems = Vec::new();
+
+    for drum in Drum::ALL {
+        let entry = &document.voices[drum.index()];
+        let voice = &mut kit.voices[drum.index()];
+        // Everything a hand-edited document could get wrong is clamped, so an edited kit cannot build a voice the panel has
+        // no way to draw and the engine no way to play.
+        voice.tune = entry.tune.clamp(-12.0, 12.0);
+        voice.attack_ms = entry.attack_ms.clamp(0.0, 10_000.0);
+        voice.decay_ms = entry.decay_ms.clamp(0.0, 10_000.0);
+        voice.sustain = entry.sustain.clamp(0.0, 1.0);
+        voice.release_ms = entry.release_ms.clamp(0.0, 10_000.0);
+        voice.filter = FilterKind::ALL[(entry.filter as usize).min(FilterKind::ALL.len() - 1)];
+        voice.cutoff = entry.cutoff.clamp(0.0, 1.0);
+        voice.resonance = entry.resonance.clamp(0.0, 1.0);
+        voice.mute = entry.mute;
+
+        if entry.file.is_empty() {
+            continue;
+        }
+        let Some(file) = song_name(&entry.file) else {
+            problems.push(KitError::NotAName {
+                voice: drum,
+                file: entry.file.clone(),
+            });
+            continue;
+        };
+        match std::fs::read(folder.join(&file)) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                problems.push(KitError::Missing { voice: drum, file });
+            }
+            Err(error) => problems.push(KitError::Unreadable {
+                voice: drum,
+                file,
+                kind: error.kind(),
+            }),
+            // The decoder is handed the rate the engine is running at, never a default: a kit decoded at the wrong rate
+            // plays every voice at the wrong pitch (trap 1). Task 8 owns reloading when the rate changes.
+            Ok(bytes) => match crate::wav::decode(&bytes, rate) {
+                Ok(samples) => voice.sample = samples,
+                Err(error) => problems.push(KitError::Undecodable {
+                    voice: drum,
+                    file,
+                    error,
+                }),
+            },
+        }
+    }
+
+    Ok(LoadedKit { kit, problems })
+}
+
+/// Write a kit into `<dir>/<kit.name>/`: one WAV per voice that has a sample, beside a `kit.json`.
+///
+/// A save writes in place — the folder is the kit — so which name a *new* kit takes is decided before this is called, by
+/// [`free_kit_name`] or by the panel's own copy rule. A factory kit's name is refused: those are compiled in, and a folder
+/// under one of their names would shadow the kit that ships.
+///
+/// `rate` is the rate the kit's samples are held at: a WAV records its own rate, and a kit written at a rate nobody is
+/// running would come back at the wrong pitch.
+///
+/// Provenance the folder already held is carried over, per voice, when the file it describes is the file being written: the
+/// player editing a decay must not erase where the sample came from.
+pub fn save_kit(kit: &Kit, dir: &Path, rate: f32) -> Result<PathBuf, KitError> {
+    let Some(name) = kit_name(&kit.name) else {
+        return Err(KitError::BadName);
+    };
+    if crate::kits::is_reserved(&name) {
+        return Err(KitError::BadName);
+    }
+    let folder = kit_folder(dir, &name);
+    let before = read_document(&folder).ok();
+    let carried: [Provenance; Drum::ALL.len()] = std::array::from_fn(|slot| {
+        let Some(document) = &before else {
+            return (String::new(), String::new());
+        };
+        let entry = &document.voices[slot];
+        let file = &entry.file;
+        if file.is_empty() || *file != format!("{}.wav", Drum::ALL[slot].label()) {
+            return (String::new(), String::new());
+        }
+        (entry.source.clone(), entry.credit.clone())
+    });
+    write_folder(&folder, &name, kit, carried, rate)?;
+    Ok(folder)
+}
+
+/// Read the kit `name` out of `dir`, decoding every voice at the engine's `rate`.
+///
+/// A voice whose file is gone, unreadable or not a WAV does not stop the kit loading: it arrives silent and is named in
+/// `problems`. What the whole kit refuses is having no document at all, or a name that is a path.
+pub fn load_kit(dir: &Path, name: &str, rate: f32) -> Result<LoadedKit, KitError> {
+    let Some(name) = kit_name(name) else {
+        return Err(KitError::BadName);
+    };
+    read_kit(&kit_folder(dir, &name), &name, rate)
+}
+
+/// Copy a kit folder into the library, and answer the folder it landed in.
+///
+/// The copy is decoded and written again rather than copied byte for byte: a kit handed to the player may be 24-bit, at
+/// another rate, or with a file that is not a WAV at all, and the library holds kits this build can play. Provenance travels
+/// with it. An import either lands whole or not at all — a folder with a hole in it would be a kit the browser offers and the
+/// player cannot use.
+pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<PathBuf, KitError> {
+    let source = read_kit(from, name, rate)?;
+    if let Some(problem) = source.problems.first() {
+        return Err(problem.clone());
+    }
+    let wanted = kit_name(name).unwrap_or_else(|| "Imported kit".to_string());
+    let landed = free_kit_name(dir, &wanted);
+
+    let document = read_document(from)?;
+    let carried: [Provenance; Drum::ALL.len()] = std::array::from_fn(|slot| {
+        (
+            document.voices[slot].source.clone(),
+            document.voices[slot].credit.clone(),
+        )
+    });
+    let folder = kit_folder(dir, &landed);
+    write_folder(&folder, &landed, &source.kit, carried, rate)?;
+    Ok(folder)
+}
+
+/// Every kit on offer: the factory kits' names first, then the player's folders, each sorted.
+///
+/// A first run has no `kits/` directory at all — `TAKKA_ACID_DATA_DIR` on a fresh path is how the guide's screenshots are
+/// taken — and that is the factory three, not an error. A plain file in the directory is not a kit: the folder with a
+/// document in it is.
+pub fn kit_names(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = crate::kits::factory_names()
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
+    names.sort();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let mut player: Vec<String> = entries
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().join(KIT_FILE).is_file())
+            .filter_map(|entry| kit_name(&entry.file_name().to_string_lossy()))
+            .filter(|name| !crate::kits::is_reserved(name))
+            .collect();
+        player.sort();
+        player.dedup();
+        names.extend(player);
+    }
+    names
+}
+
+/// Write a kit file through a `.tmp` and a rename, so a crash mid-kit cannot leave half a voice on disk.
+fn write_file(path: &Path, bytes: &[u8]) -> Result<(), KitError> {
+    write_through(path, bytes).map_err(|error| KitError::Write(error.kind()))
 }
 
 /// A brand-new song: the starter phrase in the first pattern, every other pattern empty, knobs and tempo at their

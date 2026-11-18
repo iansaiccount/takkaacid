@@ -7,7 +7,6 @@
 //! The seven dials are the 303's seven slots, relabelled for the selected voice; their values live in the kit (one truth,
 //! clone-on-write through [`crate::state::SharedState::set_kit`]) and never in the 303's atomics.
 
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use acid_core::drums::{Drum, FilterKind, KitVoice};
@@ -17,7 +16,7 @@ use eframe::egui::{self, Align2, Pos2, Rect};
 use crate::knobs::Knob;
 use crate::state::SharedState;
 
-use super::{PanelState, knob, layout, theme, tips, transport};
+use super::{PanelState, kits, knob, layout, theme, tips, transport};
 
 /// The slice of the 303's knob band the dials take: the rest goes to the grid, and the dials give up height rather than the
 /// grid giving up a row. 0.55 of the band puts the grid's first row where the spec's mockup starts it.
@@ -416,7 +415,7 @@ fn draw_dials(
         value = value.clamp(0.0, 1.0);
         state.knobs[slot] = value;
         if (value - before).abs() > 1e-6 {
-            edit_voice(shared, selected, |voice| dial.write(voice, value));
+            edit_voice(state, shared, selected, |voice| dial.write(voice, value));
         }
     }
 
@@ -447,7 +446,7 @@ fn draw_dials(
             egui::Sense::click(),
         );
         if response.clicked() {
-            edit_voice(shared, selected, |voice| voice.filter = kind);
+            edit_voice(state, shared, selected, |voice| voice.filter = kind);
         }
     }
 
@@ -482,11 +481,18 @@ fn draw_dials(
     }
 }
 
-/// Clone-on-write one voice. The kit is the one truth; the panel never keeps a second copy of a voice's envelope.
-fn edit_voice(shared: &SharedState, drum: Drum, edit: impl FnOnce(&mut KitVoice)) {
-    let mut kit = (*shared.kit()).clone();
-    edit(&mut kit.voices[drum.index()]);
-    shared.set_kit(Arc::new(kit));
+/// Clone-on-write one voice, through the kit browser's one seam: the kit is the one truth, and the panel never keeps a
+/// second copy of a voice's envelope.
+///
+/// A factory kit cannot be edited in place — it is compiled into the binary — so the first edit of one makes a copy under a
+/// free name inside [`kits::edit`], once, however many frames a dial drag lasts.
+fn edit_voice(
+    state: &mut PanelState,
+    shared: &SharedState,
+    drum: Drum,
+    edit: impl FnOnce(&mut KitVoice),
+) {
+    kits::edit(state, shared, |kit| edit(&mut kit.voices[drum.index()]));
 }
 
 #[cfg(test)]

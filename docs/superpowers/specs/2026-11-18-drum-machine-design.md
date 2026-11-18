@@ -39,7 +39,7 @@ seam the plans have pointed at since phase 2: a device whose engine is not the 3
 ## Non-goals
 
 - **The rack-wide session document.** A session still saves one device; `SavedState` gains only the kit's name. The whole rack is
-  the next phase's first item (and takes `SAVE_VERSION` 11).
+  the next phase's first item (and takes `SAVE_VERSION` 12 — the kit's name took 11, as this spec asked).
 - **Polyphony within a voice.** One hit per voice at a time; a second hit retriggers it.
 - **MIDI pads and per-voice CC.** The device keeps its port and channel; notes on a drum channel are a later round, and the
   303's learn/CC map does not apply.
@@ -63,8 +63,10 @@ fresh review per commit. The book is part of the work.
 
 **Licensing:** a bundled sample must be CC0 or public domain, with its origin in `kits/CREDITS.md` — redistribution is a
 different right from "royalty-free in your music". Where a voice has no CC0 sample it ships as a synthesised stand-in and the book
-says so. Sourced so far, all CC0: `smpldsnds/sonic-pi-samples` (808/909 one-shots), `smpldsnds/sfzinstruments-tictokmen-retrodrums1`,
-`sgossner-vcsl` (acoustic).
+says so. Two sources ship: `smpldsnds/sonic-pi-samples` (CC0 per its README, one freesound URL per file) and `sgossner/vcsl`
+(CC0 per its README, the acoustic kit and the non-machine voices). `smpldsnds/sfzinstruments-tictokmen-retrodrums1` was
+considered and **not used**: its README calls its recordings "free use" without naming a licence, which fails the test this
+paragraph sets.
 
 ## The pattern
 

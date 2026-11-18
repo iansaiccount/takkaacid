@@ -10,6 +10,7 @@ pub mod drum_panel;
 pub mod edit;
 pub mod help;
 pub mod keys;
+pub mod kits;
 pub mod knob;
 pub mod layout;
 pub mod learn;
@@ -86,6 +87,17 @@ pub struct PanelState {
     /// The drum face's editor: which voice its dials are on. Panel-wide, not per device — plan 01, task 4's ruling. Not
     /// saved: the kit it edits is in memory only this phase.
     pub drum: drum_panel::DrumView,
+    /// The kit browser: the kits that ship and the player's own, and the list `main` reads for it. The list outlives the
+    /// card, because the copy a first edit of a factory kit makes has to know which names are already taken.
+    pub kits: kits::Kits,
+    /// **Which** device's kit has been edited since its folder was last written, by its number — the identity that does not
+    /// move when a device before it is removed. A kit is two things on disk (a name in the save file, a folder of samples), and
+    /// writing two megabytes of WAV on every save is not a save. The number is here rather than a bare `bool` because the
+    /// device that was edited need not be the one selected when the save happens, and a write aimed at the wrong device loses
+    /// the player's kit.
+    pub kit_dirty: Option<usize>,
+    /// What the kit browser asked for; consumed by `main`, which owns the kits on disk.
+    pub kits_request: Option<kits::Request>,
     /// The port picker: what is on offer and what the player chose.
     pub picker: PickerState,
     /// The VOLUME knob, kept separate from the seven tone knobs.
@@ -208,6 +220,9 @@ impl Default for PanelState {
             help_visible: false,
             selected: 0,
             drum: drum_panel::DrumView::default(),
+            kits: kits::Kits::default(),
+            kit_dirty: None,
+            kits_request: None,
             clear_armed_at: None,
             copied: None,
             copy_text: None,
@@ -252,11 +267,22 @@ impl PanelState {
     /// F3, the caret on the strip's selected cell and `main`'s `Request::Open` all arrive here, so the one-card rule cannot
     /// be remembered at two of the three and forgotten at the last.
     pub fn open_device_card(&mut self, index: usize) {
+        self.put_cards_away();
         self.device_card.open = Some(index);
+    }
+
+    /// Put every card away: the one spelling of "one card at a time".
+    ///
+    /// Every path that *opens* a card calls this and then sets its own flag, so a card added later cannot be forgotten by
+    /// four callers that each list the others by hand — which is what the kit browser was, and what made Escape give up a
+    /// card nobody could see.
+    pub fn put_cards_away(&mut self) {
+        self.device_card = device_card::Card::default();
         self.device_picker.open = false;
         self.settings_open = false;
         self.help_visible = false;
         self.songs.card = None;
+        kits::close(self);
     }
 
     /// Put the device card away, mirror and all: its name, its route and its arming are readings of one device, and none of
@@ -269,11 +295,8 @@ impl PanelState {
     }
     /// Show the picker, and put every other card away: there is room for one, and this is the one that adds a device.
     pub fn open_device_picker(&mut self) {
+        self.put_cards_away();
         self.device_picker.open = true;
-        self.close_device_card();
-        self.settings_open = false;
-        self.help_visible = false;
-        self.songs.card = None;
     }
 
     /// The notice still worth showing at `now`, if any.
@@ -939,13 +962,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The card must not re-close on the click that opened it, so dismissal reads the frame-start value.
     let help_was_visible = state.help_visible;
     if gear_response.clicked() {
-        // One card at a time: the gear asks for settings and puts the other two away.
+        // One card at a time: the gear asks for settings, and every other card goes — the kit browser included, or Escape
+        // would give up a card nobody can see.
+        state.put_cards_away();
         state.settings_open = true;
-        state.help_visible = false;
-        state.songs.card = None;
     }
     if help_response.clicked() && !help_was_visible {
-        state.settings_open = false;
+        state.put_cards_away();
         state.help_visible = true;
     }
     if help_was_visible {
@@ -978,6 +1001,21 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             Some(banks::Request::Close) => state.songs.card = None,
             Some(other) => state.songs.request = Some(other),
             None => {}
+        }
+    }
+    // The kit browser is the device card's sibling — the card's `KIT` key opens it — and it is painted before the device
+    // card because only one card is ever up, and the card is what opens over everything else.
+    if state.kits.open {
+        let shield = modal::shield(ui, window, "kits-shield");
+        let request = kits::paint(ui, state, shared, l.panel, s);
+        if shield.clicked() {
+            kits::close(state);
+        } else {
+            match request {
+                Some(kits::Request::Close) => kits::close(state),
+                Some(other) => state.kits_request = Some(other),
+                None => {}
+            }
         }
     }
     // Both device cards are painted last, the picker over the device card, so nothing draws over either. They are here
@@ -1173,20 +1211,23 @@ fn draw_settings(
 ///
 /// Opening reads the songs directory, so it is not something to do twice a frame; nothing else remembers what is on disk.
 fn open_banks(state: &mut PanelState) {
-    state.songs.card = match state.songs.card {
-        Some(_) => None,
-        None => Some(banks::Banks {
-            names: crate::persist::list_songs(&crate::persist::data_dir()),
-            // The demos are built into the binary, so the card only needs their names to list them.
-            demos: crate::demo::songs()
-                .iter()
-                .map(|demo| demo.name.to_string())
-                .collect(),
-            name: state.songs.name.clone().unwrap_or_default(),
-            open: state.songs.file.clone(),
-            ..banks::Banks::default()
-        }),
-    };
+    if state.songs.card.is_some() {
+        state.songs.card = None;
+        return;
+    }
+    // One card at a time, in the one place that says so: the browser goes too, or Escape would give up a card nobody can see.
+    state.put_cards_away();
+    state.songs.card = Some(banks::Banks {
+        names: crate::persist::list_songs(&crate::persist::data_dir()),
+        // The demos are built into the binary, so the card only needs their names to list them.
+        demos: crate::demo::songs()
+            .iter()
+            .map(|demo| demo.name.to_string())
+            .collect(),
+        name: state.songs.name.clone().unwrap_or_default(),
+        open: state.songs.file.clone(),
+        ..banks::Banks::default()
+    });
 }
 
 /// The pattern on the panel, as the clipboard's text — the same text, `from` included, that `Ctrl+C` writes. A copy that did

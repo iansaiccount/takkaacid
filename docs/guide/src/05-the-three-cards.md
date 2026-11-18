@@ -1,11 +1,12 @@
-# The four cards
+# The cards
 
-Four cards open over the panel — **help**, **settings**, **songs** and **the device card** — and a fifth thing opens over
-them: the **picker**, the strip's `+`.
+Five cards open over the panel — **help**, **settings**, **songs**, a device's card and a drum machine's **kit browser** —
+and a sixth thing opens over them: the **picker**, the strip's `+`.
 
 Each card dims the face behind it and swallows clicks meant for the panel, so nothing can be edited behind a card by the
-pointer. While **help**, **settings** or the **device card** is up, the editing keys are spent too, so a stray `enter` cannot
-change a step you cannot see. The transport keys still work: `SPACE` starts and stops the line even with a card open.
+pointer. While **any** card is up — help, settings, the songs card, a device's card or the kit browser — the editing keys are
+spent too, so a stray `enter` cannot change a step you cannot see. The transport keys still work: `SPACE` starts and stops the
+line even with a card open.
 
 ## Help — `F1`, `shift+?`, or the `?`
 
@@ -44,6 +45,13 @@ pass over. [`19-a-devices-card`](19-a-devices-card.md) is that page.
 
 **Out:** `CLOSE`, `Escape`, or a click outside the card.
 
+## The kit browser — `KIT` on a drum machine's card
+
+The three kits that ship, then the player's own, with `IMPORT` and `CLOSE`. It is opened from a drum machine's card and
+puts that card away, like every other card does. [`19-a-devices-card`](19-a-devices-card.md#the-kit) is that page.
+
+**Out:** `CLOSE`, `Escape`, or a click outside the card.
+
 ## The picker — `+` on the strip
 
 ![The picker: two kinds of device, and what is not saved](img/picker.png)
@@ -59,10 +67,11 @@ first, so the nearest thing to your hand goes first:
 
 1. the **picker**;
 2. the **device card**;
-3. the **settings** card;
-4. **help**;
-5. the **songs** card;
-6. a `LEARN` that is still waiting for a controller.
+3. the **kit browser**;
+4. the **settings** card;
+5. **help**;
+6. the **songs** card;
+7. a `LEARN` that is still waiting for a controller.
 
 So one press from the picker puts you back on the pattern, and the next one gives up on the settings card behind it. The
 details are the code's, in `ui/dispatch.rs`, and the guide's version of a card — how big it is, where its keys sit — is a

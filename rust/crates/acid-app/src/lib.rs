@@ -2,6 +2,7 @@ pub mod audio;
 pub mod clipboard;
 pub mod demo;
 pub mod device;
+pub mod kits;
 pub mod knobs;
 pub mod midi;
 pub mod notes;

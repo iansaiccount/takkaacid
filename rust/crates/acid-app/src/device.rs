@@ -45,6 +45,17 @@ impl DeviceKind {
         }
     }
 
+    /// Whether this kind's sound is a kit of samples — the question a card's `KIT` row and the rate-change reload both ask.
+    ///
+    /// Written out rather than compared with `== DeviceKind::Drums`: a third kind must fail to compile here and say whether it
+    /// has a kit, not quietly take the `false` arm and get no row and no reload.
+    pub fn has_kit(self) -> bool {
+        match self {
+            DeviceKind::Acid => false,
+            DeviceKind::Drums => true,
+        }
+    }
+
     /// Whether another device of this kind fits in a rack of `count` devices.
     ///
     /// The strip's `+` and the picker's rows both grey out from this, so the two cannot disagree about when the rack is

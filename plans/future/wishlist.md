@@ -15,9 +15,10 @@ Agreed during phase 2 and deliberately deferred: phase 2 saves the first device 
 the first are lost on restart** (the picker card says so).
 
 The round that lands it: `SavedState` gains `#[serde(default)] pub devices: Vec<SavedDevice>` where `SavedDevice` holds
-`{ name, kind, inputs, bank, knobs }`; the flat v10 fields (`bank`, `knobs`, `bpm`, `swing`, `midi_input`, `cc_map`) stay as
-device 1's mirror so a file written by a v10 build still loads as a one-device song and a file written by this build still
-opens in a v10 build with device 1 intact. `SAVE_VERSION` goes to 11, `tests/persist.rs` gains the new pin next to the old
+`{ name, kind, inputs, bank, knobs }`; the flat fields (`bank`, `knobs`, `bpm`, `swing`, `midi_input`, `cc_map`, `kit`) stay as
+device 1's mirror so a file written by a build before this round still loads as a one-device song and a file written by this
+build still opens in an older build with device 1 intact. **`SAVE_VERSION` goes to 12** — the drum machine's kit took 11, so
+the rack round is 12 — and `tests/persist.rs` gains the new pin next to the old
 one, and the picker card's footnote goes away. `sanitize` learns to repair a `devices` list the way it repairs a bank:
 one device minimum, at most `MAX_DEVICES`, names made distinct.
 

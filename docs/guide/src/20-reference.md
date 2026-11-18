@@ -103,8 +103,8 @@ and tempo wells at the right.
 | `CONFIRM?` | `REMOVE` on a device card, after the first click |
 
 **The device card.** `NAME (ENTER)`, `ROLE` (`PLAY + CTRL` / `CTRL ONLY`), `PORTS` (`ALL PORTS`, then a ticked row per port),
-`CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `MUTE
-OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
+`CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `KIT` (a drum
+machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 
 **The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), `CLOSE`, and the line under the rows:
 `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.
@@ -128,6 +128,9 @@ OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 | `48 kHz - <device>` | the stream is healthy: rate and device name |
 | `failed: <reason>` | the stream is not running, and why |
 | `CLOSE` | put the card away |
+
+**The kit browser:** `KITS`, `FACTORY`, `MY KITS`, `IMPORT`, `CLOSE`, each of the three kits that ship marked `- READ ONLY`,
+and the row being asked about on `<name> - click again to replace`.
 
 **The bank browser:** `BANKS`, `DEMO BANKS`, `MY BANKS`, `SAVE`, `SAVE A COPY`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the
 `x` / `SURE` on each of your own rows.

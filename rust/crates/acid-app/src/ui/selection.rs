@@ -61,7 +61,12 @@ pub fn dispatch(key: Key, shift: bool, panel: &mut PanelState, shared: &SharedSt
     let Some(edit) = edit_key(key, shift) else {
         return Press::NotOurs;
     };
-    if panel.help_visible || panel.settings_open || panel.device_card.open.is_some() {
+    if panel.help_visible
+        || panel.settings_open
+        || panel.kits.open
+        || panel.songs.card.is_some()
+        || panel.device_card.open.is_some()
+    {
         return Press::Refused;
     }
     let index = panel.selected.min(STEPS_PER_PATTERN - 1);

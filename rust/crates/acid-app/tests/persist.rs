@@ -8,6 +8,7 @@ use acid_app::persist::{
     SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
     new_song, save_song, save_target, song_name,
 };
+use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
@@ -451,15 +452,95 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 /// an accidental bump fail the suite instead of passing every test that compares a file against `SAVE_VERSION` itself.
 /// (Nothing in this build yet refuses a *newer* version — see the wishlist — so the number is a promise, not a guard.)
 #[test]
-fn the_save_version_is_pinned_at_ten() {
-    assert_eq!(SAVE_VERSION, 10, "a bump is a migration, not an edit");
+fn the_save_version_is_pinned_at_eleven() {
+    assert_eq!(SAVE_VERSION, 11, "a bump is a migration, not an edit");
 
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
     let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
     assert!(
-        text.contains("\"version\": 10"),
+        text.contains("\"version\": 11"),
         "the document names the version it was written in"
+    );
+    assert!(
+        text.contains("\"kit\": null"),
+        "the kit is the last field, and a session with no kit names one"
+    );
+}
+
+/// The kit's name is appended after every field a version-10 file has, so such a file still reads: its prefix is unchanged
+/// and the one field it never wrote arrives as `None` — "no kit", which is what a session saved before the drum machine had.
+#[test]
+fn a_version_ten_file_upgrades_with_no_kit() {
+    let dir = tempfile::tempdir().unwrap();
+    // A value this build does not default to, so a file that was refused and replaced cannot pass by looking like one.
+    let written = SavedState {
+        bpm: 138.0,
+        ..SavedState::default()
+    };
+    save(dir.path(), &written).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    legacy["version"] = serde_json::json!(10);
+    assert!(
+        legacy.as_object_mut().unwrap().remove("kit").is_some(),
+        "the field this build appends is the one a version-10 file never had"
+    );
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = acid_app::persist::load(dir.path()).unwrap().unwrap();
+    assert_eq!(loaded.version, 10, "the file says what it is");
+    assert_eq!(loaded.kit, None, "a version-10 file names no kit");
+    let upgraded = loaded.upgraded();
+    assert_eq!(upgraded.version, SAVE_VERSION);
+    assert_eq!(upgraded.kit, None, "and upgrading invents nothing");
+    assert!(
+        (upgraded.bpm - 138.0).abs() < 1e-6,
+        "the rest of the document came through"
+    );
+}
+
+/// The kit's name is the drum machine's one addition to the session: a device that loaded a kit must come back playing it.
+#[test]
+fn a_saved_session_names_the_kit_its_device_plays() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = SavedState {
+        kit: Some("Acoustic (2)".to_string()),
+        ..SavedState::default()
+    };
+    save(dir.path(), &state).unwrap();
+    let loaded = acid_app::persist::load(dir.path()).unwrap().unwrap();
+    assert_eq!(
+        loaded.kit.as_deref(),
+        Some("Acoustic (2)"),
+        "the kit a session names is the kit it comes back with"
+    );
+}
+
+/// A device that has loaded no kit has nothing to name: `None` is the default kit, and writing the default kit's own name
+/// would make every restart look for a kit folder called `Init`, which no kit folder is.
+#[test]
+fn a_session_still_on_the_default_kit_names_no_kit() {
+    let shared = acid_app::persist::saved_to_shared(&SavedState::default());
+    let saved = shared_to_saved(&shared, PatternBank::factory());
+    assert_eq!(
+        saved.kit, None,
+        "a device on the default kit has no kit to name"
+    );
+
+    let mut kit = acid_core::drums::default_kit();
+    kit.name = "Acoustic (2)".to_string();
+    shared.set_kit(std::sync::Arc::new(kit));
+    let saved = shared_to_saved(&shared, PatternBank::factory());
+    assert_eq!(
+        saved.kit.as_deref(),
+        Some("Acoustic (2)"),
+        "and a device on a loaded kit names it"
     );
 }
 

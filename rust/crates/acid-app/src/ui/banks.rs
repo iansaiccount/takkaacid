@@ -67,8 +67,8 @@ pub fn paint(
         egui::StrokeKind::Inside,
     );
 
-    let padding = 12.0 * scale;
-    let row_height = 22.0 * scale;
+    let padding = CARD_PADDING * scale;
+    let row_height = CARD_ROW * scale;
     let left = card.left() + padding;
     let width = card.width() - padding * 2.0;
     let mut y = card.top() + padding;
@@ -163,7 +163,7 @@ pub fn paint(
         {
             request = guarded_load(songs, key, Request::LoadDemo(index), session_dirty);
         }
-        y += row_height + 2.0 * scale;
+        y += row_height + CARD_GAP * scale;
     }
 
     // Then the player's own songs: the name loads it, the cross beside it deletes it (twice, because there is no undo).
@@ -211,7 +211,7 @@ pub fn paint(
                 request = None;
             }
         }
-        y += row_height + 2.0 * scale;
+        y += row_height + CARD_GAP * scale;
     }
     // The footer: a new song, the two doors to the file system, and close. NEW replaces the session, so it asks twice while
     // the session is unsaved, like every other action that would throw work away.
@@ -261,16 +261,31 @@ pub fn paint(
     request
 }
 
-/// A heading over one of the card's two lists, and the space it takes.
-fn section(ui: &mut Ui, scale: f32, title: &str, left: f32, y: &mut f32) {
+/// The measurements the two listing cards share — this one and the kit browser — in design pixels.
+///
+/// They live here because this card is where the idiom started, and the two cards are the same object to a player: same
+/// panel, same padding, same row, same caption. A second set of numbers beside the first is how two "sibling" cards stop
+/// looking like siblings, and there is no test that would say so.
+pub(super) const CARD_PADDING: f32 = 12.0;
+pub(super) const CARD_ROW: f32 = 22.0;
+pub(super) const CARD_GAP: f32 = 2.0;
+pub(super) const CARD_HEADING: f32 = 15.0;
+
+/// A caption over one of a card's lists, at `at`. The one way a listing card names a section.
+pub(super) fn heading(ui: &mut Ui, scale: f32, title: &str, at: egui::Pos2) {
     ui.painter().text(
-        egui::Pos2::new(left, *y),
+        at,
         egui::Align2::LEFT_TOP,
         title,
         theme::legend(10.0 * scale),
         theme::BLACK.silkscreen_dim,
     );
-    *y += 15.0 * scale;
+}
+
+/// A heading over one of the card's two lists, and the space it takes.
+fn section(ui: &mut Ui, scale: f32, title: &str, left: f32, y: &mut f32) {
+    heading(ui, scale, title, egui::Pos2::new(left, *y));
+    *y += CARD_HEADING * scale;
 }
 
 /// One loadable row: its name, and a warning across it while a click would replace an unsaved session.

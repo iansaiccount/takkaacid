@@ -82,5 +82,5 @@ Two consequences worth knowing: a window dragged small does not hide controls, i
 did the `STEP` key go" is never "off the edge"; and a knob's sweep is the same 180-pixel pull at any window size — only the
 knob's size changes — so "a third of the way" means the same thing small and large.
 
-[`05-the-three-cards`](05-the-three-cards.md) covers the cards that open over this face: help, settings, songs and the device
-card.
+[`05-the-three-cards`](05-the-three-cards.md) covers the cards that open over this face: help, settings, songs, a device's card,
+a drum machine's kit browser, and the picker.

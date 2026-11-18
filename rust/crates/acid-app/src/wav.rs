@@ -336,6 +336,45 @@ fn resample(mono: &[f32], rate: f32, target: f32, out_len: usize) -> Vec<f32> {
     out
 }
 
+/// Encode samples as a WAV file's bytes: 16-bit mono PCM at `rate`.
+///
+/// This is the other half of [`decode`], and it exists for one reason: a kit the player edited has to go back to disk as a
+/// folder of WAVs, and the document beside them names those files. Sixteen bits because that is what the factory kits are
+/// stored in and what a drum voice needs; mono because a [`KitVoice`](acid_core::drums::KitVoice) is mono, so writing two
+/// channels would write the same samples twice.
+///
+/// A sample outside `-1.0..=1.0` is made storable here rather than wrapped: `decode` passes a float file's numbers through
+/// as recorded (task 5's ruling — the ceiling is the renderer's business), so this is where a number that cannot be stored
+/// becomes one that can. The clamp says so explicitly and the cast to `i16` saturates as well, so the two agree about a
+/// sample past full scale; what neither of them does is turn a loud sample into a click of the opposite sign.
+pub fn encode(samples: &[f32], rate: f32) -> Vec<u8> {
+    let rate = if rate.is_finite() && rate > 0.0 {
+        rate.round() as u32
+    } else {
+        0
+    };
+    let data = samples.len() * 2;
+    let mut out = Vec::with_capacity(44 + data);
+    out.extend_from_slice(b"RIFF");
+    // The header's own size: everything after the first eight bytes.
+    out.extend_from_slice(&((36 + data) as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    out.extend_from_slice(&1u16.to_le_bytes()); // mono
+    out.extend_from_slice(&rate.to_le_bytes());
+    out.extend_from_slice(&(rate * 2).to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes()); // one frame is one two-byte sample
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(data as u32).to_le_bytes());
+    for sample in samples {
+        let value = (sample.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16;
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -804,5 +843,86 @@ mod tests {
             WavError::TooLong.to_string(),
             "longer than the sample limit"
         );
+    }
+
+    #[test]
+    fn an_encoded_file_round_trips_through_the_decoder() {
+        // A kit's samples go out through `encode` and come back through `decode`: if the two disagree, a player's saved kit
+        // sounds different from the one they saved, and nothing in the face would say why.
+        let samples: Vec<f32> = (0..480)
+            .map(|index| (index as f32 / 48_000.0 * 440.0 * std::f32::consts::TAU).sin() * 0.75)
+            .collect();
+        let bytes = encode(&samples, RATE);
+        let back = decode(&bytes, RATE).unwrap();
+        assert_eq!(back.len(), samples.len(), "one sample in, one sample out");
+        let error = back
+            .iter()
+            .zip(samples.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        // `encode` writes at `i16::MAX` and `decode` reads at 32768, so the two differ by one least-significant bit of a
+        // 16-bit sample — a rounding, not a mistake: full scale is 1.0 on both sides.
+        assert!(
+            error < 1.0 / 16_000.0,
+            "16-bit storage lost {error} of a sample"
+        );
+    }
+
+    #[test]
+    fn an_encoded_file_declares_what_it_holds() {
+        // Not the rate `decode` is asked for elsewhere, so a rate parsed out of the header and a rate defaulted cannot agree
+        // by accident: 48 kHz here, 44.1 kHz everywhere else.
+        let bytes = encode(&[0.0, 0.5, -0.5], 48_000.0);
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert_eq!(
+            u32_at(&bytes, 4).unwrap() as usize,
+            bytes.len() - 8,
+            "the header's size is everything after it"
+        );
+        assert_eq!(u16_at(&bytes, 20).unwrap(), 1, "PCM");
+        assert_eq!(u16_at(&bytes, 22).unwrap(), 1, "mono");
+        assert_eq!(
+            u32_at(&bytes, 24).unwrap(),
+            48_000,
+            "the rate it was handed"
+        );
+        assert_eq!(u16_at(&bytes, 34).unwrap(), 16, "sixteen bits");
+        assert_eq!(
+            u32_at(&bytes, 40).unwrap() as usize,
+            6,
+            "three samples, two bytes each"
+        );
+
+        // And the same bytes resample to another engine rate like any other file: three samples at 48 kHz are two at 24.
+        let scaled = decode(&bytes, 24_000.0).unwrap();
+        assert_eq!(scaled.len(), 2);
+    }
+
+    #[test]
+    fn a_sample_past_the_rails_is_clamped_and_never_wrapped() {
+        // `decode` passes a float file's numbers through as recorded, so a saved kit can hold a sample past 1.0. Stored
+        // through a cast that wraps — `as u16 as i16` — 2.0 comes back as a full-scale click of the *opposite* sign, so this
+        // pins the sign of a loud sample as well as its level.
+        let back = decode(&encode(&[2.0, -2.0, 0.0], RATE), RATE).unwrap();
+        assert!(back[0] > 0.99, "a loud positive sample stays positive");
+        assert!(back[1] < -0.99, "a loud negative sample stays negative");
+        assert_eq!(back[2], 0.0);
+    }
+
+    #[test]
+    fn a_rate_that_is_not_a_rate_encodes_to_something_the_decoder_refuses() {
+        // The two guards are the same rule at two ends: a file written at no rate is not a file anyone can read, and
+        // refusing it here would be a panic in a function whose caller has a panel to say things on.
+        for rate in [0.0, -1.0, f32::NAN] {
+            let bytes = encode(&[0.0, 0.25], rate);
+            assert_eq!(
+                decode(&bytes, RATE),
+                Err(WavError::Unsupported {
+                    what: "a sample rate of zero"
+                }),
+                "{rate} was written as a readable rate"
+            );
+        }
     }
 }

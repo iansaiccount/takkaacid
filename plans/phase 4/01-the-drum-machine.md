@@ -158,20 +158,42 @@ Progress). `Unsupported` also names three refusals this list did not: a `fmt ` c
 ### Task 6 — kit documents and the factory kits
 
 **Files:** modify `rust/crates/acid-app/src/persist.rs` (kit document, save/load/import, name validation), create
-`rust/crates/acid-app/kits/{acoustic,808,909}/` (the WAVs) and `kits/CREDITS.md`, `rust/crates/acid-app/src/kits.rs` (the
-compiled-in factory kits); tests in `tests/kits.rs` (new).
+`rust/crates/acid-app/kits/{acoustic,808,909}/` (the WAVs), `kits/CREDITS.md` and `kits/refresh.py` (the script that fetched
+them and generated the credits), `rust/crates/acid-app/src/kits.rs` (the compiled-in factory kits) and `src/ui/kits.rs` (the
+browser and the copy seam); tests in `tests/kits.rs` and `tests/kits_live.rs` (both new). The task also touches, because a kit
+is now part of the document and of the card: `src/wav.rs` (`encode`), `src/state.rs` (`adopt_kit`), `src/device.rs`
+(`DeviceKind::has_kit`), `src/ui/device_card.rs` (the `KIT` row), `src/ui/mod.rs` (the card, `put_cards_away`),
+`src/ui/dispatch.rs` (`Escape`), `src/ui/drum_panel.rs` (the edit seam), `src/ui/banks.rs` (the shared card metrics),
+`src/main.rs` (the rate seam, the load/import/write paths), `src/lib.rs`, `tests/persist.rs` and `tests/device_card_live.rs`,
+and the book — `19-a-devices-card.md`, `05-the-three-cards.md`, `20-reference.md`, `04-the-face.md`, `SUMMARY.md` and
+`check.sh` — with the `SAVE_VERSION` queue corrected in the plan, the wishlist and the spec. **Corrected after the fact**, as
+tasks 1, 3, 4 and 5 corrected theirs: the plan named only `persist.rs`, `kits/`, `kits.rs` and `tests/kits.rs`.
 **Interfaces (consumes Task 5; produces):**
 ```rust
 // in acid-app/src/persist.rs
 pub struct KitDocument { pub name: String, pub voices: [KitVoiceDoc; 16] }
 pub fn kits_dir() -> PathBuf;                       // <data>/kits
-pub fn save_kit(kit: &Kit, dir: &Path) -> io::Result<PathBuf>;
-pub fn load_kit(dir: &Path, name: &str, rate: f32) -> Result<Kit, KitError>;   // a missing WAV is a `KitError::Missing{voice,file}`
-pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> io::Result<PathBuf>;  // lands beside a taken name
+pub fn save_kit(kit: &Kit, dir: &Path, rate: f32) -> Result<PathBuf, KitError>;   // a WAV records its own rate
+pub fn load_kit(dir: &Path, name: &str, rate: f32) -> Result<LoadedKit, KitError>; // LoadedKit { kit, problems }: a missing
+                                                                                  // WAV costs one voice, not the kit (Review Focus 2)
+pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<PathBuf, KitError>;  // lands beside a taken name,
+                                                                                  // and refuses a kit with a hole in it
 pub fn kit_names(dir: &Path) -> Vec<String>;        // factory names then the player's, sorted
+pub fn free_kit_name(dir: &Path, wanted: &str) -> String;   // factory names are reserved, and the rule is free_name's
+pub fn free_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String;  // the one copy rule: songs, kits, and a panel's copy
+pub fn kit_name(typed: &str) -> Option<String>;     // song_name's rule, named for what it is here
 // in acid-app/src/kits.rs, beside the factory banks' code
-pub fn factory_kits(rate: f32) -> Vec<Kit>;         // compiled in, read-only
+pub fn factory_kits(rate: f32) -> Vec<Kit>;         // compiled in, read-only, cached per rate
+pub fn factory_names() -> Vec<&'static str>;  pub fn is_factory(name: &str) -> bool;  pub fn default_name() -> &'static str;
+pub fn factory_sample_bytes() -> usize;             // the spec's ~2 MB, as a number a test holds a build to
+// in acid-app/src/wav.rs
+pub fn encode(samples: &[f32], rate: f32) -> Vec<u8>;   // 16-bit mono, the other half of `decode`
+// in acid-app/src/state.rs
+pub fn adopt_kit(&self, kit: Kit);                  // the load path; `set_kit` is the edit path and seeds no mutes
 ```
+**Corrected after the fact** (three deviations, each ruled on in the Progress): `save_kit` takes the rate a WAV must record and
+answers `KitError`; `load_kit` answers `LoadedKit` with a `problems` list so a broken voice does not cost the kit; and
+`import_kit` answers `KitError` because it either lands whole or does not land.
 - [ ] Tests: round trip through `save_kit`/`load_kit` with a one-voice sine written by hand; `import_kit` never overwrites (second
       import of the same name lands as `name (2)`); a kit with a missing WAV loads every other voice and reports the missing one by
       voice and file (Review Focus 2); a name that is a path (`../x`, `/abs`, `a/b`) is refused; `factory_kits` has three kits,
@@ -259,7 +281,7 @@ device's `DEMO BANKS`), `rust/crates/acid-app/src/audio/renderer.rs` if a bank n
 
 ## Non-goals
 
-As the spec's: no rack-wide save (that phase takes `SAVE_VERSION` 11), no polyphony within a voice, no MIDI pads or per-voice CC,
+As the spec's: no rack-wide save (that phase takes `SAVE_VERSION` **12** — task 6 took 11), no polyphony within a voice, no MIDI pads or per-voice CC,
 no seventeenth voice, no archive export of a kit.
 
 ## Progress
@@ -466,3 +488,118 @@ no seventeenth voice, no archive export of a kit.
       refused by name; reading the sub-format is a wishlist entry, not this round's.
       **Invisible to the guide, deliberately:** a decoder behind a kit nothing loads yet changes nothing a player can reach, so
       no page in `docs/guide` becomes wrong. Task 6 is the one that moves the book — the kit row, the browser, the factory kits.
+- [x] **Task 6 — kit documents and the factory kits.** A kit is a folder: `acid-app::persist` holds `KitDocument { name,
+      voices: [KitVoiceDoc; 16] }` with `KitVoiceDoc` in `KitVoice`'s field order and `file`/`source`/`credit` appended (trap 14),
+      plus `kits_dir`, `kit_name`, `kit_folder`, `free_kit_name`, `save_kit`, `load_kit`, `import_kit` and `kit_names`. The folder
+      is `<data>/kits/<name>/kit.json` and one `<VOICE>.wav` per sampled voice — the name from `Drum::label`, never a second
+      list — written through `write_through`, which is now the one copy of the `.tmp`-and-rename rule the save file already used.
+      `wav::encode` is the half the decoder was missing (16-bit mono at the rate it is handed). `acid-app::kits` compiles in the
+      three kits that ship — `808`, `909`, `Acoustic` — from 48 CC0 WAVs: 2.02 MiB, every voice ≤ 0.6 s and 16-bit mono, one URL
+      and licence per file in `kits/CREDITS.md`, and `kits/refresh.py` the script that fetched them from the same table that
+      generated that page. The decode is cached per rate behind a `Mutex` (`factory_sample_bytes` also answers the spec's ~2 MB,
+      and a test holds a build to it) so no frame decodes two megabytes. `ui/kits.rs` is the browser — `FACTORY` then `MY KITS`,
+      the factory rows marked read-only, `IMPORT` and `CLOSE` — and **the one seam a kit edit goes through**; `ui/device_card.rs`
+      gains a `KIT` row on a drum device's card only. `SAVE_VERSION` is **11** with `SavedState::kit` appended after every
+      existing field, and the rack round's number moved to **12** in the plan, the wishlist and the spec.
+      **810 tests**, clippy and fmt clean, `./docs/guide/check.sh` ok. New: 19 in `tests/kits.rs`, 11 in `tests/kits_live.rs`,
+      4 encode tests in `wav.rs`, 3 in `tests/persist.rs` (the version-10 upgrade, a session naming its kit, and a session on the
+      default kit naming none — the version pin itself is renamed, not added), and one unit test in `device_card.rs` for the kit
+      row at 0.65× and 1.6×. `a_kit_written_by_hand_loads_its_own_wav` is the player's own door: a folder with a document and a
+      WAV nothing in this build wrote.
+      **Mutations run, 34 of 34 caught, all reverted** (`.superpowers/mutate_task6.py`): a voice's file named by its slot; a
+      decoded voice thrown away; a clipped filter index off by one; a missing WAV not reported; a document allowed to name a
+      path; a save allowed a factory name; a free kit name ignoring the factory three; a save forgetting provenance; an import
+      overwriting; an import landing with a hole; any file counted as a kit; the save file not naming the kit; `SAVE_VERSION`
+      back at 10; `upgraded` inventing a kit; the factory kits decoded at a hard-coded rate; every name a factory name; a factory
+      edit in place; a copy named by a fixed suffix; a kit edit leaving the session saved; a factory row not marked read-only;
+      the two lists not sorted apart; the card's `KIT` key inert; a kit row on every card; a sample stored through a wrapping
+      cast; an encoded file claiming a rate it was not given; a copy named against an empty list; a loaded kit not seeding the mute
+      mask; a card opening with the kit browser left up; the default kit's own word taken as a usable name; an edit recording the
+      first device rather than the edited one; a kit list running under the footer keys; F2 opening settings under the browser; and
+      a key reaching the step editor behind the browser. Two runs are part of the record: removing the clamp in `encode` is
+      **equivalent** — `as i16` saturates, so the test cannot bite it, which is task 5's lesson again — so the mutation is the
+      cast through `u16` that would wrap; and the script's first run reported a filter that matched nothing, because an
+      integration test's path is its bare name and `kits::name` runs zero tests and exits 0. The script now strips the module
+      path for a test binary and still refuses a filter that matches nothing.
+      **Review: BLOCK on one Critical, every finding actioned.** The Critical was real and is why the review is not a formality:
+      `Kits`' `refresh` started `false`, so on the frames the panel is usable the copy rule named a factory kit's copy against
+      an **empty** list — the first dial turn of `808` could take a folder's name, and the next save would overwrite the
+      player's kit with no notice at all. `Kits::default` now asks for a read ("a list nobody has read is not up to date"),
+      `a_fresh_panel_asks_for_its_kit_list` pins that and `a_copy_lands_beside_a_name_the_library_already_has` proves the copy
+      steps to `808 (3)` past a taken name. Four of its Important findings were behaviour, not prose: a kit's `mute` flags never
+      seeded the mute mask (`SharedState::adopt_kit` is the load path and `set_kit` stays the edit path, with
+      `a_loaded_kit_seeds_the_mute_mask_and_an_edit_does_not` saying why they must be two); `write_kit` wrote device 1's kit
+      while the browser loaded and the panel edited the **selected** device's, so an edit on a second machine was reported saved
+      and then dropped (it now writes the edited one, and the kit is in the library either way); the two-click load guard had no
+      test (`loading_a_kit_over_an_unsaved_edit_takes_two_clicks`) and no guide sentence (page 19 has one); and the book promised
+      that a *mute* edit copies a factory kit, which it does not — the sentence says a dial and the filter key now. The browser
+      was also the one card the one-card rule did not know: `PanelState::put_cards_away` is the single spelling every open path
+      calls, page 05 counts five cards and names the browser in its `Escape` order, and page 20 lists `KIT` and the browser's
+      words. Of its minor findings: the unfailable `attack_ms > 0.0` compares against the value before the drag; the tautological
+      `assert!(… || true)` and its `STEPS_PER_PATTERN` companion are gone; the hand-written kit's comment no longer claims to be
+      the smallest document (a missing field is refused *whole*, which is the point); the field-order pin is strictly ascending
+      and the doc says a reorder is a diff's problem rather than a migration's; `DeviceKind::has_kit` is written out so a third
+      kind has to answer; the browser imports the banks card's `CARD_*` and `heading` instead of keeping a second set of numbers;
+      the unused `default_factory_kit` is deleted; a duplicated comment in `wav.rs` is gone; and the spec's source list now says
+      the TicTokMen set was rejected. `save_kit` still never deletes a WAV for a voice that lost its sample — no UI can clear a
+      sample yet, so it is recorded here as a deferred minor rather than paid.
+      **Second review: BLOCK on two Importants, both fixed.** Its Critical count was zero — the first round's fix holds — but two
+      survivors of the first review were real. (1) `put_cards_away` was called by every *pointer* path and by none of the keyboard
+      ones: F2 opened the settings card **underneath** the panel-sized browser (a key that looked dead), and while the browser was
+      up `selection::dispatch`'s modal guard did not name it, so `Enter` edited a step nobody could see and marked the session
+      unsaved. Both F1/F2 arms now go through `put_cards_away`, the guard names every card, and
+      `opening_a_card_puts_the_kit_browser_away` drives the keys and the invisible `Enter`, with a mutation behind each. (2)
+      `kit_dirty` was a `bool`, so `write_kit` wrote whatever device happened to be **selected** at save time: edit a kit on the
+      second drum machine, click back to the bass, quit — the write aimed at device 1, the factory early-return cleared the flag,
+      and the copy was never written while the session said it had been. It is `Option<usize>` now — the number of the device
+      owed the write — and `an_edit_records_which_device_is_owed_the_write` pins the panel half; the `main` half is a binary and
+      has no test, which is recorded here rather than implied. Of its minors: a failed kit load is no longer overwritten by its
+      own `kit: X` confirmation (`load_kit_now` answers whether it loaded); the problems of a whole kit arrive in **one** notice
+      naming every silent file instead of the last one; `Init` is a reserved name (`kits::is_reserved`), because a folder called
+      `Init` would load, play and then be forgotten — `SavedState::kit: None` means the default kit, whose name is `Init`; the
+      two assertions that could not fail are gone (the list one now asks the function for two sorted blocks with no duplicate);
+      `04-the-face` no longer names the device card twice; `default_name() == "808"` is pinned; and the browser caps its rows
+      above the footer, where forty kits used to paint over `IMPORT` and `CLOSE`. That last one the songs card still gets wrong,
+      which is recorded as a deferred minor below rather than fixed here.
+      **Rulings.** (1) `load_kit` answers `LoadedKit { kit, problems }` rather than the plan's `Result<Kit, KitError>`: Review
+      Focus 2 and the plan's own test want a kit to load around a missing file, and one error channel cannot say both "there is
+      no kit" and "this voice is silent". If wrong, every caller matches a struct for nothing. (2) `save_kit` and `import_kit`
+      take the rate and answer `KitError` rather than `io::Result`: a WAV records its own rate, so a save without one writes the
+      wrong pitch, and one error type for a kit's whole life beats two vocabularies for the same folder. If wrong, two call sites
+      match an enum where they used `?`. (3) The factory kits are built from two CC0 libraries — Sonic Pi's sample set and VCSL —
+      and the TicTokMen set is rejected because its README says only "free use". The names `808`/`909` are therefore presets, not
+      transcriptions: a 909 whose hats are freesound one-shots is a claim the files do not all support, and the caveat is in
+      `CREDITS.md`'s own words. If the ear rejects it, it costs `refresh.py` rows or three names — no code. (4) The per-voice
+      defaults (tune, decay, cutoff) are set by intent and **nobody has listened**: `kits.rs` says so where they are written. If
+      wrong, constants only. (5) The default kit is factory #1 (`808`) and `SavedState::kit: None` means it, spelled once in
+      `kits::default_name`. If wrong, a session that never ran an audio device comes back on `808`, and reordering `FACTORY`
+      silently moves the default. (6) An import that finds one broken voice refuses the whole import: a kit with a hole in it is
+      a kit the browser offers and the player cannot play. If wrong, one retry after fixing the folder. (7) A kit load over
+      unsaved edits takes two clicks, which the plan did not ask for: the edit is not on disk, and one click would throw it away.
+      If wrong, one extra click. (8) A kit loads into the device whose card opened the browser (the selected one) and is written
+      from the edited one (`PanelState::kit_dirty` carries that device's number, so the write cannot drift to whatever is
+      selected when the save happens), while the **document** still names the saved device's kit — so a kit edited on a second
+      drum machine
+      lands in the library and is named by the rack round, exactly as that device's patterns are lost until then. If wrong, the
+      rack round's `SavedDevice` list is where it is repaired, and no player loses a folder in the meantime.
+      **Third review: BLOCK on four P1s, all fixed — it closed the two Importants and found what the fixes opened.** (1) The
+      rate-change arm adopted the new rate *before* writing the pending kit, and `save_kit` stamps the rate it is handed into
+      every WAV: a device switch would have labelled old samples with the new rate, and the reload would then play the player's
+      kit sharp for ever. `write_kit()` now runs first, at the rate the samples are at, and the move is one line with the reason
+      next to it. (2) `kit_dirty` held a rack *position*, so a device removal shifted it and the write landed on a neighbour or
+      on nothing — the same "reported saved, never written" harm by a second route, and against the field's own doc. It holds
+      the device **number** now, the identity `focused` and `edit_slots` already use, found with `devices().iter().find(…)`;
+      `an_edit_records_which_device_is_owed_the_write` asserts the number. (3) A drum device still on the default kit made the
+      reload loop ask the library for `Init` and report a kit that never existed: `load_kit_now` answers the default kit for that
+      name, and the startup load only runs for a first device that has a kit at all. (4) Page 05 said three cards spend the
+      editing keys; it says **any** card now, which is what the guard does. Of its P2 notes, taken: `tests/modal_live.rs` sweeps
+      **every** open card (the browser and the device card included, dim and click-outside), where it used to sweep three and
+      claim "every"; a failed kit write leaves the session unsaved instead of reporting it kept; the two-click guard asks the
+      *selected* device's number rather than the panel's; the missing-WAV notice sentence is pinned whole; and the F1 arm has
+      its own mutation, so "a mutation behind each" is now true of F1, F2 and the invisible `Enter`. Left recorded, not paid:
+      `shift`+note and the MIDI queue still write a step behind a card (`ui::selection`'s arrows and `Enter` are the ones
+      guarded — pre-existing, and the one fix is a `PanelState::a_card_is_up()` asked by all three writers).
+      **Deferred minors, recorded rather than paid:** `save_kit` never deletes a WAV for a voice that has lost its sample (no
+      UI can clear a sample yet, so nothing can orphan one), and the songs card still lets a long list run under its footer keys
+      where the kit browser now caps its rows — the same fix belongs in `banks.rs`, and it is a card task 10 or the wishlist
+      can take without this round's kit work.

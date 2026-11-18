@@ -350,6 +350,19 @@ impl SharedState {
         self.kit.store(kit);
     }
 
+    /// Take `kit` as the kit this device plays, **and seed the mute mask from it** — the load path, where [`SharedState::set_kit`]
+    /// is the edit path.
+    ///
+    /// The two are different questions and must stay two methods. A loaded kit's `mute` flags are the kit's *starting* mask, so
+    /// a kit that ships with its cowbell off arrives with the cowbell off. An edit must not do that: a dial turn would then
+    /// undo the player's shift-click mutes on every frame of a drag, and the mask the engine reads is the panel's, not the
+    /// kit's. `Kit::mute_mask` is the one pack, so the mask and the flags cannot disagree about which voice is bit five.
+    pub fn adopt_kit(&self, kit: Kit) {
+        self.drum_mute
+            .store(u32::from(kit.mute_mask()), Ordering::Relaxed);
+        self.kit.store(Arc::new(kit));
+    }
+
     /// Ask for a voice to be heard with the transport stopped. The renderer drains it at the next block.
     pub fn request_audition(&self, drum: Drum) {
         // `Drum::index` is the only spelling of a voice's slot, and this is the one place it becomes the `-1`-sentinel number.
@@ -507,6 +520,37 @@ mod tests {
             s.drum_mute.load(Ordering::Relaxed),
             0,
             "a fresh device mutes nothing"
+        );
+    }
+
+    /// A loaded kit's mutes are the device's starting mask, and an edit's are not: the two are different questions, which is
+    /// why `adopt_kit` and `set_kit` are two methods. A kit that ships with a voice muted has to arrive muted; a dial turn must
+    /// not reset the mutes a player set by hand.
+    #[test]
+    fn a_loaded_kit_seeds_the_mute_mask_and_an_edit_does_not() {
+        let s = SharedState::new();
+        let mut kit = default_kit();
+        kit.name = "Mine".to_string();
+        kit.voices[Drum::Kick.index()].mute = true;
+        kit.voices[Drum::Shaker.index()].mute = true;
+        s.adopt_kit(kit);
+
+        let expected = (1u32 << Drum::Kick.index()) | (1u32 << Drum::Shaker.index());
+        assert_eq!(
+            s.drum_mute.load(Ordering::Relaxed),
+            expected,
+            "a loaded kit's own mutes are the mask the engine reads"
+        );
+        assert_eq!(s.kit().name, "Mine");
+
+        // An edit publishes a kit and leaves the mask alone: this is the dial-drag path.
+        let mut edited = (*s.kit()).clone();
+        edited.voices[Drum::Kick.index()].decay_ms = 111.0;
+        s.set_kit(Arc::new(edited));
+        assert_eq!(
+            s.drum_mute.load(Ordering::Relaxed),
+            expected,
+            "an edit is not a load, so the player's mutes survive it"
         );
     }
 
