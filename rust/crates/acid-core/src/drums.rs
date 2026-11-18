@@ -6,6 +6,8 @@
 //!
 //! The voices are fixed for every kit. A kit that has no cowbell mutes the cowbell; it does not renumber the ones after it.
 
+use std::sync::Arc;
+
 /// One voice of the drum machine, in grid order — the order the face draws and the mask's bits count in.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Drum {
@@ -150,6 +152,111 @@ impl FilterKind {
     }
 }
 
+/// The name of the kit a device holds before any kit is loaded. The card prints it, so it is a word and not an index.
+pub const DEFAULT_KIT_NAME: &str = "Init";
+
+/// The default voice's shape: a short percussive hit rather than a held note, which is what a drum is, and a filter as close to
+/// the sample as recorded as the filter path allows — wide open, flat, low-pass.
+///
+/// Every one of these is a decision task 6's listening pass overturns per kit, which is why they are named here rather than spelled
+/// in the constructor: changing a default is changing this list, not finding five literals.
+const DEFAULT_TUNE: f32 = 0.0;
+const DEFAULT_ATTACK_MS: f32 = 2.0;
+const DEFAULT_DECAY_MS: f32 = 300.0;
+const DEFAULT_SUSTAIN: f32 = 0.0;
+const DEFAULT_RELEASE_MS: f32 = 20.0;
+const DEFAULT_CUTOFF: f32 = 1.0;
+const DEFAULT_RESONANCE: f32 = 0.0;
+
+/// One voice of a kit: the sample it plays, what shapes it, and whether it starts silent.
+///
+/// The field order is the kit document's contract — task 6 writes `kit.json` from these names in this order, so a rename or a
+/// reorder costs a migration. Provenance is deliberately not here: `file`, `source` and `credit` describe where a sample came
+/// from, which the document records beside the file, not in the voice that plays it.
+#[derive(Clone, Debug)]
+pub struct KitVoice {
+    /// Mono, at the engine's rate, already resampled. Empty means the voice has no sample: a silent voice, not a missing one.
+    pub sample: Arc<[f32]>,
+    /// Detune in semitones, ±12. This is the `TUNE` knob's range, not its position.
+    pub tune: f32,
+    pub attack_ms: f32,
+    pub decay_ms: f32,
+    pub sustain: f32,
+    pub release_ms: f32,
+    /// Which side of the voice's filter the sample passes.
+    pub filter: FilterKind,
+    /// Knob positions in `0.0..=1.0`, mapped like the 303's by `param::cutoff_hz` and `param::resonance`.
+    pub cutoff: f32,
+    pub resonance: f32,
+    /// The kit's starting mute. A kit with no cowbell mutes the cowbell; it does not renumber the voices after it.
+    pub mute: bool,
+}
+
+impl Default for KitVoice {
+    /// A voice with no sample, untouched: the default kit is sixteen of these. Written out rather than derived because every
+    /// number is one of the decisions above.
+    fn default() -> Self {
+        // `Arc<[f32]>`'s `Default` is the empty slice, so this allocates nothing and cannot fail.
+        Self {
+            sample: Arc::default(),
+            tune: DEFAULT_TUNE,
+            attack_ms: DEFAULT_ATTACK_MS,
+            decay_ms: DEFAULT_DECAY_MS,
+            sustain: DEFAULT_SUSTAIN,
+            release_ms: DEFAULT_RELEASE_MS,
+            filter: FilterKind::Low,
+            cutoff: DEFAULT_CUTOFF,
+            resonance: DEFAULT_RESONANCE,
+            mute: false,
+        }
+    }
+}
+
+/// A kit: the name the card prints, and one voice per drum in catalogue order.
+///
+/// A kit is the whole sound of the drum machine, so it is swapped whole behind an `ArcSwap` — the audio thread reads one kit or
+/// the next, never a voice table with half a load applied to it.
+#[derive(Clone, Debug)]
+pub struct Kit {
+    pub name: String,
+    pub voices: [KitVoice; Drum::ALL.len()],
+}
+
+impl Kit {
+    /// The kit's mutes packed in catalogue order: bit `Drum::index()` set means that voice starts silent.
+    ///
+    /// The pack and the unpack live here together and nowhere else, so the state's `drum_mute` — what the audio thread reads once
+    /// per block — and the kit's own flags cannot disagree about which voice is bit five. `Drum::index` is the catalogue, so
+    /// moving a voice in the grid moves its bit with it.
+    pub fn mute_mask(&self) -> u16 {
+        let mut mask = 0u16;
+        for drum in Drum::ALL {
+            if self.voices[drum.index()].mute {
+                mask |= 1u16 << drum.index();
+            }
+        }
+        mask
+    }
+
+    /// Set each voice's mute from a mask packed by [`Kit::mute_mask`] — the inverse, and the only other place a bit is decoded.
+    pub fn set_mute_mask(&mut self, mask: u16) {
+        for drum in Drum::ALL {
+            self.voices[drum.index()].mute = mask & (1u16 << drum.index()) != 0;
+        }
+    }
+}
+
+/// The kit a device starts with: sixteen voices, none of them with a sample.
+///
+/// A device that has loaded no kit is silent, and that is the honest state — the kit is the sound, and there is nothing to play
+/// before one arrives. Task 6 puts a factory kit in its place on the first run.
+pub fn default_kit() -> Kit {
+    Kit {
+        name: DEFAULT_KIT_NAME.to_string(),
+        voices: std::array::from_fn(|_| KitVoice::default()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,6 +319,93 @@ mod tests {
             FilterKind::ALL.map(FilterKind::label),
             ["LP", "BP", "HP"],
             "the face prints these three, in this order"
+        );
+    }
+
+    #[test]
+    fn a_default_kit_has_sixteen_voices_and_no_samples() {
+        let kit = default_kit();
+        assert_eq!(
+            kit.voices.len(),
+            Drum::ALL.len(),
+            "one voice per drum, or the mask has a bit with nothing behind it"
+        );
+        assert_eq!(
+            kit.name, "Init",
+            "the card prints this for a device with no kit loaded"
+        );
+
+        let default = KitVoice::default();
+        for drum in Drum::ALL {
+            let voice = &kit.voices[drum.index()];
+            assert!(
+                voice.sample.is_empty(),
+                "{drum:?} ships a sample, and the default kit has no source to ship"
+            );
+            assert!(
+                !voice.mute,
+                "{drum:?} starts silent, but a fresh device is audible"
+            );
+            assert_eq!(voice.tune, default.tune, "{drum:?} starts detuned");
+            assert_eq!(
+                voice.filter, default.filter,
+                "{drum:?} starts on the wrong side"
+            );
+            assert_eq!(voice.attack_ms, default.attack_ms, "{drum:?}");
+            assert_eq!(voice.decay_ms, default.decay_ms, "{drum:?}");
+            assert_eq!(voice.sustain, default.sustain, "{drum:?}");
+            assert_eq!(voice.release_ms, default.release_ms, "{drum:?}");
+            assert_eq!(voice.cutoff, default.cutoff, "{drum:?}");
+            assert_eq!(voice.resonance, default.resonance, "{drum:?}");
+        }
+
+        // The numbers themselves, pinned. A default that drifts — a decay so short the hit disappears, a filter closed onto the
+        // sample — is a change to the machine's sound, and it should fail here rather than in a listening test nobody runs.
+        assert_eq!(default.tune, 0.0, "TUNE at centre: no detune");
+        assert_eq!(
+            default.attack_ms, 2.0,
+            "long enough not to click, short enough to be a hit"
+        );
+        assert_eq!(default.decay_ms, 300.0, "a hit, not a held note");
+        assert_eq!(default.sustain, 0.0, "a drum decays to nothing");
+        assert_eq!(default.release_ms, 20.0);
+        assert_eq!(default.cutoff, 1.0, "wide open: the sample as recorded");
+        assert_eq!(
+            default.resonance, 0.0,
+            "flat: no peak the kit did not ask for"
+        );
+    }
+
+    #[test]
+    fn a_kit_packs_its_mutes_in_catalogue_order() {
+        let mut kit = default_kit();
+        assert_eq!(kit.mute_mask(), 0, "a fresh kit mutes nothing");
+
+        // Both ends of the catalogue and a middle voice: bit 0, bit 14 and bit 15. A reversed order, an off-by-one and a mask
+        // packed from a hand-kept list all show up here.
+        for drum in [Drum::Kick, Drum::Clave, Drum::Shaker] {
+            kit.voices[drum.index()].mute = true;
+        }
+        assert_eq!(
+            kit.mute_mask(),
+            0b1100_0000_0000_0001,
+            "bit `Drum::index()` is a voice's bit, in catalogue order"
+        );
+
+        // And the other direction: a mask from a saved kit or from the panel's mute has to land on the voices it names.
+        let mut unpacked = default_kit();
+        unpacked.set_mute_mask(kit.mute_mask());
+        for drum in Drum::ALL {
+            assert_eq!(
+                unpacked.voices[drum.index()].mute,
+                kit.voices[drum.index()].mute,
+                "{drum:?} unpacked from the wrong bit"
+            );
+        }
+        assert_eq!(
+            unpacked.mute_mask(),
+            kit.mute_mask(),
+            "the pack and the unpack must be inverses"
         );
     }
 }

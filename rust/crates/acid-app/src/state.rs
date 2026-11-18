@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, AtomicUsize,
 use std::sync::{Arc, Mutex};
 
 use crate::notes::NoteQueue;
+use acid_core::drums::{Drum, Kit, default_kit};
 use acid_core::engine::DEFAULT_TUNING_KNOB;
 use acid_core::oscillator::Waveform;
 use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
@@ -179,6 +180,17 @@ pub struct SharedState {
     /// inside a single frame, and the later one must not overwrite the earlier one's pitch or velocity.
     pub notes: NoteQueue,
     pub pattern: ArcSwap<Pattern>,
+    /// The kit this device plays. A whole kit is swapped at once, so the audio thread reads one kit or the next and never a
+    /// voice table with half of a load applied to it.
+    pub kit: ArcSwap<Kit>,
+    /// Which voices start silent, in catalogue order: bit `Drum::index()` set means that voice is muted. `Kit::mute_mask` and
+    /// `Kit::set_mute_mask` are the only pack and unpack, so the state and the kit cannot disagree about which voice a bit names.
+    /// Sixteen voices fit a `u16`, so the high half of this word is unused: the one bridge back narrows with `as u16` rather
+    /// than masking bits by hand.
+    pub drum_mute: AtomicU32,
+    /// A voice the panel asked to hear with the transport stopped, as `Drum::index()`; `-1` when nothing is waiting. A request
+    /// the renderer drains, not a voice that is sounding.
+    pub audition: AtomicI32,
     pub status: Mutex<AudioStatus>,
 }
 
@@ -192,6 +204,10 @@ impl SharedState {
     /// rack's, so a tempo the panel or the MIDI thread writes is there before the next block reads it, and nothing has to be
     /// fanned out into a copy that a frame could turn stale.
     pub fn with_tempo(tempo: Arc<AtomicF32>) -> Arc<Self> {
+        // The kit this device holds and the mask it starts muted by are the same kit, packed here once so that a test and the
+        // app cannot disagree about which kit a fresh device has.
+        let kit = Arc::new(default_kit());
+        let drum_mute = AtomicU32::new(u32::from(kit.mute_mask()));
         Arc::new(Self {
             transport: AtomicU8::new(crate::device::Transport::Stopped.byte()),
             reversed: AtomicBool::new(false),
@@ -211,6 +227,9 @@ impl SharedState {
             accent: AtomicF32::new(DEFAULT_ACCENT_KNOB),
             volume: AtomicF32::new(DEFAULT_VOLUME),
             pattern: ArcSwap::from_pointee(Pattern::empty()),
+            kit: ArcSwap::from(kit),
+            drum_mute,
+            audition: AtomicI32::new(-1),
             midi_hz: AtomicF32::new(0.0),
             midi_gate: AtomicBool::new(false),
             midi_accent: AtomicBool::new(false),
@@ -314,6 +333,26 @@ impl SharedState {
     }
     pub fn pattern(&self) -> Arc<Pattern> {
         self.pattern.load_full()
+    }
+
+    /// The kit this device plays, read like [`SharedState::pattern`]: an owned `Arc` out of the swap, no lock and no allocation,
+    /// so the audio thread can hold it for a whole block while the panel swaps another kit in.
+    pub fn kit(&self) -> Arc<Kit> {
+        self.kit.load_full()
+    }
+
+    /// Ask for a voice to be heard with the transport stopped. The renderer drains it at the next block.
+    pub fn request_audition(&self, drum: Drum) {
+        // `Drum::index` is the only spelling of a voice's slot, and this is the one place it becomes the `-1`-sentinel number.
+        self.audition.store(drum.index() as i32, Ordering::Relaxed);
+    }
+
+    /// Take the voice a panel asked to hear, if any: one swap, as [`SharedState::take_pattern_request`] does it.
+    pub fn take_audition(&self) -> Option<Drum> {
+        let requested = self.audition.swap(-1, Ordering::Relaxed);
+        usize::try_from(requested)
+            .ok()
+            .and_then(|slot| Drum::ALL.get(slot).copied())
     }
 
     /// Which pattern is playing, `0..64`; `main` keeps this in step with the bank.
@@ -441,5 +480,47 @@ mod tests {
         let s = SharedState::new();
         assert!((s.tempo_bpm.get() - DEFAULT_BPM).abs() < 1e-6);
         assert!(s.volume.get() > 0.5);
+    }
+
+    /// A fresh device is audible, and the mask it starts with agrees with the kit it holds. What this cannot show: the default
+    /// kit mutes nothing, so a constructor that seeded a bare `0` would pass this too. The pack itself is pinned by
+    /// `drums::tests::a_kit_packs_its_mutes_in_catalogue_order`; this catches a non-zero seed and a mask that disagrees with the
+    /// kit in the swap.
+    #[test]
+    fn the_drum_mute_mask_starts_from_the_kit() {
+        let s = SharedState::new();
+        assert_eq!(
+            s.drum_mute.load(Ordering::Relaxed),
+            u32::from(s.kit().mute_mask()),
+            "the mask the engine reads is the mutes of the kit the device holds"
+        );
+        assert_eq!(
+            s.drum_mute.load(Ordering::Relaxed),
+            0,
+            "a fresh device mutes nothing"
+        );
+    }
+
+    /// The audition slot is a request, not a live voice: `-1` is the codebase's "nothing pending", and one swap drains it.
+    #[test]
+    fn nothing_is_auditioned_until_a_voice_asks() {
+        let s = SharedState::new();
+        assert_eq!(s.take_audition(), None, "-1 means nothing is waiting");
+
+        s.request_audition(Drum::Kick);
+        assert_eq!(
+            s.take_audition(),
+            Some(Drum::Kick),
+            "the first voice is not a sentinel"
+        );
+        assert_eq!(s.take_audition(), None, "a request is drained once");
+
+        s.request_audition(Drum::Shaker);
+        assert_eq!(
+            s.take_audition(),
+            Some(Drum::Shaker),
+            "the last voice is not past the end of the catalogue"
+        );
+        assert_eq!(s.take_audition(), None);
     }
 }

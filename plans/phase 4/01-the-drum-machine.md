@@ -110,7 +110,7 @@ impl Step {
 `rust/crates/acid-app/src/state.rs`.
 **Interfaces (produces):** `Kit { pub name: String, pub voices: [KitVoice; 16] }`, `KitVoice` as the spec defines it, and on
 `SharedState`: `pub kit: arc_swap::ArcSwap<Kit>`, `pub drum_mute: AtomicU32`, `pub audition: AtomicI32`. `fn kit(&self) ->
-arc_swap::Guard<Arc<Kit>>` mirrors `pattern()`.
+Arc<Kit>` mirrors `pattern()`.
 - [ ] Test: `a_default_kit_has_sixteen_voices_and_no_samples` (empty `Arc<[f32]>`, default envelope/filter values, every voice
       unmuted), and `the_drum_mute_mask_starts_from_the_kit` (the mask is the kit's `mute` flags packed in catalogue order).
 - [ ] Implement; run; PASS. Commit: `feat(drums): a kit lives on the device's shared state`.
@@ -307,3 +307,42 @@ no seventeenth voice, no archive export of a kit.
       everything" `Step` literal stopped compiling — the fixture is meant to force that decision — and the masks are carried by the
       clipboard already, since a `Clip::Pattern` is the whole `Pattern`. The wishlist's rack entry said the rack round takes
       `SAVE_VERSION` 10; it takes 11 now that this one took 10.
+- [x] **Task 3 — the kit, in memory.** `acid-core::drums` holds `Kit` (`name`, `voices: [KitVoice; Drum::ALL.len()]`),
+      `KitVoice` in the spec's field order, `KitVoice::default()`, `default_kit()` and `DEFAULT_KIT_NAME`. `Kit::mute_mask()`
+      and `Kit::set_mute_mask()` are the one pack and unpack of the sixteen mute bits, every bit taken from `Drum::ALL` and
+      `Drum::index()` rather than from a positional list. `SharedState` gained `kit: ArcSwap<Kit>`, `drum_mute: AtomicU32` and
+      `audition: AtomicI32`, built in `with_tempo` from the one `default_kit()` that goes into the swap, plus `kit()`,
+      `request_audition` and `take_audition`. **721 tests**, clippy and fmt clean, `./docs/guide/check.sh` ok. Tests:
+      `a_default_kit_has_sixteen_voices_and_no_samples` and `a_kit_packs_its_mutes_in_catalogue_order` in `drums.rs`;
+      `the_drum_mute_mask_starts_from_the_kit` and `nothing_is_auditioned_until_a_voice_asks` in `state.rs`'s `mod tests`.
+      **Mutations run, all caught, all reverted:** the mute pack in reverse catalogue order; `set_mute_mask` inverted; the
+      default voice's `cutoff` given the resonance constant; the default voice muted; the audition slot seeded `0` instead of
+      `-1`; the audition stored one past the voice's slot; the starting mask seeded `u32::MAX`. The first mutation run
+      reported **0 of 7 caught** and that run is part of the record: `--exact` with a bare test name matches no test, so every
+      run "passed" with zero run. The script now refuses a filter that matches nothing.
+      **Review: OK with notes, both actioned.** Minor 1: the state test's comment claimed the mask is the kit's own mutes
+      "rather than one kept beside it", which the test cannot show — the default kit mutes nothing, so a pack and a bare `0`
+      are both `0 == 0`; the comment now says what the assertions do show and points at `drums.rs` for the pack. Minor 2:
+      this task's Interfaces line still said `Guard<Arc<Kit>>` while the code returns an owned `Arc`, so the plan contradicted
+      its own commit; the line is corrected here, as task 1 corrected the spec.
+      **Rulings.** (1) `kit()` returns `Arc<Kit>` through `load_full()`, not the plan's `Guard<Arc<Kit>>`: it is the shape
+      `pattern()` returns next door, both are lock- and allocation-free, and task 8 wants an owned `Arc` for `Drums::set_kit`,
+      which a guard would be cloned into anyway. If wrong, task 8 pays one refcount bump per block it could have skipped and
+      one call site changes. (2) `Kit::set_mute_mask` is written here although task 7 owns `Drums::set_mute_mask`: the unpack
+      belongs beside the pack, or it is the second hand-kept list this repo has paid for twice. (3) `request_audition` and
+      `take_audition` are added though the Interfaces line named only the field: they keep the `-1` sentinel and the
+      `Drum::index()` cast in one place, as `take_pattern_request` does — **task 8 must consume them**, or the renderer spells
+      the sentinel again. (4) The default voice is attack 2 ms, decay 300 ms, sustain 0.0, release 20 ms, cutoff 1.0 (wide
+      open), resonance 0.0 (flat), tune 0.0, low-pass, and the kit is named `Init` — **a word the card prints and task 10's
+      page will name**, chosen here because neither spec nor plan settles it. If wrong it costs one constant, one pinned
+      assertion and one guide sentence. (5) `voices: [KitVoice; Drum::ALL.len()]` instead of the spec's literal `16`, so a
+      seventeenth voice cannot leave a voice table one short.
+      **One hole recorded rather than hidden:** the state's `drum_mute` could be seeded from a literal `0` instead of from the
+      kit and every test would still pass, because the only kit a constructor can see mutes nothing. The pack is proven in
+      `drums.rs`; proving the seed needs a kit-taking constructor, which is task 6/8's seam.
+      **A debt noted, not paid:** `1u16 << Drum::index()` now appears in `pattern::drum_bit` and twice here. Every copy comes
+      from the catalogue, so no reorder can desynchronise them, and task 2's ruling deliberately left `Drum::bit()` out. If
+      task 7's `Drums::set_mute_mask` needs a fourth, `Drum::bit()` earns its place — and `pattern::drum_bit` must move onto
+      it in the same commit, or there are two.
+      **Invisible to the guide, deliberately:** nothing a player can reach changes. A device still starts silent until task 6
+      supplies samples, the face is task 4's, and `persist::SavedState` is untouched, so no page in `docs/guide` is now wrong.
