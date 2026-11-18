@@ -131,7 +131,7 @@ sound is unspecified; it waits.
 Kick, Snare, Rim, Clap, ClosedHat, OpenHat, LowTom, MidTom, HighTom, Crash, Ride, Cowbell, LowConga, HighConga, Clave, Shaker
 ```
 
-`Drum::ALL`, `index()`, `label()` (`KICK`, `SNR`, `RIM`, `CLAP`, `CHH`, `OHH`, `LOT`, `MID`, `HIT`, `CRS`, `RDE`, `CWB`, `LCO`,
+`Drum::ALL`, `index()`, `label()` (`KICK`, `SNR`, `RIM`, `CLAP`, `CHH`, `OHH`, `LOT`, `MID`, `HTOM`, `CRS`, `RDE`, `CWB`, `LCO`,
 `HCO`, `CLV`, `SHK`), `choke_group()` (`ClosedHat`/`OpenHat` share one, the rest zero) — all written out, no `_` arm. Sixteen
 voices is exactly one `u16`.
 

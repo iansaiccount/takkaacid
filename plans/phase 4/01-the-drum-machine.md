@@ -62,7 +62,9 @@ and whose seven knobs are the selected voice's.
 
 ### Task 1 — the voice catalogue
 
-**Files:** create `rust/crates/acid-core/src/drums.rs`; modify `rust/crates/acid-core/src/lib.rs`.
+**Files:** create `rust/crates/acid-core/src/drums.rs`; modify `rust/crates/acid-core/src/lib.rs`; and
+`docs/superpowers/specs/2026-11-18-drum-machine-design.md` for one label (`HighTom` is `HTOM`, because the knob row's audition
+key is `HIT`).
 **Interfaces (produces):**
 ```rust
 pub enum Drum { Kick, Snare, Rim, Clap, ClosedHat, OpenHat, LowTom, MidTom, HighTom, Crash, Ride, Cowbell,
@@ -260,3 +262,17 @@ no seventeenth voice, no archive export of a kit.
       had no task (it is now the second half of task 6, with its tests); two of the Review Focus lines had no test (the mid-bar click
       and the scale extremes, now in task 4); and the long-sample/retrigger and all-muted modes had none (now in tasks 7 and 8).
       Nothing has been built.
+- [x] **Task 1 — the voice catalogue.** `acid-core::drums` holds `Drum` (sixteen voices in grid order, `ALL`, `index`, `label`,
+      `choke_group`) and `FilterKind` (`LP | BP | HP`); every `match` is written out, so a seventeenth voice fails to compile in
+      `index`, in `label`, in `choke_group` and in `ALL`. Two tests: the voices numbered, round-tripping, ASCII and exactly the hat
+      pair choking; and the filter's three faces printing in the order the face draws them. 709 tests.
+      **One label differs from the spec, deliberately:** `HighTom` prints `HTOM`, not `HIT` — the knob row's audition key is
+      `HIT`, and one face cannot carry two. The spec is corrected in the same commit.
+      **Mutation run:** giving `Kick` a choke group fails `the hats share a choke group and nothing else does`
+      (`left: [Kick, ClosedHat, OpenHat]`); changing `Snare`'s caption to `SNX` fails the label pin (`left: [..., "SNX", ...]`).
+      Both reverted.
+      **Review: OK with notes.** Its Important finding was the plan's gap, not the code's: the sixteen captions were guarded only
+      by ASCII-and-length assertions, so a renamed or duplicated label — including restoring `HIT` — passed every gate. One
+      assertion now pins them in grid order, mirroring what the filter test already did, and the mutation above proves it fails.
+      Also taken: the `ClosedHat` doc said the choke both ways round and now names the direction (a hit on it cuts an open hat);
+      and this task's **Files** line now names the spec, which the commit edits. Nothing else in the round is affected.
