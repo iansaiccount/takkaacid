@@ -276,3 +276,34 @@ no seventeenth voice, no archive export of a kit.
       assertion now pins them in grid order, mirroring what the filter test already did, and the mutation above proves it fails.
       Also taken: the `ClosedHat` doc said the choke both ways round and now names the direction (a hit on it cuts an open hat);
       and this task's **Files** line now names the spec, which the commit edits. Nothing else in the round is affected.
+- [x] **Task 2 — the pattern's masks.** `Step` carries `hits` and `accents`, two `u16` appended after `velocity` so the file's
+      field order only grows, both `#[serde(default)]`. The four methods are the interface the plan asked for, and the bit comes
+      from `Drum::index` through one private `drum_bit`, so the mask is not spelled a second time anywhere. `SAVE_VERSION` is 10;
+      `upgraded` needs no rewrite — the serde default *is* the upgrade — and its doc now says so. Five tests in `pattern.rs` and
+      three in `tests/persist.rs`: the four the task named, plus `an_accent_with_no_hit_under_it_is_not_an_accent`,
+      `the_save_version_is_pinned_at_ten` and `a_drum_step_survives_the_save_file`. **717 tests, all green**, clippy and fmt
+      clean, `./docs/guide/check.sh` ok.
+      **Mutations run:** dropping `self.on = true` from `hit` fails three of the pattern tests; dropping `on = false` from
+      `clear_hit` fails `clearing_the_last_hit_rests_the_step`; `is_accented` without the `hits` mask fails the disagreement test;
+      `skip_deserializing` on `accents` fails the new round trip *while `a_version_nine_file_upgrades_with_empty_drum_masks` still
+      passes*, which is the hole below. All reverted.
+      **Review: OK with notes, every finding actioned.** Important: no test pinned a *non-zero* mask through the save file, and
+      every other persist test holds zeros, so a mask written and never read would have passed the whole suite —
+      `a_drum_step_survives_the_save_file` is that test, and the mutation above proves it bites. Two Minor findings were behaviour,
+      not prose: `is_accented` now reads `hits & accents`, so a hand-edited accent bit with no hit under it answers as nothing
+      instead of as an accent the doc promised it was not; and `clear_hit` rests the step only when it actually removed a hit, so
+      a stray clear cannot empty a note the 303 put on a step. Two doc comments claimed a version refusal this build does not
+      implement — both now say what the number is (a promise to a later build), and the missing refusal is a wishlist entry with
+      what would have to move, because it is a behaviour change to the one path every file goes through. Of the review's
+      report-only notes, the test helper's mask-name list carries the "a seventeenth voice is a third mask" warning;
+      `ui/randomise.rs` writing `on` under `..*step` stands — RANDOM is not on a drum face and the masks survive the reroll.
+      **Two rulings.** (1) `Step::hit(voice, false)` *writes* the accent bit rather than leaving it, so the two masks cannot
+      disagree through the API — if wrong, a shift-click that accents and then a plain click would still sound accented.
+      (2) `clear_hit` rests the step only when it removed a hit, where the plan said "and `on` when no hit remains"; the two differ
+      only on a maskless 303 step, which a drum gesture must not silently empty — if wrong, a drum device can leave a step `on` with
+      no voice on it, which the face draws as a rest anyway.
+      **Invisible to the guide, deliberately:** nothing a player can reach changes until task 4 draws the grid, and what an old file
+      reads back as is unchanged, so no page in `docs/guide` is now wrong. `clipboard.rs` is touched only because its "one of
+      everything" `Step` literal stopped compiling — the fixture is meant to force that decision — and the masks are carried by the
+      clipboard already, since a `Clip::Pattern` is the whole `Pattern`. The wishlist's rack entry said the rack round takes
+      `SAVE_VERSION` 10; it takes 11 now that this one took 10.

@@ -8,6 +8,7 @@ use acid_app::persist::{
     SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
     new_song, save_song, save_target, song_name,
 };
+use acid_core::drums::Drum;
 use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
 
@@ -443,6 +444,144 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
     assert_eq!(old.version, 0, "no field, no version");
     let upgraded = acid_app::persist::load_or_default(dir.path());
     assert_eq!(upgraded.version, SAVE_VERSION, "loading upgrades it");
+}
+
+/// The version number is part of the file's contract, not housekeeping: it is what a later build reads to know a document
+/// it cannot handle, and what a reader of a diff sees to know a migration was meant. Pinning the number here is what makes
+/// an accidental bump fail the suite instead of passing every test that compares a file against `SAVE_VERSION` itself.
+/// (Nothing in this build yet refuses a *newer* version — see the wishlist — so the number is a promise, not a guard.)
+#[test]
+fn the_save_version_is_pinned_at_ten() {
+    assert_eq!(SAVE_VERSION, 10, "a bump is a migration, not an edit");
+
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    assert!(
+        text.contains("\"version\": 10"),
+        "the document names the version it was written in"
+    );
+}
+
+/// Remove a step's drum masks from a document, wherever the steps are: this is the shape a version-9 file has, since no
+/// step then carried a mask at all. Answers how many keys it took out, so a test cannot pass on a document that never had
+/// them.
+fn strip_drum_masks(value: &mut serde_json::Value) -> usize {
+    match value {
+        serde_json::Value::Object(fields) => {
+            let mut removed = 0;
+            // One name per mask a step carries, and a seventeenth voice would be a third: a mask this list does not know
+            // would stay in the "version 9" document and the count below would keep passing.
+            for key in ["hits", "accents"] {
+                if fields.remove(key).is_some() {
+                    removed += 1;
+                }
+            }
+            removed + fields.values_mut().map(strip_drum_masks).sum::<usize>()
+        }
+        serde_json::Value::Array(items) => items.iter_mut().map(strip_drum_masks).sum(),
+        _ => 0,
+    }
+}
+
+#[test]
+fn a_version_nine_file_upgrades_with_empty_drum_masks() {
+    // Version 9 is the build before the drum machine: not one step names `hits` or `accents`. Such a file has to upgrade
+    // rather than be refused, arrive with every mask zeroed — a bit left set would strike a voice the player never
+    // struck — and give the 303's phrase back byte for byte.
+    let dir = tempfile::tempdir().unwrap();
+    // A value this build does not default to, so a file that was refused and replaced by a fresh session cannot pass the
+    // round trip below by looking like the one that was written.
+    let written = SavedState {
+        bpm: 137.0,
+        ..SavedState::default()
+    };
+    save(dir.path(), &written).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&text).unwrap();
+    legacy
+        .as_object_mut()
+        .unwrap()
+        .insert("version".to_string(), serde_json::json!(9));
+    let stripped = strip_drum_masks(&mut legacy);
+    assert_eq!(
+        stripped,
+        written.bank.pattern_count() * acid_core::pattern::STEPS_PER_PATTERN * 2,
+        "every step of every pattern lost both masks"
+    );
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+
+    // Read it the way `open` does — `load`, then `upgraded` — and not through `load_or_default`, whose "a broken file means
+    // start again" fallback would answer with a fresh session and let this test pass on a file that was never understood.
+    let version_nine = acid_app::persist::load(dir.path())
+        .expect("a version-9 file is readable")
+        .expect("the file is on disk");
+    let loaded = version_nine.upgraded();
+    assert_eq!(
+        loaded.version, SAVE_VERSION,
+        "loading stamps it with this build's version"
+    );
+    assert!(
+        (loaded.bpm - 137.0).abs() < 1e-6,
+        "the file's own session came back, not the defaults a refused file falls back to"
+    );
+    for slot in 0..loaded.bank.pattern_count() {
+        for step in &loaded.bank.get(slot).steps {
+            assert_eq!(
+                (step.hits, step.accents),
+                (0, 0),
+                "pattern {slot} came back carrying a drum"
+            );
+        }
+    }
+    assert_eq!(
+        serde_json::to_vec(&loaded).unwrap(),
+        serde_json::to_vec(&written).unwrap(),
+        "the 303's steps come back byte for byte"
+    );
+}
+
+/// The masks are the drum pattern, so the file has to carry them both ways. Every other test in this file holds zeros, which
+/// is exactly the shape a mask that is written and never read would pass — the player would reopen a song to a silent bar.
+#[test]
+fn a_drum_step_survives_the_save_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut written = SavedState::default();
+    let mut steps = [Step::rest(); acid_core::pattern::STEPS_PER_PATTERN];
+    steps[3].hit(Drum::Kick, false);
+    steps[3].hit(Drum::Snare, true);
+    steps[7].hit(Drum::Cowbell, true);
+    written.bank.replace(0, Pattern::from_steps(steps));
+    save(dir.path(), &written).unwrap();
+
+    let loaded = acid_app::persist::load(dir.path())
+        .expect("a file this build wrote is readable")
+        .expect("the file is on disk")
+        .upgraded();
+
+    let struck = loaded.bank.get(0).steps[3];
+    assert!(struck.on, "the step sounds because voices hit it");
+    assert!(struck.is_hit(Drum::Kick));
+    assert!(
+        !struck.is_accented(Drum::Kick),
+        "an unaccented strike stayed plain"
+    );
+    assert!(struck.is_hit(Drum::Snare));
+    assert!(struck.is_accented(Drum::Snare), "an accent survived");
+    assert!(!struck.is_hit(Drum::Cowbell), "step 4 is another step's");
+
+    let later = loaded.bank.get(0).steps[7];
+    assert!(later.is_hit(Drum::Cowbell) && later.is_accented(Drum::Cowbell));
+    assert_eq!(
+        serde_json::to_vec(&loaded).unwrap(),
+        serde_json::to_vec(&written).unwrap(),
+        "the masks come back byte for byte"
+    );
 }
 
 #[test]

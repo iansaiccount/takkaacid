@@ -15,11 +15,31 @@ Agreed during phase 2 and deliberately deferred: phase 2 saves the first device 
 the first are lost on restart** (the picker card says so).
 
 The round that lands it: `SavedState` gains `#[serde(default)] pub devices: Vec<SavedDevice>` where `SavedDevice` holds
-`{ name, kind, inputs, bank, knobs }`; the flat v9 fields (`bank`, `knobs`, `bpm`, `swing`, `midi_input`, `cc_map`) stay as
-device 1's mirror so a file written by a v9 build still loads as a one-device song and a file written by this build still
-opens in a v9 build with device 1 intact. `SAVE_VERSION` goes to 10, `tests/persist.rs` gains the new pin next to the old
+`{ name, kind, inputs, bank, knobs }`; the flat v10 fields (`bank`, `knobs`, `bpm`, `swing`, `midi_input`, `cc_map`) stay as
+device 1's mirror so a file written by a v10 build still loads as a one-device song and a file written by this build still
+opens in a v10 build with device 1 intact. `SAVE_VERSION` goes to 11, `tests/persist.rs` gains the new pin next to the old
 one, and the picker card's footnote goes away. `sanitize` learns to repair a `devices` list the way it repairs a bank:
 one device minimum, at most `MAX_DEVICES`, names made distinct.
+
+## The save file
+
+### A file from a newer build is refused, not relabelled
+
+**What it would do.** `persist::open`, `load_song` and `import_song` compare a document's `version` with `SAVE_VERSION` and
+refuse one that is newer, naming the version it found — instead of today's behaviour, where `upgraded` stamps its own version
+over whatever it read and the next save quietly rewrites a newer document as an older one. Phase 4's spec names this exact
+loss as a risk: "a version-9 build reading a version-10 file loses the drum steps silently, which `SAVE_VERSION` is there to
+prevent." The number does not prevent it today; nothing reads it before `upgraded` overwrites them.
+
+**Why not now.** Phase 4's task 2 bumps the version to 10 and pins it in `tests/persist.rs`, which is what a bump has to do.
+Teaching the load path to refuse is a behaviour change to the one path every file goes through, and it needs a decision the
+bump does not: what the app opens instead of the file, and what it says about it.
+
+**What would have to move.** `persist::load` already returns a `Result`, so the refusal is a new error variant naming the
+version and the file; the decision is in `open`, whose rule is "a wrong save file means start again, so the app always opens".
+A newer file needs the second face of that rule — a first run, and a `PanelState::notice` on the status line saying the file was
+newer than this build. `import_song` and `load_song` follow it. The comparison belongs in `persist`; the notice and its live test
+belong with the panel.
 
 ## Transport and racks
 
