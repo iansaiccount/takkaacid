@@ -7,7 +7,7 @@ A TB-303-style acid bass synth: a Rust audio engine and an egui/eframe panel. Tw
   Panel behaviour is tested by driving `draw_panel` through real egui frames in `rust/crates/acid-app/tests/*_live.rs`.
 
 `plans/` holds one plan per round of work, numbered, and one directory per phase: `phase 1/` is the finished rounds,
-`phase 3/` is the round in flight, `future/wishlist.md` is where an idea goes before it earns a round. Each phase directory
+`phase 4/` is the round in flight, `future/wishlist.md` is where an idea goes before it earns a round. Each phase directory
 opens with a `00-` overview that says what the phase is and which plan to take next. `EAR_TESTING.md` is how to judge the
 sound by ear.
 
