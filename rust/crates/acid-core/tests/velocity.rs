@@ -4,6 +4,7 @@ use acid_core::pattern::{DEFAULT_VELOCITY, Step};
 use acid_core::pitch::Pitch;
 use acid_core::voice::{Voice, velocity_to_gain};
 
+use acid_core::sequencer::Performer;
 /// The loudest sample of a note at `velocity`, after the filter and envelope have had their say.
 fn peak(velocity: u8) -> f32 {
     let mut voice = Voice::new(44_100.0);

@@ -2,6 +2,7 @@
 //! ACCENT knob decides how much of both there is. At zero the accent must be inaudible; at full it is the character.
 
 use acid_core::analysis::{brightness, rms};
+use acid_core::sequencer::Performer;
 use acid_core::voice::Voice;
 
 const SR: f32 = 48_000.0;

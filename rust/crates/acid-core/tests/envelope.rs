@@ -71,3 +71,37 @@ fn retrigger_restarts_from_the_current_level() {
     );
     assert_eq!(e.stage(), Stage::Attack);
 }
+
+/// A machine that re-states its voice's settings every block must not restart the ramps it is describing: a release that
+/// is re-armed every 2 ms never reaches silence, so the time it was given becomes a time constant instead.
+#[test]
+fn restating_a_time_does_not_restart_the_ramp() {
+    let sr = 48_000.0;
+    let ramp = |restate: bool| {
+        let mut e = Envelope::new(sr);
+        e.set_release_ms(20.0);
+        e.gate_on();
+        for _ in 0..(0.05 * sr) as usize {
+            e.next();
+        }
+        e.gate_off();
+        // Twenty blocks of 2 ms: forty milliseconds, twice the release the envelope was given.
+        for _ in 0..20 {
+            if restate {
+                e.set_release_ms(20.0);
+            }
+            for _ in 0..(0.002 * sr) as usize {
+                e.next();
+            }
+        }
+        e
+    };
+
+    assert!(ramp(false).is_idle(), "a 20 ms release is over after 40 ms");
+    let restated = ramp(true);
+    assert!(
+        restated.is_idle(),
+        "re-stating the release restarted it: {} left after twice the time it was given",
+        restated.level()
+    );
+}

@@ -7,6 +7,8 @@ use crate::envelope::Envelope;
 use crate::filter::LadderFilter;
 use crate::oscillator::{Oscillator, Waveform};
 use crate::param;
+use crate::pattern::Step;
+use crate::sequencer::Performer;
 
 /// Gate and accent as plain floats, so the sequencer and the UI can carry them without enums.
 #[derive(Copy, Clone, Debug, Default)]
@@ -80,6 +82,10 @@ pub struct Voice {
     cutoff_knob: f32,
     resonance_knob: f32,
     env_mod_knob: f32,
+    /// Whether the step that was just played carried a slide, so the next note glides into place. This is the 303's half of
+    /// what a start clears ([`Performer::arm`]), and it moved here from the sequencer when the clock stopped knowing what
+    /// a slide was: a drum machine's step has no slide to remember.
+    prev_slide: bool,
 }
 
 impl Voice {
@@ -123,6 +129,7 @@ impl Voice {
             cutoff_knob: DEFAULT_CUTOFF_KNOB,
             resonance_knob: DEFAULT_RESONANCE_KNOB,
             env_mod_knob: DEFAULT_ENV_MOD_KNOB,
+            prev_slide: false,
         };
         voice.apply_pitch();
         voice
@@ -228,7 +235,43 @@ impl Voice {
         }
     }
 
-    pub fn render(&mut self, out: &mut [f32]) {
+    /// Kept for symmetry with the filter/VCA stages that follow; the rate never changes after
+    /// construction.
+    #[allow(dead_code)]
+    pub fn sample_rate(&self) -> f32 {
+        self.sample_rate
+    }
+}
+
+impl Performer for Voice {
+    /// The 303's reading of a step: a rest closes the gate, a slide glides into the next note without retriggering the
+    /// envelopes, and anything else is struck at its own velocity and accent.
+    fn step(&mut self, step: &Step) {
+        // A rest, and a note transposed outside the instrument's range, are the same thing to the voice: silence. The
+        // step keeps its flags and its note, so transposing back brings it in again.
+        if !step.on || !step.audible() {
+            self.note_off();
+            // A rest cannot glide out of anything. A rest keeps its flags, so it may carry `slide`; letting that through
+            // would retune the next note with the gate still shut and it would never sound.
+            self.prev_slide = false;
+            return;
+        }
+        if self.prev_slide {
+            // The previous step asked to slide into this one: retune without retriggering the envelopes.
+            self.glide_to(step.hz());
+        } else {
+            // A step carries its own velocity; `note_on` would play it at full scale.
+            self.note_at(step.hz(), step.accent, step.velocity);
+        }
+        self.prev_slide = step.slide;
+    }
+
+    /// The gate closes; the release tail fades rather than being cut.
+    fn release(&mut self) {
+        self.note_off();
+    }
+
+    fn render(&mut self, out: &mut [f32]) {
         let amp = AMPLITUDE * self.accent_gain() * self.velocity_gain;
 
         for slot in out.iter_mut() {
@@ -259,10 +302,9 @@ impl Voice {
         }
     }
 
-    /// Kept for symmetry with the filter/VCA stages that follow; the rate never changes after
-    /// construction.
-    #[allow(dead_code)]
-    pub fn sample_rate(&self) -> f32 {
-        self.sample_rate
+    /// A start strikes its first note: the slide history belongs to the run, so the last step of the run before cannot
+    /// retune it with the gate still shut.
+    fn arm(&mut self) {
+        self.prev_slide = false;
     }
 }

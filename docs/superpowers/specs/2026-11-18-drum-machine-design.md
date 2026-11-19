@@ -97,9 +97,16 @@ pub trait Performer: Sized {
 }
 ```
 
-`Voice` implements it (taking the `prev_slide` state `Sequencer` holds today), `Drums` implements it, and `Sequencer::render`
-keeps its shape. Every render path — the delay in `wait_out_start`, the tail after a stop, the block loop — already goes through
-the performer, which is why `render` is on the trait.
+`Voice` implements it (taking the `prev_slide` state `Sequencer` holds today), a private `DrumMachine` over the drum machine's
+sixteen voices implements it, and
+`Sequencer::render` keeps its shape. Every render path — the delay in `wait_out_start`, the tail after a stop, the block loop —
+already goes through the performer, which is why `render` is on the trait.
+
+**Corrected after the fact**, as tasks 1 and 3–6 corrected their own lines: `Drums` does not implement the trait itself. A
+`Drums` owns the clock, and `Sequencer::render` borrows the performer for the length of a block while it holds that clock, so the
+performer has to be a **field** of the machine — a private `DrumMachine` with the kit, the sixteen voice states and the mask.
+Implementing the trait on `Drums` as well would give the voices two ways to be rendered, which is the second-list bug this repo
+has paid for twice. `Drums` is the machine; `DrumMachine` is what the clock drives.
 
 ## The drum machine
 

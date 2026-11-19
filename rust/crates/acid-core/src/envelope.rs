@@ -49,15 +49,29 @@ impl Envelope {
         }
     }
 
+    /// The attack time.
+    ///
+    /// A value that has not changed is not reapplied. Re-arming a ramp that is already running restarts it from wherever it
+    /// had got to, so a caller that re-states its settings every block — the drum machine pushes its kit at every hit and
+    /// every block, so a dial turn is heard without being retriggered — would quietly turn a *time* into a *time constant*.
     pub fn set_attack_ms(&mut self, ms: f32) {
-        self.attack_ms = ms.max(0.01);
+        let ms = ms.max(0.01);
+        if ms == self.attack_ms {
+            return;
+        }
+        self.attack_ms = ms;
         if self.stage == Stage::Attack {
             self.step = self.attack_increment();
         }
     }
 
+    /// The decay time, under the same rule as [`Envelope::set_attack_ms`].
     pub fn set_decay_seconds(&mut self, seconds: f32) {
-        self.decay_seconds = seconds.max(0.001);
+        let seconds = seconds.max(0.001);
+        if seconds == self.decay_seconds {
+            return;
+        }
+        self.decay_seconds = seconds;
         if self.stage == Stage::Decay {
             self.step = self.decay_increment();
         }
@@ -67,8 +81,14 @@ impl Envelope {
         self.sustain = level.clamp(0.0, 1.0);
     }
 
+    /// The release time, under the same rule as [`Envelope::set_attack_ms`] — and there it matters most: a release's step is
+    /// the level it started from over its time, so re-arming one every block never lets it finish.
     pub fn set_release_ms(&mut self, ms: f32) {
-        self.release_ms = ms.max(0.01);
+        let ms = ms.max(0.01);
+        if ms == self.release_ms {
+            return;
+        }
+        self.release_ms = ms;
         if self.stage == Stage::Release {
             self.step = self.release_increment();
         }

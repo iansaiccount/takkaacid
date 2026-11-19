@@ -107,7 +107,7 @@ impl Step {
     /// `accented` is written rather than added: striking a voice again without the accent takes the accent off with it,
     /// so a bit in `accents` can never outlive the hit it belonged to.
     pub fn hit(&mut self, drum: Drum, accented: bool) {
-        let bit = drum_bit(drum);
+        let bit = drum.bit();
         self.hits |= bit;
         if accented {
             self.accents |= bit;
@@ -123,7 +123,7 @@ impl Step {
     /// Clearing a voice the step does not strike changes nothing at all, so a stray click on an empty cell cannot rest a
     /// step the 303 put a note on.
     pub fn clear_hit(&mut self, drum: Drum) {
-        let bit = drum_bit(drum);
+        let bit = drum.bit();
         let struck = self.hits & bit != 0;
         self.hits &= !bit;
         self.accents &= !bit;
@@ -134,13 +134,13 @@ impl Step {
 
     /// Whether this step strikes `drum`.
     pub fn is_hit(&self, drum: Drum) -> bool {
-        self.hits & drum_bit(drum) != 0
+        self.hits & drum.bit() != 0
     }
 
     /// Whether this step's strike on `drum` is accented. False for a voice the step does not strike, and false for an
     /// accent bit with no hit under it — nothing here writes one, but a hand-edited document can.
     pub fn is_accented(&self, drum: Drum) -> bool {
-        self.hits & self.accents & drum_bit(drum) != 0
+        self.hits & self.accents & drum.bit() != 0
     }
 
     /// This step moved by whole semitones, rolling into the octave: the same sound on a shifted lattice.
@@ -156,14 +156,6 @@ impl Step {
             ..self
         }
     }
-}
-
-/// The bit a voice owns in [`Step::hits`] and [`Step::accents`].
-///
-/// Derived from the catalogue's own `index` rather than written out again: sixteen voices is exactly the width of the
-/// mask, and a voice that moved in [`Drum::ALL`] moves here with it.
-fn drum_bit(drum: Drum) -> u16 {
-    1u16 << drum.index() as u16
 }
 
 /// Sixteen steps — one bar at 16th notes.
@@ -223,7 +215,7 @@ mod tests {
         assert!(step.on, "a drum step is on because a voice hits it");
         assert!(step.is_hit(Drum::Kick));
         assert!(!step.is_accented(Drum::Kick));
-        assert_eq!(step.hits, drum_bit(Drum::Kick));
+        assert_eq!(step.hits, Drum::Kick.bit());
         for drum in Drum::ALL {
             if drum != Drum::Kick {
                 assert!(!step.is_hit(drum), "{drum:?} was struck by a kick");
@@ -231,7 +223,7 @@ mod tests {
         }
 
         step.hit(Drum::Snare, true);
-        assert_eq!(step.hits, drum_bit(Drum::Kick) | drum_bit(Drum::Snare));
+        assert_eq!(step.hits, Drum::Kick.bit() | Drum::Snare.bit());
         assert!(step.is_accented(Drum::Snare));
         assert!(
             !step.is_accented(Drum::Kick),
@@ -243,13 +235,13 @@ mod tests {
         step.hit(Drum::Snare, false);
         assert!(step.is_hit(Drum::Snare));
         assert!(!step.is_accented(Drum::Snare));
-        assert_eq!(step.hits, drum_bit(Drum::Kick) | drum_bit(Drum::Snare));
+        assert_eq!(step.hits, Drum::Kick.bit() | Drum::Snare.bit());
 
         // The last voice in the catalogue is the top bit, and it is a bit like any other.
         step.hit(Drum::Shaker, true);
         assert_eq!(
             step.hits,
-            drum_bit(Drum::Kick) | drum_bit(Drum::Snare) | drum_bit(Drum::Shaker)
+            Drum::Kick.bit() | Drum::Snare.bit() | Drum::Shaker.bit()
         );
         assert!(step.is_accented(Drum::Shaker));
 
@@ -300,7 +292,7 @@ mod tests {
         // The accent belongs to a strike, so a bit with no strike under it answers as nothing rather than as an accent a
         // later bank would play.
         let disagreeing = Step {
-            accents: drum_bit(Drum::Ride),
+            accents: Drum::Ride.bit(),
             ..Step::rest()
         };
         assert!(!disagreeing.is_hit(Drum::Ride));

@@ -1,4 +1,5 @@
 use acid_core::analysis::{dominant_hz, rms};
+use acid_core::sequencer::Performer;
 use acid_core::voice::Voice;
 
 #[test]

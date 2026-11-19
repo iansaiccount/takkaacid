@@ -212,14 +212,18 @@ import with a broken voice **lands** and names the file to replace rather than b
 
 **Files:** modify `rust/crates/acid-core/src/sequencer.rs` (the `Performer` trait), `voice.rs` (impl), `filter.rs` (a multimode
 filter); create `rust/crates/acid-core/src/drums.rs` additions (`Drums`, the voice state); tests in
-`rust/crates/acid-core/tests/drums.rs` (new).
+`rust/crates/acid-core/tests/drums.rs` (new). **Corrected after the fact**, as tasks 1 and 3–6 corrected theirs: the commit also
+touches `pattern.rs` (trap 12's `drum_bit` → `Drum::bit()` move, which had to land in the same commit), `envelope.rs` (its time
+setters became idempotent — the first review's Important), `tests/envelope.rs`, `tests/sequencer_feel.rs` (a slide fixture that
+was vacuous) and the six `tests/*.rs` files that render a `Voice` and so need `use acid_core::sequencer::Performer;`, plus the
+spec's §"The clock, and the performer".
 **Interfaces (consumes Tasks 1–3; produces):**
 ```rust
 pub trait Performer: Sized { fn step(&mut self, step: &Step); fn release(&mut self);
                             fn render(&mut self, out: &mut [f32]); fn arm(&mut self); }
 impl Performer for Voice;                       // `prev_slide` moves here from `Sequencer`
-impl Performer for Drums;
-pub struct Drums;                               // owns a Sequencer, the current Kit, sixteen voice states
+impl Performer for DrumMachine;                 // NOT `Drums` — see the Progress, ruling 1: the performer is a field
+pub struct Drums;                               // a Sequencer and a private DrumMachine: the kit, sixteen voice states, the mask
 impl Drums {
     pub fn new(sample_rate: f32, kit: Arc<Kit>) -> Self;
     pub fn set_kit(&mut self, kit: Arc<Kit>);
@@ -229,6 +233,8 @@ impl Drums {
     pub fn bar_line(&self) -> Option<usize>;  pub fn start(&mut self);  pub fn start_at(&mut self, step: usize);
     pub fn start_later(&mut self, step: usize, silence: usize);  pub fn stop(&mut self);  pub fn pause(&mut self);
     pub fn resume(&mut self);  pub fn set_reverse(&mut self, on: bool);  pub fn set_transpose(&mut self, semitones: i32);
+    pub fn set_pattern(&mut self, pattern: Arc<Pattern>);  pub fn set_bpm(&mut self, bpm: f32);
+    pub fn set_swing(&mut self, swing: f32);  pub fn position(&self) -> usize;   // added: the clock it owns, and its bar
 }
 pub struct MultimodeFilter;  // one state-variable filter, `FilterKind`, cutoff/resonance in knob positions
 ```
@@ -622,3 +628,121 @@ no seventeenth voice, no archive export of a kit.
       a song list under the footer, a key writing behind a card, and a MIDI note landing behind one. The follow-up's own review
       found one Important — that the deletion rule, as first written, deleted a WAV the app could not *decode* — and it is fixed
       with `a_save_keeps_a_wav_that_will_not_decode`: only a file this build can play back is one the player deleted.
+- [x] **Task 7 — the machine.** `acid-core::sequencer` holds the `Performer` trait (`step`, `release`, `render`, `arm`) and
+      `Sequencer::render<P: Performer>(&mut self, performer: &mut P, out: &mut [f32])` renders through it, so the bar, `REVERSE`,
+      swing, pause, the bar line and the sample-accurate start are one implementation for every machine and only "make this step
+      sound" moves. All three render paths — the wait before a late start, the tail after a stop, the block loop — go through the
+      trait, and the 303's slide history moved out of the `Sequencer` into `Voice`, where `Performer::arm` clears it, called on
+      the step a start begins with. `Voice`'s inherent `render` is **gone**: rendering a voice *is* its `Performer` role, so
+      `accent.rs`, `velocity.rs` and the four `voice_*.rs` test files gained one `use acid_core::sequencer::Performer;` line each
+      and nothing else.
+      `drums.rs` gained `Drums` — a `Sequencer` and the sixteen voices — with `new`, `set_kit`, `set_mute_mask`, `audition`,
+      `render`, `set_pattern`, `set_bpm`, `set_swing`, `position`, `bar_line`, `start`, `start_at`, `start_later`, `stop`,
+      `pause`, `resume`, `set_reverse` and `set_transpose`. A voice is a fractional sample position advanced by
+      `2^((TUNE + transpose)/12)`, linearly interpolated between two samples, through the envelope and the new filter; an accent
+      takes the 303's gain *and* its decayed filter pulse; a hit on a hat folds the other hat away through its release. `filter.rs`
+      gained `MultimodeFilter`, the topology-preserving state-variable filter: `LP | BP | HP` from one pair of integrators, cutoff
+      and resonance mapped by `param::cutoff_hz`/`param::resonance` exactly as the 303's are. `Drum::bit()` now owns the mask bit
+      — trap 12's fourth caller — and `pattern::drum_bit` was deleted onto it in the same commit. `tests/sequencer_feel.rs`'s
+      slide fixture was strengthened (step 0 now slides, so the slide history is actually set): it had been vacuous.
+      **848 tests, all green**, clippy and fmt clean, `./docs/guide/check.sh` ok. New: 26 in `tests/drums.rs` — the twelve the
+      task named, plus `the_rack_transpose_moves_every_voice`, `a_muted_hat_still_chokes_an_open_one`,
+      `a_kit_swap_changes_the_sound_and_keeps_the_hit_going`,
+      `a_new_machine_takes_its_mutes_from_its_kit_and_a_kit_swap_does_not`, `a_kit_with_no_samples_is_silence_and_a_hit_is_harmless`,
+      `a_hostile_sample_is_silence_not_a_poisoned_voice`, `an_enormous_sample_does_not_outlive_itself`,
+      `a_cut_off_turn_is_heard_on_the_next_block`, `a_resonant_voice_at_the_edges_stays_finite`,
+      `a_late_start_waits_out_the_silence_it_is_given`, `a_pause_keeps_the_step_and_a_resume_carries_on_from_it`,
+      `a_start_strikes_rather_than_gliding_from_the_previous_run`, `start_at_lands_on_the_step_it_names` and
+      `reverse_reads_the_bar_from_its_other_end` — five unit tests in `filter.rs`, and
+      `restating_a_time_does_not_restart_the_ramp` in `tests/envelope.rs`.
+      **Mutations run, 42 of 42 caught (and 2 equivalent, below), all reverted** (`.superpowers/mutate_task7.py`): a retrigger that does not restart; an
+      envelope never gated; a stop that releases nothing; a release that cuts instead of folding; the kit's release time ignored;
+      the end of a sample read past; a non-finite sample reaching the filter; the accent's gain dropped; its filter pulse dropped;
+      the voice's filter kind ignored; TUNE ignored; the transpose ignored; the choke group ignored; a muted voice's stroke
+      skipped (so it chokes nothing); the mask never read (twice, one test each); a kit swap resetting every voice's place;
+      loading a kit seeding no mutes; an edit reseeding them; the audition drained and thrown away; the bar line dropped; the
+      silence before a late start skipped; a resume starting from the top; the performer not armed; a rest keeping the slide
+      history; the mask bit counted backwards; the low face answering with the high and the high with the low; resonance never
+      reaching the damping; the cutoff unclamped; `reset` leaving the integrators; a release re-stated every block (twice, the
+      envelope's own test and the drum tail); an overflowing filter state left in the voice; an audition surviving the stop;
+      `start_at` starting at the top; the direction never reaching the clock; one voice past the rails; and a choke that cuts
+      nothing. The first run of thirty reported **five MISSED**, and each was a hole rather than a script problem: a peak-only
+      accent assertion that the brightness lift could satisfy; a kit-swap test whose second block held no hit; a restart test
+      whose own bar ended by striking step 0 and clearing the slide; a rest test whose previous step did not slide; and a
+      `next()` guard that the empty-sample path never reached. All five tests were rewritten or retargeted, and the record is
+      here because "the tests bite" is only true of the run that says so.
+      **Review: OK with notes, every finding actioned.** The Important finding was real and is the reason this entry is long:
+      `DrumVoice::shape` re-states the kit at the top of every block, and `Envelope::set_release_ms` re-armed the ramp whenever
+      it was called, so a release restarted every block never finished: a 20 ms release became a 20 ms *time constant*, and its tail
+      ran nowhere near to its end — the smaller the block, the longer it ran, and a block as long as the release hid the whole bug,
+      which is why every test passed with every tail rendered in one gulp. Fixed at the source: all
+      three of `Envelope`'s time setters are now no-ops when the value has not moved (`restating_a_time_does_not_restart_the_ramp`
+      proves it, and both tail tests now render in device-sized blocks, so the release is measured at the granularity a device
+      asks for rather than in one gulp). Of its
+      Minors: the non-finite guard promised a repair it did not do, so the check moved to the *output* and resets the filter's
+      state (an enormous but finite sample can overflow a resonant filter's own state — `an_enormous_sample_does_not_outlive_itself`),
+      and the now-redundant input guard was deleted rather than kept as a second rule; a hit asked for but not yet served now goes
+      with the stop that silences the machine; the two tautological `pattern.steps[0]` assertions are gone and the misleading
+      kit-swap message says what its assertion proves; the per-sample `tan` now only runs while an accent's pulse is worth hearing;
+      a resonant voice at both cutoff clamps has a test; and `MultimodeFilter::kind()` — unused — is deleted.
+      **Second review: OK with notes, no Critical and no Important, all six Minors actioned.** It confirmed the Important is fixed
+      at the source and that both tail tests would fail without it, that one guard is the right count and the reset is
+      load-bearing, and that `hush` is needed because `Sequencer::stop` only closes a gate it opened. Its first finding was that
+      `hit`'s accent write came *after* `shape`, so a plain hit could keep the previous accent's cutoff for a block. It is now
+      written first — but the mutation that reorders it back **is equivalent**, and the record says so: every hit is followed by a
+      render, and `DrumMachine::render` re-shapes the voice at the top of every chunk, so `shape` always runs again before a
+      sample is produced. What that finding had assumed could be reached is not reachable through `Drums`' API, and the reordering
+      is kept because it makes the precondition local rather than depending on the render loop. The same is true of the
+      accent-then-plain case could not fail and was replaced by `a_cut_off_turn_is_heard_on_the_next_block`.
+      **Third review: OK with notes — no Critical, one Important and six Minors, all actioned.** The Important was that a branch
+      the round above called load-bearing was held by nothing: the accent's spent pulse was drawn to zero in an arm whose other
+      line re-applied the plain cutoff, so the zeroing was that arm's only real job and no test could fail it. The arm is now just
+      `self.accent_pulse = 0.0` — `shape` owns the plain cutoff — which makes it load-bearing, and the cut-off test was rebuilt
+      around it: an **accented** hit, then nine and a half of the pulse's time constants in device-sized blocks so it is spent, and
+      the baseline window taken
+      *after* it. Measuring during the accent was the first version's hole: the accent is far brighter than either cutoff, so the
+      assertion held without the dial turn landing at all. The arm is held by the zeroing-removed mutation, and the test's other
+      mutation makes `shape` never re-apply the plain cutoff — the `> 1e-4` sweep arm is a cost fence, not the thing the test
+      pins, because it multiplies `self.cutoff_hz`, which `shape` keeps current. Of its Minors: the spec's rewritten sentence said
+      the sixteen voices implement the trait (they do not; `DrumMachine`
+      does) and the Interfaces line now names the four `Drums` methods ruling 2 added; `shape`'s doc no longer claims the filter's
+      setters are no-ops when unchanged (they hold no ramp state, which is the real reason re-stating is safe); `Kit::set_mute_mask`
+      no longer claims to be the only other place a mask bit is decoded (`DrumMachine::render` reads it too); the ladder's module doc
+      no longer claims it skips a rebuild for an unchanged cutoff, which `Voice` never gives it; and the script can now apply a
+      mutation of several edits at once, so `a_kit_with_no_samples_is_silence_and_a_hit_is_harmless` — which no *single* mutation
+      could fail, because either guard alone is enough — is held by removing both.
+      **The script tells equivalent mutations apart from caught ones.** Two are recorded as equivalent and the run fails if either
+      is ever caught: moving the accent's write after `shape` (equivalent because every hit is followed by a render, and
+      `DrumMachine::render` re-shapes first), and `shape` setting the plain cutoff even while an accent's pulse is running
+      (equivalent because the per-sample arm rewrites it to the same swept value). Those two are in the record so that a caught
+      count cannot be read as "every mutation tried was caught".
+      **Rounds four, five and six found only bookkeeping, corrected in this commit:** a duplicated doc line on `DrumVoice::shape`, an
+      underived literal in the cut-off test (now `9.5 × ACCENT_DECAY_MS`), four prose statements that outran the code (the ~280 ms
+      figure was a tail's duration rather than its time constant; `Drums`'s Interfaces comment still described the pre-split struct;
+      the spec cited four tasks where five corrected their own lines; the test file's header claimed *every* test drives `Drums` when one
+      drives `Sequencer` and `Voice`), and two Progress sentences that did not match the script. A seventh pass found the two figures
+      above — a ~280 ms tail that was a small-block limit, and "six" tasks where five corrected their own lines — and both are
+      fixed here by stating the mechanism instead of a number.
+      **Rulings.** (1) The trait's implementor on the drum side is a private `DrumMachine`, not `Drums`: `Sequencer::render`
+      borrows the performer for the block while holding the clock, so the performer must be a field, and implementing the trait on
+      `Drums` as well would give the voices two ways to be rendered. The spec is corrected in the same commit. If wrong, it is one
+      wrapper type and task 8's `Machine` calls `drums.render` either way. (2) `Drums` also carries `set_pattern`, `set_bpm`,
+      `set_swing` and `position`, which the Interfaces line did not name: without them a drum machine cannot be given anything to
+      play or compared with the 303's clock. (3) `Drums::new` seeds the mask from its kit and `set_kit` does not, mirroring
+      `SharedState::adopt_kit` (the load path) against `set_kit` (the edit path) — if wrong, one dial turn undoes a mute.
+      (4) `stop` and `pause` silence the machine themselves, because an audition sounds with no transport under it and the clock
+      closes only a gate it opened; the clock's own close at the next render starts the same ramp from the same level. (5) A
+      sample that leaves the filter's state out of range plays as silence and resets the filter rather than silencing the voice for
+      the session — task 5's deferred ceiling question, answered here. If wrong it costs one branch. (6) An accented drum takes the
+      *whole* of the 303's accent lift, because a drum face has no `ACCENT` knob; if wrong, one constant and one test. (7) The mask
+      silences a voice's output, not the sequencer: a muted closed hat still cuts an open one, which is `a_muted_hat_still_chokes_an_open_one`
+      and a deliberate reading of trap 5. (8) `the_envelope_shapes_the_tail` reads the plan's "a long release passes the ADSR's
+      release point" as a 200 ms release measured in windows *through* it, since a stop is the only gate-off this machine has.
+      (9) Envelope time setters are idempotent — the fix for the review's Important — which also means a knob landing on its own
+      current value no longer restarts anything; if that was ever wanted, it is `gate_on`/`gate_off`'s job, not a setter's.
+      **Deferred, deliberately:** `tests/no_alloc.rs` with a drum slot rendering is task 8's line, and no test here proves the
+      audio path allocates nothing *with drums in it* — the code allocates nothing (one `Arc` field read, no `Vec`, no `format!`,
+      no lock), but the gate that would catch a regression is task 8's.
+      **Invisible to the guide, deliberately:** nothing a player can reach changes until task 8 gives the renderer a `Machine` — a
+      drum device's face still draws the 303's sound under the grid — so no page in `docs/guide` is now wrong and the drum face's
+      page is task 10's.
