@@ -65,7 +65,9 @@ kit under the first free name (`808 (2)`), once, and it is the copy that is edit
 session is saved, beside the name the save file keeps, so a restart comes back to the kit you made rather than to the one it
 came from.
 
-`IMPORT` copies a kit folder from anywhere on the disk into the library, under the folder's own name or beside a taken one.
+`IMPORT` copies a kit folder from anywhere on the disk into the library, under the folder's own name or beside a taken one. A
+kit whose samples will not read still lands: the voices that failed are silent, the status line names the file to replace, and
+putting the right WAV in the folder under that name, then loading the kit again, is the whole repair.
 
 A kit is a folder holding one WAV per sampled voice and a `kit.json` that names them, so it can be copied, edited by hand and handed
 to someone else. `kits/CREDITS.md` in this repository records where every sample in the three that ship came from, and that

@@ -4,9 +4,9 @@ Five cards open over the panel — **help**, **settings**, **songs**, a device's
 and a sixth thing opens over them: the **picker**, the strip's `+`.
 
 Each card dims the face behind it and swallows clicks meant for the panel, so nothing can be edited behind a card by the
-pointer. While **any** card is up — help, settings, the songs card, a device's card or the kit browser — the editing keys are
-spent too, so a stray `enter` cannot change a step you cannot see. The transport keys still work: `SPACE` starts and stops the
-line even with a card open.
+pointer. While **any** card is up — help, settings, the songs card, a device's card, the kit browser, or the picker — the
+editing keys are spent too, so a stray `enter` cannot change a step you cannot see. The transport keys still work: `SPACE` starts
+and stops the line even with a card open.
 
 ## Help — `F1`, `shift+?`, or the `?`
 

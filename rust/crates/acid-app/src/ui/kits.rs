@@ -107,8 +107,8 @@ pub fn rows(panel: Rect, s: f32, names: &[String]) -> Rows {
         egui::vec2(rows_wide, CARD_HEADING * s),
     );
     // The room the rows may take: everything above the footer keys, less one row so the last row is not painted over them.
-    // A player who has made more kits than fit sees the first of them — the alternative, which the songs card still does, is
-    // rows painted over IMPORT and CLOSE and off the bottom of the card.
+    // A player who has made more kits than fit sees the first of them — the alternative is rows painted over IMPORT and CLOSE
+    // and off the bottom of the card. The songs card caps its list the same way, from the same numbers.
     let limit = card.bottom() - CARD_PADDING * s - CARD_ROW * s - CARD_GAP * s;
     for name in names {
         if (y + CARD_ROW * s) > limit {

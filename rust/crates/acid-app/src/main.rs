@@ -781,19 +781,28 @@ impl TakkaApp {
                     .unwrap_or_default();
                 let library = persist::kits_dir();
                 match persist::import_kit(&from, &wanted, &library, rate) {
-                    Ok(folder) => {
-                        let name = folder
-                            .file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or(wanted);
+                    Ok(imported) => {
+                        let name = imported.name.clone();
                         self.panel.kits.names = persist::kit_names(&library);
                         let loaded = self.load_kit_now(self.rack.selected(), &name, rate);
                         if loaded {
                             self.forgive_kit_write();
                         }
                         self.kit_wanted = name.clone();
-                        if loaded {
+                        // One notice, and it is the *last* one this frame, so it can say what to do: a voice that did not come
+                        // with the folder is silent in the copy, and the file the document now names is the repair.
+                        if imported.problems.is_empty() && loaded {
                             self.notice(format!("imported the kit {name}"));
+                        } else if !imported.problems.is_empty() {
+                            let named: Vec<String> = imported
+                                .problems
+                                .iter()
+                                .map(|problem| problem.to_string())
+                                .collect();
+                            self.notice(format!(
+                                "imported {name}, but {} - put that file in its folder and load it again",
+                                named.join("; ")
+                            ));
                         }
                     }
                     Err(error) => self.notice(format!("could not import the kit: {error}")),

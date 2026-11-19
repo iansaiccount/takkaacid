@@ -140,11 +140,18 @@ pub fn paint(
         request = Some(Request::SaveCopy(name));
     }
     y += row_height + padding;
+    // The room a list may take: everything above the footer keys, less one row so the last row is not painted over them.
+    // Past it the rows stop, as the kit browser's do — the alternative is a list drawn over NEW/IMPORT/EXPORT/CLOSE and off
+    // the bottom of the card. A player with more songs than fit sees the first of them; there is no scrolling yet.
+    let list_limit = card.bottom() - padding - row_height - CARD_GAP * scale;
 
     // The demos first: they are what a player reaches for when they want a sound, and they are not files, so there is no
     // cross and no rename. Loading one replaces the session, which takes two clicks while it is unsaved.
     section(ui, scale, "DEMO BANKS", left, &mut y);
     for index in 0..songs.demos.len() {
+        if (y + row_height) > list_limit {
+            break;
+        }
         let name = songs.demos[index].clone();
         let row = Rect::from_min_size(
             egui::Pos2::new(left, y),
@@ -167,8 +174,13 @@ pub fn paint(
     }
 
     // Then the player's own songs: the name loads it, the cross beside it deletes it (twice, because there is no undo).
-    section(ui, scale, "MY BANKS", left, &mut y);
+    if (y + CARD_HEADING * scale) < list_limit {
+        section(ui, scale, "MY BANKS", left, &mut y);
+    }
     for index in 0..songs.names.len() {
+        if (y + row_height) > list_limit {
+            break;
+        }
         let name = songs.names[index].clone();
         let row = Rect::from_min_size(
             egui::Pos2::new(left, y),

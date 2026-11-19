@@ -90,3 +90,53 @@ fn the_keyboard_plays_in_the_selected_octave() {
         shared.midi_hz.get()
     );
 }
+
+/// A card over the face is modal: a key that would write a step behind it is a note instead, and a MIDI note waiting to be
+/// placed is drained without landing. The class the second review found one instance of, closed for all three writers.
+#[test]
+fn a_card_up_stops_a_key_and_a_midi_note_from_writing_a_step() {
+    use acid_app::ui::banks::Banks;
+
+    let shared = SharedState::new();
+    let mut panel = PanelState {
+        step_mode: true,
+        songs: acid_app::ui::SongState {
+            card: Some(Banks::default()),
+            ..acid_app::ui::SongState::default()
+        },
+        ..PanelState::default()
+    };
+    let before = shared.pattern().steps;
+
+    // Step mode would write this key into the selected step; behind a card it plays instead.
+    frames(
+        &shared,
+        &mut panel,
+        vec![vec![], vec![key_event(Key::A, true)]],
+    );
+    assert_eq!(
+        shared.pattern().steps,
+        before,
+        "a key behind a card writes no step"
+    );
+    assert!(
+        shared.midi_gate.load(std::sync::atomic::Ordering::Relaxed),
+        "it is an audition instead: the gate is what a card does not hide"
+    );
+    assert!(!panel.dirty, "and the session is not marked unsaved by it");
+
+    frames(&shared, &mut panel, vec![vec![key_event(Key::A, false)]]);
+
+    // The same for a note that arrived from MIDI while the card was up: drained, not placed.
+    assert!(shared.notes.push(45, 100), "a note is waiting");
+    frames(&shared, &mut panel, vec![vec![]]);
+    assert_eq!(
+        shared.pattern().steps,
+        before,
+        "a MIDI note behind a card writes no step either"
+    );
+    assert!(
+        shared.notes.is_empty(),
+        "the note was drained, not left waiting to land when the card closes"
+    );
+}

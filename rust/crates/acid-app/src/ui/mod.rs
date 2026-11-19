@@ -293,6 +293,20 @@ impl PanelState {
     pub fn close_device_card(&mut self) {
         self.device_card = device_card::Card::default();
     }
+    /// Whether any card is open over the panel.
+    ///
+    /// The one spelling of "the face is covered", asked by everything that would otherwise change something a card hides: the
+    /// step editor's arrows and `Enter`, the computer keyboard's step writes, and a MIDI note waiting to be placed. A card is
+    /// modal by design, so a writer that does not ask this is a write a player cannot see.
+    pub fn a_card_is_up(&self) -> bool {
+        self.help_visible
+            || self.settings_open
+            || self.kits.open
+            || self.songs.card.is_some()
+            || self.device_card.open.is_some()
+            || self.device_picker.open
+    }
+
     /// Show the picker, and put every other card away: there is room for one, and this is the one that adds a device.
     pub fn open_device_picker(&mut self) {
         self.put_cards_away();
@@ -462,7 +476,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // Every MIDI note still waiting while the panel is editing (step mode, or shift held) belongs to the selected
     // step. The queue is drained rather than peeked: two notes inside one frame are two steps, each at its own
     // velocity — one slot and a counter used to lose the first of them.
-    let editing = state.step_mode || ui.input(|input| input.modifiers.shift);
+    // A card over the face is modal: a note that would land in a step nobody can see is drained and dropped, not placed.
+    let editing =
+        (state.step_mode || ui.input(|input| input.modifiers.shift)) && !state.a_card_is_up();
     while let Some(waiting) = shared.notes.pop() {
         // The queue is drained for every kind — a note that arrived while a drum device was on the panel must not be placed
         // later — but only the 303 writes it into a step. A drum device's MIDI notes are a later round.
@@ -1055,7 +1071,9 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
         for action in keys::key_actions(&input.events) {
             match action {
                 keys::KeyAction::Press { key, shift } => {
-                    let editing = state.step_mode || shift;
+                    // A card over the face is modal, the same rule the step editor's arrows and `Enter` keep: behind a card a
+                    // note key is an audition, not a step write. The key is still remembered (`fresh`) so it walks nothing.
+                    let editing = (state.step_mode || shift) && !state.a_card_is_up();
                     // Only a key that *writes a step* is remembered. Every other key (arrows, Z/X, anything else) must be
                     // left alone: its press is replied to elsewhere, and its release would otherwise walk the border —
                     // pressing left walked back one step and the release immediately walked forward again.
@@ -1097,7 +1115,7 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
                 keys::KeyAction::Release { key } => {
                     // Only a key this panel wrote with walks on: an auditioned note is not an edit, and a release with
                     // no press behind it (a lost frame, a stuck key) moves nothing.
-                    if keys::release(&mut state.placed, key) && state.step_mode {
+                    if keys::release(&mut state.placed, key) && state.step_mode && !state.a_card_is_up() {
                         selection::walk(state);
                     }
                 }

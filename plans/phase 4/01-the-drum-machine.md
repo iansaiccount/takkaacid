@@ -176,8 +176,9 @@ pub fn kits_dir() -> PathBuf;                       // <data>/kits
 pub fn save_kit(kit: &Kit, dir: &Path, rate: f32) -> Result<PathBuf, KitError>;   // a WAV records its own rate
 pub fn load_kit(dir: &Path, name: &str, rate: f32) -> Result<LoadedKit, KitError>; // LoadedKit { kit, problems }: a missing
                                                                                   // WAV costs one voice, not the kit (Review Focus 2)
-pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<PathBuf, KitError>;  // lands beside a taken name,
-                                                                                  // and refuses a kit with a hole in it
+pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<ImportedKit, KitError>;  // lands beside a
+                                                                                  // taken name; a broken voice lands silent
+                                                                                  // with its file named (ImportedKit.problems)
 pub fn kit_names(dir: &Path) -> Vec<String>;        // factory names then the player's, sorted
 pub fn free_kit_name(dir: &Path, wanted: &str) -> String;   // factory names are reserved, and the rule is free_name's
 pub fn free_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String;  // the one copy rule: songs, kits, and a panel's copy
@@ -193,7 +194,8 @@ pub fn adopt_kit(&self, kit: Kit);                  // the load path; `set_kit` 
 ```
 **Corrected after the fact** (three deviations, each ruled on in the Progress): `save_kit` takes the rate a WAV must record and
 answers `KitError`; `load_kit` answers `LoadedKit` with a `problems` list so a broken voice does not cost the kit; and
-`import_kit` answers `KitError` because it either lands whole or does not land.
+`import_kit` answers `ImportedKit { folder, name, problems }` — a fourth correction, made after the follow-up — because an
+import with a broken voice **lands** and names the file to replace rather than being refused whole.
 - [ ] Tests: round trip through `save_kit`/`load_kit` with a one-voice sine written by hand; `import_kit` never overwrites (second
       import of the same name lands as `name (2)`); a kit with a missing WAV loads every other voice and reports the missing one by
       voice and file (Review Focus 2); a name that is a path (`../x`, `/abs`, `a/b`) is refused; `factory_kits` has three kits,
@@ -506,10 +508,11 @@ no seventeenth voice, no archive export of a kit.
       default kit naming none — the version pin itself is renamed, not added), and one unit test in `device_card.rs` for the kit
       row at 0.65× and 1.6×. `a_kit_written_by_hand_loads_its_own_wav` is the player's own door: a folder with a document and a
       WAV nothing in this build wrote.
-      **Mutations run, 34 of 34 caught, all reverted** (`.superpowers/mutate_task6.py`): a voice's file named by its slot; a
+      **Mutations run, 34 of 34 caught, all reverted** (`.superpowers/mutate_task6.py`; 42 of 42 with the follow-up, one retired
+      when the import reversed and nine added): a voice's file named by its slot; a
       decoded voice thrown away; a clipped filter index off by one; a missing WAV not reported; a document allowed to name a
       path; a save allowed a factory name; a free kit name ignoring the factory three; a save forgetting provenance; an import
-      overwriting; an import landing with a hole; any file counted as a kit; the save file not naming the kit; `SAVE_VERSION`
+      overwriting; any file counted as a kit; the save file not naming the kit; `SAVE_VERSION`
       back at 10; `upgraded` inventing a kit; the factory kits decoded at a hard-coded rate; every name a factory name; a factory
       edit in place; a copy named by a fixed suffix; a kit edit leaving the session saved; a factory row not marked read-only;
       the two lists not sorted apart; the card's `KIT` key inert; a kit row on every card; a sample stored through a wrapping
@@ -573,8 +576,9 @@ no seventeenth voice, no archive export of a kit.
       defaults (tune, decay, cutoff) are set by intent and **nobody has listened**: `kits.rs` says so where they are written. If
       wrong, constants only. (5) The default kit is factory #1 (`808`) and `SavedState::kit: None` means it, spelled once in
       `kits::default_name`. If wrong, a session that never ran an audio device comes back on `808`, and reordering `FACTORY`
-      silently moves the default. (6) An import that finds one broken voice refuses the whole import: a kit with a hole in it is
-      a kit the browser offers and the player cannot play. If wrong, one retry after fixing the folder. (7) A kit load over
+      silently moves the default. (6) **Superseded by the follow-up below:** an import that finds one broken voice was refused
+      whole, and the player's partner asked for the opposite — a kit that lands with the file named is one they can repair, and a
+      refusal gives them nothing to repair. (7) A kit load over
       unsaved edits takes two clicks, which the plan did not ask for: the edit is not on disk, and one click would throw it away.
       If wrong, one extra click. (8) A kit loads into the device whose card opened the browser (the selected one) and is written
       from the edited one (`PanelState::kit_dirty` carries that device's number, so the write cannot drift to whatever is
@@ -599,7 +603,22 @@ no seventeenth voice, no archive export of a kit.
       its own mutation, so "a mutation behind each" is now true of F1, F2 and the invisible `Enter`. Left recorded, not paid:
       `shift`+note and the MIDI queue still write a step behind a card (`ui::selection`'s arrows and `Enter` are the ones
       guarded — pre-existing, and the one fix is a `PanelState::a_card_is_up()` asked by all three writers).
-      **Deferred minors, recorded rather than paid:** `save_kit` never deletes a WAV for a voice that has lost its sample (no
-      UI can clear a sample yet, so nothing can orphan one), and the songs card still lets a long list run under its footer keys
-      where the kit browser now caps its rows — the same fix belongs in `banks.rs`, and it is a card task 10 or the wishlist
-      can take without this round's kit work.
+      **Follow-up after the commit (asked for by the player's partner), four changes, all paid.** (1) **An import with a broken
+      voice now lands instead of being refused** — ruling (6) reversed: `import_kit` answers `ImportedKit { folder, name,
+      problems }`, the copy's document keeps the source's file name for a voice that did not decode (so the kit is a kit *with a
+      hole* rather than one that never had the voice), and the status line says `imported X, but KICK: KICK.wav is missing - put
+      that file in its folder and load it again`. A test proves the whole arc: the import lands, the hole is named, the right WAV
+      dropped in under that name makes it load whole. (2) The three deferred minors are paid. `write_folder` deletes a
+      `<VOICE>.wav` the document no longer names (only names this module writes are ever touched), so a kit folder holds exactly
+      its samples — and `save_kit` keeps a name **only while its file is absent**, which is what tells "the player deleted this
+      voice" (delete the file and the name) apart from "this kit has a hole" (keep the name, so it stays repairable). The songs
+      card caps its rows above the footer keys the way the kit browser does. And `PanelState::a_card_is_up()` is now the one
+      spelling of "the face is covered": the step editor's arrows and `Enter`, the computer keyboard's step writes (a note key
+      behind a card auditions instead) and a MIDI note waiting to be placed all ask it, which closes the class the second review
+      found one instance of. **816 tests**, clippy and fmt clean, `./docs/guide/check.sh` ok, and the mutation run is **42 of 42**
+      — the follow-up's nine are a copy that does not keep the file name, an import that forgets its problems, a save that keeps a
+      stale WAV, a save that forgets a name, a save that deletes a file it cannot decode (the review's Important finding, fixed),
+      an import that lands a document naming a path,
+      a song list under the footer, a key writing behind a card, and a MIDI note landing behind one. The follow-up's own review
+      found one Important — that the deletion rule, as first written, deleted a WAV the app could not *decode* — and it is fixed
+      with `a_save_keeps_a_wav_that_will_not_decode`: only a file this build can play back is one the player deleted.

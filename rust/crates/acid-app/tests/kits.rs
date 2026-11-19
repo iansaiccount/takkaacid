@@ -231,10 +231,11 @@ fn an_import_lands_beside_a_taken_name_and_never_overwrites() {
     let source = save_kit(&kit, elsewhere.path(), RATE).unwrap();
 
     let first = import_kit(&source, "Test Kit", library.path(), 44_100.0).unwrap();
-    assert_eq!(first, library.path().join("Test Kit"));
+    assert_eq!(first.folder, library.path().join("Test Kit"));
+    assert_eq!(first.name, "Test Kit");
     let second = import_kit(&source, "Test Kit", library.path(), 44_100.0).unwrap();
     assert_eq!(
-        second,
+        second.folder,
         library.path().join("Test Kit (2)"),
         "a second import of the same name lands beside the first"
     );
@@ -248,30 +249,155 @@ fn an_import_lands_beside_a_taken_name_and_never_overwrites() {
 }
 
 #[test]
-fn an_import_refuses_a_kit_with_a_broken_voice_and_writes_nothing() {
+fn an_import_lands_a_kit_with_a_missing_wav_and_names_the_file_to_replace() {
+    // An import is the moment a player is holding a folder from somewhere else, so a kit with one broken voice lands anyway:
+    // fifteen good voices and a file name to fix are worth more than a refusal and nothing on disk. The copy's document keeps
+    // the name the source gave (`KICK.wav`), so dropping the right file in is the whole repair — and the next load says so.
     let library = tempfile::tempdir().unwrap();
     let elsewhere = tempfile::tempdir().unwrap();
     let source = save_kit(&test_kit(), elsewhere.path(), RATE).unwrap();
     std::fs::remove_file(source.join("KICK.wav")).unwrap();
 
-    let error = import_kit(&source, "Test Kit", library.path(), 44_100.0).unwrap_err();
+    let imported = import_kit(&source, "Test Kit", library.path(), 44_100.0).unwrap();
+    assert_eq!(imported.name, "Test Kit");
     assert_eq!(
-        error,
-        KitError::Missing {
+        imported.problems,
+        vec![KitError::Missing {
             voice: Drum::Kick,
             file: "KICK.wav".to_string()
-        },
-        "an import says which voice's file is not there"
+        }],
+        "the import says which voice's file is not there, so the notice can name it"
     );
     assert!(
-        kit_names(library.path()).is_empty()
-            || kit_names(library.path())
-                .iter()
-                .all(|name| is_factory(name)),
-        "a refused import leaves the library as it was: {:?}",
-        kit_names(library.path())
+        imported.folder.join("kit.json").is_file(),
+        "the kit landed: a copy a player can fix"
     );
-    assert!(!library.path().join("Test Kit").exists());
+
+    let loaded = load_kit(library.path(), "Test Kit", 44_100.0).unwrap();
+    assert_eq!(
+        loaded.problems.len(),
+        1,
+        "and the copy still names the hole: {:?}",
+        loaded.problems
+    );
+    assert_eq!(
+        loaded.kit.voices[Drum::Kick.index()].sample.len(),
+        0,
+        "the voice is silent until the file is put back"
+    );
+
+    // The repair: drop the right WAV in, under the name the document already carries, and the kit loads whole.
+    std::fs::write(imported.folder.join("KICK.wav"), sine_wav()).unwrap();
+    let repaired = load_kit(library.path(), "Test Kit", 44_100.0).unwrap();
+    assert_eq!(repaired.problems.len(), 0, "{:?}", repaired.problems);
+    assert_eq!(repaired.kit.voices[Drum::Kick.index()].sample.len(), 4_410);
+}
+
+#[test]
+fn a_save_removes_a_wav_for_a_voice_that_lost_its_sample() {
+    // A kit folder should hold the samples its document names and nothing else: a stale WAV is a voice the player deleted
+    // coming back if the name ever returns. Only the names this module writes are removed, so a player's own note in the
+    // folder survives.
+    let dir = tempfile::tempdir().unwrap();
+    let mut kit = test_kit();
+    save_kit(&kit, dir.path(), RATE).unwrap();
+    let folder = dir.path().join("Test Kit");
+    assert!(folder.join("KICK.wav").is_file());
+    std::fs::write(folder.join("notes.txt"), b"mine").unwrap();
+
+    kit.voices[Drum::Kick.index()].sample = Arc::default();
+    save_kit(&kit, dir.path(), RATE).unwrap();
+    assert!(
+        !folder.join("KICK.wav").exists(),
+        "the sample is gone from the kit, so its file goes too"
+    );
+    assert!(
+        folder.join("notes.txt").is_file(),
+        "and nothing else in the folder is touched"
+    );
+    let loaded = load_kit(dir.path(), "Test Kit", 44_100.0).unwrap();
+    assert_eq!(loaded.problems.len(), 0, "a silent voice is not a hole");
+}
+
+#[test]
+fn a_save_keeps_a_wav_that_will_not_decode() {
+    // The other side of the deletion: a file the app cannot *play* is not a voice the player deleted, it is the hole the
+    // notice names. A kit handed over with one ADPCM or half-downloaded WAV must survive a save with its bytes and its name —
+    // deleting it would destroy the player's only copy of the sample the status line just told them to replace.
+    let dir = tempfile::tempdir().unwrap();
+    save_kit(&test_kit(), dir.path(), RATE).unwrap();
+    let folder = dir.path().join("Test Kit");
+    std::fs::write(folder.join("KICK.wav"), b"not a wav at all").unwrap();
+    let loaded = load_kit(dir.path(), "Test Kit", RATE).unwrap();
+    assert_eq!(loaded.problems.len(), 1);
+
+    let mut edited = loaded.kit.clone();
+    edited.voices[Drum::Kick.index()].decay_ms = 111.0;
+    save_kit(&edited, dir.path(), RATE).unwrap();
+
+    assert!(
+        folder.join("KICK.wav").is_file(),
+        "a save destroyed the file the notice told the player to replace"
+    );
+    assert_eq!(
+        load_kit(dir.path(), "Test Kit", RATE)
+            .unwrap()
+            .problems
+            .len(),
+        1,
+        "and the hole is still the repair"
+    );
+}
+
+#[test]
+fn an_import_refuses_a_document_that_names_a_path() {
+    // The one problem an import cannot turn into a repairable kit: there is no file to put in the folder, and the name cannot
+    // be written into the copy, so the voice would vanish from the copy without a word. A broken document is refused whole.
+    let library = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let source = save_kit(&test_kit(), elsewhere.path(), RATE).unwrap();
+    let path = source.join("kit.json");
+    let mut document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    document["voices"][0]["file"] = serde_json::json!("../../etc/passwd");
+    std::fs::write(&path, serde_json::to_vec_pretty(&document).unwrap()).unwrap();
+
+    let error = import_kit(&source, "Test Kit", library.path(), RATE).unwrap_err();
+    assert!(
+        matches!(error, KitError::NotAName { .. }),
+        "{error:?} should name the document's entry"
+    );
+    assert!(
+        !library.path().join("Test Kit").exists(),
+        "a refused import leaves nothing behind"
+    );
+}
+
+#[test]
+fn a_save_keeps_the_name_of_a_file_that_is_not_there() {
+    // The other half of the import repair: a save must not turn a kit *with a hole* into a kit that never had the voice, or
+    // the file name the player was told to fill in would be forgotten the first time they touched a dial.
+    let dir = tempfile::tempdir().unwrap();
+    let kit = test_kit();
+    save_kit(&kit, dir.path(), RATE).unwrap();
+    std::fs::remove_file(dir.path().join("Test Kit").join("KICK.wav")).unwrap();
+    let loaded = load_kit(dir.path(), "Test Kit", 44_100.0).unwrap();
+    assert_eq!(loaded.problems.len(), 1);
+
+    // Save what was loaded, exactly as an edit of one dial would.
+    let mut edited = loaded.kit.clone();
+    edited.voices[Drum::Kick.index()].decay_ms = 111.0;
+    save_kit(&edited, dir.path(), RATE).unwrap();
+
+    let after = load_kit(dir.path(), "Test Kit", 44_100.0).unwrap();
+    assert_eq!(
+        after.problems,
+        vec![KitError::Missing {
+            voice: Drum::Kick,
+            file: "KICK.wav".to_string()
+        }],
+        "the hole is still a hole, with the name the player can fill"
+    );
 }
 
 #[test]

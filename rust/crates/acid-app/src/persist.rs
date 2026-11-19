@@ -708,6 +708,21 @@ pub struct LoadedKit {
     pub problems: Vec<KitError>,
 }
 
+/// A kit that was copied into the library, and the voices that did not come with it.
+///
+/// An import is the one moment a player is holding a folder from somewhere else, so a kit with a broken voice lands anyway and
+/// says which file to replace: refusing it whole would leave them nothing to fix, and a kit that is fifteen-sixteenths right is
+/// worth more than no kit. `problems` is the same vocabulary [`LoadedKit`] uses, one entry per voice.
+#[derive(Clone, Debug)]
+pub struct ImportedKit {
+    /// The folder the copy landed in, which is `<dir>/<name>` and never an existing one.
+    pub folder: PathBuf,
+    /// The name it landed under — the one asked for, or the first free `X (2)`.
+    pub name: String,
+    /// The voices that are silent in the copy, each naming the file to put in the folder.
+    pub problems: Vec<KitError>,
+}
+
 /// Where one voice's sample came from, kept when a kit is written again so a save cannot forget a licence.
 type Provenance = (String, String);
 
@@ -717,6 +732,7 @@ fn write_folder(
     name: &str,
     kit: &Kit,
     carried: [Provenance; Drum::ALL.len()],
+    named: [Option<String>; Drum::ALL.len()],
     rate: f32,
 ) -> Result<(), KitError> {
     std::fs::create_dir_all(folder).map_err(|error| KitError::Write(error.kind()))?;
@@ -739,7 +755,12 @@ fn write_folder(
     for drum in Drum::ALL {
         let voice = &kit.voices[drum.index()];
         if voice.sample.is_empty() {
-            // No sample, no file, and no name for one: a silent voice is silence, not a missing file.
+            // A silent voice writes no file — but it may still be *named*, and one case needs that: the copy an import makes of
+            // a kit whose KICK.wav was broken. A document that names the file is a kit with a hole a player can fill, and the
+            // notice says which file; a document that names nothing is a kit whose voice is simply silent for ever.
+            if let Some(file) = &named[drum.index()] {
+                voices[drum.index()].file = file.clone();
+            }
             continue;
         }
         let file = format!("{}.wav", drum.label());
@@ -748,6 +769,18 @@ fn write_folder(
             &crate::wav::encode(&voice.sample, rate),
         )?;
         voices[drum.index()].file = file;
+    }
+
+    // A file this write did not name is a WAV the document does not reference any more, and the folder should not keep it: the
+    // kit would carry a stale sample a player could hear by re-adding the name by hand. Only the names this module writes are
+    // ever removed, so nothing else in the folder is touched.
+    for drum in Drum::ALL {
+        if voices[drum.index()].file.is_empty() {
+            let stale = folder.join(format!("{}.wav", drum.label()));
+            if stale.is_file() {
+                std::fs::remove_file(&stale).map_err(|error| KitError::Write(error.kind()))?;
+            }
+        }
     }
 
     let document = KitDocument {
@@ -847,18 +880,34 @@ pub fn save_kit(kit: &Kit, dir: &Path, rate: f32) -> Result<PathBuf, KitError> {
     }
     let folder = kit_folder(dir, &name);
     let before = read_document(&folder).ok();
+    // What the folder already knew, kept per voice: where a sample came from, and — for a voice that has no sample now — the
+    // file the document names, so a save cannot turn a kit with one missing WAV into a kit that has forgotten it ever had one.
     let carried: [Provenance; Drum::ALL.len()] = std::array::from_fn(|slot| {
         let Some(document) = &before else {
             return (String::new(), String::new());
         };
         let entry = &document.voices[slot];
-        let file = &entry.file;
-        if file.is_empty() || *file != format!("{}.wav", Drum::ALL[slot].label()) {
+        if entry.file != format!("{}.wav", Drum::ALL[slot].label()) {
             return (String::new(), String::new());
         }
         (entry.source.clone(), entry.credit.clone())
     });
-    write_folder(&folder, &name, kit, carried, rate)?;
+    let named: [Option<String>; Drum::ALL.len()] = std::array::from_fn(|slot| {
+        if !kit.voices[slot].sample.is_empty() {
+            return None;
+        }
+        let document = before.as_ref()?;
+        let file = song_name(&document.voices[slot].file)?;
+        // The name is kept for every file this build cannot **play back**: gone, unreadable, or not a WAV. That is the hole a
+        // notice tells the player to fill — `KICK: KICK.wav is missing` or `KICK: KICK.wav - not a RIFF file` — and keeping the
+        // name (and the bytes) is what lets them fill it. Only a sample this build *can* decode is one the player deleted from
+        // the kit: then the save deletes its file and the name with it, and the folder stops carrying a stale voice.
+        let playable =
+            crate::wav::decode(&std::fs::read(folder.join(&file)).unwrap_or_default(), rate)
+                .is_ok();
+        if playable { None } else { Some(file) }
+    });
+    write_folder(&folder, &name, kit, carried, named, rate)?;
     Ok(folder)
 }
 
@@ -873,15 +922,26 @@ pub fn load_kit(dir: &Path, name: &str, rate: f32) -> Result<LoadedKit, KitError
     read_kit(&kit_folder(dir, &name), &name, rate)
 }
 
-/// Copy a kit folder into the library, and answer the folder it landed in.
+/// Copy a kit folder into the library, and answer where it landed and what is wrong with it.
 ///
 /// The copy is decoded and written again rather than copied byte for byte: a kit handed to the player may be 24-bit, at
 /// another rate, or with a file that is not a WAV at all, and the library holds kits this build can play. Provenance travels
-/// with it. An import either lands whole or not at all — a folder with a hole in it would be a kit the browser offers and the
-/// player cannot use.
-pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<PathBuf, KitError> {
+/// with it.
+///
+/// A kit with a broken voice **lands anyway**, with that voice silent and the problem named in `problems`: an import is the
+/// moment a player is holding a folder from somewhere else, and refusing it whole would leave them nothing to fix. The voice's
+/// slot in the document keeps its file name (`KICK.wav`) even though no file was written for it, so the notice says exactly
+/// which file to put in the folder — and the kit's next save writes the rest.
+pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<ImportedKit, KitError> {
     let source = read_kit(from, name, rate)?;
-    if let Some(problem) = source.problems.first() {
+    // A document that names something which is not a file name is the one problem an import cannot make repairable: there is
+    // no file the player could put in the folder, and the name cannot be written into the copy's document either. That is a
+    // broken document, not a broken sample, and it is refused whole — with the decoder's sentence naming the entry.
+    if let Some(problem) = source
+        .problems
+        .iter()
+        .find(|problem| matches!(problem, KitError::NotAName { .. }))
+    {
         return Err(problem.clone());
     }
     let wanted = kit_name(name).unwrap_or_else(|| "Imported kit".to_string());
@@ -894,9 +954,21 @@ pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<Path
             document.voices[slot].credit.clone(),
         )
     });
+    // A voice that did not decode keeps the file name the source document gave it, so the copy is a kit *with a hole* rather
+    // than a kit that never had the voice — and dropping the right WAV into that name is the whole repair.
+    let named: [Option<String>; Drum::ALL.len()] = std::array::from_fn(|slot| {
+        if !source.kit.voices[slot].sample.is_empty() {
+            return None;
+        }
+        song_name(&document.voices[slot].file)
+    });
     let folder = kit_folder(dir, &landed);
-    write_folder(&folder, &landed, &source.kit, carried, rate)?;
-    Ok(folder)
+    write_folder(&folder, &landed, &source.kit, carried, named, rate)?;
+    Ok(ImportedKit {
+        folder,
+        name: landed,
+        problems: source.problems,
+    })
 }
 
 /// Every kit on offer: the factory kits' names first, then the player's folders, each sorted.

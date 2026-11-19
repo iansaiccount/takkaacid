@@ -74,7 +74,7 @@ fn face_is_dimmed(output: &FullOutput) -> bool {
 ///
 /// Every card, not the three there used to be: the kit browser is panel-sized and opaque, so a missing entry here is a card a
 /// player can be stuck behind.
-fn every_open_card() -> [(&'static str, PanelState); 5] {
+fn every_open_card() -> [(&'static str, PanelState); 6] {
     let with_cell = || {
         let mut panel = PanelState::default();
         panel.strip.cells = vec![acid_app::ui::strip::StripCell {
@@ -111,6 +111,13 @@ fn every_open_card() -> [(&'static str, PanelState); 5] {
         ),
         ("device", device),
         ("kits", kits),
+        (
+            "picker",
+            PanelState {
+                device_picker: acid_app::ui::device_card::Picker { open: true },
+                ..PanelState::default()
+            },
+        ),
     ]
 }
 
@@ -119,6 +126,12 @@ fn every_card_dims_the_face_behind_it() {
     let ctx = Context::default();
     let shared = SharedState::new();
     for (name, mut panel) in every_open_card() {
+        // Every panel in this sweep must also answer "a card is up", because that is what the three step writers ask before
+        // they change something a card hides: a card added to this list alone would re-open the class that gate closes.
+        assert!(
+            panel.a_card_is_up(),
+            "{name} is a card this sweep knows and `a_card_is_up` does not"
+        );
         let output = run_on(&ctx, &mut panel, &shared, Vec::new());
         assert!(
             face_is_dimmed(&output),
@@ -156,6 +169,7 @@ fn every_card_dismisses_on_a_click_outside_the_panel() {
             "settings" => panel.settings_open,
             "device" => panel.device_request != Some(acid_app::device::Request::Close),
             "kits" => panel.kits.open,
+            "picker" => panel.device_picker.open,
             other => panic!("{other} is not a card this test knows"),
         };
         assert!(

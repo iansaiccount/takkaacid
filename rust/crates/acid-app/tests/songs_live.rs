@@ -426,6 +426,64 @@ fn the_header_names_the_session_and_its_state() {
     assert_eq!(now_line(Some("Acid 1"), false), "NOW: Acid 1 - SAVED");
 }
 
+/// A player accumulates songs, and the card has one screen. Past the room above the footer the rows stop being drawn, as the
+/// kit browser's do: the alternative is a list painted over `NEW`/`IMPORT`/`EXPORT`/`CLOSE` and off the bottom of the card.
+#[test]
+fn a_long_song_list_is_capped_above_the_footer_keys() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let names: Vec<String> = (0..60).map(|index| format!("Song {index:02}")).collect();
+    let mut panel = PanelState {
+        songs: SongState {
+            card: Some(Banks {
+                names: names.clone(),
+                ..Banks::default()
+            }),
+            ..SongState::default()
+        },
+        ..PanelState::default()
+    };
+
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        events: Vec::new(),
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+    output.textures_delta.clear();
+
+    // The footer's band: the last `row_height` of the card, which is where NEW/IMPORT/EXPORT/CLOSE are painted.
+    let footer_top = card().bottom() - padding() - row_height();
+    let mut painted = 0;
+    fn walk(shape: &egui::Shape, footer_top: f32, painted: &mut usize) {
+        match shape {
+            egui::Shape::Text(text) if text.galley.text().starts_with("Song ") => {
+                *painted += 1;
+                assert!(
+                    text.pos.y < footer_top,
+                    "a song row is painted over the footer keys: {} at y {} (limit {footer_top})",
+                    text.galley.text(),
+                    text.pos.y
+                );
+            }
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    walk(shape, footer_top, painted);
+                }
+            }
+            _ => {}
+        }
+    }
+    for clipped in &output.shapes {
+        walk(&clipped.shape, footer_top, &mut painted);
+    }
+    assert!(
+        painted > 0 && painted < names.len(),
+        "the list is capped: {painted} of {} rows drawn",
+        names.len()
+    );
+}
+
 /// A session that has never been saved is a first run or a demo: the header must not call it untitled while the name
 /// field and the panel's own label both show a name.
 #[test]
