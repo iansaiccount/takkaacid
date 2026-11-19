@@ -1,5 +1,8 @@
 # Handover — phase 4, task 7 (for a fresh session)
 
+> **Superseded — kept for the record, not for instructions.** Task 7 landed at `b998751`; the instructions for the session in flight
+> are in [`handover-task-8.md`](handover-task-8.md).
+
 Paste this whole file as the first message. It is written to be self-contained: the session it is for has no memory of the one
 that wrote it.
 
