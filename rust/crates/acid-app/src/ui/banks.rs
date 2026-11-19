@@ -19,7 +19,9 @@ pub struct Banks {
     pub message: Option<String>,
     /// The song whose delete cross has been clicked once. Deleting a file has no undo, so it takes two clicks.
     pub delete_armed: Option<String>,
-    /// The demo songs built into the app, in their own order. They are not files, so they are never deleted or renamed.
+    /// The demo banks built into the app, in their own order. They are not files, so they are never deleted or renamed —
+    /// and the five names are the same on either face, because they are the same demos: a 303 loads the song, a drum
+    /// machine the groove it is played over.
     pub demos: Vec<String>,
     /// The row whose load has been clicked once while the session was unsaved: loading again replaces it. Replacing work
     /// that is not on disk takes two clicks, like deleting a file.
@@ -43,7 +45,9 @@ pub enum Request {
     Import,
     /// Write the session to a path the player picks.
     Export,
-    /// Adopt the demo at this index as a new song: it is not a file, so it arrives unsaved, under a new name.
+    /// Adopt the demo at this index, as the device on the panel can use it: a 303 takes the whole song, under a new name
+    /// and unsaved; a drum machine takes its drum bank, into the grid, and keeps its kit and the session's name. `main`
+    /// asks the device's kind, because the card is a painter and the rack is not its to reach.
     LoadDemo(usize),
     Close,
 }
@@ -146,7 +150,9 @@ pub fn paint(
     let list_limit = card.bottom() - padding - row_height - CARD_GAP * scale;
 
     // The demos first: they are what a player reaches for when they want a sound, and they are not files, so there is no
-    // cross and no rename. Loading one replaces the session, which takes two clicks while it is unsaved.
+    // cross and no rename. Loading one replaces the session on a 303 — twice, while it is unsaved — and on a drum machine
+    // it fills the grid with that demo's groove and leaves the session where it was; the device's kind decides which, in
+    // `main`.
     section(ui, scale, "DEMO BANKS", left, &mut y);
     for index in 0..songs.demos.len() {
         if (y + row_height) > list_limit {

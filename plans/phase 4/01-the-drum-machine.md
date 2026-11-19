@@ -269,11 +269,19 @@ surface (`render_mono`, `bar_line`, `start_later`, `seek`, `stop`, `pause`, `res
 
 ### Task 9 — factory banks for the demo variations
 
-**Files:** modify `rust/crates/acid-core/src/factory.rs` (five drum banks), `rust/crates/acid-app/src/ui/banks.rs` (the drum
-device's `DEMO BANKS`), `rust/crates/acid-app/src/audio/renderer.rs` if a bank needs its kit; tests in `tests/banks_live.rs`.
-**Interfaces (produces):** `factory::drum_banks() -> Vec<(&'static str, PatternBank)>` with the five names the demo songs use
-(`Slow Acid`, `Hard Techno Acid`, `Blues`, `Rock`, `Funk` — in `acid-app::demo::songs()`, not in `factory`), eight patterns each,
-every pattern sounding something.
+**Files:** modify `rust/crates/acid-app/src/demo.rs` (the five drum banks, as `Demo::drums` and `demo::drum_banks`),
+`rust/crates/acid-app/src/device.rs` (`Device::load_bank`, `Device::publish_pattern`), `rust/crates/acid-app/src/main.rs`
+(the `DEMO BANKS` row routed by kind), `rust/crates/acid-app/src/ui/banks.rs` (the request's doc), and the book —
+`docs/guide/src/12-songs-and-demos.md` and `check.sh`; tests in `rust/crates/acid-app/tests/drum_banks.rs` (new).
+**Corrected after the fact**, as every task before it corrected its own lines: the plan named `acid-core/src/factory.rs`,
+`ui/banks.rs` for a listing change and `tests/banks_live.rs`; the banks live in `acid-app` beside the songs (ruling 1),
+the card's rows are the same five names on either face so it needs no listing change at all (ruling 5), and a test file
+that never drives `draw_panel` may not carry the `_live` suffix.
+
+**Interfaces (produces):** `demo::drum_banks() -> Vec<(&'static str, PatternBank)>` and
+`demo::load_drum_bank(&mut Rack, index) -> Option<&'static str>`, with the five names the demo songs use
+(`Slow Acid`, `Hard Techno Acid`, `Blues`, `Rock`, `Funk` — in `acid-app::demo::songs()`, not in `factory`), eight patterns
+each, every pattern sounding something, and a demo's tempo and shuffle landing with its grooves.
 - [ ] Tests: `every_demo_variation_has_a_drum_bank_of_eight_patterns`; `the_demo_names_are_the_acid_names` (the two lists agree,
       so the later whole-rack song can pair them); each bank's patterns have at least one hit per bar.
 - [ ] Write the patterns (listening work: a four-on-the-floor for the acid demos, a backbeat for Rock, a shuffle for Funk).
@@ -285,7 +293,8 @@ every pattern sounding something.
 `19-a-devices-card.md`, `14-midi.md` and `15-keyboard.md` (both say a device's one voice is played by the keyboard, which is
 no longer true of a drum device — task 8 added the one sentence each; re-read them with the drum machine in mind),
 `01-what-it-is.md` (the intro's framing: task 8 made a drum machine audible, so "what it is not" needs the page that says what
-it now is), `docs/guide/check.sh` (facts), and `src/img/README.md` + the screenshots.
+it now is), `docs/guide/check.sh` (facts), `12-songs-and-demos.md` (task 9 added the drum-bank paragraph, which wants the
+cross-reference to page 22 from where a player arrives at `DEMO BANKS`), and `src/img/README.md` + the screenshots.
 - [ ] Page 22: what the drum machine is, the grid, the lit plate, the knobs' relabelled meaning, `SHUFFLE`, the kit browser and
       kits, the factory banks. Facts pinned in `check.sh`: `KICK`, `LP | BP | HP`, `MY KITS`, `Drum machine`.
 - [ ] Screenshots at 1960 × 1340 (the AGENTS.md recipe, checking the display size first): the drum face, the kit list.
@@ -855,3 +864,110 @@ no seventeenth voice, no archive export of a kit.
       **The other drum-face pages are not wrong yet:** a drum device still opens on an empty grid (its masks are zero, so the
       machine sounds nothing), the card, the browser and the picker are task 6's and task 4's, and no page claimed what a `DRUMS`
       device sounds like or which banks its `BANKS` offers — the drum face's page is task 10's page 22.
+- [x] **Task 9 — a drum bank for every demo variation.** `acid_app::demo` gained the drum side of the five demos: each
+      `Demo` carries `drums: [Pattern; 8]`, five authored `groove`/`turnaround` pairs are built through one `bar` table of
+      `(Drum, steps, accented steps)` strikes, and eight variations are derived from each pair (`groove`; `groove` with a
+      downbeat crash; hats out; kick out; a shaker on the last sixteenth of each beat; `turnaround`; `turnaround` without
+      the snare; `turnaround` with sixteenths into the bar). `demo::drum_banks() -> Vec<(&'static str, PatternBank)>` is
+      that same list read from the drum side — eight patterns in `A1`..`A8`, the other seven banks empty, built by one
+      `bank_of`. Every strike goes through `Step::hit`, so a groove cannot draw a cell the machine does not sound.
+      `demo::load_drum_bank(&mut Rack, index) -> Option<&'static str>` is what a `DEMO BANKS` row does on a drum machine:
+      the bank through `Device::load_bank` (which opens it on `A1` and publishes it with `Device::publish_pattern`, the one
+      spelling of that rule, used by `adopted` too), then the demo's own tempo on the rack's cell and its shuffle on the
+      device's own. `main`'s `LoadDemo` arm branches on `Device::kind`: a 303 loads the whole demo song exactly as before,
+      a drum machine loads that demo and nothing else. Tests: four in `tests/drum_banks.rs` (new) — the three the task
+      names, plus `a_demo_arrives_on_a_drum_machine_as_patterns_a_tempo_and_a_shuffle`. **864 tests** (860 + 4), clippy and
+      fmt clean, `./docs/guide/check.sh` ok, `SAVE_VERSION` untouched at **11** — a bank is patterns and adds no document
+      field.
+      **Mutations run, 11 of 11 caught, all reverted** (`.superpowers/mutate_task9.py`): a demo renamed while its drum bank
+      is not; every demo given the slow acid groove; a groove written with `Step::note` (a grid that draws what the machine
+      never plays); a bank filling the second bank as well; two of a bank's eight variations being the same bar; the demo's
+      tempo never reaching the rack; its shuffle never reaching the machine; a loaded bank opening on its second pattern; a
+      loaded bank never reaching the state; a bank arriving with the default kit; and a device never publishing the bank it
+      was built on. The last one was **MISSED on the first run** against the test I guessed for it, which is why the script
+      names `mixer::two_devices_sum_to_something_louder_than_one` — `adopted`'s publish is held by the 303's sum test, not
+      by the drum device's, whose two patterns happen to coincide. The script now also **fails on a `SKIP`**: task 5's
+      record is right that a skip is not a pass, and its exit code used to say otherwise.
+      **Rulings, with what each costs if wrong.** (1) **The banks live in `acid-app`, beside the songs, not in
+      `acid_core::factory`**: the names are acid-app's, acid-core cannot depend on acid-app, and `factory::drum_banks()`
+      plus a test holding two lists equal would leave exactly the hand-kept second list this repo has paid for twice. As a
+      field of `Demo` there is one list, so a rename renames both sides and no test has to say so; the plan's **Files** and
+      **Interfaces** lines are corrected here. If wrong, the grooves are ~200 lines of tables to move and a name comparison
+      to add; nothing else depends on the home. (2) **`the_demo_names_are_the_acid_names` pins the five names as literals**
+      and compares the two accessors, but the equality half is structural now (one list) and cannot fail — the pin and the
+      "no two demos share a groove" loop are what bite, which the first two mutations show. If wrong, the test is a rename
+      reminder and a copy-paste guard rather than a drift guard. (3) **A demo's tempo and shuffle travel with its grooves.**
+      A bank is patterns only — the kit, the knobs and the session's name stay where they are — but a *demo* is more than
+      its patterns: a rack has one tempo cell and a drum device is built at swing 0.0, so without them a funk groove plays
+      at the slow acid's 118 and the blues arrives straight. The first review's Important finding was exactly that the
+      shuffle was missing (see below). If wrong, two lines in `load_drum_bank`. (4) **`Device::publish_pattern` is
+      extracted** so `adopted` and `load_bank` cannot spell the publish rule two ways, and it is named `publish_pattern`
+      rather than `publish` because `Rack::publish` — the `BusState` write `AGENTS.md` names — lives in the same module. If
+      wrong, one duplicated pair of `set_pattern` calls. (5) **The card itself is unchanged in what it draws.** The spec
+      says a drum device's `DEMO BANKS` lists the same five names as the acid side, and with one list it does — so the kind
+      is asked once, in `main`'s written-out match, and `ui/banks.rs` changes by its docs only. That is the plan's Files
+      line corrected again: it named `ui/banks.rs` for a listing change the "same five names" rule makes invisible, and the
+      load went behind `demo::load_drum_bank` rather than four statements in a binary no test can see. (6) **The tests live
+      in `tests/drum_banks.rs`, not `tests/banks_live.rs`** as the plan said: nothing in them drives `draw_panel`, and
+      `_live` is the repo's word for a test that does — the one exception to the naming in `tests/`, and a suffix is a
+      claim like any other. If wrong, a file name.
+      **Untested, deliberately, and why:** `main`'s arm is a binary with no tests (the same limit task 6 recorded for its
+      kit paths), so what a `DEMO BANKS` row loads is a function the test calls directly (`demo::load_drum_bank`), with
+      four mutations behind it — tempo, shuffle, the opening pattern and the published state. What is left in `main` is
+      three calls the acid arm already makes (`save`, `pattern_swap::adopt`, the notice) and the request's routing. The
+      card's drum rows are the acid rows by the spec's own rule, so there is no widget whose behaviour differs for a live
+      test to drive; `tests/songs_live.rs` keeps the row's request.
+      **The drum grooves are listening work and nobody has heard them.** The tables are written from the head against
+      `EAR_TESTING.md`'s marks — a four-on-the-floor for the two acid demos, a ride-led shuffle for Blues (its swing is the
+      clock's, and the demo sets it), a backbeat for Rock, sixteenth-note syncopation with a clave on the last sixteenth of
+      two for Funk — and every pattern's sounding is a test's, but the ear has not passed any of them. If a groove is wrong
+      it is a table, not code; `kits.rs`'s per-voice defaults carry the same caveat from task 6.
+      **Review: BLOCK on two Importants, both fixed in this commit, and every Minor actioned.** (1) **The drum side was
+      losing the demo's shuffle** while `demo.rs`'s own comment and this record claimed the drums lean where the walk leans:
+      swing is per-device, a drum machine is built at 0.0, and the arm set only the tempo, so Blues arrived straight and
+      Funk lost its 0.12 — a lie in the code, the record and (after my first draft) page 12. `load_drum_bank` now writes
+      `demo.state.swing`, page 12 says "tempo and shuffle", and a mutation holds it. (2) **The seam stopped at the bank.**
+      Everything about a demo that is not a pattern was re-derived in the binary, which is where (1) hid; the demo's
+      identity now lives in `demo::load_drum_bank` with the whole arc under test. Of its Minors: `check.sh` had the
+      "# 4. the facts" comment line twice (my edit re-added the header instead of replacing the wrapped line); `publish`
+      collided in name with `Rack::publish` and is `publish_pattern`; page 12's first draft said the fresh patterns make
+      the name go amber, which oversells a save that still writes the first device only (the page now says the grooves last
+      the session); the funk clave's comment said "the and of two" over a table that puts it on the last sixteenth; and this
+      record claimed task 10's Files line named page 12 when it did not — it does now, because page 22 wants the
+      cross-reference from the page a player arrives at `DEMO BANKS` from. The review also confirmed the ruling on where
+      the banks live ("right home, and the alternative is strictly worse") and found the unlistened-grooves caveat honest.
+      **The guide moved by one page and one fact.** `12-songs-and-demos` said a `DEMO BANKS` row loads a demo "as a **new**
+      song", which is no longer true on a drum machine — the same five rows now load that demo's drum bank at its tempo and
+      shuffle and leave the kit and the session's name alone — so the page gains one paragraph saying so, and `check.sh`
+      pins `drum bank` so a rewrite cannot drop it — proven by replacing the phrase on the page and watching `check.sh` stop
+      with `the guide never says: drum bank`, then restoring it. Nothing else in the book describes the BANKS row; the drum face's own
+      page is task 10's page 22.
+      **Second review: OK with notes — no Critical and no Important, and it checked each of the first round's eight findings
+      as genuinely gone rather than trusting the record.** Of its notes, two were fixed here. (1) `drum_variations`' doc said
+      "Every one of them keeps the downbeat", which is false of the kick-out break on the slow acid groove (its step 0 holds
+      the kick and nothing else) — the same class as round one's first finding, a comment claiming a property the table does
+      not have, and no test could hold it because no test asserts a downbeat. The sentence now says "all but the kick-out
+      break", which is also the reason the break is worth having. (2) Page 12's paragraph did not say the demo's tempo lands
+      on the **rack's** cell, so loading a drum bank on the second device also retunes the 303s beside it — and that tempo,
+      unlike the grooves, is what a save keeps. The page says both now, and says where the grooves themselves are kept (the
+      first device alone). Two notes are left standing and recorded rather than paid: `banks::paint`'s two-click guard prints
+      `unsaved session: click again to replace it` on a drum face, where a demo row replaces that device's eight patterns and
+      not the session — a sentence a player reads, so it is the player's call and the wishlist carries it with what would have
+      to move; and `demo::drum_banks()` has no production caller (the app reaches a bank through `load_drum_bank`, and the
+      test holds the two equal across `A1..A8`), which is the documented pairing seam for the rack round rather than a second
+      list. Its second-round limits are worth recording too: the reviewer had no shell, so it verified the diff and the
+      assertions by reading and re-ran nothing — the gates below are the executor's, run after the fixes.
+      **Third review (the delta only): OK with notes — no Critical, no Important, and every finding prose.** It caught four
+      claims the new handover made and the code does not: "no hover tips on drum controls" (the drum `SHUFFLE` and the shared
+      keys keep the 303's tips; only the seven dials, `LP | BP | HP` and `HIT` have none), a factory kit's first edit copying
+      "silently" (it says so on the strip and the browser's header reads `NOW: <name> - READ ONLY`), "two CC0 libraries and one
+      Freesound collection" (`CREDITS.md` and ruling 3 both say **two** collections), and `STEP` being "inert" on a drum face
+      (it lights and toggles; only the writing it opens is gated). Its remaining notes: the wishlist said `banks::paint`
+      already receives the `SharedState` (`kits::paint` does; `banks::paint` would grow the argument), the deferral named the
+      wrong round, `drum_variations`' second phrasing still read as "the kick-out break never keeps the downbeat" (it can, in
+      four of the five banks — the comment now says why the slow acid's cannot), and page 12's bare "unlike the grooves" is
+      qualified. Two structural notes were acted on as well: `handover-task-9.md` now carries its superseded note and
+      `00-phase-4.md`'s bullet points at `handover-task-10`, which the phase overview requires of every handover ("only the
+      newest is instructions") — they travel in this commit rather than a follow-up, so the diff that landed is the diff that
+      was read. Nothing in the third round touched code: what it moved was prose in a handover, a wishlist entry and a page,
+      and the gates below were re-run after it.

@@ -5,7 +5,7 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
 
 - [`01-the-drum-machine`](01-the-drum-machine.md) — the whole phase in one round: the face first, then the pattern's masks, the
   machine, the kits and the factory banks.
-- [`handover-task-9`](handover-task-9.md) — the briefing for the session taking the next task: where the branch stands, what the
+- [`handover-task-10`](handover-task-10.md) — the briefing for the session taking the next task: where the branch stands, what the
   finished tasks left, the traps that task owns, and the environment facts that have cost time. Each task's session rewrites
   it for the next one, and supersedes it with a pointer, so only the newest is instructions.
 

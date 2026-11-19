@@ -31,7 +31,7 @@ done
   done
 
 # 4. the facts that must not drift (phase 2's rack, card, colour and clipboard; the themes' source and its credit; phase 3's
-#    deck, pause, transpose row, banks and copy/paste)
+#    deck, pause, transpose row, banks and copy/paste; phase 4's drum machine and the drum banks its demos carry)
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
 # The phase replaced the saved word and moved the name out of the middle; both are claims a rewrite can put back, and neither is
 # a positive fact, so each needs its own guard.
@@ -53,7 +53,8 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE' \
             '`KIT`' '`MY KITS`' 'Acoustic' \
             'the whole repair' \
-            'the next play carries on from there' 'tape deck' 'writes as you go' 'DRUMS'; do
+            'the next play carries on from there' 'tape deck' 'writes as you go' 'DRUMS' \
+            'drum bank'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done
 echo "guide: ok"

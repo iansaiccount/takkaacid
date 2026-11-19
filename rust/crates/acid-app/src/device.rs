@@ -242,11 +242,7 @@ impl Device {
 
     /// A device wrapped around state and patterns that already exist — what a session loads. Its kind is the state's.
     pub fn adopted(number: usize, state: Arc<SharedState>, bank: PatternBank) -> Self {
-        // The engine plays what `SharedState` holds, not what the bank holds. A device whose state was never handed its
-        // pattern renders silence, which the mixer's sum test found the day a second device existed.
-        state.set_pattern(Arc::new(*bank.current_pattern()));
-        state.set_pattern_index(bank.current());
-        Self {
+        let device = Self {
             number,
             name: Self::default_name(state.kind, number),
             scheme: Scheme::Black,
@@ -255,7 +251,33 @@ impl Device {
             inputs: crate::midi::route::InputFilter::everything(),
             state,
             bank,
-        }
+        };
+        device.publish_pattern();
+        device
+    }
+
+    /// Give this device a whole bank of patterns, and open on its first: what loading a factory bank does.
+    ///
+    /// A bank is patterns only — the kit, the knobs, the name and the route are not its business, so a machine handed a
+    /// groove keeps the sound it was edited to make. *Which* bank a device takes is its caller's question, and it is the
+    /// caller's to answer: a drum device loads the drum banks, a 303 a song's, because a bank of masks played by the 303
+    /// is silence rather than a line.
+    pub fn load_bank(&mut self, bank: PatternBank) {
+        self.bank = bank;
+        self.bank.select(0);
+        self.publish_pattern();
+    }
+
+    /// The engine plays what `SharedState` holds, not what the bank holds: say which pattern the bank is on. A device
+    /// whose state was never handed its pattern renders silence, which the mixer's sum test found the day a second
+    /// device existed.
+    ///
+    /// One spelling, because a bank arrives two ways — a session load and a factory bank — and the second caller is how
+    /// the first one's rule comes to be forgotten.
+    fn publish_pattern(&self) {
+        self.state
+            .set_pattern(Arc::new(*self.bank.current_pattern()));
+        self.state.set_pattern_index(self.bank.current());
     }
 
     /// The name a device carries until a hand types one: `ACID 3`.

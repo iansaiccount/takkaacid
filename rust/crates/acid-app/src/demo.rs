@@ -9,20 +9,65 @@
 //! funk lines are written here. They are in the spirit of those records, not copies of them.
 
 use acid_core::bank::PatternBank;
+use acid_core::drums::Drum;
 use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
 use acid_core::pitch::Pitch;
 
 use crate::persist::{Knobs, SAVE_VERSION, SavedState};
 
-/// One demo: the name the card shows, and the song it loads.
+/// One demo: the name the card shows, the song it loads, and the drum machine's version of it.
 pub struct Demo {
     pub name: &'static str,
     pub state: SavedState,
+    /// The drum machine's side of this variation: eight one-bar grooves in `A1`..`A8`, the drums this line plays over. The
+    /// grooves travel with the name, so a drum bank cannot be listed under a demo that has none, and a groove cannot outlive
+    /// the demo it was written for.
+    pub drums: [Pattern; 8],
 }
 
 /// Every demo, in the order the card lists them.
 pub fn songs() -> Vec<Demo> {
     vec![slow_acid(), hard_techno(), blues(), rock(), funk()]
+}
+
+/// The drum side of every demo, in the demos' own order, as the bank a drum device loads from `DEMO BANKS`.
+///
+/// The names are [`songs`]' own — one list, not a second kept beside it — so the song a player hears and the groove it
+/// plays over cannot be renamed out from under each other, and the whole-rack document this phase leaves for later pairs
+/// them by name without a table to keep in step.
+pub fn drum_banks() -> Vec<(&'static str, PatternBank)> {
+    songs()
+        .into_iter()
+        .map(|demo| (demo.name, bank_of(&demo.drums)))
+        .collect()
+}
+
+/// Eight patterns as the bank a device loads: `A1`..`A8`, and the other seven banks empty.
+fn bank_of(drums: &[Pattern; 8]) -> PatternBank {
+    let mut bank = PatternBank::new_empty();
+    for (slot, pattern) in drums.iter().enumerate() {
+        bank.replace(slot, *pattern);
+    }
+    bank
+}
+
+/// Put one of the demos on a drum machine: its eight patterns into the device's bank, and the tempo and shuffle it is
+/// played at.
+///
+/// A bank is patterns only — the kit, the knobs and the session's name are the player's — but a *demo* is not only its
+/// patterns, and a groove at another demo's tempo is not the demo it is named after. Answers the demo's name when
+/// `index` named one, which is what the status line says.
+/// The device has to be a drum machine: a bank of masks played by the 303 is silence, so `main` calls this from its
+/// `DeviceKind::Drums` arm and nowhere else.
+pub fn load_drum_bank(rack: &mut crate::device::Rack, index: usize) -> Option<&'static str> {
+    let demo = songs().into_iter().nth(index)?;
+    let device = rack.device_mut();
+    device.load_bank(bank_of(&demo.drums));
+    // The shuffle is the device's own, like the 303's — a song sets it from the same field — and a drum machine is built
+    // at 0.0, so without this the blues demo arrives straight rather than as the shuffle it was written to be.
+    device.state.swing.set(demo.state.swing);
+    rack.set_tempo_bpm(demo.state.bpm);
+    Some(demo.name)
 }
 
 /// What a first run opens on: the slow acid demo, already carrying the name a new song starts with.
@@ -107,6 +152,64 @@ fn sparser(pattern: Pattern) -> Pattern {
     Pattern::from_steps(steps)
 }
 
+/// One drum voice's strikes in a bar: which steps it hits, and which of those are accented.
+///
+/// The steps are written as numbers because a bar is sixteen steps and a groove is where its strikes fall; the voices are
+/// always from [`Drum`], which is the one catalogue of them.
+type Strike = (Drum, &'static [usize], &'static [usize]);
+
+/// A bar of drums from a table of strikes; every step the table does not name is a rest.
+///
+/// Every strike goes through [`Step::hit`], the only writer of the two masks and of `on`, so a groove cannot draw a cell
+/// the machine does not sound — a table written with `Step::note` would be a bar of rests with a grid that looked full.
+fn bar(strikes: &[Strike]) -> Pattern {
+    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    for &(drum, hits, accents) in strikes {
+        for &at in hits {
+            steps[at].hit(drum, accents.contains(&at));
+        }
+    }
+    Pattern::from_steps(steps)
+}
+
+/// The same bar with one voice taken out: the break a groove needs, without a second table to keep in step.
+fn without(pattern: Pattern, drum: Drum) -> Pattern {
+    let mut pattern = pattern;
+    for step in &mut pattern.steps {
+        step.clear_hit(drum);
+    }
+    pattern
+}
+
+/// The same bar with one voice also struck on more steps: the busier reading of a groove.
+fn also(pattern: Pattern, drum: Drum, hits: &[usize], accented: bool) -> Pattern {
+    let mut pattern = pattern;
+    for &at in hits {
+        pattern.steps[at].hit(drum, accented);
+    }
+    pattern
+}
+
+/// The drum side of one demo: the groove, six readings of it and the turnaround, so a bank has all eight slots.
+///
+/// Transposing is not a drum variation — it moves a lattice the masks do not read — so the eight are the ways a section
+/// opens, breaks and turns around: the groove, a crash to open on, the hats out, the kick out, a shaker on the offbeats,
+/// the turnaround, and two readings of the turnaround. Every variation keeps the downbeat except the kick-out break, whose
+/// whole point is to lose it — that is only true because the groove it is taken from has nothing else on its first step —
+/// and that each of them sounds at all is the test's to hold.
+fn drum_variations(groove: Pattern, turnaround: Pattern) -> [Pattern; 8] {
+    [
+        groove,
+        also(groove, Drum::Crash, &[0], true),
+        without(groove, Drum::ClosedHat),
+        without(groove, Drum::Kick),
+        also(groove, Drum::Shaker, &[3, 7, 11, 15], false),
+        turnaround,
+        without(turnaround, Drum::Snare),
+        also(turnaround, Drum::Snare, &[13, 14, 15], true),
+    ]
+}
+
 /// The patch each demo plays through. "Saw" and "square" are the wave catalogue's indices, so a demo cannot name a wave
 /// the oscillator does not have.
 mod patches {
@@ -161,6 +264,21 @@ fn slow_acid() -> Demo {
         (14, Pitch::A, 1, ""),
         (15, Pitch::C, 2, "s"),
     ]);
+
+    // The drums four to the floor, with the clap on two and four and a closed hat on the offbeats: the slow acid records'
+    // own pulse, sparse enough that the slides are still what a player hears.
+    let groove = bar(&[
+        (Drum::Kick, &[0, 4, 8, 12], &[0]),
+        (Drum::Clap, &[4, 12], &[12]),
+        (Drum::ClosedHat, &[2, 6, 10, 14], &[6]),
+    ]);
+    let turnaround = bar(&[
+        (Drum::Kick, &[0, 8], &[0]),
+        (Drum::Snare, &[4, 12], &[]),
+        (Drum::ClosedHat, &[2, 6, 10], &[]),
+        (Drum::LowTom, &[13, 14], &[14]),
+        (Drum::HighTom, &[15], &[15]),
+    ]);
     Demo {
         name: "Slow Acid",
         state: song(
@@ -170,6 +288,7 @@ fn slow_acid() -> Demo {
             main,
             fill,
         ),
+        drums: drum_variations(groove, turnaround),
     }
 }
 
@@ -211,6 +330,26 @@ fn hard_techno() -> Demo {
         (14, Pitch::E, 1, "g"),
         (15, Pitch::E, 1, "s"),
     ]);
+
+    // Sixteenth hats under the kick, the clap on two and four and a rim on the offbeats: the same chug the line plays, at the
+    // tempo the demo calls hard techno.
+    let groove = bar(&[
+        (Drum::Kick, &[0, 4, 8, 12], &[0, 8]),
+        (Drum::Clap, &[4, 12], &[12]),
+        (
+            Drum::ClosedHat,
+            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+            &[2, 6, 10, 14],
+        ),
+        (Drum::Rim, &[2, 10], &[]),
+    ]);
+    let turnaround = bar(&[
+        (Drum::Kick, &[0, 4, 8], &[0]),
+        (Drum::Clap, &[4], &[]),
+        (Drum::Snare, &[14, 15], &[]),
+        (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10, 12], &[2, 10]),
+        (Drum::LowTom, &[11], &[]),
+    ]);
     Demo {
         name: "Hard Techno Acid",
         state: song(
@@ -220,6 +359,7 @@ fn hard_techno() -> Demo {
             main,
             fill,
         ),
+        drums: drum_variations(groove, turnaround),
     }
 }
 
@@ -248,6 +388,23 @@ fn blues() -> Demo {
         (14, Pitch::D, 2, ""),
         (15, Pitch::D, 2, "s"),
     ]);
+
+    // A shuffle is the clock's (this demo swings 0.35), so the ride walks the eighths straight on and the hats sit on the
+    // last sixteenth of each beat: the drums lean where the walk leans.
+    let groove = bar(&[
+        (Drum::Ride, &[0, 2, 4, 6, 8, 10, 12, 14], &[0, 6, 12]),
+        (Drum::Kick, &[0, 8], &[0]),
+        (Drum::Snare, &[4, 12], &[]),
+        (Drum::ClosedHat, &[3, 7, 11, 15], &[]),
+    ]);
+    let turnaround = bar(&[
+        (Drum::Ride, &[0, 2, 4, 6], &[0]),
+        (Drum::Kick, &[0], &[0]),
+        (Drum::Snare, &[4, 12], &[]),
+        (Drum::LowTom, &[13], &[]),
+        (Drum::MidTom, &[14], &[]),
+        (Drum::Crash, &[15], &[15]),
+    ]);
     Demo {
         name: "Blues",
         state: song(
@@ -257,6 +414,7 @@ fn blues() -> Demo {
             main,
             fill,
         ),
+        drums: drum_variations(groove, turnaround),
     }
 }
 
@@ -282,6 +440,21 @@ fn rock() -> Demo {
         (12, Pitch::E, 1, "s"),
         (14, Pitch::E, 2, ""),
     ]);
+
+    // A backbeat: the kick on one and the "and" of two, the snare on two and four, eighth hats over it. The rock band's
+    // drums, which is what the bass part was written against.
+    let groove = bar(&[
+        (Drum::Kick, &[0, 6, 8], &[0, 8]),
+        (Drum::Snare, &[4, 12], &[12]),
+        (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10, 12, 14], &[]),
+    ]);
+    let turnaround = bar(&[
+        (Drum::Kick, &[0, 8], &[0]),
+        (Drum::Snare, &[4], &[]),
+        (Drum::ClosedHat, &[0, 2, 4, 6, 8], &[]),
+        (Drum::MidTom, &[12, 13], &[]),
+        (Drum::LowTom, &[14], &[]),
+    ]);
     Demo {
         name: "Rock",
         state: song(
@@ -291,6 +464,7 @@ fn rock() -> Demo {
             main,
             fill,
         ),
+        drums: drum_variations(groove, turnaround),
     }
 }
 
@@ -325,6 +499,27 @@ fn funk() -> Demo {
         (14, Pitch::E, 1, ""),
         (15, Pitch::B, 1, "s"),
     ]);
+
+    // The syncopation is the point: the kick around the beat rather than on it, sixteenth hats with the accents on the
+    // offbeats, a clave on the last sixteenth of two, and an open hat to close the bar.
+    let groove = bar(&[
+        (Drum::Kick, &[0, 3, 6, 10], &[0]),
+        (Drum::Snare, &[4, 12], &[12]),
+        (
+            Drum::ClosedHat,
+            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+            &[2, 6, 10, 14],
+        ),
+        (Drum::OpenHat, &[15], &[15]),
+        (Drum::Clave, &[7], &[]),
+    ]);
+    let turnaround = bar(&[
+        (Drum::Kick, &[0, 6], &[0]),
+        (Drum::Snare, &[4], &[]),
+        (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10], &[2, 10]),
+        (Drum::LowConga, &[11], &[]),
+        (Drum::HighConga, &[13], &[]),
+    ]);
     Demo {
         name: "Funk",
         state: song(
@@ -334,6 +529,7 @@ fn funk() -> Demo {
             main,
             fill,
         ),
+        drums: drum_variations(groove, turnaround),
     }
 }
 

@@ -402,29 +402,51 @@ impl eframe::App for TakkaApp {
                 }
                 panel_ui::banks::Request::Load(name) => self.load_song_now(&dir, &name),
                 panel_ui::banks::Request::LoadDemo(index) => {
-                    if let Some(demo) = demo::songs().into_iter().nth(index) {
-                        self.save();
-                        let device = self.rack.device_mut();
-                        persist::apply_saved(&demo.state, &device.state, &mut device.bank);
-                        self.rack.set_tempo_bpm(demo.state.bpm);
-                        panel_ui::pattern_swap::adopt(
-                            &mut self.panel,
-                            self.rack.state(),
-                            self.rack.bank(),
-                        );
-                        self.pending_pattern = None;
-                        // A demo is not a file: it arrives as a new song under a name, and nothing of it is on disk until
-                        // the player renames and saves it.
-                        self.panel.songs.name = Some(demo::NEW_SONG.to_string());
-                        self.panel.songs.file = None;
-                        self.panel.songs.card = None;
-                        self.panel.dirty = true;
-                        self.panel.tooltips = demo.state.tooltips;
-                        self.panel.autosave = demo.state.autosave;
-                        self.panel.set_density(demo.state.density);
-                        self.panel.set_scale(panel_ui::scale::Scale::from_index(
-                            demo.state.scale as usize,
-                        ));
+                    // The five rows are the demos' own names on either face, so what a row *does* is the device's kind —
+                    // the one question `Device::kind` answers. Written out, so a third machine has to decide here.
+                    match self.rack.device().kind() {
+                        device::DeviceKind::Acid => {
+                            if let Some(demo) = demo::songs().into_iter().nth(index) {
+                                self.save();
+                                let device = self.rack.device_mut();
+                                persist::apply_saved(&demo.state, &device.state, &mut device.bank);
+                                self.rack.set_tempo_bpm(demo.state.bpm);
+                                panel_ui::pattern_swap::adopt(
+                                    &mut self.panel,
+                                    self.rack.state(),
+                                    self.rack.bank(),
+                                );
+                                self.pending_pattern = None;
+                                // A demo is not a file: it arrives as a new song under a name, and nothing of it is on
+                                // disk until the player renames and saves it.
+                                self.panel.songs.name = Some(demo::NEW_SONG.to_string());
+                                self.panel.songs.file = None;
+                                self.panel.songs.card = None;
+                                self.panel.dirty = true;
+                                self.panel.tooltips = demo.state.tooltips;
+                                self.panel.autosave = demo.state.autosave;
+                                self.panel.set_density(demo.state.density);
+                                self.panel.set_scale(panel_ui::scale::Scale::from_index(
+                                    demo.state.scale as usize,
+                                ));
+                            }
+                        }
+                        device::DeviceKind::Drums => {
+                            // The whole of what a demo on a drum machine is lives in `demo::load_drum_bank`: its patterns,
+                            // its tempo and its shuffle, and nothing else — not the kit, not the session's name.
+                            self.save();
+                            if let Some(name) = demo::load_drum_bank(&mut self.rack, index) {
+                                panel_ui::pattern_swap::adopt(
+                                    &mut self.panel,
+                                    self.rack.state(),
+                                    self.rack.bank(),
+                                );
+                                self.pending_pattern = None;
+                                self.panel.songs.card = None;
+                                self.panel.dirty = true;
+                                self.notice(format!("loaded the {name} drum bank"));
+                            }
+                        }
                     }
                 }
             }

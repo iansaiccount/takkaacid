@@ -112,6 +112,18 @@ would see it does not exist yet: it needs the transport **stopped** (which is wh
 `the_volume_knob_sets_a_drum_devices_level` is not — its rack is playing), a `HIT` requested in the block the knob moves, and the
 hit's opening level compared against its settled one.
 
+### The banks card's two-click warning says "session" on a drum face
+
+`ui::banks`'s guard prints `<name> - click again to replace` and `unsaved session: click again to replace it` whenever the
+device's eight patterns** and leaves the session's name, the kit and the knobs alone — so the warning names the wrong thing
+on the one face task 9 changed the row's meaning for. Two clicks are still right (eight patterns are overwritten and a
+non-first device's bank is in no file); only the word is wrong.
+
+**What would have to move.** `banks::paint` grows the `shared: &SharedState` argument `kits::paint` already takes — it is the
+state's `kind` the label needs — and `ui/mod.rs` passes the selected device's state it already has in hand. Deferred because
+it is a sentence a player reads and the 303's copy is already right: changing it is the player's call, not an executor's, and
+the rack round is the one that will touch this card again (a second device's banks get a file of their own there).
+
 ### Per-device audio outs (stems)
 
 One cpal stream and an app-side mix is the phase 2 design, and stems would ride on it: `Mixer` already renders each device
