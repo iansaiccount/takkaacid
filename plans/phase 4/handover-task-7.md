@@ -15,12 +15,13 @@ transport, transpose, reverse and themes. The approved design is
 tasks, is `plans/phase 4/01-the-drum-machine.md`; its `## Progress` is the record and its Global Constraints and Review Focus
 are binding. The phase overview is `plans/phase 4/00-phase-4.md`.
 
-**Where the branch stands.** `044d5e0` is task 6, reviewed (three times — the third review's findings are in the Progress
-entry and every one is fixed) and committed; `e1b0640` is the committed task 6 handover plus task 5's marked superseded;
-`00af7c1` task 5, `718b8d2` task 4, `0520760` task 3, `b74179d` task 2, `0f7890d` task 1. Gates green at `044d5e0`:
-`cargo test --workspace` (**810**), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`, and
-`./docs/guide/check.sh` from the repo root. The branch is **local only** — nothing is pushed. Tasks 1–6 are done; tasks 7–10
-are not started. `SAVE_VERSION` is now **11** (`SavedState::kit`); the rack round takes **12**.
+**Where the branch stands.** `d4ba97f` is task 6's follow-up (the review's findings, and the player's partner's ask that an import
+with a broken voice lands instead of being refused) and `044d5e0` is task 6 itself, reviewed three times — the third round's
+findings are in the plan's Progress and every one is fixed. `cc6cd2e` is the committed handover, `e1b0640` task 5's handover,
+`00af7c1` task 5, `718b8d2` task 4, `0520760` task 3, `b74179d` task 2, `0f7890d` task 1. Gates green at `d4ba97f`:
+`cargo test --workspace` (**816**), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`, and
+`./docs/guide/check.sh` from the repo root; the mutation run is 42 of 42. The branch is **local only** — nothing is pushed.
+Tasks 1–6 are done; tasks 7–10 are not started. `SAVE_VERSION` is now **11** (`SavedState::kit`); the rack round takes **12**.
 
 ## Your task: task 7 of the plan — the machine
 
@@ -105,6 +106,12 @@ sentences written for the status line.
 loads into the selected device's `SharedState` through `adopt_kit`, and writes an edited kit's folder on save.
 **`SAVE_VERSION` is 11** with `SavedState::kit: Option<String>` appended last.
 
+Its follow-up (`d4ba97f`, same task): `import_kit` answers `ImportedKit { folder, name, problems }` and **lands** a kit whose
+sample will not read, keeping the source's file name for the hole so the status line can say which file to replace — a document
+naming a *path* is still refused whole. A save deletes a `<VOICE>.wav` the document no longer names, and keeps the name and the
+bytes of a file this build cannot play back. `PanelState::a_card_is_up()` is the one spelling of "the face is covered", asked by
+`ui::selection::dispatch`, `ui::mod::play_computer_keys` and the MIDI note queue — **any new writer that changes a step must ask
+it**, and `tests/modal_live.rs::every_open_card` is the list a new card has to join.
 **What is still missing, and is your task**: there is no `Performer`, no `Drums`, no multimode filter, and
 `acid-app::audio::renderer::AudioRenderer` still owns an `acid_core::Engine` and nothing else — so a drum device's face draws
 and edits a kit but **sounds the 303 line under the grid**. Task 8 is what gives the renderer a `Machine`; task 7 is the
@@ -192,8 +199,8 @@ machine itself.
 
 ## The end of this session
 
-When task 8 is committed: add its `## Progress` entry (what shipped, the mutations, the review's findings, every ruling with
-its cost), **rewrite this file as `plans/phase 4/handover-task-9.md`** for the next task — task 9 is *factory banks for the demo
+When task 7 is committed: add its `## Progress` entry (what shipped, the mutations, the review's findings, every ruling with
+its cost), **rewrite this file as `plans/phase 4/handover-task-8.md`** for the next task — task 8 is *the renderer holds a
 machine*: `Machine::{Acid, Drums}` in `audio/renderer.rs`, `audio/mixer.rs` if the slot type changes, the kit reload on a rate
 change in `main`, the audition drain, and `tests/mixer.rs` / `tests/no_alloc.rs` — and prepend the one-line
 `> **Superseded — kept for the record, not for instructions.**` note to this file, as task 5's handover did to task 4's.
