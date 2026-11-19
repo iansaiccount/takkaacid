@@ -112,17 +112,29 @@ would see it does not exist yet: it needs the transport **stopped** (which is wh
 `the_volume_knob_sets_a_drum_devices_level` is not — its rack is playing), a `HIT` requested in the block the knob moves, and the
 hit's opening level compared against its settled one.
 
-### The banks card's two-click warning says "session" on a drum face
+### A drum voice takes no controller, so `LEARN` has half a face on one
 
-`ui::banks`'s guard prints `<name> - click again to replace` and `unsaved session: click again to replace it` whenever the
-device's eight patterns** and leaves the session's name, the kit and the knobs alone — so the warning names the wrong thing
-on the one face task 9 changed the row's meaning for. Two clicks are still right (eight patterns are overwritten and a
-non-first device's bank is in no file); only the word is wrong.
+`LEARN` is on every face, `VOLUME` answers it on both, and a drum machine's seven dials, filter key and `HIT` do not: there is
+no `midi::cc::CcTarget` for a drum voice this phase (the spec's non-goal), so pressing `LEARN` on a drum face and clicking a
+dial picks nothing. The dials now stand still while it is choosing — a drag used to turn the voice and, on a factory kit, copy
+the whole kit under a free name — but the key still reads as if the face could be taught.
 
-**What would have to move.** `banks::paint` grows the `shared: &SharedState` argument `kits::paint` already takes — it is the
-state's `kind` the label needs — and `ui/mod.rs` passes the selected device's state it already has in hand. Deferred because
-it is a sentence a player reads and the 303's copy is already right: changing it is the player's call, not an executor's, and
-the rack round is the one that will touch this card again (a second device's banks get a file of their own there).
+**What would have to move.** Either a `CcTarget` per voice (a filled extension of `midi::cc`, a mapping from `Drum` to a
+controller number, and the renderer reading sixteen more CCs — the round that also gives the machine MIDI pads), or hiding
+`LEARN` on a drum face the way the 303's rows are hidden, which is a face change and therefore the player's call. Until then
+the page says which of the two it is (page 22: "`LEARN` has nothing to teach here").
+
+### The retired `Arc<Kit>` is freed on the audio thread
+
+`audio::renderer`'s module doc names it: when a kit is swapped, the mixer's copy of the old `Arc<Kit>` drops its last
+reference during the render call, and `tests/no_alloc.rs` counts allocations, so it cannot see a **free**. It happens once per
+published kit, which a dial drag makes once per value — a small, bounded cost on the audio thread that is deliberate and
+written down rather than hidden.
+
+What would have to move: publish on pointer release rather than per frame (a `response.drag_stopped()` arm in
+`ui::kits::edit`), or hand the retired `Arc` back to the UI thread through a slot the callback only ever pushes to and never
+frees. Either is a change to `ui::kits::edit`, which is the one seam a kit edit goes through.
+
 
 ### Per-device audio outs (stems)
 

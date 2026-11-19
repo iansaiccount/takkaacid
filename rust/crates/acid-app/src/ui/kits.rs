@@ -102,10 +102,10 @@ pub fn rows(panel: Rect, s: f32, names: &[String]) -> Rows {
     let factory_heading = caption(&mut y);
     let mut factory = Vec::new();
     let mut mine = Vec::new();
-    let mut mine_heading = Rect::from_min_size(
-        egui::Pos2::new(left, y),
-        egui::vec2(rows_wide, CARD_HEADING * s),
-    );
+    // The caption for the player's list is placed where that list starts: above the first of their kits, or — when they
+    // have none, which is what a first run has — after the factory rows. It used to be measured straight after the
+    // `FACTORY` caption and moved only when a player's kit appeared, so a first run drew `MY KITS` on top of `808`.
+    let mut mine_heading = Rect::NOTHING;
     // The room the rows may take: everything above the footer keys, less one row so the last row is not painted over them.
     // A player who has made more kits than fit sees the first of them — the alternative is rows painted over IMPORT and CLOSE
     // and off the bottom of the card. The songs card caps its list the same way, from the same numbers.
@@ -122,6 +122,9 @@ pub fn rows(panel: Rect, s: f32, names: &[String]) -> Rows {
             }
             mine.push(row(&mut y, rows_wide));
         }
+    }
+    if mine.is_empty() {
+        mine_heading = caption(&mut y);
     }
 
     let bottom = card.bottom() - CARD_PADDING * s - CARD_ROW * s;
@@ -371,4 +374,54 @@ pub fn close(state: &mut PanelState) {
     state.kits.open = false;
     state.kits.load_armed = None;
     state.kits.message = None;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn panel() -> Rect {
+        Rect::from_min_size(egui::Pos2::ZERO, theme::DESIGN_SIZE)
+    }
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|name| (*name).to_string()).collect()
+    }
+
+    #[test]
+    fn each_caption_sits_above_its_own_rows_and_never_on_one() {
+        // A first run: the three that ship and nothing of the player's. `MY KITS` still gets a caption, and it belongs
+        // under the last factory row — the browser first shipped with that caption measured straight after `FACTORY`,
+        // which drew it across `808` and made the card read as if the two lists overlapped.
+        let layout = rows(panel(), 1.0, &names(&["808", "909", "Acoustic"]));
+        assert_eq!(layout.factory.len(), 3);
+        assert!(layout.mine.is_empty());
+        assert!(layout.factory_heading.bottom() <= layout.factory[0].top());
+        for pair in layout.factory.windows(2) {
+            assert!(pair[0].bottom() <= pair[1].top(), "factory rows overlap");
+        }
+        assert!(
+            layout.mine_heading.top() >= layout.factory[2].bottom(),
+            "the MY KITS caption is drawn over the factory rows: {:?} vs {:?}",
+            layout.mine_heading,
+            layout.factory[2]
+        );
+
+        // With a kit of the player's, the caption moves to just above their first row, below the factory ones.
+        let layout = rows(panel(), 1.0, &names(&["808", "909", "Acoustic", "My kit"]));
+        assert_eq!(layout.mine.len(), 1);
+        assert!(layout.mine_heading.bottom() <= layout.mine[0].top());
+        assert!(layout.mine_heading.top() >= layout.factory[2].bottom());
+    }
+
+    #[test]
+    fn the_footer_keys_stay_below_every_row() {
+        // Forty kits: the rows stop above `IMPORT` and `CLOSE` rather than being painted over them.
+        let many: Vec<String> = (0..40).map(|index| format!("Kit {index}")).collect();
+        let layout = rows(panel(), 1.0, &many);
+        let footer = layout.import.top().min(layout.close.top());
+        for rect in layout.mine.iter().chain(&layout.factory) {
+            assert!(rect.bottom() <= footer, "a row runs under the keys");
+        }
+    }
 }

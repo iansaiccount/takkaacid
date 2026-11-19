@@ -664,6 +664,115 @@ fn turning_attack_edits_the_selected_voice() {
 }
 
 #[test]
+fn a_learn_in_progress_turns_no_drum_dial() {
+    // `LEARN` is on every face and asks the player to click a control. The drum face has no `CcTarget` for a voice this
+    // phase, so there is nothing there to teach — but the dial must also not *turn*: on a factory kit an edit copies the
+    // kit under a new name, and a hand that meant to learn must not end up with `808 (2)` and an unsaved session.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let before = shared.kit().voices[Drum::Kick.index()].clone();
+    let name = shared.kit().name.clone();
+    let attack = drum_panel::dial_cells(&layout(screen()))[Knob::Waveform.index()].center();
+    // The first frame settles which device the editor is on, and a device arriving cancels any learn (`draw_panel`), so the
+    // `LEARN` is started on the frame after it — which is the order a player's hands arrive in too.
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![Event::PointerMoved(attack)],
+    );
+    panel.learn = acid_app::ui::learn::Step::Choosing;
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![press(attack, Modifiers::default())],
+    );
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![Event::PointerMoved(attack - vec2(0.0, 24.0))],
+    );
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![release(attack - vec2(0.0, 24.0))],
+    );
+    // The filter key is the other voice edit on that face, and it copies a factory kit for the same reason.
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        drum_panel::filter_cell(&layout(screen()), FilterKind::Band).center(),
+        Modifiers::default(),
+    );
+    assert_eq!(
+        shared.kit().voices[Drum::Kick.index()].filter,
+        before.filter,
+        "a learn in progress switched the voice's filter"
+    );
+
+    // ...and the drum `SHUFFLE`, which *can* be taught: it picks the controller instead of turning the swing.
+    let swing = shared.swing.get();
+    let shuffle = drum_panel::key_cell(&layout(screen()), DrumKey::Shuffle).center();
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![Event::PointerMoved(shuffle)],
+    );
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![press(shuffle, Modifiers::default())],
+    );
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![Event::PointerMoved(shuffle - vec2(0.0, 24.0))],
+    );
+    run(
+        &ctx,
+        screen(),
+        &mut panel,
+        &shared,
+        vec![release(shuffle - vec2(0.0, 24.0))],
+    );
+    assert_eq!(
+        shared.swing.get(),
+        swing,
+        "a learn in progress turned the drum SHUFFLE"
+    );
+    let after = shared.kit().voices[Drum::Kick.index()].clone();
+    assert_eq!(
+        (after.attack_ms, after.decay_ms, after.cutoff),
+        (before.attack_ms, before.decay_ms, before.cutoff),
+        "a learn in progress turned the voice"
+    );
+    assert_eq!(
+        shared.kit().name,
+        name,
+        "a learn in progress copied the kit"
+    );
+    assert!(
+        !panel.dirty,
+        "a learn in progress marked the session unsaved"
+    );
+}
+
+#[test]
 fn the_filter_key_sets_the_voices_filter() {
     let ctx = Context::default();
     let shared = SharedState::new();

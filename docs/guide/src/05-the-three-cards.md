@@ -48,7 +48,8 @@ pass over. [`19-a-devices-card`](19-a-devices-card.md) is that page.
 ## The kit browser — `KIT` on a drum machine's card
 
 The three kits that ship, then the player's own, with `IMPORT` and `CLOSE`. It is opened from a drum machine's card and
-puts that card away, like every other card does. [`19-a-devices-card`](19-a-devices-card.md#the-kit) is that page.
+puts that card away, like every other card does. [`19-a-devices-card`](19-a-devices-card.md#the-kit) is the card's side of it
+and [`22-the-drum-machine`](22-the-drum-machine.md) the machine's.
 
 **Out:** `CLOSE`, `Escape`, or a click outside the card.
 

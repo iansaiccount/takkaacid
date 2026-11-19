@@ -64,8 +64,9 @@ The session lives in a data directory:
 - otherwise `$XDG_DATA_HOME/takka-acid`,
 - otherwise `~/.local/share/takka-acid`.
 
-Inside it, `state.json` is the session and `songs/` holds one file per named song. Both are read at startup: a run with a
-different `TAKKA_ACID_DATA_DIR` sees none of the work from a run with the default one.
+Inside it, `state.json` is the session, `songs/` holds one file per named song, and `kits/` holds the kits you have made or
+imported. All three are read at startup: a run with a different `TAKKA_ACID_DATA_DIR` sees none of the work from a run with the
+default one.
 
 **And the warning worth repeating:** saving is manual by default. The help card's own note says the session is saved on exit
 and that `AUTOSAVE`, in the settings card, writes as you go; only the exit save always happens — the as-you-go save needs

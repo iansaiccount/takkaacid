@@ -45,7 +45,7 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | `F3`, or the caret on the selected cell | the device card |
 | `Ctrl+1` … `Ctrl+4` | put that device on the panel |
 | `Ctrl+C` / `Ctrl+V` | copy the pattern on the panel / paste one into it |
-| `escape` | close the topmost card — the picker, the device card, settings, help, the bank browser — then give up on a `LEARN` |
+| `escape` | close the topmost card — the picker, the device card, the kit browser, settings, help, the bank browser — then give up on a `LEARN` |
 
 **The panel's own keys:** `REVERSE`, `TRANS -`, the transpose's readout, `TRANS +` and `TBC` twice, then `LEARN`, in the
 bottom row; `OCT -` `OCT +` `CLEAR` `RANDOM` in the performance row's left cluster, with `SHUFFLE`, density and scale at its
@@ -109,6 +109,14 @@ machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, 
 **The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), `CLOSE`, and the line under the rows:
 `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.
 
+**The drum machine's face.** `DRUMS` is the device; its seven dials are the selected voice's — `ATTACK`, `DECAY`, `SUSTAIN`,
+`RELEASE`, `CUT OFF`, `RESONANCE`, `TUNE` — with the three-way key `LP | BP | HP` beside them, `HIT` to audition that voice,
+and `SHUFFLE` set apart from the seven because it is the device's swing. That voice's name is printed above the dials. The
+grid's sixteen rows are `KICK`, `SNR`, `RIM`, `CLAP`, `CHH`, `OHH`, `LOT`, `MID`, `HTOM`, `CRS`, `RDE`, `CWB`, `LCO`, `HCO`,
+`CLV`, `SHK`, one per voice top to bottom, and one cell per step: a click strikes, `SHIFT`-click accents, a click on the
+label selects the voice and `SHIFT`-click on the label mutes it. `OCT`, `CLEAR`, `RANDOM` and the density and scale dials are
+not on that face, `STEP` lights and writes nothing there, and the machine takes no notes this round.
+
 **The clipboard's notices**, in the same corridor as the name: `copied A1`, `pasted A1 into A2`, `the clipboard has no pattern`.
 
 **The settings card.**
@@ -144,8 +152,9 @@ and the row being asked about on `<name> - click again to replace`.
 | `$TAKKA_ACID_DATA_DIR` | the whole data directory, when that variable is set |
 | `$XDG_DATA_HOME/takka-acid` | otherwise, this |
 | `~/.local/share/takka-acid` | or this, when `XDG_DATA_HOME` is unset too |
-| `state.json` | the session: bank, patch, tempo, swing, switches, MIDI choice — **the first device only**; other devices' names, patterns, ports and colours are not saved |
+| `state.json` | the session: bank, patch, tempo, swing, switches, the kit's name, MIDI choice — **the first device only**; other devices' names, patterns, kits, ports and colours are not saved |
 | `songs/<name>.json` | one file per named song; the name is the file name |
+| `kits/<name>/` | a kit: its `kit.json` and one `<VOICE>.wav` per sampled voice. The three that ship are compiled into the app and have no folder here; a kit is written when a session that plays an edited one is saved |
 
 Song names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.
 

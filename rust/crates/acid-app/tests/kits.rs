@@ -710,6 +710,45 @@ fn factory_kits_are_three_kits_of_sixteen_audible_voices() {
 }
 
 #[test]
+fn every_factory_voice_plays_the_file_named_after_it() {
+    // The compiled-in tables are positional: row `Drum::index()` *is* that voice, and the file name in each row is the only
+    // thing that says which sound it holds. Swap two rows and every other check here still passes — each voice has a
+    // sample, each is audible and short — while the kit plays a kick where the snare is. So the link is checked by name:
+    // the WAV in the repository whose name is the voice's own label, decoded at the same rate the app decoded it.
+    let rate = 48_000.0;
+    let kits = std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("kits"))
+        .expect("the kits folder ships with the crate")
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+
+    for kit in factory_kits(rate) {
+        let folder = kits
+            .iter()
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.eq_ignore_ascii_case(&kit.name))
+            })
+            .unwrap_or_else(|| panic!("no folder for the {} kit", kit.name));
+        for drum in Drum::ALL {
+            let path = folder.join(format!("{}.wav", drum.label()));
+            let bytes =
+                std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+            let expected = acid_app::wav::decode(&bytes, rate)
+                .unwrap_or_else(|error| panic!("{}: {error:?}", path.display()));
+            assert!(
+                kit.voices[drum.index()].sample == expected,
+                "{}: the {drum:?} row does not play {}",
+                kit.name,
+                path.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn the_factory_kits_decode_at_the_rate_they_are_handed() {
     // Trap 1: the rate is a parameter, never a default. A kit decoded at the wrong rate plays every
     // voice at the wrong pitch, and nothing in the face would say why.

@@ -251,13 +251,6 @@ impl Kit {
         }
         mask
     }
-
-    /// Set each voice's mute from a mask packed by [`Kit::mute_mask`] — the inverse, beside the pack so a reorder moves both.
-    pub fn set_mute_mask(&mut self, mask: u16) {
-        for drum in Drum::ALL {
-            self.voices[drum.index()].mute = mask & drum.bit() != 0;
-        }
-    }
 }
 
 /// The kit a device starts with: sixteen voices, none of them with a sample.
@@ -774,20 +767,13 @@ mod tests {
             "bit `Drum::index()` is a voice's bit, in catalogue order"
         );
 
-        // And the other direction: a mask from a saved kit or from the panel's mute has to land on the voices it names.
-        let mut unpacked = default_kit();
-        unpacked.set_mute_mask(kit.mute_mask());
-        for drum in Drum::ALL {
-            assert_eq!(
-                unpacked.voices[drum.index()].mute,
-                kit.voices[drum.index()].mute,
-                "{drum:?} unpacked from the wrong bit"
-            );
-        }
+        // The mask a *machine* holds is the live one (`Drums::set_mute_mask` writes it, and `SharedState::adopt_kit` seeds
+        // it from this pack); the kit's own flags are the starting mask a load carries and nothing unpacks into them, so the
+        // inverse lives on the machine and not here.
         assert_eq!(
-            unpacked.mute_mask(),
-            kit.mute_mask(),
-            "the pack and the unpack must be inverses"
+            default_kit().mute_mask(),
+            0,
+            "a fresh kit is silent, not muted"
         );
     }
 }

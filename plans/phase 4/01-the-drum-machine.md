@@ -294,9 +294,15 @@ each, every pattern sounding something, and a demo's tempo and shuffle landing w
 no longer true of a drum device — task 8 added the one sentence each; re-read them with the drum machine in mind),
 `01-what-it-is.md` (the intro's framing: task 8 made a drum machine audible, so "what it is not" needs the page that says what
 it now is), `docs/guide/check.sh` (facts), `12-songs-and-demos.md` (task 9 added the drum-bank paragraph, which wants the
-cross-reference to page 22 from where a player arrives at `DEMO BANKS`), and `src/img/README.md` + the screenshots.
+cross-reference to page 22 from where a player arrives at `DEMO BANKS`), and `src/img/README.md` + the screenshots; plus,
+**corrected after the fact** as every task before it corrected its own lines: `05-the-three-cards.md` and
+`18-a-rack-of-devices.md` (the two other pages a reader arrives from), `rust/crates/acid-app/src/ui/kits.rs` and
+`ui/banks.rs` (two defects the pictures exposed — see the Progress), and `rust/crates/acid-app/src/ui/mod.rs` (the call
+site a new argument reaches).
 - [ ] Page 22: what the drum machine is, the grid, the lit plate, the knobs' relabelled meaning, `SHUFFLE`, the kit browser and
-      kits, the factory banks. Facts pinned in `check.sh`: `KICK`, `LP | BP | HP`, `MY KITS`, `Drum machine`.
+      kits, the factory banks. Facts pinned in `check.sh`: `KICK`, `LP | BP | HP`, `MY KITS`, `drum machine` (the plan said
+      `Drum machine`; the guide's own title is "The drum machine", and `grep -F` is case-sensitive, so the pin is the
+      sentence the pages actually say).
 - [ ] Screenshots at 1960 × 1340 (the AGENTS.md recipe, checking the display size first): the drum face, the kit list.
 - [ ] `./docs/guide/check.sh`; PASS. Commit: `docs(guide): the drum machine, its card and its kits`.
 
@@ -971,3 +977,88 @@ no seventeenth voice, no archive export of a kit.
       newest is instructions") — they travel in this commit rather than a follow-up, so the diff that landed is the diff that
       was read. Nothing in the third round touched code: what it moved was prose in a handover, a wishlist entry and a page,
       and the gates below were re-run after it.
+- [x] **Task 10 — the book, and two defects the pictures exposed.** `22-the-drum-machine` is a new page: the grid and its
+      gestures, the seven dials' relabelled meaning with `LP | BP | HP`, `HIT` and `SHUFFLE`, the kit browser and what a kit
+      is, the five demo drum banks, and a "what is not here" section (no notes, no step or performance row, one hit per voice,
+      no per-voice hover help). It is in `SUMMARY.md` under *Making a sound*, and the pages a reader arrives from — `04`'s new
+      "The second face", `12`'s drum-bank paragraph, `19`'s `KIT` section, `05`'s kit-browser entry and `18`'s picker
+      paragraph — link it. `01-what-it-is` now opens on both machines ("one voice, or sixteen") and answers "not a sampler"
+      for a machine that plays samples; `20-reference` carries the face's whole vocabulary. `check.sh` pins `KICK`,
+      `LP | BP | HP`, `MY KITS` and `drum machine`. Two pictures at 1960 × 1340 (`drum-face.png`, `kit-browser.png`), each
+      with its own row in `img/README.md` and the session that took them recorded there. **870 tests** (867 at the end of task 9, plus three the reviews added), clippy and
+      fmt clean, `./docs/guide/check.sh` ok. `SAVE_VERSION` untouched at 11.
+      **The pictures found two real defects, both fixed here with a test and a mutation behind each.** (1) The kit browser
+      drew `MY KITS` **on top of** `808`: the caption was measured straight after `FACTORY` and only moved when a player's
+      kit appeared, so a first run — three factory kits, no others — put it across the first row. Found by looking at the
+      grab the page was going to publish, not by the suite. `rows` now places it after the factory rows when the player has
+      none, and `each_caption_sits_above_its_own_rows_and_never_on_one` holds it. (2) Task 9's deferred minor: the two-click
+      guard said `unsaved session: click again to replace it` on a drum face, where a demo row replaces that device's eight
+      patterns and not the session. `banks::paint` now takes the device's kind and `armed_hint`/`guard_message` answer per
+      machine (`click again to replace the grid`), with the song rows and `NEW` keeping the session's sentence — a song *is*
+      a session on either face — and `the_guard_names_what_a_second_click_would_replace` pinning both. Of the plan's other
+      deferred items, three are left standing and each is in the wishlist with what would have to move: per-voice hover help
+      (the tip table is a 40-variant catalogue and nine new player-facing sentences are the player's to hear first), the
+      rate-change reload reseeding the player's mutes, and the drum gain's missing idle snap. The version-refusal wishlist
+      entry is behaviour on the one path every file goes through and belongs to the round that also writes the rack document.
+      **Mutations run, 7 of 7 caught** (`.superpowers/mutate_task10.py`): the kit browser's caption measured after `FACTORY`
+      again; the kit list's cap removed; the drum face's warning naming the session again; and each of the four new pins
+      taken out of the guide (`check.sh` stops with `the guide never says: …` for each). The first run reported **3 of 7**,
+      and the four misses were the script's own bug rather than a weak pin: it walked `src/*.md` and missed
+      `src/img/README.md`, where `KICK` and `MY KITS` are also said, so the check kept passing. `guide_pages` now walks the
+      tree, and the record keeps that run because "the pin bites" is only true of the run that says so.
+      **The guide is the deliverable, so its pins were proven, not assumed:** removing `drum bank` from page 12, then each of
+      the four new phrases from every page, stops `./docs/guide/check.sh` with the phrase it stopped saying.
+      **The pictures are the round's other test, and one of them is why the kit browser is in this commit.** Both are at
+      1960 × 1340 on a display checked with `xdotool getdisplaygeometry` first (`2200 1500`), from a fresh
+      `TAKKA_ACID_DATA_DIR`, pointer parked away from the panel before each grab, and the state each one records is the
+      state `img/README.md` says.
+      **Invisible to the guide: nothing.** This task *is* the guide, and the two defects above were prose's subject before
+      they were code's: a page describing the kit browser's two lists would have described a picture that contradicted it.
+      **Whole-branch review (phase 4 against `main`): BLOCK on one Critical and three Importants, all fixed in this
+      commit.** The Critical was this task's own: `04-the-face` printed "The second face" **twice** — the first paragraph's
+      continuation was deleted when it was rewritten and the opening sentence was left behind, so the page the new page hangs
+      from rendered a sentence starting twice and stopping mid-clause. `check.sh` cannot see a duplicated line; the reviewer
+      can, which is the difference between the two tools. The Importants: (1) page 22 said the drum filter "is the same one
+      the 303's is", and `filter.rs` says in its own module doc that it is deliberately **not** the 303's ladder but a
+      state-variable filter that *maps* cutoff and resonance the same way — the one sentence that explains `LP | BP | HP` was
+      the one contradicting the engine. (2) `LEARN` is drawn on every face and picks nothing on a drum machine's dials; worse,
+      a *drag* while it was choosing turned the voice and, on a factory kit, copied the whole kit under a free name because
+      the hand meant to teach. The dials and the filter key now stand still while a learn is choosing (the 303's own idiom,
+      without a target to pick), `a_learn_in_progress_turns_no_drum_dial` holds it, and the wishlist carries the two ways to
+      finish the job — a `CcTarget` per voice, or hiding `LEARN` there, a face change and so the player's. (3) The factory
+      kits' sample tables are positional and nothing bound a row to a voice: swapping the 808's kick and snare rows left
+      every existing check green. `every_factory_voice_plays_the_file_named_after_it` now decodes the WAV in the repository
+      whose name is the voice's own label and compares it to the compiled-in voice, and the mutation that swaps those two
+      rows is caught. Of its minors, all actioned: page 22's kit folder is written "when the session is saved"; `20-reference`
+      and `ui/dispatch`'s two comments now count **five** cards inside the panel and name the kit browser in the escape order;
+      the kit is in the three enumerations that describe what is on disk (`20`'s `state.json` line and its files table, `18`'s
+      restart paragraph, `12`'s "one song, one rack"); `1u32 << drum.index()` became `u32::from(drum.bit())`; and
+      `Kit::set_mute_mask` is **deleted** — it had no production caller, and `SharedState::drum_mute`'s doc claimed the kit
+      and the state were "the only pack and unpack" when nothing unpacks into a kit any more. The retired `Arc<Kit>` freed on
+      the audio thread is now a wishlist line with what would have to move, because it ships knowingly and the record did not
+      say so. The review's second-round caveat is worth keeping: it had no shell, so the gates below are the executor's, run
+      after every fix.
+      **Mutations after the review, 9 of 9 caught** (the same script, two entries added): a learn in progress turning a drum
+      dial again (a two-edit mutation, because either half of the guard alone already stops it — the lesson of task 7's
+      accent ordering), and the 808's kick and snare rows swapped. **870 tests** (867 + the learn test, the sample-binding
+      test).
+      **Second review of the delta (after the whole-branch fixes): BLOCK, narrowly, on three prose findings and six minors —
+      all actioned.** The three Importants were book text this commit would have shipped: page 22 said `LEARN` on a drum face
+      could "only bind the `VOLUME` knob" when the shared top strip also lets it bind the tempo and pattern readouts (the
+      wishlist entry written in the same commit had it right, so the page was the one liar); `18`'s new kit sentence sat
+      beside a list that still counted kits as memory-only and a "They are gone on restart" that contradicted it, so the
+      paragraph now separates what the file keeps, what the folder keeps and what the rack forgets; and `02-install` still
+      said the data directory holds **two** things, with no kit in its `state.json` line — it says three now, with a `kits/`
+      row, and `17-trouble`'s version of the same sentence took the same clause. Of the minors: the drum `SHUFFLE` got the
+      303's `learn_pick` treatment (it is the one knob on that face with a real target, `CcTarget::Swing`) and its guard is
+      recorded as **equivalent**, because picking ends `choosing` on the press frame so the swing is only ever turned by a
+      drag already past the pick in either spelling; the filter key's half of the learn guard got its own assertion (mutating
+      `&& !choosing` away now fails, which it did not before); the two-click guard's wording got a **live** test
+      (`a_drums_demo_row_is_armed_against_its_grid_not_the_session` in `tests/songs_live.rs`, a frame-driven click on the demo
+      row, with the unit test in `banks.rs` kept for the exhaustive match); `ui/mod.rs`'s "four cards" comment is five;
+      `check.sh`'s duplicate `MY KITS` pin is dropped, so the round added **three** new pins, not four; the phase's test count
+      is **870** everywhere it is stated; and `handover-phase-5` now points at the wishlist entry and the `SavedDevice` shape
+      the record actually has, rather than at a section and a field list it invented.
+      **Mutations at the end: 10 of 10 caught, 1 recorded as equivalent, 0 skipped.** Three were added after the reviews (the
+      dial guard as a two-edit mutation, the filter key's guard, the 808 row swap), and the equivalent is the `SHUFFLE`'s,
+      written down so a caught count cannot be read as covering it.

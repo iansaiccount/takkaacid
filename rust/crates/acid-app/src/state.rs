@@ -193,7 +193,9 @@ pub struct SharedState {
     /// voice table with half of a load applied to it.
     pub kit: ArcSwap<Kit>,
     /// Which voices start silent, in catalogue order: bit `Drum::index()` set means that voice is muted. `Kit::mute_mask` and
-    /// `Kit::set_mute_mask` are the only pack and unpack, so the state and the kit cannot disagree about which voice a bit names.
+    /// `Kit::mute_mask` packs it, so the state and the kit cannot disagree about which voice a bit names; the mask is never
+    /// unpacked back into a kit's flags — the kit's are the starting mask a load seeds, and an edit keeps them where they were
+    /// (see `SharedState::adopt_kit` against `set_kit`).
     /// Sixteen voices fit a `u16`, so the high half of this word is unused: the one bridge back narrows with `as u16` rather
     /// than masking bits by hand.
     pub drum_mute: AtomicU32,

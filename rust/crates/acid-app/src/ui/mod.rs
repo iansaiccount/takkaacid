@@ -154,7 +154,8 @@ pub struct PanelState {
     /// way `pattern` is filled from the device's state, because the panel paints and never owns the list.
     pub strip: strip::Strip,
     /// Which way round to paint the face: the selected device's scheme, filled by `main` every frame the way the strip is.
-    /// The four cards ignore it — they are furniture, and stay black whatever the face does.
+    /// The five cards ignore it — they are furniture, and stay black whatever the face does. The picker is the sixth surface
+    /// over the panel and is furniture too.
     pub scheme: crate::device::Scheme,
     /// Set by the strip and by `Ctrl+1..4`, drained by `main` after the frame. The panel cannot reach the rack, so asking
     /// is the only way it can select a device, mute one or add one.
@@ -1007,8 +1008,11 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // The card names the session by what the session is on, not by what the library file happens to be: a first run
         // and a demo have a name and no file, and the header must not call them untitled while the field says otherwise.
         let session = state.songs.name.clone();
+        // Which machine the panel is showing, so the card's armed rows warn about the right thing: a 303's demo row replaces
+        // the session, a drum machine's replaces that device's grid.
+        let kind = state.showing_kind();
         if let Some(card) = state.songs.card.as_mut() {
-            request = banks::paint(ui, l.panel, s, card, session.as_deref(), state.dirty);
+            request = banks::paint(ui, l.panel, s, card, session.as_deref(), state.dirty, kind);
         }
         if shield.clicked() {
             request = Some(banks::Request::Close);

@@ -5,15 +5,21 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
 
 - [`01-the-drum-machine`](01-the-drum-machine.md) — the whole phase in one round: the face first, then the pattern's masks, the
   machine, the kits and the factory banks.
-- [`handover-task-10`](handover-task-10.md) — the briefing for the session taking the next task: where the branch stands, what the
-  finished tasks left, the traps that task owns, and the environment facts that have cost time. Each task's session rewrites
-  it for the next one, and supersedes it with a pointer, so only the newest is instructions.
+- [`handover-task-10`](handover-task-10.md) — superseded. The briefing the last task's session worked from; kept for the record.
+- [`handover-phase-5`](handover-phase-5.md) — **the live handover.** Where the phase finished, what it shipped, what is
+  outstanding, and the questions the next round starts from.
 
 **Spec:** [`docs/superpowers/specs/2026-11-18-drum-machine-design.md`](../../docs/superpowers/specs/2026-11-18-drum-machine-design.md)
 — approved in conversation on 2026-11-18. The plan argues from it; where they disagree, the spec wins and this plan is wrong.
 
 **Gate:** unchanged from phases 1–3 — the three workspace commands, `docs/guide/check.sh` when the book moves, and a fresh
 subagent review before every commit (`AGENTS.md`).
+
+**State: complete, 2026-11-19.** All ten tasks are committed on `phase-4` (local only — nothing is pushed). The branch is
+the whole round: `cargo test --workspace` **870**, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt
+--check` and `./docs/guide/check.sh` all green at its head, and each task's own mutation run is recorded in the plan's
+`## Progress`. `SAVE_VERSION` is **11**; the rack round takes **12**. The whole-branch review's findings are in
+`handover-phase-5`.
 
 **Rulings this phase rests on, and what they cost if wrong:**
 

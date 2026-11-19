@@ -57,8 +57,9 @@ The theme is **not saved**. A restart brings every device back to `BLACK`.
 
 A drum machine's card carries one row an acid device's does not: `KIT`, with the name of the kit that device plays. A click
 opens the kit browser — the banks card's sibling, with the kits that ship under `FACTORY`, the player's own under `MY KITS`,
-and `IMPORT` and `CLOSE` along the bottom. A click on a row loads that kit into the device; while the kit has edits that are
-not saved, the first click asks and the second one loads, the same two-click rule as loading over an unsaved song.
+and `IMPORT` and `CLOSE` along the bottom ([`22-the-drum-machine`](22-the-drum-machine.md) is the drum machine itself). A
+click on a row loads that kit into the device; while the kit has edits that are not saved, the first click asks and the
+second one loads, the same two-click rule as loading over an unsaved song.
 The three that ship — `808`, `909` and `Acoustic` — are **read-only**, and every row of them says so. Their samples are
 compiled into the app, so there is no folder to change. Editing a voice of one — a dial or the filter key — copies the whole
 kit under the first free name (`808 (2)`), once, and it is the copy that is edited from then on. The copy is written when the

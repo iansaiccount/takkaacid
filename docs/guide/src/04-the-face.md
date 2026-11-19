@@ -72,6 +72,13 @@ learned controller instead ([`11-the-bank`](11-the-bank.md)).
 controller gets taught a control ([`14-midi`](14-midi.md)). The deck above is the transport
 ([`09-playing`](09-playing.md)); this row is the performance.
 
+## The second face
+
+Everything above is the 303's face. A `DRUMS` device draws its own middle on the same seven bands: the seven dials become
+the selected voice's and give up the bottom of their band to a sixteen-row grid, which runs down through the performance
+and step bands to the switches row. The strip, the top strip, the switches row and the transport row are the same, and so is
+the theme — a drum machine wears a `COLOUR` like any device. [`22-the-drum-machine`](22-the-drum-machine.md) is that face.
+
 ## The panel is one piece, and it scales
 
 Everything above is drawn on a face designed at 980 × 670 and scaled as a single piece to the window, between 0.65× and

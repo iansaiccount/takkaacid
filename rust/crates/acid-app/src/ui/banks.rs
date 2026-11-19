@@ -60,6 +60,7 @@ pub fn paint(
     songs: &mut Banks,
     session: Option<&str>,
     session_dirty: bool,
+    kind: crate::device::DeviceKind,
 ) -> Option<Request> {
     let card = panel.shrink(theme::MARGIN * scale);
     let painter = ui.painter();
@@ -152,7 +153,8 @@ pub fn paint(
     // The demos first: they are what a player reaches for when they want a sound, and they are not files, so there is no
     // cross and no rename. Loading one replaces the session on a 303 — twice, while it is unsaved — and on a drum machine
     // it fills the grid with that demo's groove and leaves the session where it was; the device's kind decides which, in
-    // `main`.
+    // `main`. The line a click leaves behind says which of the two it will do — `armed_hint` and `guard_message` ask the
+    // device's kind, because "session" on a drum face was the wrong word.
     section(ui, scale, "DEMO BANKS", left, &mut y);
     for index in 0..songs.demos.len() {
         if (y + row_height) > list_limit {
@@ -172,9 +174,16 @@ pub fn paint(
             &name,
             armed,
             session_dirty,
+            armed_hint(kind),
         ) && request.is_none()
         {
-            request = guarded_load(songs, key, Request::LoadDemo(index), session_dirty);
+            request = guarded_load(
+                songs,
+                key,
+                Request::LoadDemo(index),
+                session_dirty,
+                guard_message(kind),
+            );
         }
         y += row_height + CARD_GAP * scale;
     }
@@ -201,9 +210,16 @@ pub fn paint(
             &name,
             armed,
             session_dirty,
+            REPLACE_SESSION,
         ) && request.is_none()
         {
-            request = guarded_load(songs, key, Request::Load(name.clone()), session_dirty);
+            request = guarded_load(
+                songs,
+                key,
+                Request::Load(name.clone()),
+                session_dirty,
+                REPLACE_SESSION,
+            );
             songs.delete_armed = None;
         }
         let delete_armed = songs.delete_armed.as_deref() == Some(name.as_str());
@@ -241,7 +257,13 @@ pub fn paint(
     let new_armed = songs.load_armed.as_deref() == Some(NEW_KEY);
     let new_label = if new_armed { "SURE?" } else { "NEW" };
     if transport::card_button(ui, "song-new", new_rect, new_label, new_armed).clicked() {
-        request = guarded_load(songs, NEW_KEY.to_string(), Request::New, session_dirty);
+        request = guarded_load(
+            songs,
+            NEW_KEY.to_string(),
+            Request::New,
+            session_dirty,
+            REPLACE_SESSION,
+        );
     }
     let import_rect = Rect::from_min_size(
         egui::Pos2::new(new_rect.right() + padding, bottom),
@@ -306,7 +328,30 @@ fn section(ui: &mut Ui, scale: f32, title: &str, left: f32, y: &mut f32) {
     *y += CARD_HEADING * scale;
 }
 
-/// One loadable row: its name, and a warning across it while a click would replace an unsaved session.
+/// What a demo row says once its first click has been spent, per machine: on a 303 a second click throws the session away
+/// and loads a song, and on a drum machine it replaces that device's eight patterns and nothing else. A sentence a player
+/// reads, so it says which — the word `session` on a drum face was the wrong one.
+fn armed_hint(kind: crate::device::DeviceKind) -> &'static str {
+    match kind {
+        crate::device::DeviceKind::Acid => "click again to replace",
+        crate::device::DeviceKind::Drums => "click again to replace the grid",
+    }
+}
+
+/// The line under the card when a guarded load spent its first click, per machine — the same sentence as [`armed_hint`], said
+/// in the card's message slot rather than across the row.
+fn guard_message(kind: crate::device::DeviceKind) -> &'static str {
+    match kind {
+        crate::device::DeviceKind::Acid => "unsaved session: click again to replace it",
+        crate::device::DeviceKind::Drums => "unsaved: click again to replace this machine's grid",
+    }
+}
+
+/// What a song row says while its load would replace the session: a song is a session on either face, so this one does not
+/// ask the device's kind.
+const REPLACE_SESSION: &str = "unsaved session: click again to replace it";
+
+/// One loadable row: its name, and what it is waiting for while a click would replace unsaved work.
 fn load_row(
     ui: &mut Ui,
     id: &str,
@@ -314,9 +359,10 @@ fn load_row(
     name: &str,
     armed: bool,
     session_dirty: bool,
+    hint: &str,
 ) -> bool {
     let label = if armed && session_dirty {
-        format!("{name} - click again to replace")
+        format!("{name} - {hint}")
     } else {
         name.to_string()
     };
@@ -329,13 +375,14 @@ fn guarded_load(
     key: String,
     request: Request,
     session_dirty: bool,
+    message: &'static str,
 ) -> Option<Request> {
     if !session_dirty || songs.load_armed.as_deref() == Some(key.as_str()) {
         songs.load_armed = None;
         return Some(request);
     }
     songs.load_armed = Some(key);
-    songs.message = Some("unsaved session: click again to replace it".to_string());
+    songs.message = Some(message.to_string());
     None
 }
 
@@ -354,5 +401,35 @@ pub fn now_line(session: Option<&str>, dirty: bool) -> String {
         (Some(name), true) => format!("NOW: {name} - UNSAVED"),
         (Some(name), false) => format!("NOW: {name} - SAVED"),
         (None, _) => "NOW: untitled - UNSAVED".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::DeviceKind;
+
+    #[test]
+    fn the_guard_names_what_a_second_click_would_replace() {
+        // A 303's demo row loads a whole song, so the session goes. A drum machine's loads eight patterns into that device
+        // and leaves the session, the kit and the name alone — the card said "session" on both faces, which was a lie on
+        // one of them.
+        assert_eq!(armed_hint(DeviceKind::Acid), "click again to replace");
+        assert_eq!(
+            armed_hint(DeviceKind::Drums),
+            "click again to replace the grid"
+        );
+        assert_eq!(guard_message(DeviceKind::Acid), REPLACE_SESSION);
+        assert_ne!(guard_message(DeviceKind::Drums), REPLACE_SESSION);
+        assert!(
+            guard_message(DeviceKind::Drums).contains("grid"),
+            "the drum face's warning has to name what a click replaces"
+        );
+
+        // Written out, so a third kind has to decide here rather than inherit one of the two sentences.
+        for kind in DeviceKind::ALL {
+            assert!(!armed_hint(kind).is_empty());
+            assert!(!guard_message(kind).is_empty());
+        }
     }
 }

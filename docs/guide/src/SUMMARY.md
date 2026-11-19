@@ -14,6 +14,7 @@
 
 - [The knobs](06-the-knobs.md)
 - [A starting patch](07-a-starting-patch.md)
+- [The drum machine](22-the-drum-machine.md)
 
 # Part III — Writing and playing a line
 

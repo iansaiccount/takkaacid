@@ -274,7 +274,7 @@ fn draw_grid(
         let row = row_band(l, drum);
         let label = label_rect(l, drum);
         let is_selected = drum == selected;
-        let is_muted = muted & (1u32 << drum.index()) != 0;
+        let is_muted = muted & u32::from(drum.bit()) != 0;
 
         if is_selected {
             ui.painter().rect_filled(row, 2.0 * s, band);
@@ -306,7 +306,7 @@ fn draw_grid(
             if shift {
                 // The live mute is the state's mask, not the kit's flags: the kit's are the starting mask a load seeds, and
                 // rewriting them would let the panel's mute travel into a saved kit.
-                let bit = 1u32 << drum.index();
+                let bit = u32::from(drum.bit());
                 shared.drum_mute.store(muted ^ bit, Ordering::Relaxed);
             } else {
                 state.drum.selected = drum;
@@ -388,6 +388,11 @@ fn draw_dials(
         p.led_accent,
     );
 
+    // A learn in progress is picking a control, not turning one: the 303's dials stand still and a click picks instead
+    // (`row_knobs`), and a drum dial that turned here would copy a factory kit under a new name because the hand meant to
+    // teach. There is no `CcTarget` for a drum voice this phase, so there is nothing here to pick either — the dial holds
+    // its position and the kit is left alone.
+    let choosing = state.learn == super::learn::Step::Choosing;
     let kit = shared.kit();
     let voice = &kit.voices[selected.index()];
     let cells = dial_cells(l);
@@ -404,17 +409,18 @@ fn draw_dials(
         let mut cell_ui = ui.new_child(egui::UiBuilder::new().max_rect(square));
         cell_ui.set_clip_rect(*cell);
         let mut value = before;
+        let mut scratch = before;
         knob::knob(
             &mut cell_ui,
             egui::Id::unique(("drum-dial", slot)),
             dial.label(),
-            &mut value,
+            if choosing { &mut scratch } else { &mut value },
             diameter,
             p,
         );
         value = value.clamp(0.0, 1.0);
         state.knobs[slot] = value;
-        if (value - before).abs() > 1e-6 {
+        if !choosing && (value - before).abs() > 1e-6 {
             edit_voice(state, shared, selected, |voice| dial.write(voice, value));
         }
     }
@@ -445,7 +451,7 @@ fn draw_dials(
             ui.scope_id().with(("drum-filter", kind.index())),
             egui::Sense::click(),
         );
-        if response.clicked() {
+        if response.clicked() && !choosing {
             edit_voice(state, shared, selected, |voice| voice.filter = kind);
         }
     }
@@ -459,16 +465,31 @@ fn draw_dials(
     cell_ui.set_clip_rect(cell);
     let before = shared.swing.get();
     let mut value = before;
+    let mut scratch = before;
     let response = knob::knob(
         &mut cell_ui,
         egui::Id::unique("drum-shuffle"),
         "SHUFFLE",
-        &mut value,
+        if choosing { &mut scratch } else { &mut value },
         diameter,
         p,
     );
     tips::hover(&response, state.tooltips, tips::Control::Shuffle);
-    if (value - before).abs() > 1e-6 {
+    if super::learn::highlight(state.learn, crate::midi::cc::CcTarget::Swing) {
+        super::panel::learn_highlight(ui.painter(), cell, s, p);
+    }
+    if choosing {
+        // The swing is rack-wide and has a real target, so this dial is the one knob on the drum face a controller *can* be
+        // taught — the 303's `SHUFFLE` behaves the same way, and the two write the same atomic.
+        super::controls::learn_pick(
+            ui,
+            state,
+            shared,
+            "learn-drum-shuffle",
+            cell,
+            crate::midi::cc::CcTarget::Swing,
+        );
+    } else if (value - before).abs() > 1e-6 {
         shared.swing.set(value.clamp(0.0, 1.0));
         state.dirty = true;
     }

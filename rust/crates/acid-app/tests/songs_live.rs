@@ -121,6 +121,62 @@ fn open_card(names: Vec<&str>, name: &str) -> PanelState {
         ..PanelState::default()
     }
 }
+/// A panel showing a drum machine, with the songs card open over it and the session unsaved: the card's demo rows are then
+/// armed by the state that says they would replace that device's grid, not the session.
+fn open_card_on_drums() -> PanelState {
+    use acid_app::device::DeviceKind;
+    use acid_app::ui::strip::{Strip, StripCell};
+
+    let mut panel = open_card(vec![], "");
+    panel.dirty = true;
+    panel.strip = Strip {
+        cells: vec![StripCell {
+            name: "DRUMS 1".to_string(),
+            kind: DeviceKind::Drums,
+            number: 1,
+            scheme: acid_app::device::Scheme::Black,
+            running: false,
+            muted: false,
+        }],
+        selected: 0,
+    };
+    if let Some(card) = panel.songs.card.as_mut() {
+        card.demos = vec!["Slow Acid".to_string()];
+    }
+    panel
+}
+
+#[test]
+fn a_drums_demo_row_is_armed_against_its_grid_not_the_session() {
+    // The two-click guard names what a second click throws away. On a 303 that is the session; on a drum machine it is that
+    // device's eight patterns, and the card said "session" on both faces until the face it was wrong on was fixed.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card_on_drums();
+
+    click(&ctx, &mut panel, &shared, demo_row_centre(0));
+
+    assert_eq!(
+        panel
+            .songs
+            .card
+            .as_ref()
+            .and_then(|card| card.load_armed.clone()),
+        Some("demo:0".to_string()),
+        "the first click arms the row instead of loading"
+    );
+    let message = panel
+        .songs
+        .card
+        .as_ref()
+        .and_then(|card| card.message.clone())
+        .unwrap_or_default();
+    assert!(
+        message.contains("grid") && !message.contains("session"),
+        "the drum face's guard names the wrong thing: {message}"
+    );
+    assert_eq!(panel.songs.request, None, "the first click loads nothing");
+}
 
 #[test]
 fn a_song_row_asks_to_load_that_song() {
