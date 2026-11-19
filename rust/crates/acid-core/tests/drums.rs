@@ -567,7 +567,8 @@ fn a_muted_voice_is_silent_and_keeps_its_step() {
 #[test]
 fn every_voice_muted_is_silence_with_the_steps_still_on() {
     // Review Focus 5's first half: sixteen voices on one step, all muted. The machine is silent and the pattern still
-    // says all sixteen struck — the mixer's ceiling is the other half, and task 8's.
+    // says all sixteen struck. The other half — the sum, and the ceiling that holds it — is the mixer's, and is
+    // `all_sixteen_voices_struck_at_once_do_not_exceed_the_ceiling` in `acid-app`'s `tests/mixer.rs`.
     let voice = KitVoice {
         sample: noise(9_600),
         ..KitVoice::default()

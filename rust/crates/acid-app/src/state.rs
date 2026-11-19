@@ -6,6 +6,7 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::device::DeviceKind;
 use crate::notes::NoteQueue;
 use acid_core::drums::{Drum, Kit, default_kit};
 use acid_core::engine::DEFAULT_TUNING_KNOB;
@@ -118,6 +119,14 @@ pub struct Parameters {
 /// only the UI thread touches it.
 #[derive(Debug)]
 pub struct SharedState {
+    /// Which machine this state drives. Chosen when the device is made and never changed, so the audio thread can build the
+    /// right machine from the state alone — which is all an [`crate::audio::renderer::AudioRenderer`] is given. **Not saved:**
+    /// `persist::SavedState` has no field for a kind, so a session saves its first device whatever it is and loads it as a 303.
+    /// That is the format this phase inherits; the rack document that carries a kind is the next round's.
+    ///
+    /// **The one answer to "what kind is this device".** `Device` keeps no field of its own beside this one — `Device::kind`
+    /// reads it — so a device's face and its sound cannot disagree about which machine it is.
+    pub kind: DeviceKind,
     /// The state this device is in. A device in a rack mirrors the rack's — `Rack::sync_transport` is its only writer — and
     /// a device on its own (every test, and the audio crate's own harness) owns its transport and moves it itself.
     pub transport: AtomicU8,
@@ -196,19 +205,36 @@ pub struct SharedState {
 
 impl SharedState {
     /// A state with a tempo cell of its own: a device on its own, or a test.
+    ///
+    /// It is the **303's**, because a state built without being asked for a kind is the bass — every test in the workspace
+    /// and the mixer's own harness build one this way. A machine of another kind is asked for by name:
+    /// [`SharedState::for_kind`].
     pub fn new() -> Arc<Self> {
         Self::with_tempo(Arc::new(AtomicF32::new(DEFAULT_BPM)))
+    }
+
+    /// A state for a device of `kind`, on a tempo cell of its own.
+    pub fn for_kind(kind: DeviceKind) -> Arc<Self> {
+        Self::with_tempo_for(kind, Arc::new(AtomicF32::new(DEFAULT_BPM)))
     }
 
     /// A state sharing `tempo`: how a device joins a rack, where there is one tempo for every engine. The cell is the
     /// rack's, so a tempo the panel or the MIDI thread writes is there before the next block reads it, and nothing has to be
     /// fanned out into a copy that a frame could turn stale.
+    ///
+    /// The 303's, like [`SharedState::new`]; [`SharedState::with_tempo_for`] is the same with the kind named.
     pub fn with_tempo(tempo: Arc<AtomicF32>) -> Arc<Self> {
+        Self::with_tempo_for(DeviceKind::Acid, tempo)
+    }
+
+    /// A state for a device of `kind` sharing the rack's tempo cell — how a device joins a rack.
+    pub fn with_tempo_for(kind: DeviceKind, tempo: Arc<AtomicF32>) -> Arc<Self> {
         // The kit this device holds and the mask it starts muted by are the same kit, packed here once so that a test and the
         // app cannot disagree about which kit a fresh device has.
         let kit = Arc::new(default_kit());
         let drum_mute = AtomicU32::new(u32::from(kit.mute_mask()));
         Arc::new(Self {
+            kind,
             transport: AtomicU8::new(crate::device::Transport::Stopped.byte()),
             reversed: AtomicBool::new(false),
             transpose: std::sync::atomic::AtomicI32::new(0),

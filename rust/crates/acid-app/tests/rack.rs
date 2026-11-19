@@ -36,7 +36,7 @@ fn a_new_device_is_numbered_named_and_has_something_to_play() {
 #[test]
 fn a_new_drum_device_is_named_and_opens_on_an_empty_grid() {
     let device = Device::new(DeviceKind::Drums, 2);
-    assert_eq!(device.kind, DeviceKind::Drums);
+    assert_eq!(device.kind(), DeviceKind::Drums);
     assert_eq!(device.name, "DRUMS 2");
     assert_eq!(Device::default_name(DeviceKind::Drums, 3), "DRUMS 3");
     assert_eq!(DeviceKind::Drums.name(), "DRUMS");

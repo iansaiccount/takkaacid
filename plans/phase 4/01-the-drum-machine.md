@@ -271,8 +271,9 @@ surface (`render_mono`, `bar_line`, `start_later`, `seek`, `stop`, `pause`, `res
 
 **Files:** modify `rust/crates/acid-core/src/factory.rs` (five drum banks), `rust/crates/acid-app/src/ui/banks.rs` (the drum
 device's `DEMO BANKS`), `rust/crates/acid-app/src/audio/renderer.rs` if a bank needs its kit; tests in `tests/banks_live.rs`.
-**Interfaces (produces):** `factory::drum_banks() -> Vec<(&'static str, PatternBank)>` with the five names the acid factories use
-(`Slow Acid`, `Hard Techno Acid`, `Blues`, `Rock`, `Funk`), eight patterns each, every pattern sounding something.
+**Interfaces (produces):** `factory::drum_banks() -> Vec<(&'static str, PatternBank)>` with the five names the demo songs use
+(`Slow Acid`, `Hard Techno Acid`, `Blues`, `Rock`, `Funk` — in `acid-app::demo::songs()`, not in `factory`), eight patterns each,
+every pattern sounding something.
 - [ ] Tests: `every_demo_variation_has_a_drum_bank_of_eight_patterns`; `the_demo_names_are_the_acid_names` (the two lists agree,
       so the later whole-rack song can pair them); each bank's patterns have at least one hit per bar.
 - [ ] Write the patterns (listening work: a four-on-the-floor for the acid demos, a backbeat for Rock, a shuffle for Funk).
@@ -281,7 +282,10 @@ device's `DEMO BANKS`), `rust/crates/acid-app/src/audio/renderer.rs` if a bank n
 ### Task 10 — the book
 
 **Files:** create `docs/guide/src/22-the-drum-machine.md`; modify `src/SUMMARY.md`, `04-the-face.md`, `20-reference.md`,
-`19-a-devices-card.md`, `docs/guide/check.sh` (facts), and `src/img/README.md` + the screenshots.
+`19-a-devices-card.md`, `14-midi.md` and `15-keyboard.md` (both say a device's one voice is played by the keyboard, which is
+no longer true of a drum device — task 8 added the one sentence each; re-read them with the drum machine in mind),
+`01-what-it-is.md` (the intro's framing: task 8 made a drum machine audible, so "what it is not" needs the page that says what
+it now is), `docs/guide/check.sh` (facts), and `src/img/README.md` + the screenshots.
 - [ ] Page 22: what the drum machine is, the grid, the lit plate, the knobs' relabelled meaning, `SHUFFLE`, the kit browser and
       kits, the factory banks. Facts pinned in `check.sh`: `KICK`, `LP | BP | HP`, `MY KITS`, `Drum machine`.
 - [ ] Screenshots at 1960 × 1340 (the AGENTS.md recipe, checking the display size first): the drum face, the kit list.
@@ -746,3 +750,108 @@ no seventeenth voice, no archive export of a kit.
       **Invisible to the guide, deliberately:** nothing a player can reach changes until task 8 gives the renderer a `Machine` — a
       drum device's face still draws the 303's sound under the grid — so no page in `docs/guide` is now wrong and the drum face's
       page is task 10's.
+- [x] **Task 8 — the renderer holds a machine.** `audio::renderer::AudioRenderer` owns one `Machine`: `Acid(Box<Engine>)` or
+      `Drums { drums: Box<Drums>, kit: Arc<Kit>, volume: Smooth }`, chosen once at open from the device's own kind. The public
+      surface is kept except `engine()`, which is gone: four `tests/renderer.rs` assertions now read `state.position`, the step
+      the panel's chase reads, because a `Machine` cannot answer `&Engine` for a drum device and nothing outside that file asked.
+      Per block: `push` (the 303's seven knobs and volume into its engine, a drum machine's tempo and swing), `settle_transport`
+      (one three-state decision, dispatched to either machine's `start`/`resume`/`pause`/`stop`), the direction and the transpose
+      on change, `service_drums` (the kit by `Arc::ptr_eq`, the mask by one `u32` load, a `HIT` drained once), `service_note` (the
+      acid-only MIDI gate), the pattern by `Arc::ptr_eq`, then the render loop, then `state.position`.
+      `apply_drums` and `apply_volume` are the two free functions beside `apply`; the second is the 303's master VOLUME applied to
+      a drum block — same `param::master_volume` taper, same `param::VOLUME_MS` ramp, exact silence at zero — because a drum
+      machine has no engine to hold its gain. The two `let … else` service functions are exhaustive two-armed `match`es, so a
+      third kind fails to compile at every decision in this file rather than falling into nothing.
+      **848 → 860 tests** (26 in `tests/mixer.rs`, up from 14: the four the task names for that file — its fifth is the extension
+      to `tests/no_alloc.rs` — plus `a_hit_is_heard_with_the_transport_stopped`,
+      `a_drum_device_added_to_a_paused_rack_joins_the_step_it_is_holding`, `a_303_joining_a_drum_machine_finds_its_bar_line`,
+      `a_paused_drum_device_keeps_its_step_and_a_stopped_one_plays_the_bar_again`, `a_drum_device_plays_the_bar_backwards_when_the_rack_asks`,
+      `a_pattern_published_to_a_playing_drum_device_is_heard`, `a_note_on_a_drum_device_is_silent_and_on_a_303_is_not` and
+      `the_volume_knob_sets_a_drum_devices_level`), clippy and fmt clean, `./docs/guide/check.sh` ok. `SAVE_VERSION` untouched at
+      **11**: this task adds no document field.
+      **One ruling, and it is the one the plan left open.** The renderer is built from a `SharedState` and nothing else, and
+      `BusState.slots` carries no `DeviceKind`, so the kind had to arrive somewhere. It lives on `SharedState` as an immutable
+      `pub kind: DeviceKind`, set at construction by `SharedState::for_kind` / `with_tempo_for` (and the older `new`/`with_tempo`
+      mean the 303, which is what a state built without a device is), and **`Device`'s own `kind` field is deleted**:
+      `Device::kind()` reads the state's, so the face and the sound cannot answer the question differently. `Device::on` and
+      `Device::adopted` lost their `kind` parameter, `Rack::add` builds the state with the kind, and `Rack::from_saved` keeps the
+      303's. **If wrong:** the alternative was `BusState.slots: Vec<(Arc<SharedState>, DeviceKind)>`, which keeps the kind on
+      `Device` and costs a wider diff on the audio path (the mixer, the MIDI router's two loops, every `BusState` literal in a
+      test) for the same answer; moving back is that diff. The cost of this one is a save file with no kind, which the next
+      entry pays.
+      **A second ruling, on the drum device's VOLUME.** The knob is drawn in the top strip of **every** face, so a drum device
+      must hear it; the engine holds the 303's gain and a drum machine has none, so `apply_volume` is the renderer's. It is
+      seeded at the knob's value at open (so a device opened with the knob down does not ramp down for its first 10 ms), ramps
+      otherwise, and is exact silence at zero. **If wrong:** a second gain somewhere else in the drum path is the fix, and the
+      one test that pins it (`the_volume_knob_sets_a_drum_devices_level`, with the open-at-the-knob ratio and the ramp's shape)
+      would move with it.
+      **Mutations: 22 of 22 caught, all reverted** (`.superpowers/mutate_task8.py`): a drum device built on the 303's state; the
+      kit never handed over; a pattern published mid-play lost; the mask never read; the audition drained and thrown away; the
+      master volume never applied; volume 0 fading instead of silencing; a gain that steps instead of ramping; a device opened at
+      full gain whatever its knob says; the published step stuck at 0; a drum device handing out no bar line; a late start
+      started at once; the tempo, the shuffle, the transpose and the direction each never reaching the machine; `stop`, `pause`
+      and `resume` each not reaching it (or reaching the wrong verb); a kit swapped mid-tail allocating; a key on a drum device
+      striking a voice; `Device::kind` always answering the bass. Three runs are part of the record: the first reported
+      **9/12** and the three misses were holes — a
+      published step of 0 passes every `drum == rack` equality, a drum device's own `bar_line` is never asked for when it is not
+      slot 0, and the rack transpose had no test at all — which cost `furthest > 0`,
+      `a_303_joining_a_drum_machine_finds_its_bar_line` and a transpose in the sample comparison; the second, after the first
+      review, reported **17/19** because the paused/stopped silence was asserted on one block instead of a bar, which a machine
+      that kept clocking satisfied; the third reported **19/20** until a pattern publish got its own test.
+      **Review: five rounds, and every round after the first found something real.** Round one: Important — the drum arm's
+      `stop`/`pause`/`resume`/`set_reverse` and `apply_drums`' swing were unproven (paid with the transport and reverse tests,
+      swing in the sample comparison, and four mutations); Minors — `Machine::of` took the kind beside the state (now reads
+      `state.kind`), the volume ramp was claimed and not measured (now `rising < 0.9 * settled` on a held envelope), and three
+      comments outran the code. Round two: Important — `Machine::Drums => drums.set_pattern` was reached by no test, so a grid
+      edit could be inaudible with the suite green (paid with `a_pattern_published_to_a_playing_drum_device_is_heard` and its
+      mutation); Minors — the two service functions would have silently skipped a third kind (now exhaustive matches), `mixer.rs`
+      still called every slot an engine with its own limiter, the drum gain was a second copy of the engine's 10 ms (now
+      `acid_core::param::VOLUME_MS`, used by both), one assertion's message claimed more than it proved, and page 01 still denied
+      a drum machine. Round three: BLOCK, narrowly, on the executor's own test — the waiting half of
+      `a_drum_device_sounds_through_the_mixer` never ran, because a drum device added before the mixer is released on the first
+      block's own downbeat, and its control rack was never set playing, so "the kit must be heard" would have passed with silent
+      drums (paid by adding the drum device *after* a bar, setting the control rack playing, and asserting the wait was seen:
+      `waited > 0`); Minors — "a `Machine` is two words" was false, the initial-gain claim had no test, `MUTE_MS` still held a
+      literal, "engine" survived in two places, the drum gain takes no idle snap, and a rate change reseeds the player's mutes.
+      Round four: BLOCK, narrowly, on two things this commit itself left — (1) a drum device's MIDI notes went **silent** where
+      the old renderer (which held an `Engine` whatever the kind) played them, and the Progress claimed no page was wrong, while
+      `14-midi` and `15-keyboard` both say a device's one voice is played by the keyboard; (2) `service_note`'s drum arm was the
+      one drum decision with neither a test nor a mutation. Paid with `a_note_on_a_drum_device_is_silent_and_on_a_303_is_not`
+      (the same key on both, so the silence is a decision and not a missing message), a mutation that turns the guard into a MIDI
+      pad, one sentence on each of the two pages, both pages and `01-what-it-is` in task 10's Files, and this entry corrected.
+      Its Minors: three more "engine"s (the waiting-slot doc, the `no_alloc` message, and a test name, now
+      `a_steady_rack_rebuilds_no_machine`); the handover said the mixer did not change when its prose and `MUTE_MS` did; the
+      handover and the plan named `factory` for the five demo names, which live in `acid-app::demo::songs()`; the wishlist's
+      `is_playing_something` was not the condition `Engine::set_volume` actually snaps on (`!playing && !voice.is_active()`),
+      and its "no test could tell it from the ramp" was simply false (the volume test's ratio would); and the phase overview still
+      pointed at a superseded handover.
+      Round five: OK with notes, ready to land — no behavioural finding, four stale numbers in this record and the handover
+      (859 for 860, 21 for 22, "three rounds" where there were four) and one reason that was still wrong: the wishlist said the
+      volume test's ratio would see the idle snap, but that test's rack is *playing*, which is exactly when the snap does not fire.
+      All four are corrected here and in the handover, and the wishlist now names the test that would see it (transport stopped, a
+      `HIT` in the same block as the knob move, the hit's opening level compared with the settled one) instead of misnaming an
+      existing one.
+      **Rulings, with what each costs if wrong.** (1) The kind lives on `SharedState` and `Device` has no field for it — above.
+      (2) The drum device's master gain is the renderer's, seeded at the knob, ramped at `param::VOLUME_MS` — above. (3) The
+      machine is `Machine::{Acid(Box<Engine>), Drums { … }}` with both arms boxed, where the plan's Interfaces line says
+      `Machine::{Acid(Engine), Drums(Drums)}`: clippy's `large_enum_variant` is right that a 1.5 KB drum machine should not sit
+      inline in a value whose job is to say which machine this is, and both are built once at open. If wrong, two boxes.
+      (4) The plan's surface list names `stop`, `pause` and `resume`, which `AudioRenderer` never had: the transport arrives
+      through `Parameters::transport` and `settle_transport` is private. The list is corrected here rather than the code.
+      (5) `AudioRenderer::engine()` is deleted rather than made to return `Option<&Engine>`: nothing outside one test file used
+      it, and that test now asserts the published step — the seam the panel reads. If wrong, one accessor.
+      **Deferred, deliberately, and recorded in the wishlist:** a sample-rate change re-decodes one kit through the *load* path,
+      so `adopt_kit` reseeds the mask and the player's shift-clicked mutes come back — pre-existing, audible only now, and its
+      fix is `main`'s, which has no test. The drum gain also cannot take `Engine::set_volume`'s idle snap, because `Drums` has
+      no "nothing is sounding" answer; that is a wishlist line with what would have to move.
+      **The guide moved by three passages, and no more.** `01-what-it-is.md` said "if you want a polysynth **or a drum machine**,
+      this is the wrong door" — false the moment a `DRUMS` device sounds like drums — so the clause is gone and the sentence now
+      scopes the 303 clone ("the 303 clone is one line at a time … if you want a polysynth, this is the wrong door"). `14-midi.md`
+      and `15-keyboard.md` both said a device's one voice is played by the keyboard and the MIDI gate: true of a 303 and no
+      longer true of a drum device, whose renderer now answers a note with silence (`service_note`'s drum arm), where before this
+      commit a drum device still held an `Engine` and a note played. Each page gets one sentence saying a drum machine takes no
+      notes this phase, and both are in task 10's **Files** line. The rest of page 01's framing (its "one device is one voice"
+      line, and "not a sampler" beside a machine that plays samples) is task 10's, and `01-what-it-is.md` is in that list too.
+      **The other drum-face pages are not wrong yet:** a drum device still opens on an empty grid (its masks are zero, so the
+      machine sounds nothing), the card, the browser and the picker are task 6's and task 4's, and no page claimed what a `DRUMS`
+      device sounds like or which banks its `BANKS` offers — the drum face's page is task 10's page 22.

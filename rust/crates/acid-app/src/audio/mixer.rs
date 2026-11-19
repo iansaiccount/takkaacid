@@ -1,9 +1,10 @@
-//! The mix bus: one stream, an engine per device, one ceiling.
+//! The mix bus: one stream, a machine per device, one ceiling.
 //!
 //! `Rig` opens a stream once and calls whatever `RenderFn` it was handed, so the mixer *is* that closure. It loads
 //! [`BusState`] once per block and keeps a [`Slot`] per published device — an [`AudioRenderer`], which owns that device's
-//! engine, plus a mute ramp. The summing happens here rather than in the operating system because that is where a DAW puts
-//! its mix bus, and because the app is the only thing that can hold a ceiling over the sum.
+//! machine (the 303's engine, or a drum machine and its gain), plus a mute ramp. The summing happens here rather than in the
+//! operating system because that is where a DAW puts its mix bus, and because the app is the only thing that can hold a
+//! ceiling over the sum.
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -16,18 +17,19 @@ use super::renderer::AudioRenderer;
 use crate::device::{BusState, Transport};
 use crate::state::SharedState;
 
-/// How fast a mute is a fade rather than a cut: the same 10 ms the VOLUME knob uses, so the two sound alike.
-const MUTE_MS: f32 = 10.0;
+/// How fast a mute is a fade rather than a cut: the VOLUME knob's own ramp, so the two sound alike.
+const MUTE_MS: f32 = acid_core::param::VOLUME_MS;
 
 /// One device as the audio thread holds it.
 struct Slot {
     state: Arc<SharedState>,
-    /// Owns this device's engine: its sequencer, its clock, its drive and its own limiter.
+    /// Owns this device's machine: the 303's engine (its sequencer, its clock, its drive and its own limiter), or a drum
+    /// machine, which has no engine and no limiter at all — its sixteen voices can reach the ceiling by themselves.
     renderer: AudioRenderer,
     /// The mute gain. Ramped, so muting is a fade over `MUTE_MS` and not a click.
     mute: Smooth,
     /// Whether this device is waiting to join a rack that is already playing. A waiting slot is not rendered at all, so its
-    /// engine never starts, and it is released on the reference device's bar line — see [`Mixer::render_mono`].
+    /// machine never starts, and it is released on the reference device's bar line — see [`Mixer::render_mono`].
     waiting: bool,
 }
 
@@ -49,9 +51,10 @@ pub struct Mixer {
     slots: Vec<Slot>,
     /// One block of scratch, sized once at open, so a block never allocates.
     scratch: Vec<f32>,
-    /// The sum's ceiling. Each device's own limiter only holds its own output, so two devices can reach twice it.
+    /// The sum's ceiling. A 303's own limiter holds its own output and a drum machine has none, so two devices can reach
+    /// twice this and one drum device can reach it with sixteen voices on one step.
     master: Limiter,
-    /// How many *engines* have ever been built. A steady rack builds each device once: the reconcile keeps the renderer of
+    /// How many *machines* have ever been built. A steady rack builds each device once: the reconcile keeps the renderer of
     /// every device that is still in the list, which is what stops an unrelated add from restarting a transport.
     ///
     rebuilds: usize,

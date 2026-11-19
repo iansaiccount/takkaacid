@@ -450,7 +450,7 @@ impl eframe::App for TakkaApp {
             {
                 self.panel.device_card.offer(
                     &device.name,
-                    device.kind,
+                    device.kind(),
                     &device.inputs,
                     midi::ports::list_ports().unwrap_or_default(),
                 );
@@ -475,8 +475,8 @@ impl eframe::App for TakkaApp {
         }
         // The kit's samples are resampled to the rate the running device plays at, and never to a default: a kit decoded at
         // the wrong rate plays every voice at the wrong pitch, and nothing in the face would say why. So the kit loads the
-        // frame the device says what rate it runs at — and again if that rate ever changes, which is the seam task 8 wires
-        // the renderer into.
+        // frame the device says what rate it runs at — and again if that rate ever changes. The renderer follows the state's
+        // kit once a block, so a reload reaches the sound without the audio thread decoding anything.
         if let Some(rate) = self.sample_rate() {
             match self.kit_rate {
                 None => {
@@ -485,7 +485,7 @@ impl eframe::App for TakkaApp {
                     // Device 1: the save file is one device, and the kit it names is that device's (the spec's rule, and the
                     // reason `saved_device` exists at all). A first device that is not a drum machine has no kit to load, and
                     // asking the library for one would report a kit the machine does not play.
-                    if self.rack.saved_device().kind.has_kit() {
+                    if self.rack.saved_device().kind().has_kit() {
                         self.load_kit_now(0, &wanted, rate);
                     }
                 }
@@ -493,8 +493,8 @@ impl eframe::App for TakkaApp {
                     // A rate change re-decodes every drum device's kit: a voice decoded at the old rate plays at the wrong
                     // pitch. An edit that has not been written is written **first, at the old rate** — the one its samples are
                     // at — because `save_kit` stamps that rate into every WAV it writes; adopting the new rate first would
-                    // label old samples with a new rate and the reload would then play them sharp for ever. The renderer's side
-                    // of this is task 8's.
+                    // label old samples with a new rate and the reload would then play them sharp for ever. That is why the write
+                    // comes before the new rate is adopted: the order is the fix, not a tidy-up's choice.
                     self.write_kit();
                     self.kit_rate = Some(rate);
                     let live: Vec<(usize, String)> = self
@@ -502,7 +502,7 @@ impl eframe::App for TakkaApp {
                         .devices()
                         .iter()
                         .enumerate()
-                        .filter(|(_, device)| device.kind.has_kit())
+                        .filter(|(_, device)| device.kind().has_kit())
                         .map(|(index, device)| (index, device.state.kit().name.clone()))
                         .collect();
                     for (index, name) in live {
@@ -579,7 +579,7 @@ impl eframe::App for TakkaApp {
             .map(|device| panel_ui::strip::StripCell {
                 name: device.name.clone(),
                 // The face the panel draws is the kind's: a drum device gets the grid, an acid device the step row.
-                kind: device.kind,
+                kind: device.kind(),
                 // The panel's per-device editor slots are keyed by this, so a removal cannot hand one device's step,
                 // step mode and randomise dials to its neighbour.
                 number: device.number,

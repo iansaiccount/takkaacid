@@ -27,8 +27,8 @@ retriggering, which is where the 303's liquid phrasing comes from.
 
 ## What it is not
 
-It is not a sampler, not a workstation, and not a plugin. There is no piano roll, no layers, no chords — one line at a
-time, on purpose. If you want a polysynth or a drum machine, this is the wrong door.
+It is not a sampler, not a workstation, and not a plugin. There is no piano roll, no layers, no chords — the 303 clone is
+one line at a time, on purpose. If you want a polysynth, this is the wrong door.
 
 What it does have: five demo songs to start from, sixty-four patterns to fill, MIDI in for a keyboard or a controller,
 and a save file that keeps it all.

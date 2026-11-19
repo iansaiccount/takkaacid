@@ -190,7 +190,8 @@ impl Scheme {
 
 /// One machine: its own sound, its own patterns, its own identity.
 pub struct Device {
-    pub kind: DeviceKind,
+    /// The kind is not a field here: the state carries it, and [`Device::kind`] reads it, so a device's face and its sound
+    /// cannot disagree about which machine it is.
     /// The engine state this device's thread pair shares: its knobs, its pattern, its mute, its learn map, its position.
     pub state: Arc<SharedState>,
     /// The sixty-four patterns this device is working through.
@@ -208,44 +209,46 @@ pub struct Device {
 }
 
 impl Device {
+    /// What this device is.
+    ///
+    /// Read from the state, which is the one place the answer lives: `AudioRenderer` builds the machine a device renders
+    /// from the same field, so a device's face and its sound cannot disagree about which machine it is.
+    pub fn kind(&self) -> DeviceKind {
+        self.state.kind
+    }
+
     /// A brand-new device: the starter phrase in `A1`, the launch patch, and the number it was given, on a tempo cell of
     /// its own.
     pub fn new(kind: DeviceKind, number: usize) -> Self {
-        Self::on(kind, number, SharedState::new())
+        Self::on(number, SharedState::for_kind(kind))
     }
 
     /// A brand-new device built on somebody else's state — how a device joins a rack, where the state holds the rack's own
-    /// tempo cell so there is one tempo for every engine.
-    pub fn on(kind: DeviceKind, number: usize, state: Arc<SharedState>) -> Self {
+    /// tempo cell so there is one tempo for every engine. The state already says which machine it is: the rack builds it
+    /// with [`SharedState::with_tempo_for`].
+    pub fn on(number: usize, state: Arc<SharedState>) -> Self {
         // The same pair `persist::new_song` builds, so a new device and a new song open on the same phrase.
         //
         // A drum device opens on this same pattern with both masks zero, which is an empty grid: the 303's notes are not
-        // drum hits, and a starter phrase for the drums is the factory banks' work (plan 01, task 9). Until task 8 gives the
-        // renderer a `Machine`, a DRUMS device still *sounds* the 303's starter line under that empty grid; that is the seam
-        // this round closes in task 8, and task 4's Progress says so rather than leaving it to be discovered by ear.
+        // drum hits, and a starter phrase for the drums is the factory banks' work (plan 01, task 9). What it *sounds* is the
+        // drum machine reading those masks, so the grid and the sound agree: nothing on the grid, nothing heard.
         let mut bank = PatternBank::new_empty();
         bank.replace(0, acid_core::factory::starter());
-        let mut device = Self::adopted(kind, number, state, bank);
+        let mut device = Self::adopted(number, state, bank);
         // A device that arrives hearing nothing cannot be layered under a keyboard that is already playing.
         device.inputs = crate::midi::route::InputFilter::silent();
         device
     }
 
-    /// A device wrapped around state and patterns that already exist — what a session loads.
-    pub fn adopted(
-        kind: DeviceKind,
-        number: usize,
-        state: Arc<SharedState>,
-        bank: PatternBank,
-    ) -> Self {
+    /// A device wrapped around state and patterns that already exist — what a session loads. Its kind is the state's.
+    pub fn adopted(number: usize, state: Arc<SharedState>, bank: PatternBank) -> Self {
         // The engine plays what `SharedState` holds, not what the bank holds. A device whose state was never handed its
         // pattern renders silence, which the mixer's sum test found the day a second device existed.
         state.set_pattern(Arc::new(*bank.current_pattern()));
         state.set_pattern_index(bank.current());
         Self {
-            kind,
             number,
-            name: Self::default_name(kind, number),
+            name: Self::default_name(state.kind, number),
             scheme: Scheme::Black,
             // A loaded device hears everything, which is what the factory device does: a session that never opens the device
             // card cannot tell phase 2 happened.
@@ -393,7 +396,6 @@ impl Rack {
     /// The session's rack: one device holding the bank and the state the save file carried, at the tempo it was saved at.
     pub fn from_saved(saved: &crate::persist::SavedState) -> Self {
         let device = Device::adopted(
-            DeviceKind::Acid,
             1,
             crate::persist::saved_to_shared(saved),
             saved.bank.clone(),
@@ -514,9 +516,8 @@ impl Rack {
         self.next_number += 1;
         // Built on the rack's own tempo cell, so the new device's engine follows the tempo without being told it.
         self.devices.push(Device::on(
-            kind,
             number,
-            SharedState::with_tempo(Arc::clone(&self.tempo_bpm)),
+            SharedState::with_tempo_for(kind, Arc::clone(&self.tempo_bpm)),
         ));
         // A device that arrives while the rack is playing joins the transport rather than sitting silent.
         self.sync_transport();
@@ -551,7 +552,7 @@ impl Rack {
             return String::new();
         }
         let wanted = match typed.trim() {
-            "" => Device::default_name(self.devices[index].kind, self.devices[index].number),
+            "" => Device::default_name(self.devices[index].kind(), self.devices[index].number),
             trimmed => trimmed.to_string(),
         };
         let mut candidate = wanted.clone();

@@ -5,6 +5,7 @@
 //! shows up as a non-zero count and fails the test.
 
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use acid_app::audio::mixer::Mixer;
@@ -12,8 +13,40 @@ use acid_app::audio::renderer::AudioRenderer;
 use acid_app::device::{DeviceKind, Rack};
 use acid_app::persist;
 use acid_app::state::SharedState;
-use acid_core::pattern::{Pattern, Step};
+use acid_core::drums::{Drum, Kit, default_kit};
+use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
 use acid_core::pitch::Pitch;
+
+/// The rate the renderers are built at, so a kit's samples are the rate the machine reads them at.
+const RATE: f32 = 48_000.0;
+
+/// A kit whose every voice is a short sine: sixteen sample voices, which is what a drum block costs.
+///
+/// Built by the test and not by the callback: a kit is a load, and the whole point of this test is that the *block* is not.
+fn stub_kit(amplitude: f32) -> Kit {
+    let mut kit = default_kit();
+    kit.name = "Stub".to_string();
+    let len = (RATE * 0.4) as usize;
+    let samples: Vec<f32> = (0..len)
+        .map(|i| (std::f32::consts::TAU * 440.0 * i as f32 / RATE).sin() * amplitude)
+        .collect();
+    let sample: Arc<[f32]> = Arc::from(samples);
+    for drum in Drum::ALL {
+        kit.voices[drum.index()].sample = Arc::clone(&sample);
+    }
+    kit
+}
+
+/// A bar with all sixteen voices struck on the downbeat and on the backbeat, so the window is not spent on silence.
+fn busy_bar() -> [Step; STEPS_PER_PATTERN] {
+    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    for step in [0, 8] {
+        for drum in Drum::ALL {
+            steps[step].hit(drum, false);
+        }
+    }
+    steps
+}
 
 struct Counting;
 static COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -105,6 +138,48 @@ fn the_audio_path_never_allocates() {
     assert_eq!(
         mixer.rebuilds(),
         built,
-        "and it still reused its two engines while doing it"
+        "and it still reused its two machines while doing it"
+    );
+
+    // The second kind of machine on the same path. A drum slot renders sixteen sample voices and reads its kit, its mask and
+    // any `HIT` waiting — all of it per block, none of it allocating.
+    let index = rack
+        .add(DeviceKind::Drums)
+        .expect("room for a drum machine");
+    let drum = Arc::clone(&rack.devices()[index].state);
+    drum.adopt_kit(stub_kit(0.5));
+    drum.set_pattern(Arc::new(Pattern::from_steps(busy_bar())));
+    mixer.render_mono(&mut mix); // warm-up: builds the new slot and hands it the pattern
+    let rebuilt = mixer.rebuilds();
+    assert_eq!(
+        rebuilt,
+        built + 1,
+        "the drum machine is one more machine, not a rebuilt rack"
+    );
+
+    COUNT.store(0, Ordering::Relaxed);
+    for step in 0..1_000usize {
+        // The panel's `HIT`, every block: the drain is on the audio path, so a request is written here and served there.
+        drum.request_audition(Drum::ALL[step % Drum::ALL.len()]);
+        mixer.render_mono(&mut mix);
+    }
+    let drummed = COUNT.load(Ordering::Relaxed);
+    assert_eq!(
+        drummed, 0,
+        "a drum machine in the rack allocated {drummed} times in the mix path"
+    );
+
+    // A kit swapped while voices are sounding. The kit is built here, on this side of the counter, as the fixture `Arc`s
+    // above are; what the window measures is the swap itself, which is one refcount and a pointer — not a decode.
+    let swapped = Arc::new(stub_kit(0.2));
+    drum.set_kit(Arc::clone(&swapped));
+    COUNT.store(0, Ordering::Relaxed);
+    for _ in 0..1_000 {
+        mixer.render_mono(&mut mix);
+    }
+    let reswapped = COUNT.load(Ordering::Relaxed);
+    assert_eq!(
+        reswapped, 0,
+        "a kit swapped mid-tail allocated {reswapped} times in the mix path"
     );
 }

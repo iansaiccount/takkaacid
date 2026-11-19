@@ -75,13 +75,42 @@ or the top strip. It waits for a second opinion on where it sits, because the to
 
 ## Machine
 
-### A second device type
+### A third device type
 
-`device::DeviceKind` is a one-entry catalogue with an exhaustive `match`, on purpose: adding a variant must fail to compile
-wherever a decision is owed. The likely second one is a drum machine or a 606, which means the thing that renders a device stops
-being an `acid_core::Engine` and becomes a `Box<dyn Voice>`-ish trait object. Note where that lives: not on `device::Device`
-(`kind`, `state`, `bank`, `inputs`, `number`, `name`, `scheme`) but in `audio::renderer::AudioRenderer`, one per mixer slot.
-Do it only when there is a real second type to build against, not before.
+`device::DeviceKind` is a two-entry catalogue (`ACID`, `DRUMS`) with an exhaustive `match`, on purpose: adding a variant
+fails to compile wherever a decision is owed. The drum machine was the first second type, and it landed as
+`audio::renderer::Machine` — an enum inside `AudioRenderer`, one arm per kind — rather than as the `Box<dyn Voice>` trait
+object this entry used to imagine: two kinds of machine are an enum with every arm written out, and a trait object earns its
+place at the third, when the arms stop fitting on a screen. When that third kind arrives, the trait is the shape to reach
+for, and the enum stays as the front door that says which one. Note where it lives: not on `device::Device` (`state`,
+`bank`, `inputs`, `number`, `name`, `scheme`) but in `audio::renderer::AudioRenderer`, one per mixer slot, built from the
+`kind` the device's `SharedState` carries.
+
+### A rate change must not undo the player's mutes
+
+Re-decoding every drum device's kit at a new sample rate (`main`'s rate-change arm) goes through `load_kit_now`, which is a
+**load** and calls `SharedState::adopt_kit` — so the kit's own `mute` flags become the mask again, and the player's
+shift-clicked mutes come back to life when they switch audio device. That call is right for a kit the player picked and
+wrong for a kit being re-decoded; phase 4's task 8 made it audible, because before that the mask reached no machine.
+
+What would have to move: `load_kit_now` grows the one thing it is missing — whether this is a load or a re-decode — or the
+rate-change arm publishes with `set_kit` (the edit path, which keeps the mask) and leaves the first load on `adopt_kit`. It
+is `main`'s, which has no test, so paying it means the rate-change arm leaving `main` for a function a test can call.
+
+### The drum machine's gain, and the snap it cannot take
+
+`Engine::set_volume` jumps its smoother when nothing is playing and the drum machine's gain always ramps
+(`audio::renderer::apply_volume`), so a VOLUME moved on a stopped drum device fades the next `HIT` in over its 10 ms where a
+303 would start at level.
+
+What would have to move: `Drums` needs to answer the same question the engine answers — `Engine::is_playing_something()` is only
+half of it, and the condition `set_volume` actually snaps on is `!playing && !voice.is_active()`, so the machine needs both a
+"the transport is not running" and a "no voice is sounding" answer over its sixteen voices and its sequencer — and then
+`apply_volume` takes them and snaps, exactly as `Engine::set_volume` does. It is deferred because it is one more predicate with
+no consumer until something else needs it, and because the fade it costs is 10 ms of a hit that was just pressed. The test that
+would see it does not exist yet: it needs the transport **stopped** (which is when the snap fires, and which
+`the_volume_knob_sets_a_drum_devices_level` is not — its rack is playing), a `HIT` requested in the block the knob moves, and the
+hit's opening level compared against its settled one.
 
 ### Per-device audio outs (stems)
 

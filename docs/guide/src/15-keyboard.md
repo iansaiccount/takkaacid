@@ -13,9 +13,10 @@ A W S E D F T G Y H U J K
 C, C#, D, D#, E, F, F#, G, G#, A, A#, B, C — a chromatic scale on the home row, the same layout most sequencers and DAWs
 use. `Z` and `X` move the octave down and up, between two octaves down and two up.
 
-A held key keeps the note sounding; the gate closes when every mapped key is up. There is one voice **per device**, so a
-computer key and a MIDI keyboard play the same oscillator on the device the panel is showing, and the last one pressed
-wins. A key released while a MIDI note is sounding ends that note too — one voice, one gate, no exceptions.
+A held key keeps the note sounding; the gate closes when every mapped key is up. There is one voice **per acid device**, so
+a computer key and a MIDI keyboard play the same oscillator on the device the panel is showing, and the last one pressed
+wins. A key released while a MIDI note is sounding ends that note too — one voice, one gate, no exceptions. On a drum device
+the keys are silent this phase: its voices belong to the grid.
 
 What you hear when you play a key is the same pitch that key would write into a step, so auditioning and editing can never
 disagree about which note is which.
@@ -46,7 +47,8 @@ This is a bass machine: one line, one oscillator, one filter. The keyboard being
 about what it is — and it is why pressing a key while a note is playing does the expected thing, rather than stacking
 notes the machine would have to drop.
 
-Four machines in one window does not change that. A device is still one voice, played by one gate; what the rack gives you
+Four machines in one window does not change that. A device is still one voice, played by one gate — a drum machine's sixteen
+voices are the grid's, and a key pressed with it on the panel sounds nothing this phase. What the rack gives you
 is four of them side by side, each with its own line and its own inputs
 ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)).
 

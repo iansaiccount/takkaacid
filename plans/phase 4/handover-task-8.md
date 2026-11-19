@@ -1,5 +1,10 @@
 # Handover — phase 4, task 8 (for a fresh session)
 
+> **Superseded — kept for the record, not for instructions.**
+>
+> Picked up and carried through in the commit after it: task 8 is done, its Progress entry is in
+> `plans/phase 4/01-the-drum-machine.md`, and the live handover is `plans/phase 4/handover-task-9.md`.
+
 Paste this whole file as the first message. It is written to be self-contained: the session it is for has no memory of the one
 that wrote it.
 

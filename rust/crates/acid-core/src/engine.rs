@@ -90,7 +90,11 @@ impl Engine {
             sequencer: Sequencer::new(sample_rate),
             drive: Drive::new(sample_rate),
             limiter: Limiter::new(sample_rate),
-            volume: param::Smooth::new(param::master_volume(knobs.volume), 10.0, sample_rate),
+            volume: param::Smooth::new(
+                param::master_volume(knobs.volume),
+                param::VOLUME_MS,
+                sample_rate,
+            ),
             playing: false,
             transpose: 0,
             knobs,
