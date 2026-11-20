@@ -36,7 +36,7 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | `R` | record (drawn, not wired yet) |
 | `left` / `right` | move the selection one step |
 | `shift+left` / `shift+right` | previous / next pattern |
-| `shift+up` / `shift+down` | note up / down a step |
+| `shift+up` / `shift+down` | note up / down a step on an acid device; on a drum device, the previous / next voice, repeating while held |
 | `up` / `down` | tempo, one BPM (and they repeat while held) |
 | `enter` | note on or off |
 | `backspace` | empty the step to a rest, while editing |

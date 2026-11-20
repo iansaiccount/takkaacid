@@ -52,6 +52,21 @@ impl Default for DrumView {
     }
 }
 
+/// What `shift` and an arrow do to the face's selection: walk the dials up or down the grid, in [`Drum::ALL`]'s order — the
+/// order the rows are drawn in.
+///
+/// `-1` is the row above and `1` the row below, so the walk lands on the neighbour the eye expects; the caller clamps at
+/// the ends with [`super::selection::move_selection`], the rule the 303's step border already keeps. The 303 owns the same
+/// two keys for the selected note ([`super::selection::edit_key`]) and the two faces are never up together, so the two
+/// mappings cannot argue.
+pub fn voice_move(key: egui::Key, shift: bool) -> Option<i8> {
+    match (key, shift) {
+        (egui::Key::ArrowUp, true) => Some(-1),
+        (egui::Key::ArrowDown, true) => Some(1),
+        _ => None,
+    }
+}
+
 /// One of the seven dials, in the order the face draws them.
 ///
 /// The 303's knob slots are repurposed, left to right, so the row reads `ATTACK DECAY SUSTAIN RELEASE CUT OFF RESONANCE TUNE`
@@ -621,5 +636,26 @@ mod tests {
         let light = theme::palette(Scheme::ChoirPastel);
         assert_ne!(black.led_accent, light.led_accent);
         assert_ne!(faint(black.led_accent, 36), faint(light.led_accent, 36));
+    }
+
+    #[test]
+    fn the_voice_keys_are_shift_and_the_two_arrows() {
+        // One mapping for the face's keyboard. Up the grid is one row earlier in `Drum::ALL`, which is the order the rows
+        // are drawn in, so the sign and the catalogue cannot disagree; everything else is not this face's key.
+        assert_eq!(voice_move(egui::Key::ArrowUp, true), Some(-1));
+        assert_eq!(voice_move(egui::Key::ArrowDown, true), Some(1));
+        assert_eq!(
+            voice_move(egui::Key::ArrowUp, false),
+            None,
+            "an unshifted arrow is the tempo's"
+        );
+        assert_eq!(voice_move(egui::Key::ArrowDown, false), None);
+        for key in [
+            egui::Key::ArrowLeft,
+            egui::Key::ArrowRight,
+            egui::Key::Enter,
+        ] {
+            assert_eq!(voice_move(key, true), None, "{key:?} walks no voice");
+        }
     }
 }

@@ -33,6 +33,11 @@ sound, so a `SHIFT`-click does not play anything.
 
 `SHIFT` is the modifier throughout: a strike, an accent, a mute has a plain click and a `SHIFT`-click, never a menu.
 
+The keyboard reaches the same selection: **`shift+up` / `shift+down` walk it up and down the grid** — the rows are the
+grid's own order, `KICK` at the top — and each voice they land on is heard, so a kit can be walked by ear. Held down, the walk
+repeats; it stops at the top row and the bottom one rather than wrapping round. While a card is up the walk is spent, like the
+editing keys, because a card is modal.
+
 ## The dials
 
 The seven knobs stay where the 303 puts them and are **the selected voice's**, not the machine's:
@@ -96,9 +101,10 @@ A drum bank is patterns, not a song. The grooves last the session — a save sti
 
 ## What is not here
 
-- **No notes.** A drum machine takes no notes at all this round: the computer keyboard plays nothing on it
+- **No notes.** A drum machine takes no notes at all this round: the computer keyboard's letters play nothing on it
   ([`15-keyboard`](15-keyboard.md)), a MIDI note on its channel is silent ([`14-midi`](14-midi.md)), and `STEP` lights and
-  toggles while writing nothing. MIDI pads and per-voice controllers are a later round.
+  toggles while writing nothing. `shift` and the arrows move between its voices, not notes. MIDI pads and per-voice
+  controllers are a later round.
 - **No step row, no performance row.** The grid's columns are the steps, and `OCT`, `CLEAR`, `RANDOM`, the density and the
   scale are the 303's. `BANK`, `PATTERN`, `COPY`, `PASTE`, `SAVE`, `BANKS` and `STEP` keep their places on the switches row.
 - **One hit per voice at a time.** A second strike on the same voice retriggers it rather than layering, and a hat's

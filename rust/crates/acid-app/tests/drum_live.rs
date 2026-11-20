@@ -19,7 +19,8 @@ use acid_app::ui::theme::{self, DESIGN_SIZE};
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::bank::PatternBank;
 use acid_core::drums::{Drum, FilterKind, KitVoice};
-use acid_core::pattern::STEPS_PER_PATTERN;
+use acid_core::pattern::{STEPS_PER_PATTERN, Step};
+use acid_core::pitch::Pitch;
 use eframe::egui::{
     self, Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape,
     vec2,
@@ -79,6 +80,18 @@ fn key_press(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
+/// The same press, flagged as the repeat a held key sends: `dispatch::presses` lets an arrow's repeat through, and a held
+/// `shift+down` is meant to keep walking the grid.
+fn key_repeat(key: Key, modifiers: Modifiers) -> Event {
+    Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: true,
+        modifiers,
+    }
+}
+
 fn key_release(key: Key) -> Event {
     Event::Key {
         key,
@@ -87,6 +100,29 @@ fn key_release(key: Key) -> Event {
         repeat: false,
         modifiers: Modifiers::default(),
     }
+}
+
+/// One key press, through the two calls `main` makes: the frame's events become presses (`dispatch::presses`), and each
+/// press is resolved (`dispatch::handle`). The shortcuts and the step editor do not run inside `draw_panel`, so this is the
+/// seam a test presses — the same one `tests/settings_live.rs` uses.
+fn voice_press(
+    panel: &mut PanelState,
+    shared: &SharedState,
+    bank: &mut PatternBank,
+    key: Key,
+    shift: bool,
+) -> Handled {
+    let mut handled = Handled::Nothing;
+    for press in dispatch::presses(&[key_press(
+        key,
+        Modifiers {
+            shift,
+            ..Modifiers::default()
+        },
+    )]) {
+        handled = dispatch::handle(press, panel, shared, bank);
+    }
+    handled
 }
 
 /// A settled pointer, a press and a release — three frames, because a widget must exist before it is hit.
@@ -1126,4 +1162,135 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
         "the transport shortcuts are the drum machine's too"
     );
     assert_eq!(shared.pattern().steps, before.steps);
+}
+
+#[test]
+fn shift_up_and_down_walk_the_selected_voice() {
+    // The grid is the drum face's editor, so the arrows walk its rows the way they walk the 303's steps: `shift+down` is
+    // the row below, `shift+up` the row above, and each voice the walk lands on is heard — the preview a click on its label
+    // already gives, from the keyboard.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    let pattern = shared.pattern();
+    shared.take_audition();
+
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true),
+        Handled::Selection
+    );
+    assert_eq!(
+        panel.drum.selected,
+        Drum::Snare,
+        "down the grid is the next voice"
+    );
+    assert_eq!(
+        shared.take_audition(),
+        Some(Drum::Snare),
+        "and the voice it lands on is heard"
+    );
+
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
+        Handled::Selection
+    );
+    assert_eq!(
+        panel.drum.selected,
+        Drum::Kick,
+        "up the grid is the previous one"
+    );
+    assert_eq!(shared.take_audition(), Some(Drum::Kick));
+
+    // Both ends clamp, the rule the 303's step border keeps: a walk past the first row or the last is the same selection,
+    // not a jump to the other end of the grid.
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
+        Handled::Selection
+    );
+    assert_eq!(
+        panel.drum.selected,
+        Drum::Kick,
+        "the top row is the top row"
+    );
+
+    // A held key repeats, and the walk is meant to carry on: `dispatch::presses` lets an arrow's repeat through, so holding
+    // `shift+down` walks row after row and hears each one — the kit goes past at a walking pace.
+    let mut repeated = Handled::Nothing;
+    for press in dispatch::presses(&[key_repeat(Key::ArrowDown, Modifiers::SHIFT)]) {
+        repeated = dispatch::handle(press, &mut panel, &shared, &mut bank);
+    }
+    assert_eq!(repeated, Handled::Selection, "a repeat is still a walk");
+    assert_eq!(panel.drum.selected, Drum::Snare, "and it walks on");
+    assert_eq!(shared.take_audition(), Some(Drum::Snare));
+    for _ in 0..Drum::ALL.len() + 4 {
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true);
+    }
+    assert_eq!(
+        panel.drum.selected,
+        Drum::Shaker,
+        "and the bottom row is the bottom"
+    );
+
+    // A selection is not an edit, and the plain arrows still belong to the tempo.
+    assert_eq!(shared.pattern(), pattern, "no step changed");
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, false),
+        Handled::Shortcut(Shortcut::TempoUp),
+        "unshifted arrows are still the tempo's, and they moved no voice"
+    );
+    assert_eq!(
+        panel.drum.selected,
+        Drum::Shaker,
+        "and the tempo's arrow walked no voice"
+    );
+}
+
+#[test]
+fn a_card_refuses_the_voice_keys() {
+    // A card over the face is modal for the keyboard as well as the pointer — the rule `selection::dispatch` keeps for the
+    // step editor — so a walk aimed at a grid nobody can see lands nowhere and sounds nothing.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    panel.help_visible = true;
+    shared.take_audition();
+
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true),
+        Handled::Refused,
+        "the help card is up"
+    );
+    assert_eq!(
+        panel.drum.selected,
+        Drum::Kick,
+        "a refused press moves nothing"
+    );
+    assert_eq!(shared.take_audition(), None, "and sounds nothing");
+}
+
+#[test]
+fn the_voice_keys_leave_the_acid_note_alone() {
+    // The drum face owns `shift+up`/`shift+down` for its rows and the 303 owns the same two keys for the selected note. One
+    // mapping must not swallow the other: this is the pairing that proves the drum arm is the drum face's only.
+    let shared = SharedState::new();
+    shared.set_step(0, Step::note(Pitch::E, 0));
+    let mut panel = acid_panel_state();
+    let mut bank = PatternBank::new_empty();
+
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true),
+        Handled::Selection
+    );
+    let nudged = shared.pattern().steps[0];
+    assert!(nudged.on, "the nudge leaves the step sounding");
+    assert_eq!(
+        (nudged.pitch, nudged.octave_offset),
+        (Pitch::DSharp, 0),
+        "shift+down on an acid face still moves the note down a semitone"
+    );
+    assert_eq!(
+        panel.drum.selected,
+        Drum::Kick,
+        "and it moved no drum voice"
+    );
 }

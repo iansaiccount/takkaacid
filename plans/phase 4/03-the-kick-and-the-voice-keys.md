@@ -163,3 +163,25 @@ next round and still needs its own design.
       those; the `__pycache__` left by importing `refresh.py` from a scratch script is deleted and the tree is clean. The
       reviewer's one question it could not settle — whether the 200 Hz column was 4-pole or 2-pole — is answered by the
       re-measurement: 2-pole, 5.42% before and 20.95% after, at 44.1 kHz on disk.
+- [x] **Task 2 — the voice keys.** `drum_panel::voice_move(key, shift) -> Option<i8>` is the one mapping (-1 up the grid,
+      +1 down it, `Drum::ALL`'s order), and `dispatch::handle`'s `DeviceKind::Drums` arm walks `panel.drum.selected` with
+      `selection::move_selection` — clamped, not wrapped — and requests the audition of every voice it lands on. The acid arm is
+      the call it was, now inside `DeviceKind::Acid`. Tests: `shift_up_and_down_walk_the_selected_voice` (down to `SNR` and
+      heard; a held key's repeat walks on and is heard; up again; clamped at both ends; the pattern untouched; the plain arrow
+      still nudging the tempo without moving a voice), `a_card_refuses_the_voice_keys`,
+      `the_voice_keys_leave_the_acid_note_alone` (`E` → `D#`), and `drum_panel`'s `the_voice_keys_are_shift_and_the_two_arrows`.
+      **Mutations: 4 of 4 caught, 0 skipped** (`.superpowers/mutate_voice_keys.py`) — no clamp (wraps), no audition, no card
+      refusal, directions swapped — each named by the test that caught it. Gates: `cargo test --workspace` **880**, clippy, fmt,
+      `./docs/guide/check.sh`. **Rulings:** the walk auditions (a click on a label is a preview, and a held key walks the kit by
+      ear); it clamps, like the step border; it does not disarm a pending `CLEAR`, because it changes no pattern — and that face
+      draws no `CLEAR` to arm. If the audition is wrong, one `request_audition` line; wrapping would need a different walk than
+      `move_selection`. **The book moved:** page 22 gains the walk under *The grid* (heard, repeats while held, spent behind a
+      card) and its *No notes* bullet no longer claims every key is dead; page 15's two drum sentences and the
+      four-editing-keys paragraph say the same; page 20's key table names both faces; `check.sh` pins `walk it up and down the
+      grid`; `00-phase-4.md` lists this round and plan 02, which was missing. No screenshot: the face paints nothing new.
+      **Review: PASS on eight Minors, every one actioned.** The page-22 paragraph had been split from the click sentence it
+      belonged to (moved below it); the held-key repeat was untested and unsaid (a `repeat: true` press now walks on, and pages
+      22 and 20 say it repeats); `Handled::Refused` and `a_card_is_up` named only the step editor (both name the walk now);
+      `is_panel_key` claimed the keys through the acid mapping alone, so it now asks `drum_panel::voice_move` too — redundancy by
+      construction today, and the comment says which question each mapping answers; one assertion message claimed a check its
+      line did not make (the selection is asserted); and this entry is the record the reviewer asked for.

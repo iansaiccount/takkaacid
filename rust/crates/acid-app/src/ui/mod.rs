@@ -297,8 +297,8 @@ impl PanelState {
     /// Whether any card is open over the panel.
     ///
     /// The one spelling of "the face is covered", asked by everything that would otherwise change something a card hides: the
-    /// step editor's arrows and `Enter`, the computer keyboard's step writes, and a MIDI note waiting to be placed. A card is
-    /// modal by design, so a writer that does not ask this is a write a player cannot see.
+    /// step editor's arrows and `Enter`, the drum face's voice walk, the computer keyboard's step writes, and a MIDI note waiting
+    /// to be placed. A card is modal by design, so a writer that does not ask this is a write a player cannot see.
     pub fn a_card_is_up(&self) -> bool {
         self.help_visible
             || self.settings_open

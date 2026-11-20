@@ -6,10 +6,11 @@
 //! because `main.rs` is a binary and cannot be tested.
 
 use acid_core::bank::PatternBank;
+use acid_core::drums::Drum;
 use eframe::egui::{Event, Key};
 
-use super::{PanelState, kits, learn, selection, shortcuts, tape, transport};
-use crate::device::MAX_DEVICES;
+use super::{PanelState, drum_panel, kits, learn, selection, shortcuts, tape, transport};
+use crate::device::{DeviceKind, MAX_DEVICES};
 use crate::state::SharedState;
 
 /// One press the panel handles: the key, and which of the modifiers it cares about were down.
@@ -31,7 +32,7 @@ pub enum Handled {
     Selection,
     /// A transport, tempo, pattern or help shortcut ran.
     Shortcut(shortcuts::Shortcut),
-    /// The step editor's key, refused because the help card is modal.
+    /// A face's own key, refused because a card is modal: the step editor's, or the drum face's voice walk.
     Refused,
     /// Nothing in the panel wanted this key.
     Nothing,
@@ -50,6 +51,10 @@ pub fn is_panel_key(key: Key, shift: bool, ctrl: bool) -> bool {
     (ctrl && device_key(key).is_some())
         || shortcuts::shortcut_for(key, shift).is_some()
         || selection::edit_key(key, shift).is_some()
+        // A drum face's walk is the same two keys as the 303's note nudge, but it is `handle`'s drum arm that acts on them;
+        // asking the face's own mapping here says the press is the panel's for its own reason, so a change to the acid
+        // editor's keys cannot silently take the drums' away.
+        || drum_panel::voice_move(key, shift).is_some()
 }
 
 /// The keys `Ctrl` and a digit use, in device order.
@@ -118,10 +123,14 @@ pub fn handle(
         return Handled::Rack;
     }
     // A drum device's editor is the grid, not the keyboard: the step editor writes 303 pitches into a pattern and moves a
-    // border the drum face has no row to show. The transport and pattern shortcuts below are the drum machine's too, so
-    // only this arm is gated — a face's rows are gone, not every key.
-    if panel.showing_kind() == crate::device::DeviceKind::Acid {
-        match selection::dispatch(press.key, press.shift, panel, shared) {
+    // border the drum face has no row to show. What that face does own is its selection, and `shift` and the arrows walk it
+    // up and down the grid, hearing each voice it lands on — the preview a click on the voice's label already gives. The walk
+    // is a selection and not an edit, so a pending CLEAR is left alone: the pattern it would clear has not moved.
+    //
+    // The transport and pattern shortcuts below are both machines' — one drum voice does not make the deck another deck — so
+    // only a face's own keys are decided here, and the face's rows are gone rather than every key.
+    match panel.showing_kind() {
+        DeviceKind::Acid => match selection::dispatch(press.key, press.shift, panel, shared) {
             selection::Press::Applied => {
                 // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
                 super::clear::disarm(panel);
@@ -129,6 +138,22 @@ pub fn handle(
             }
             selection::Press::Refused => return Handled::Refused,
             selection::Press::NotOurs => {}
+        },
+        DeviceKind::Drums => {
+            if let Some(delta) = drum_panel::voice_move(press.key, press.shift) {
+                // A card is modal for the keyboard as well as the pointer: a walk aimed at a grid nobody can see would
+                // select and sound a voice behind it.
+                if panel.a_card_is_up() {
+                    return Handled::Refused;
+                }
+                // `move_selection` clamps at both ends, so `shift+up` on the first row stays on it rather than wrapping to
+                // the last — the same rule the 303's step border keeps.
+                let walked =
+                    selection::move_selection(panel.drum.selected.index(), delta, Drum::ALL.len());
+                panel.drum.selected = Drum::ALL[walked];
+                shared.request_audition(panel.drum.selected);
+                return Handled::Selection;
+            }
         }
     }
     let Some(shortcut) = shortcuts::shortcut_for(press.key, press.shift) else {
