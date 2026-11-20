@@ -24,13 +24,13 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
   `xdotool key F1` for the keys. The button rects are in the layout (`ui/layout.rs`, `ui/strip.rs`, `ui/device_card.rs`);
   do not read them off a screenshot, because a key's painted label and its hit area are not always where the eye puts them
   (this round's first attempt clicked `SAVE` six times while believing it was clicking `SONGS`).
-- **The two drum-machine pictures** (`drum-face.png`, `kit-browser.png`) were taken later, on 2026-11-19, from a session of
-  their own: `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-50`, emptied first, on `Xvfb :87 -screen 0 2200x1500x24` (the screen
-  must be at least the design size doubled — check `xdotool getdisplaygeometry` before trusting a grab), the same scale
-  factor and software GL. The app was launched on a first run and then driven: `+` → `DRUMS` added `DRUMS 2`, `BANKS` →
-  `Hard Techno Acid` twice loaded that demo's drum bank into it (the session was unsaved, so the row asked first), and `F3`
-  → the card's `KIT` row opened the browser. No device was saved, so both pictures show a first run's rack with one extra
-  machine on it.
+- **The two drum-machine pictures** (`drum-face.png`, `kit-browser.png`) were retaken on 2026-11-20, from a session of their own:
+  `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-51`, emptied first, on `Xvfb :88 -screen 0 2200x1500x24` (the screen must be at least
+  the design size doubled — check `xdotool getdisplaygeometry` before trusting a grab), the same scale factor and software GL.
+  The app was launched on a first run and then driven: `+` → `DRUMS` added `DRUMS 2`, which arrives on `808` (so the face reads
+  `KIT 808` and the browser `NOW: 808 - READ ONLY`), then `BANKS` → `Hard Techno Acid` twice loaded that demo's drum bank into it
+  (the session was unsaved, so the row asked first), and `F3` → the card's `KIT` row opened the browser. No device was saved, so
+  both pictures show a first run's rack with one extra machine on it.
 
 ## The images
 
@@ -44,8 +44,8 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
 | `img/picker.png` | the picker: the `ACID` and `DRUMS` rows and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
-| `img/drum-face.png` | the drum machine's face: `DRUMS 2` selected, `KICK` the selected voice, the Hard Techno Acid drum bank's groove in the grid, the seven voice dials, `LP | BP | HP`, `SHUFFLE` and `HIT` | from the picker: click `+`, click `DRUMS`, then `BANKS` and the `Hard Techno Acid` row twice (the session is unsaved), and wait for the notice to clear before grabbing |
-| `img/kit-browser.png` | the kit browser: `FACTORY` with `808`, `909` and `Acoustic`, each `- READ ONLY`, `MY KITS` under them and empty, `NOW: Init` | `F3` on the drum device; click the card's `KIT` row |
+| `img/drum-face.png` | the drum machine's face: `DRUMS 2` selected, `KICK` the selected voice, the Hard Techno Acid drum bank's groove in the grid, the seven voice dials, `LP | BP | HP`, `SHUFFLE` and `HIT`, and `KIT 808` at the right-hand end of the caption line above the dials | from the picker: click `+`, click `DRUMS`, then `BANKS` and the `Hard Techno Acid` row twice (the session is unsaved), and wait for the notice to clear before grabbing |
+| `img/kit-browser.png` | the kit browser: `FACTORY` with `808`, `909` and `Acoustic`, each `- READ ONLY`, `MY KITS` under them and empty, `NOW: 808 - READ ONLY` — the kit a drum machine arrives on | `F3` on the drum device; click the card's `KIT` row |
 | `img/two-devices.png` | two devices, `ACID 1` black and selected, `ACID 2` on `FESTIVAL CITRUS` | from the picker, click `ACID`; `ctrl+2`; `F3`; click `COLOUR`; click the `FESTIVAL CITRUS` row; `Escape`; `ctrl+1` |
 | `img/strip.png` | the same strip, cropped: a black cell, a teal one, and `+` | `-crop 1960x76+0+24` in the state above |
 | `img/clipboard-notice.png` | the status line reading `pasted A1 into A2` | `ctrl+c`, `shift+Right`, `ctrl+v`, grabbed within the second, before the notice clears |

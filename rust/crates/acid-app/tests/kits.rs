@@ -6,10 +6,15 @@
 
 use std::sync::Arc;
 
-use acid_app::kits::{default_name, factory_kits, factory_names, factory_sample_bytes, is_factory};
+use acid_app::device::DeviceKind;
+use acid_app::kits::{
+    default_name, factory_kits, factory_names, factory_sample_bytes, fill_if_silent, is_factory,
+    needs_a_kit,
+};
 use acid_app::persist::{
     KitError, free_kit_name, import_kit, kit_name, kit_names, load_kit, save_kit,
 };
+use acid_app::state::SharedState;
 use acid_core::drums::{Drum, FilterKind, KitVoice, default_kit};
 
 /// The rate these kits are written and read at: a saved WAV records its own rate, so a save and a load have to agree on the
@@ -762,6 +767,55 @@ fn the_factory_kits_decode_at_the_rate_they_are_handed() {
         at_48.len(),
         at_44.len()
     );
+}
+
+#[test]
+fn a_drum_device_with_no_kit_is_given_the_default_one() {
+    // A drum machine is built on the `Init` kit — sixteen voices and no samples — because a `SharedState` cannot decode a WAV.
+    // The rate is only known when the stream opens, so `main` asks this once a frame; a device the player has just added is
+    // device 2 or later and nothing else ever gives it a kit, which is why a fresh machine used to be silent for ever.
+    let rate = 48_000.0;
+    let drum = SharedState::for_kind(DeviceKind::Drums);
+    assert!(needs_a_kit(&drum.kit()), "a new drum device has no samples");
+    assert!(
+        fill_if_silent(&drum, rate),
+        "a silent drum device is filled"
+    );
+    assert_eq!(drum.kit().name, default_name());
+    assert!(
+        drum.kit()
+            .voices
+            .iter()
+            .all(|voice| !voice.sample.is_empty()),
+        "the filled kit is the factory one, samples and all"
+    );
+
+    // Asking again changes nothing, a kit the player picked is never touched, and the 303 has no kit to fill.
+    assert!(!fill_if_silent(&drum, rate));
+    let picked = SharedState::for_kind(DeviceKind::Drums);
+    picked.adopt_kit(factory_kits(rate)[1].clone());
+    assert!(!fill_if_silent(&picked, rate));
+    assert_eq!(picked.kit().name, factory_names()[1]);
+    let bass = SharedState::new();
+    assert!(!fill_if_silent(&bass, rate));
+}
+
+#[test]
+fn a_players_kit_that_decoded_to_nothing_is_not_filled() {
+    // A folder whose WAVs are missing loads — with a problem per voice, by design — and every one of its samples is empty. That
+    // kit is the player's, not `Init`, and "all samples empty" alone would take it away and put `808` in its place.
+    let rate = 48_000.0;
+    let mine = SharedState::for_kind(DeviceKind::Drums);
+    mine.adopt_kit(acid_core::drums::Kit {
+        name: "Mine".to_string(),
+        ..default_kit()
+    });
+    assert!(
+        !needs_a_kit(&mine.kit()),
+        "a kit with no samples is only `Init` if it is called Init"
+    );
+    assert!(!fill_if_silent(&mine, rate));
+    assert_eq!(mine.kit().name, "Mine", "the player's kit was taken away");
 }
 
 #[test]

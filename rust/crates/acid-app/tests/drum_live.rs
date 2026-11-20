@@ -208,6 +208,33 @@ fn said(output: &FullOutput) -> Vec<String> {
 }
 
 #[test]
+fn the_face_names_the_kit_it_plays() {
+    // A drum machine is born on the `Init` kit, which has no samples: a face that never says the kit's name reads as a broken
+    // machine, and the card's `KIT` row is a card away. Both read the state's kit, so the face and the card cannot disagree.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+
+    let painted = said(&paint(&ctx, &mut panel, &shared));
+    assert!(
+        painted.iter().any(|text| text == "KIT Init"),
+        "a fresh drum machine does not say which kit it has: {painted:?}"
+    );
+
+    let kit = acid_app::kits::factory_kits(48_000.0)
+        .into_iter()
+        .next()
+        .expect("the first factory kit");
+    let name = kit.name.clone();
+    shared.adopt_kit(kit);
+    let painted = said(&paint(&ctx, &mut panel, &shared));
+    assert!(
+        painted.iter().any(|text| *text == format!("KIT {name}")),
+        "the face does not name the kit it plays: {painted:?}"
+    );
+}
+
+#[test]
 fn the_grid_has_sixteen_labelled_rows_and_sixteen_cells() {
     // The grid is the catalogue's shape, not a second sixteen written down beside it.
     assert_eq!(Drum::ALL.len(), 16);
@@ -305,6 +332,44 @@ fn a_shift_click_accents_it() {
         !shared.pattern().steps[1].is_hit(Drum::Kick),
         "no neighbour moved"
     );
+}
+
+#[test]
+fn clicking_a_voices_label_auditions_it() {
+    // The label is the voice's preview key: a click selects the voice for the dials *and* asks to hear it, so a row is
+    // something a player can identify without writing it into the bar. `HIT` plays the selected voice; this plays the one
+    // under the pointer.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let l = layout(screen());
+    shared.take_audition();
+
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        drum_panel::label_rect(&l, Drum::Snare).center(),
+        Modifiers::default(),
+    );
+
+    assert_eq!(panel.drum.selected, Drum::Snare, "the label still selects");
+    assert_eq!(
+        shared.take_audition(),
+        Some(Drum::Snare),
+        "one click on a voice's label has to be heard"
+    );
+
+    // A `SHIFT`-click is still the mute: a mute is not a sound, so it does not audition.
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        drum_panel::label_rect(&l, Drum::Clap).center(),
+        Modifiers::SHIFT,
+    );
+    assert_eq!(shared.take_audition(), None, "a mute is not a preview");
+    assert_eq!(panel.drum.selected, Drum::Snare, "a mute does not select");
 }
 
 #[test]

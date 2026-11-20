@@ -20,6 +20,27 @@ pub fn is_failed(text: &str) -> bool {
     text.starts_with("failed")
 }
 
+/// The typed status a device's state mirrors, from the rig's two facts: the open stream (its device name and rate) and the
+/// line the player reads.
+///
+/// `device` and `sample_rate` come from the stream and never from the line, which is prose — a `Running` whose `device` is
+/// `"48 kHz - PipeWire"` ticks no row on the settings card and prints a sentence where a device belongs. A `reason` likewise
+/// carries the failure without the `failed: ` the line prefixes it with, because `status_text` puts that back.
+pub fn mirror(running: Option<(&str, u32)>, line: &str) -> AudioStatus {
+    match running {
+        Some((device, sample_rate)) => AudioStatus::Running {
+            device: device.to_string(),
+            sample_rate,
+        },
+        None if is_failed(line) => AudioStatus::Failed {
+            reason: line.trim_start_matches("failed:").trim_start().to_string(),
+        },
+        // Starting, reconnecting, or a stream that was never opened: nothing is running, and `Starting` is the honest word for
+        // all three — the line itself says which, and it is what the settings card shows.
+        None => AudioStatus::Starting,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -47,8 +68,41 @@ mod tests {
             reason: "device busy".into()
         })));
         assert!(!is_failed(&status_text(&AudioStatus::Starting)));
-        assert!(!is_failed("reconnecting (attempt 1/3)"));
         assert!(!is_failed("48 kHz - PipeWire"));
+        // ...and the mirror agrees with it: only a line that says `failed:` is a failure, and a reconnect is `Starting`.
+        assert!(matches!(
+            mirror(None, "failed: device busy"),
+            AudioStatus::Failed { .. }
+        ));
+        assert_eq!(
+            mirror(None, "reconnecting (attempt 1/3)"),
+            AudioStatus::Starting
+        );
+    }
+
+    #[test]
+    fn the_mirror_takes_the_device_from_the_stream_and_the_reason_from_the_line() {
+        // The bug this replaced: `device` was the *display line* (`"48 kHz - PipeWire"`), so the settings card printed it as a
+        // device name and ticked no row, and `reason` was `"failed: device busy"`, which `status_text` prefixed again.
+        assert_eq!(
+            mirror(Some(("PipeWire", 48_000)), "48 kHz - PipeWire"),
+            AudioStatus::Running {
+                device: "PipeWire".to_string(),
+                sample_rate: 48_000,
+            }
+        );
+        assert_eq!(
+            mirror(None, "failed: device busy"),
+            AudioStatus::Failed {
+                reason: "device busy".to_string(),
+            }
+        );
+        assert_eq!(mirror(None, "starting"), AudioStatus::Starting);
+        // The round trip the strip and the card both depend on: the line this status prints is the line the rig had.
+        assert_eq!(
+            status_text(&mirror(Some(("PipeWire", 48_000)), "48 kHz - PipeWire")),
+            "48 kHz - PipeWire"
+        );
     }
 
     #[test]

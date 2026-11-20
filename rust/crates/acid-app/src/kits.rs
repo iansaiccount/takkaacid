@@ -131,6 +131,33 @@ pub fn factory_sample_bytes() -> usize {
         .map(|voice| voice.wav.len())
         .sum()
 }
+
+/// Whether this is the kit a drum machine arrives on rather than a kit anybody chose: `Init` is reserved, and it holds sixteen
+/// voices and **no samples at all**. A *player's* kit can also decode to nothing — a folder whose WAVs are missing loads with a
+/// problem per voice, by design — so "all samples empty" alone would take that kit away from them; the name is what tells the
+/// two apart.
+pub fn needs_a_kit(kit: &acid_core::drums::Kit) -> bool {
+    kit.name == acid_core::drums::DEFAULT_KIT_NAME
+        && kit.voices.iter().all(|voice| voice.sample.is_empty())
+}
+
+/// Give the default factory kit to a drum machine that has never had one, decoding at `rate`. Answers whether it filled it.
+///
+/// A drum device is built on `default_kit()` — sixteen voices and no samples — because a `SharedState` cannot decode a WAV: the
+/// rate is only known when the stream opens, which is `main`'s to say. So a device added from the picker arrives silent, and
+/// this is the half that makes it audible. `main` asks once a frame, and the answer is `false` for every device that already
+/// has samples, which is all of them after the first frame.
+pub fn fill_if_silent(state: &crate::state::SharedState, rate: f32) -> bool {
+    if !state.kind.has_kit() || !needs_a_kit(&state.kit()) {
+        return false;
+    }
+    let Some(kit) = factory_kit(default_name(), rate) else {
+        return false;
+    };
+    state.adopt_kit(kit);
+    true
+}
+
 /// Whether `name` is one of the kits that ships — the question a wall and a free name both ask.
 pub fn is_factory(name: &str) -> bool {
     FACTORY.iter().any(|kit| kit.name == name)
@@ -170,6 +197,12 @@ pub fn factory_kits(rate: f32) -> Vec<Kit> {
     let kits = decode(rate);
     *slot = Some((key, kits.clone()));
     kits
+}
+
+/// One kit that ships, by the name the browser and the save file use, decoded at `rate`. The one lookup of "which factory kit is
+/// this name": the panel's load path and the fill for a silent drum machine both ask it, so a name cannot mean two kits.
+pub fn factory_kit(name: &str, rate: f32) -> Option<Kit> {
+    factory_kits(rate).into_iter().find(|kit| kit.name == name)
 }
 
 /// The name of the kit a drum device with no kit of its own plays, and the answer to "which kit does `None` mean?".

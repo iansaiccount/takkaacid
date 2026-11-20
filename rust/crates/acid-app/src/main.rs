@@ -173,23 +173,14 @@ impl eframe::App for TakkaApp {
         // the panel is not showing. `draw_panel` drains the drawn device; this drains the rest, so no fader-moved tempo is left
         // unsaved because it was heard by a device off screen.
         self.panel.dirty |= panel_ui::transport::take_tempo_moved(&self.rack);
-        let status = self.rack.state().status();
-        let text = match &status {
-            AudioStatus::Starting => "starting".to_string(),
-            AudioStatus::Running { .. } => self.rig.status().to_string(),
-            AudioStatus::Failed { reason } => format!("failed: {reason}"),
-        };
-        if text != self.rig.status() {
-            self.rack.state().set_status(match &status {
-                AudioStatus::Running {
-                    device,
-                    sample_rate,
-                } => AudioStatus::Running {
-                    device: device.clone(),
-                    sample_rate: *sample_rate,
-                },
-                other => other.clone(),
-            });
+        // The rig owns the stream, so it owns the status: every device's state is told what it says, from the typed answer the
+        // rig builds (the stream's own device name and rate, never the display line). This used to read the *state's* status and
+        // write the same value back, which is why `main::sample_rate` answered `None` for ever and no kit ever loaded.
+        let status = self.rig.audio_status();
+        for device in self.rack.devices() {
+            if device.state.status() != status {
+                device.state.set_status(status.clone());
+            }
         }
         // Escape gives up on one thing at a time; the order lives in `ui::dispatch` so it can be tested. It is *taken* out of
         // the frame for the same reason the presses are: `key_pressed` counts presses over the event buffer, and a logic-only
@@ -533,6 +524,12 @@ impl eframe::App for TakkaApp {
                 }
                 Some(_) => {}
             }
+            // A drum machine is built on the `Init` kit — sixteen voices and no samples — because a state cannot decode a WAV;
+            // the rate is only known here. So every drum device that has never had a kit is given the default factory kit the
+            // frame this runs: a device the player has just added is device 2 or later, and nothing else ever loads its kit.
+            for device in self.rack.devices() {
+                acid_app::kits::fill_if_silent(&device.state, rate);
+            }
         }
         // The kits on offer, read when they are needed: on the first frame — the copy a factory edit makes has to know which
         // names are taken, and that is not a moment the card is open for — when the card opens, and after a copy is named.
@@ -644,11 +641,11 @@ impl TakkaApp {
     /// A kit is decoded at this rate and never at a default: a voice decoded at the wrong rate plays at the wrong pitch, and
     /// nothing in the face would say why. While the device is still starting nothing is decoded, and a drum device is silent
     /// until its kit arrives — which is exactly what a device with no samples sounds like.
+    ///
+    /// The rig answers, not a device's state: the state mirrors the stream and can lag it, and this used to read that mirror —
+    /// which nothing ever wrote, so the rate was `None` for ever and no kit was ever loaded. See the status block in `logic`.
     fn sample_rate(&self) -> Option<f32> {
-        match self.rack.state().status() {
-            AudioStatus::Running { sample_rate, .. } => Some(sample_rate as f32),
-            AudioStatus::Starting | AudioStatus::Failed { .. } => None,
-        }
+        self.rig.sample_rate()
     }
 
     /// Publish the kit `name` into device `index`, decoding it at `rate`.
@@ -658,9 +655,7 @@ impl TakkaApp {
     fn load_kit_now(&mut self, index: usize, name: &str, rate: f32) -> bool {
         let mut problems = Vec::new();
         let kit = if acid_app::kits::is_factory(name) {
-            acid_app::kits::factory_kits(rate)
-                .into_iter()
-                .find(|kit| kit.name == name)
+            acid_app::kits::factory_kit(name, rate)
         } else if name == acid_core::drums::DEFAULT_KIT_NAME {
             // The default kit is not a folder and never was: a drum machine that has not picked one holds `Init`, and a
             // reload loop asking the library for it would report a kit that does not exist. Silence is the honest answer.
@@ -672,7 +667,7 @@ impl TakkaApp {
                     Some(loaded.kit)
                 }
                 Err(error) => {
-                    self.notice(format!("could not load the kit {name}: {error}"));
+                    self.kit_notice(format!("could not load the kit {name}: {error}"));
                     None
                 }
             }
@@ -681,7 +676,7 @@ impl TakkaApp {
         // The voices are still named, in the decoder's own words, because a player holding a kit wants to know *which* file.
         if !problems.is_empty() {
             let named: Vec<String> = problems.iter().map(|problem| problem.to_string()).collect();
-            self.notice(format!("kit {name}: {}", named.join("; ")));
+            self.kit_notice(format!("kit {name}: {}", named.join("; ")));
         }
         let Some(kit) = kit else {
             return false;
@@ -739,7 +734,7 @@ impl TakkaApp {
             Err(error) => {
                 // The flag stays, so the next save tries again — and the caller must not report the session saved, or a full
                 // disk would cost the player their kit with the status line saying everything was kept.
-                self.notice(format!("could not save the kit: {error}"));
+                self.kit_notice(format!("could not save the kit: {error}"));
                 false
             }
         }
@@ -762,7 +757,7 @@ impl TakkaApp {
             panel_ui::kits::Request::Close => panel_ui::kits::close(&mut self.panel),
             panel_ui::kits::Request::Load(name) => {
                 let Some(rate) = self.kit_rate else {
-                    self.notice(
+                    self.kit_notice(
                         "the audio device is not running yet, so no kit can be loaded".to_string(),
                     );
                     return;
@@ -779,12 +774,12 @@ impl TakkaApp {
                 self.kit_wanted = name.clone();
                 self.panel.kits.names = persist::kit_names(&persist::kits_dir());
                 if loaded {
-                    self.notice(format!("kit: {name}"));
+                    self.kit_notice(format!("kit: {name}"));
                 }
             }
             panel_ui::kits::Request::Import => {
                 let Some(rate) = self.kit_rate else {
-                    self.notice(
+                    self.kit_notice(
                         "the audio device is not running yet, so no kit can be imported"
                             .to_string(),
                     );
@@ -814,20 +809,20 @@ impl TakkaApp {
                         // One notice, and it is the *last* one this frame, so it can say what to do: a voice that did not come
                         // with the folder is silent in the copy, and the file the document now names is the repair.
                         if imported.problems.is_empty() && loaded {
-                            self.notice(format!("imported the kit {name}"));
+                            self.kit_notice(format!("imported the kit {name}"));
                         } else if !imported.problems.is_empty() {
                             let named: Vec<String> = imported
                                 .problems
                                 .iter()
                                 .map(|problem| problem.to_string())
                                 .collect();
-                            self.notice(format!(
+                            self.kit_notice(format!(
                                 "imported {name}, but {} - put that file in its folder and load it again",
                                 named.join("; ")
                             ));
                         }
                     }
-                    Err(error) => self.notice(format!("could not import the kit: {error}")),
+                    Err(error) => self.kit_notice(format!("could not import the kit: {error}")),
                 }
             }
         }
@@ -1105,6 +1100,16 @@ impl TakkaApp {
     /// Say something on the status line. It survives the card that asked for it, and it clears itself.
     fn notice(&mut self, message: String) {
         self.panel.notify(message);
+    }
+
+    /// Say something about a kit: on the status line, and — while the browser is up — on the browser's own line, because the
+    /// browser is the whole panel and a notice painted under a card is a notice nobody reads. One seam for every kit message:
+    /// the load's failure, its per-voice problems, a copy's name, an import's hole, and the two "not running yet" refusals.
+    fn kit_notice(&mut self, message: String) {
+        if self.panel.kits.open {
+            self.panel.kits.message = Some(message.clone());
+        }
+        self.notice(message);
     }
 }
 

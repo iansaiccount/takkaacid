@@ -34,7 +34,11 @@ pub struct Kits {
     /// The row whose load has been clicked once while the kit was edited and not saved. Loading another kit throws the edit
     /// away, so it takes two clicks, like replacing an unsaved song.
     pub load_armed: Option<String>,
-    /// The card's own hint. Messages from the app go to the status line, not here.
+    /// The card's own line: what an armed row is waiting for, and what `main::kit_notice` last said about the device's kit — a
+    /// load that failed, a voice that would not decode, the "not running yet" refusal. It is written *and* sent to the status
+    /// line while this card is up, because the card fills the panel and a notice painted underneath it is a notice nobody
+    /// reads; it is cleared when the card closes, and by the next row that loads. (A copy's own name is the panel's notice, made
+    /// by `ui::kits::edit`: a dial cannot be turned while this card is up, so that one is never made behind it.)
     pub message: Option<String>,
 }
 

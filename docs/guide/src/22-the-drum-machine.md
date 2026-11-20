@@ -25,10 +25,11 @@ A click on a cell strikes that voice on that step; a click on a struck cell take
 the 303's own accent gesture, louder and brighter — and an accent is printed brighter than a plain strike, so the pattern
 reads at a glance. Every fourth column is framed in the silk, which is where the beats are.
 
-Clicking a row's **label** selects that voice: its label becomes a lit plate in the accent, its row carries a faint band
-behind the cells, and the name is printed above the dials, so what is being edited is readable from either end of the
-panel. `SHIFT`-clicking the label **mutes** that voice — the label prints dim and the row's cells lose their accent, but
-they stay readable, so a muted voice can be found and unmuted by eye.
+Clicking a row's **label** selects that voice **and hears it**: its label becomes a lit plate in the accent, its row carries
+a faint band behind the cells, the name is printed above the dials — and the voice plays once, so a row is something you can
+identify by ear without writing it into the bar. `SHIFT`-clicking the label **mutes** that voice — the label prints dim and
+the row's cells lose their accent, but they stay readable, so a muted voice can be found and unmuted by eye. A mute is not a
+sound, so a `SHIFT`-click does not play anything.
 
 `SHIFT` is the modifier throughout: a strike, an accent, a mute has a plain click and a `SHIFT`-click, never a menu.
 
@@ -60,8 +61,14 @@ read-only ([`19-a-devices-card`](19-a-devices-card.md#the-kit)).
 
 ## The kits
 
-A drum machine's sound is a **kit**: sixteen voices, each with a sample and the dials above. A drum machine's card carries a
-`KIT` row an acid device's does not, with the name of the kit it plays; a click on it opens the **kit browser**.
+A drum machine's sound is a **kit**: sixteen voices, each with a sample and the dials above. **The face names the kit it is
+playing** — `KIT 808` in dim silk at the right-hand end of the line above the dials, smaller and quieter than the voice's name
+at the left — and a drum machine's card carries a `KIT` row an acid device's does not, with the same name; a click on the row
+opens the **kit browser**.
+
+A drum machine arrives on `808`, the first kit that ships. `Init` is the name of a kit with sixteen voices and **no samples at
+all** — the state a machine is in before any kit has been decoded — so `KIT Init` on the face means the machine has no sound
+in it, not that the machine is broken.
 
 ![The kit browser](img/kit-browser.png)
 

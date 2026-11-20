@@ -310,6 +310,10 @@ fn draw_grid(
                 shared.drum_mute.store(muted ^ bit, Ordering::Relaxed);
             } else {
                 state.drum.selected = drum;
+                // The label is the voice's preview key: one click selects the voice for the dials *and* hears it, so a row is
+                // something a player can identify without writing it into the bar. `HIT` plays the selected voice; this plays
+                // the one under the pointer. A `SHIFT`-click still mutes and does not audition, because a mute is not a sound.
+                shared.request_audition(drum);
             }
         }
 
@@ -394,6 +398,23 @@ fn draw_dials(
     // its position and the kit is left alone.
     let choosing = state.learn == super::learn::Step::Choosing;
     let kit = shared.kit();
+    // The kit the machine is playing, at the other end of the caption line. A drum machine is born on the `Init` kit, which
+    // has no samples, so a face that never says the kit's name reads as a broken machine rather than as a kit with nothing in
+    // it — and a face that says `KIT 808` cannot disagree with the card's row, because both read the state's kit.
+    let caption = format!("KIT {}", kit.name);
+    let caption = super::text::fit(
+        ui.painter(),
+        &caption,
+        theme::legend(11.0 * s),
+        area.width() * 0.5,
+    );
+    ui.painter().text(
+        Pos2::new(area.right(), area.top() + area.height() * CAPTION * 0.5),
+        Align2::RIGHT_CENTER,
+        caption,
+        theme::legend(11.0 * s),
+        p.silkscreen_dim,
+    );
     let voice = &kit.voices[selected.index()];
     let cells = dial_cells(l);
     for (knob, cell) in Knob::ALL.iter().zip(cells.iter()) {
