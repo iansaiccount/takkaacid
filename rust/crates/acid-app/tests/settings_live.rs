@@ -107,7 +107,8 @@ fn press(
             ..Modifiers::default()
         },
     }];
-    for press in dispatch::presses(&events) {
+    let kind = panel.showing_kind();
+    for press in dispatch::presses(&events, kind) {
         dispatch::handle(press, panel, shared, bank);
     }
 }

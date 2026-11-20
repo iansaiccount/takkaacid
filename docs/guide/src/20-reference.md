@@ -29,6 +29,7 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | Key | What it does |
 |---|---|
 | `A W S E D F T G Y H U J K` | play a chromatic scale; with `shift` or `STEP`, write the note to the selected step |
+| `h` | on a drum device, strike the selected voice — `HIT`'s key |
 | `Z` / `X` | octave down / up, two either way |
 | `space` | play / pause, same as `PLAY` / `PAUSE` |
 | `,` | step the playhead back a bar (drawn, not wired yet) |

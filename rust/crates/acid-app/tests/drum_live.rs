@@ -113,13 +113,17 @@ fn voice_press(
     shift: bool,
 ) -> Handled {
     let mut handled = Handled::Nothing;
-    for press in dispatch::presses(&[key_press(
-        key,
-        Modifiers {
-            shift,
-            ..Modifiers::default()
-        },
-    )]) {
+    let kind = panel.showing_kind();
+    for press in dispatch::presses(
+        &[key_press(
+            key,
+            Modifiers {
+                shift,
+                ..Modifiers::default()
+            },
+        )],
+        kind,
+    ) {
         handled = dispatch::handle(press, panel, shared, bank);
     }
     handled
@@ -1149,7 +1153,7 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
     assert_eq!(
         dispatch::handle(enter, &mut panel, &shared, &mut bank),
         Handled::Nothing,
-        "Enter is the step editor's key and belongs to the acid face"
+        "a drum face has no step editor, so `Enter` is no face's key and nothing takes it from the frame"
     );
     let space = KeyPress {
         key: Key::Space,
@@ -1216,7 +1220,10 @@ fn shift_up_and_down_walk_the_selected_voice() {
     // A held key repeats, and the walk is meant to carry on: `dispatch::presses` lets an arrow's repeat through, so holding
     // `shift+down` walks row after row, silently.
     let mut repeated = Handled::Nothing;
-    for press in dispatch::presses(&[key_repeat(Key::ArrowDown, Modifiers::SHIFT)]) {
+    for press in dispatch::presses(
+        &[key_repeat(Key::ArrowDown, Modifiers::SHIFT)],
+        panel.showing_kind(),
+    ) {
         repeated = dispatch::handle(press, &mut panel, &shared, &mut bank);
     }
     assert_eq!(repeated, Handled::Selection, "a repeat is still a walk");
@@ -1292,5 +1299,50 @@ fn the_voice_keys_leave_the_acid_note_alone() {
         panel.drum.selected,
         Drum::Kick,
         "and it moved no drum voice"
+    );
+}
+
+#[test]
+fn h_strikes_the_selected_voice() {
+    // `HIT` is a click; `h` is the same hit from the keyboard, so a kit can be walked with the arrows and heard with one key.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    panel.drum.selected = Drum::Snare;
+    shared.take_audition();
+
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::H, false),
+        Handled::Hit,
+        "the hit key answers as a hit"
+    );
+    assert_eq!(
+        shared.take_audition(),
+        Some(Drum::Snare),
+        "and asks for the voice the dials are on"
+    );
+    assert_eq!(panel.drum.selected, Drum::Snare, "a hit is not a selection");
+
+    // A card is modal for selections and edits, not for auditions: the 303's letters already play through one.
+    panel.help_visible = true;
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::H, false),
+        Handled::Hit
+    );
+    assert_eq!(shared.take_audition(), Some(Drum::Snare));
+
+    // On an acid panel `h` is a note, and the press is not the dispatcher's to act on: it has to reach `play_computer_keys`.
+    let mut acid = acid_panel_state();
+    let acid_shared = SharedState::new();
+    acid_shared.take_audition();
+    assert_eq!(
+        voice_press(&mut acid, &acid_shared, &mut bank, Key::H, false),
+        Handled::Nothing,
+        "`h` is one of the 303's notes"
+    );
+    assert_eq!(
+        acid_shared.take_audition(),
+        None,
+        "and it struck no drum voice"
     );
 }

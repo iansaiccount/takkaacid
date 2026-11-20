@@ -199,8 +199,11 @@ impl eframe::App for TakkaApp {
         // the window came back. Nothing is taken while a text field has the keyboard — the field's letters are letters, and
         // its space bar is a space rather than the transport. `ui::mod`'s audition keys ask the same question, and both must,
         // or a name typed into a card plays notes and stops the transport.
-        let presses =
-            ctx.input_mut(|input| panel_ui::dispatch::take_presses(&mut input.events, typing));
+        // The face is part of the question: `h` is a note on the 303 and `HIT` on a drum machine, so what the panel takes
+        // from the frame depends on which face is showing.
+        let kind = self.panel.showing_kind();
+        let presses = ctx
+            .input_mut(|input| panel_ui::dispatch::take_presses(&mut input.events, kind, typing));
         let pattern_before = self.rack.bank().current();
         for press in presses {
             let device = self.rack.device_mut();

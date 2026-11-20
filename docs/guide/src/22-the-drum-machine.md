@@ -37,6 +37,9 @@ grid's own order, `KICK` at the top. The walk selects and does not sound, like a
 stops at the top row and the bottom one rather than wrapping round. While a card is up the walk is spent, like the editing
 keys, because a card is modal.
 
+**`h`** strikes the selected voice — the same hit as `HIT` — so a kit can be walked with the arrows and heard with one key. A
+card does not stop it: a hit is a sound, not an edit. The rest of the letters stay silent here; they are the 303's notes.
+
 ## The dials
 
 The seven knobs stay where the 303 puts them and are **the selected voice's**, not the machine's:
@@ -100,10 +103,10 @@ A drum bank is patterns, not a song. The grooves last the session — a save sti
 
 ## What is not here
 
-- **No notes.** A drum machine takes no notes at all this round: the computer keyboard's letters play nothing on it
-  ([`15-keyboard`](15-keyboard.md)), a MIDI note on its channel is silent ([`14-midi`](14-midi.md)), and `STEP` lights and
-  toggles while writing nothing. `shift` and the arrows move between its voices, not notes. MIDI pads and per-voice
-  controllers are a later round.
+- **No notes.** A drum machine takes no notes at all this round: no letter plays a note on it
+  ([`15-keyboard`](15-keyboard.md)) — `h` strikes a voice, and nothing writes a pitch — a MIDI note on its channel is silent
+  ([`14-midi`](14-midi.md)), and `STEP` lights and toggles while writing nothing. `shift` and the arrows move between its
+  voices, not notes. MIDI pads and per-voice controllers are a later round.
 - **No step row, no performance row.** The grid's columns are the steps, and `OCT`, `CLEAR`, `RANDOM`, the density and the
   scale are the 303's. `BANK`, `PATTERN`, `COPY`, `PASTE`, `SAVE`, `BANKS` and `STEP` keep their places on the switches row.
 - **One hit per voice at a time.** A second strike on the same voice retriggers it rather than layering, and a hat's

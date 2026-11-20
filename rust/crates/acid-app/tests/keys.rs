@@ -6,6 +6,7 @@
 //! The mapping from a key to a `KeyPress` stays in `dispatch::presses`, and these tests drive the taking, not the frames —
 //! `keys_live.rs` is the keyboard through the panel.
 
+use acid_app::device::DeviceKind;
 use acid_app::ui::dispatch::{self, KeyPress};
 use eframe::egui::{Event, Key, Modifiers, Pos2};
 
@@ -30,7 +31,7 @@ fn a_panel_key_is_taken_and_returned_as_a_press() {
         Event::Text("A".to_string()),
     ];
 
-    let taken = dispatch::take_presses(&mut events, false);
+    let taken = dispatch::take_presses(&mut events, DeviceKind::Acid, false);
 
     assert_eq!(
         taken,
@@ -64,11 +65,45 @@ fn a_key_the_panel_does_not_use_stays_in_the_frame() {
     // `B` auditions a note; a copy is the clipboard's, and neither is a press the panel acts on.
     let mut events = vec![press(Key::B, false), Event::Copy];
 
-    assert!(dispatch::take_presses(&mut events, false).is_empty());
+    assert!(dispatch::take_presses(&mut events, DeviceKind::Acid, false).is_empty());
     assert_eq!(
         events,
         vec![press(Key::B, false), Event::Copy],
         "an audition key and a clipboard event are not the key path's to take"
+    );
+}
+
+/// The same key is a note on an acid device and `HIT`'s key on a drum machine, so the taking asks which face is showing.
+#[test]
+fn the_hit_key_is_taken_on_a_drum_face_and_left_for_the_note_on_an_acid_one() {
+    let mut acid = vec![press(Key::H, false)];
+    assert!(
+        dispatch::take_presses(&mut acid, DeviceKind::Acid, false).is_empty(),
+        "`h` is one of the 303's notes and must reach the keyboard"
+    );
+    assert_eq!(acid, vec![press(Key::H, false)]);
+
+    let mut drums = vec![press(Key::H, false)];
+    assert_eq!(
+        dispatch::take_presses(&mut drums, DeviceKind::Drums, false),
+        vec![KeyPress {
+            key: Key::H,
+            shift: false,
+            ctrl: false
+        }],
+        "on a drum face `h` is the hit key"
+    );
+    assert!(drums.is_empty(), "and the press is spent");
+
+    // A drum face owns no step editor, so the step border's keys are egui's there: nothing may take them from the frame.
+    let mut border = vec![press(Key::Enter, false), press(Key::ArrowLeft, false)];
+    assert!(
+        dispatch::take_presses(&mut border, DeviceKind::Drums, false).is_empty(),
+        "Enter and the left arrow are the 303 editor's, and a drum face has no editor"
+    );
+    assert_eq!(
+        border,
+        vec![press(Key::Enter, false), press(Key::ArrowLeft, false)]
     );
 }
 
@@ -77,7 +112,7 @@ fn a_key_the_panel_does_not_use_stays_in_the_frame() {
 fn a_typing_hand_takes_nothing_out_of_the_frame() {
     let mut events = vec![press(Key::Space, false), press(Key::Enter, false)];
 
-    assert!(dispatch::take_presses(&mut events, true).is_empty());
+    assert!(dispatch::take_presses(&mut events, DeviceKind::Acid, true).is_empty());
     assert_eq!(
         events,
         vec![press(Key::Space, false), press(Key::Enter, false)],
@@ -91,7 +126,7 @@ fn only_a_tempo_nudge_repeats_out_of_the_frame() {
     let mut events = vec![press(Key::ArrowUp, true), press(Key::Enter, true)];
 
     assert_eq!(
-        dispatch::take_presses(&mut events, false),
+        dispatch::take_presses(&mut events, DeviceKind::Acid, false),
         vec![KeyPress {
             key: Key::ArrowUp,
             shift: false,
