@@ -189,11 +189,13 @@ fn fills(output: &FullOutput) -> Vec<(Rect, egui::Color32)> {
     out
 }
 
-/// Every stroked rectangle — a beat frame, a key's border — so a test can ask where one was drawn.
-fn strokes(output: &FullOutput) -> Vec<Rect> {
-    fn walk(shape: &Shape, out: &mut Vec<Rect>) {
+/// Every stroked rectangle with the stroke it was drawn in, so a test can ask where one was drawn and in what ink.
+fn strokes_with_ink(output: &FullOutput) -> Vec<(Rect, egui::Stroke)> {
+    fn walk(shape: &Shape, out: &mut Vec<(Rect, egui::Stroke)>) {
         match shape {
-            Shape::Rect(rect) if rect.fill == egui::Color32::TRANSPARENT => out.push(rect.rect),
+            Shape::Rect(rect) if rect.fill == egui::Color32::TRANSPARENT => {
+                out.push((rect.rect, rect.stroke))
+            }
             Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
             _ => {}
         }
@@ -203,6 +205,14 @@ fn strokes(output: &FullOutput) -> Vec<Rect> {
         walk(&clipped.shape, &mut out);
     }
     out
+}
+
+/// Every stroked rectangle — a beat frame, a key's border — so a test can ask where one was drawn.
+fn strokes(output: &FullOutput) -> Vec<Rect> {
+    strokes_with_ink(output)
+        .into_iter()
+        .map(|(rect, _)| rect)
+        .collect()
 }
 
 /// Whether a stroked rect is the one painted on `rect` (a shape may shrink by a pixel or two).
@@ -1344,5 +1354,46 @@ fn h_strikes_the_selected_voice() {
         acid_shared.take_audition(),
         None,
         "and it struck no drum voice"
+    );
+}
+
+#[test]
+fn the_selected_step_is_painted() {
+    // A drum face has no step row, so the selection has to be on the grid itself: one column, stroked in the accent.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let l = layout(screen());
+    // The first frame loads this device's editor slot, which starts the step at 0; a hand sets it on a settled frame.
+    paint(&ctx, &mut panel, &shared);
+    // Six is not a multiple of four, so the beat frame is not what this finds by accident.
+    panel.selected = 6;
+    let painted = paint(&ctx, &mut panel, &shared);
+
+    let accent = theme::palette(Scheme::Black).led_accent;
+    let selected = drum_panel::column_rect(&l, 6);
+    assert!(
+        strokes_with_ink(&painted)
+            .iter()
+            .any(|(rect, stroke)| *rect == selected && stroke.color == accent),
+        "the selected step's column is not stroked in the accent"
+    );
+    assert!(
+        !strokes_with_ink(&painted)
+            .iter()
+            .any(|(rect, stroke)| *rect == drum_panel::column_rect(&l, 7) && stroke.color == accent),
+        "a column that is not selected is stroked"
+    );
+
+    // A literal colour would pass above, because in the black scheme `led_accent` and `lit_ink` are the same value; the
+    // light scheme's accent is not, so painting the same frame again in it is what proves the ink comes from the palette.
+    panel.scheme = Scheme::ChoirPastel;
+    let light = paint(&ctx, &mut panel, &shared);
+    let light_accent = theme::palette(Scheme::ChoirPastel).led_accent;
+    assert!(
+        strokes_with_ink(&light)
+            .iter()
+            .any(|(rect, stroke)| *rect == selected && stroke.color == light_accent),
+        "the column does not follow the face's scheme"
     );
 }

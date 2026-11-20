@@ -245,6 +245,21 @@ pub fn row_cells(l: &layout::PanelLayout, drum: Drum) -> [Rect; STEPS_PER_PATTER
     cells
 }
 
+/// One step's column: the sixteen cells under each other, from the first row's band to the last's.
+///
+/// Derived from the rows rather than from the cells, so the column keeps the row inset's shape at every scale. It is the step
+/// selection's mark, the way the 303's border is drawn round its step key — this face has no step row to put one in.
+pub fn column_rect(l: &layout::PanelLayout, step: usize) -> Rect {
+    let step = step.min(STEPS_PER_PATTERN - 1);
+    let first = cell_rect(l, Drum::ALL[0], step);
+    let top = row_band(l, Drum::ALL[0]).top();
+    let bottom = row_band(l, Drum::ALL[Drum::ALL.len() - 1]).bottom();
+    Rect::from_min_max(
+        Pos2::new(first.left(), top),
+        Pos2::new(first.right(), bottom),
+    )
+}
+
 /// One of the three keys beside the dials.
 pub fn key_cell(l: &layout::PanelLayout, key: DrumKey) -> Rect {
     dial_cells(l)[Knob::ALL.len() + key.index()]
@@ -393,6 +408,25 @@ fn draw_grid(
             }
         }
     }
+
+    // The step selection: one column, the mark the 303 draws round its step key. Drawn after the cells so it reads over
+    // their edges, and it is the only mark a step has on this face — the playhead belongs to the 303's step row, which a
+    // drum face does not draw.
+    let column = column_rect(l, state.selected);
+    ui.painter().rect_stroke(
+        column,
+        2.0 * s,
+        egui::Stroke::new(1.5 * s, p.led_accent),
+        egui::StrokeKind::Inside,
+    );
+    // A gutter in the face's own colour outside the accent: an accented hit is filled with the same ink, so without this the
+    // column's edge would vanish for the height of every accent it crossed.
+    ui.painter().rect_stroke(
+        column,
+        2.0 * s,
+        egui::Stroke::new(1.5 * s, p.panel),
+        egui::StrokeKind::Outside,
+    );
 }
 
 fn draw_dials(
@@ -671,5 +705,19 @@ mod tests {
         ] {
             assert_eq!(face_key(key, true), None, "{key:?} is not this face's");
         }
+    }
+
+    #[test]
+    fn the_column_is_one_step_wide_and_sixteen_rows_tall() {
+        // The painted test compares against `column_rect`, so this is the one that says the rect is the column and not a
+        // cell: one step wide, from the first row's band to the last's, clamped like every other index on the face.
+        let l = l();
+        let column = column_rect(&l, 6);
+        let first = cell_rect(&l, Drum::Kick, 6);
+        assert_eq!(column.left(), first.left());
+        assert_eq!(column.right(), first.right());
+        assert_eq!(column.top(), row_band(&l, Drum::Kick).top());
+        assert_eq!(column.bottom(), row_band(&l, Drum::Shaker).bottom());
+        assert_eq!(column_rect(&l, 99), column_rect(&l, STEPS_PER_PATTERN - 1));
     }
 }

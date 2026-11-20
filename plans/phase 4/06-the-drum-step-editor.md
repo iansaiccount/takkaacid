@@ -149,6 +149,23 @@ becoming per device; a step's length or a per-step edit beyond the hit and its a
 
 ## Progress
 
-- [ ] Task 1 —
+- [x] **Task 1 — the column is drawn.** `drum_panel::column_rect(l, step)` is the step's sixteen cells as one rect (x from the
+      first row's cell for that step, y from the first row's band to the last's, clamped), and `draw_grid` strokes it after the
+      cells in `p.led_accent` with a `1.5 * s` **gutter in `p.panel` just outside it**, because an accented hit is filled with
+      the same accent and the column's edge would otherwise vanish wherever it crossed one. Tests:
+      `drum_live::the_selected_step_is_painted` (step 6, not a multiple of four so no beat frame is near; painted in the black
+      scheme **and** in `ChoirPastel`, so a literal colour could not pass — the black scheme's `led_accent` and `lit_ink` are the
+      same value) and `drum_panel::tests::the_column_is_one_step_wide_and_sixteen_rows_tall` (the rect against the cells and the
+      bands, plus the clamp — the live test compares against `column_rect`, so without this a rect that was one cell tall would
+      still pass). Gates: `cargo test --workspace` **885**, clippy `-D warnings`, `fmt --check`. The book is deferred to Task 3:
+      page 22 describes no step selection today, so it is knowingly one round behind for these two commits, and `check.sh` is
+      run with Task 3.
+      **Review: PASS on one Important and three Minors, every one actioned.** The Important was the accent-on-accent collision
+      (fixed with the panel gutter above, and it matters precisely because Task 2 writes accents into the selected step); the
+      Minors were the geometry not pinned (the unit test above), the palette test painting one scheme (the second-scheme half
+      above), a stale doc line above `strokes_with_ink` (deleted), and a doubled clamp (`draw_grid` now passes `state.selected`
+      and `column_rect` clamps). The reviewer's note that `column_rect` builds a row's 16 rects for one cell was left as it is:
+      it is one small allocation a frame on the UI thread, not on the audio path, and `row_band`/`cell_rect` already own that
+      geometry.
 - [ ] Task 2 —
 - [ ] Task 3 —
