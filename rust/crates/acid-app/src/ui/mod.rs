@@ -82,7 +82,7 @@ pub struct PanelState {
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
-    /// The step the keyboard edits; always in `0..16`, never saved.
+    /// The step the face edits — the 303's border, the drum grid's lit column; always in `0..16`, never saved.
     pub selected: usize,
     /// The drum face's editor: which voice its dials are on. Panel-wide, not per device — plan 01, task 4's ruling. Not
     /// saved: the kit it edits is in memory only this phase.
@@ -297,8 +297,9 @@ impl PanelState {
     /// Whether any card is open over the panel.
     ///
     /// The one spelling of "the face is covered", asked by everything that would otherwise change something a card hides: the
-    /// step editor's arrows and `Enter`, the drum face's voice walk, the computer keyboard's step writes, and a MIDI note waiting
-    /// to be placed. A card is modal by design, so a writer that does not ask this is a write a player cannot see.
+    /// step editor's arrows and `Enter`, the drum face's voice walk, step move and step writes, the computer keyboard's step
+    /// writes, and a MIDI note waiting to be placed. A card is modal by design, so a writer that does not ask this is a write a
+    /// player cannot see.
     pub fn a_card_is_up(&self) -> bool {
         self.help_visible
             || self.settings_open

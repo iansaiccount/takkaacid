@@ -1153,8 +1153,12 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
         "and no audition was sounded"
     );
 
-    // The dispatcher refuses the step editor for a drum device, and still answers the transport.
+    // The dispatcher answers the drum face's own keys: `enter` writes the selected voice into the selected step, and it
+    // writes no 303 note with it. (A step's `on` bit follows its drum mask, which is `Step::hit`'s own rule and the click's
+    // before this round; the note's pitch, level and shaping are what this asserts.)
     let mut bank = PatternBank::new_empty();
+    let step = panel.selected.min(STEPS_PER_PATTERN - 1);
+    let note = shared.pattern().steps[step];
     let enter = KeyPress {
         key: Key::Enter,
         shift: false,
@@ -1162,9 +1166,33 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
     };
     assert_eq!(
         dispatch::handle(enter, &mut panel, &shared, &mut bank),
-        Handled::Nothing,
-        "a drum face has no step editor, so `Enter` is no face's key and nothing takes it from the frame"
+        Handled::Selection,
+        "Enter writes the selected voice on a drum face"
     );
+    let written = shared.pattern().steps[step];
+    assert!(
+        written.is_hit(panel.drum.selected),
+        "the voice landed on the selected step"
+    );
+    assert_eq!(
+        (
+            written.pitch,
+            written.octave_offset,
+            written.velocity,
+            written.accent,
+            written.slide
+        ),
+        (
+            note.pitch,
+            note.octave_offset,
+            note.velocity,
+            note.accent,
+            note.slide
+        ),
+        "and no 303 note was written with it"
+    );
+    let after_write = shared.pattern();
+
     let space = KeyPress {
         key: Key::Space,
         shift: false,
@@ -1175,7 +1203,11 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
         Handled::Shortcut(Shortcut::PlayStop),
         "the transport shortcuts are the drum machine's too"
     );
-    assert_eq!(shared.pattern().steps, before.steps);
+    assert_eq!(
+        shared.pattern(),
+        after_write,
+        "and the transport changed no step"
+    );
 }
 
 #[test]
@@ -1395,5 +1427,213 @@ fn the_selected_step_is_painted() {
             .iter()
             .any(|(rect, stroke)| *rect == selected && stroke.color == light_accent),
         "the column does not follow the face's scheme"
+    );
+}
+
+#[test]
+fn the_arrows_move_the_selected_step_on_a_drum_face() {
+    // The 303's plain arrows, on the drum face: the step the grid will write to, clamped at both ends.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    let pattern = shared.pattern();
+    let voice = panel.drum.selected;
+    panel.selected = 0;
+
+    for (key, expected) in [
+        (Key::ArrowRight, 1),
+        (Key::ArrowRight, 2),
+        (Key::ArrowLeft, 1),
+    ] {
+        assert_eq!(
+            voice_press(&mut panel, &shared, &mut bank, key, false),
+            Handled::Selection,
+            "{key:?}"
+        );
+        assert_eq!(panel.selected, expected, "{key:?}");
+    }
+
+    panel.selected = 0;
+    voice_press(&mut panel, &shared, &mut bank, Key::ArrowLeft, false);
+    assert_eq!(panel.selected, 0, "the first step is the first");
+    panel.selected = STEPS_PER_PATTERN - 1;
+    voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
+    assert_eq!(
+        panel.selected,
+        STEPS_PER_PATTERN - 1,
+        "and the last is the last"
+    );
+
+    assert_eq!(
+        panel.drum.selected, voice,
+        "a step move is not a voice move"
+    );
+    assert_eq!(shared.pattern(), pattern, "and not an edit");
+    // The unshifted up and down arrows are still the tempo's, and they move no step.
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, false),
+        Handled::Shortcut(Shortcut::TempoUp)
+    );
+    assert_eq!(panel.selected, STEPS_PER_PATTERN - 1);
+}
+
+#[test]
+fn enter_writes_the_selected_voice_into_the_selected_step() {
+    // Silent, like the 303's step writes: `h` is how a voice is heard, `enter` is how it is written.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    panel.drum.selected = Drum::Snare;
+    panel.selected = 2;
+    shared.take_audition();
+
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::Enter, false),
+        Handled::Selection
+    );
+    let step = shared.pattern().steps[2];
+    assert!(step.is_hit(Drum::Snare), "the voice landed on the step");
+    assert!(
+        !step.is_accented(Drum::Snare),
+        "a plain write is not accented"
+    );
+    assert!(
+        !shared.pattern().steps[1].is_hit(Drum::Snare),
+        "and no other step moved"
+    );
+    assert_eq!(
+        shared.take_audition(),
+        None,
+        "a write is silent: `HIT` is how a voice is heard"
+    );
+    assert!(panel.dirty, "a write is a save the session owes");
+    assert_eq!(panel.drum.selected, Drum::Snare, "and it moved no voice");
+    assert_eq!(
+        panel.selected, 2,
+        "nor the step: a drum step holds many voices"
+    );
+
+    // A second enter takes it off again, the 303's toggle.
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::Enter, false),
+        Handled::Selection
+    );
+    assert!(!shared.pattern().steps[2].is_hit(Drum::Snare));
+}
+
+#[test]
+fn shift_enter_is_the_accent_gesture() {
+    // The grid's shift-click, from the keyboard: empty takes an accented hit, a plain strike is accented, an accented one is
+    // taken off.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    panel.drum.selected = Drum::Clap;
+
+    panel.selected = 3;
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::Enter, true),
+        Handled::Selection
+    );
+    assert!(
+        shared.pattern().steps[3].is_accented(Drum::Clap),
+        "an empty cell takes an accented hit"
+    );
+
+    let mut plain = shared.pattern().steps[4];
+    plain.hit(Drum::Clap, false);
+    shared.set_step(4, plain);
+    panel.selected = 4;
+    voice_press(&mut panel, &shared, &mut bank, Key::Enter, true);
+    assert!(
+        shared.pattern().steps[4].is_accented(Drum::Clap),
+        "a plain strike is accented"
+    );
+    voice_press(&mut panel, &shared, &mut bank, Key::Enter, true);
+    assert!(
+        !shared.pattern().steps[4].is_hit(Drum::Clap),
+        "an accented hit is taken off"
+    );
+}
+
+#[test]
+fn the_keyboard_and_the_pointer_write_the_same_step() {
+    // One writer, two hands: the SHIFT-click and shift+enter must leave the same step.
+    let l = layout(screen());
+    let clicked = {
+        let ctx = Context::default();
+        let shared = SharedState::new();
+        let mut panel = drum_panel_state();
+        // The first frame loads the editor slot; a click lands on a settled frame.
+        paint(&ctx, &mut panel, &shared);
+        click(
+            &ctx,
+            &mut panel,
+            &shared,
+            drum_panel::cell_rect(&l, Drum::Clap, 3).center(),
+            Modifiers::SHIFT,
+        );
+        shared.pattern().steps[3]
+    };
+    let keyed = {
+        let shared = SharedState::new();
+        let mut panel = drum_panel_state();
+        let mut bank = PatternBank::new_empty();
+        panel.drum.selected = Drum::Clap;
+        panel.selected = 3;
+        voice_press(&mut panel, &shared, &mut bank, Key::Enter, true);
+        shared.pattern().steps[3]
+    };
+    assert_eq!(keyed, clicked, "the click and shift+enter are one gesture");
+}
+
+#[test]
+fn a_card_refuses_the_write_and_still_allows_the_hit() {
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    let pattern = shared.pattern();
+    panel.drum.selected = Drum::Snare;
+    panel.selected = 2;
+    panel.help_visible = true;
+    shared.take_audition();
+
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::Enter, false),
+        Handled::Refused
+    );
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false),
+        Handled::Refused,
+        "the step arrow is refused too: a card is modal"
+    );
+    assert_eq!(panel.selected, 2, "a refused step move moves nothing");
+    assert_eq!(shared.pattern(), pattern, "and no step was written");
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::H, false),
+        Handled::Hit,
+        "a hit is a sound, not an edit"
+    );
+    assert_eq!(shared.take_audition(), Some(Drum::Snare));
+}
+
+#[test]
+fn a_write_disarms_a_pending_clear() {
+    // The drum face draws no CLEAR, but an arm made on the 303 survives a device switch, so a write here has to spend it —
+    // and a hit must not, because an audition is not an edit.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    panel.drum.selected = Drum::Snare;
+    panel.selected = 2;
+
+    panel.clear_armed_at = Some(std::time::Instant::now());
+    voice_press(&mut panel, &shared, &mut bank, Key::H, false);
+    assert!(panel.clear_armed_at.is_some(), "a hit is not an edit");
+
+    voice_press(&mut panel, &shared, &mut bank, Key::Enter, false);
+    assert!(
+        panel.clear_armed_at.is_none(),
+        "a write makes a pending CLEAR stale"
     );
 }

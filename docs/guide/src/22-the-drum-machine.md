@@ -105,8 +105,9 @@ A drum bank is patterns, not a song. The grooves last the session — a save sti
 
 - **No notes.** A drum machine takes no notes at all this round: no letter plays a note on it
   ([`15-keyboard`](15-keyboard.md)) — `h` strikes a voice, and nothing writes a pitch — a MIDI note on its channel is silent
-  ([`14-midi`](14-midi.md)), and `STEP` lights and toggles while writing nothing. `shift` and the arrows move between its
-  voices, not notes. MIDI pads and per-voice controllers are a later round.
+  ([`14-midi`](14-midi.md)), and `STEP` lights and toggles while writing nothing. `shift` and `up`/`down` move between its
+  voices and `left`/`right` between its steps; `enter` writes that voice into that step and `shift+enter` accents it, and no
+  letter writes a note. MIDI pads and per-voice controllers are a later round.
 - **No step row, no performance row.** The grid's columns are the steps, and `OCT`, `CLEAR`, `RANDOM`, the density and the
   scale are the 303's. `BANK`, `PATTERN`, `COPY`, `PASTE`, `SAVE`, `BANKS` and `STEP` keep their places on the switches row.
 - **One hit per voice at a time.** A second strike on the same voice retriggers it rather than layering, and a hat's

@@ -95,16 +95,18 @@ fn the_hit_key_is_taken_on_a_drum_face_and_left_for_the_note_on_an_acid_one() {
     );
     assert!(drums.is_empty(), "and the press is spent");
 
-    // A drum face owns no step editor, so the step border's keys are egui's there: nothing may take them from the frame.
-    let mut border = vec![press(Key::Enter, false), press(Key::ArrowLeft, false)];
-    assert!(
-        dispatch::take_presses(&mut border, DeviceKind::Drums, false).is_empty(),
-        "Enter and the left arrow are the 303 editor's, and a drum face has no editor"
-    );
-    assert_eq!(
-        border,
-        vec![press(Key::Enter, false), press(Key::ArrowLeft, false)]
-    );
+    // `Enter` and the plain arrows are the step editor's on **both** faces, for different jobs: the 303 toggles and selects
+    // a step with them, the drum face writes the selected voice into the selected step and moves that selection. Both faces
+    // take them, and a text field still owns them first.
+    for kind in [DeviceKind::Acid, DeviceKind::Drums] {
+        let mut events = vec![press(Key::Enter, false), press(Key::ArrowLeft, false)];
+        assert_eq!(
+            dispatch::take_presses(&mut events, kind, false).len(),
+            2,
+            "{kind:?} takes the step editor's keys"
+        );
+        assert!(events.is_empty(), "{kind:?}: and spends them");
+    }
 }
 
 /// A focused text field owns the keyboard: the space bar is a space, not the transport.

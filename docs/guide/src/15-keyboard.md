@@ -38,8 +38,9 @@ The four keys that do the editing, in the order you will meet them:
 - `enter` turns the selected step on and off.
 - `backspace` empties it to a rest, while you are editing.
 
-On a drum device those four keys are not the step editor's, because the grid has no note to edit: `shift+up` / `shift+down`
-walk the selected voice up and down it, and the rest write nothing.
+On a drum device the same keys edit the grid, because a step there holds sixteen voices and no note: `left` / `right` move the
+selected step, `shift+up` / `shift+down` move the selected voice, `enter` writes that voice into that step and `shift+enter`
+accents it. Nothing is written as a note, and the selection does not walk on after a write.
 
 Everything else — the transport, the tempo, `shift+left` / `shift+right` for the next pattern, `Ctrl+1`…`Ctrl+4` for the
 device on the panel, `F3` for its card, `Ctrl+C` / `Ctrl+V` for the pattern, and the cards themselves — is on one table in

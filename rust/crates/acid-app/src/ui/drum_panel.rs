@@ -10,7 +10,7 @@
 use std::sync::atomic::Ordering;
 
 use acid_core::drums::{Drum, FilterKind, KitVoice};
-use acid_core::pattern::STEPS_PER_PATTERN;
+use acid_core::pattern::{STEPS_PER_PATTERN, Step};
 use eframe::egui::{self, Align2, Pos2, Rect};
 
 use crate::knobs::Knob;
@@ -57,23 +57,71 @@ impl Default for DrumView {
 pub enum FaceKey {
     /// Walk the dials up (`-1`) or down (`1`) the grid, in [`Drum::ALL`]'s order — the order the rows are drawn in. The
     /// caller clamps at the ends with [`super::selection::move_selection`], the rule the 303's step border already keeps.
-    Move(i8),
-    /// Strike the selected voice: `HIT`'s key, so a voice can be heard without the pointer.
+    MoveVoice(i8),
+    /// Move the step selection back (`-1`) or on (`1`), the 303's plain arrows. The caller clamps the same way.
+    MoveStep(i8),
+    /// Write the selected voice into the selected step, `enter` and `shift+enter`: the grid's own click gesture, and silent.
+    Write { accented: bool },
+    /// Strike the selected voice without writing it: `HIT`'s key, so a voice can be heard without the pointer.
     Hit,
 }
 
 /// What a key does on the drum face, if anything.
 ///
-/// One mapping for the face's keys: `shift` and the arrows are the walk, `h` with no shift is the hit, and everything else
-/// belongs to another reader — the transport, the patterns, or (on the 303's face) the notes. The same `h` is one of the
-/// 303's note keys, which is why the press filter has to be told which face is showing before it takes a press.
+/// One mapping for the face's keys: plain `left`/`right` move the step, `shift` and `up`/`down` walk the voice, `enter` writes
+/// the voice into the step (`shift` accents it), `h` strikes it, and everything else belongs to another reader — the transport,
+/// the patterns, or (on the 303's face) the notes. The same `h`, `enter` and arrows are the 303's, which is why the press filter
+/// has to be told which face is showing before it takes a press.
 pub fn face_key(key: egui::Key, shift: bool) -> Option<FaceKey> {
     match (key, shift) {
-        (egui::Key::ArrowUp, true) => Some(FaceKey::Move(-1)),
-        (egui::Key::ArrowDown, true) => Some(FaceKey::Move(1)),
+        (egui::Key::ArrowUp, true) => Some(FaceKey::MoveVoice(-1)),
+        (egui::Key::ArrowDown, true) => Some(FaceKey::MoveVoice(1)),
+        (egui::Key::ArrowLeft, false) => Some(FaceKey::MoveStep(-1)),
+        (egui::Key::ArrowRight, false) => Some(FaceKey::MoveStep(1)),
+        (egui::Key::Enter, _) => Some(FaceKey::Write { accented: shift }),
         (egui::Key::H, false) => Some(FaceKey::Hit),
         _ => None,
     }
+}
+
+/// The selected voice on one step, after the gesture the cell click and `enter` share: a plain gesture adds or takes the hit
+/// off, an accented one adds an accent, accents a plain strike, or takes an accented one off.
+///
+/// This is the grid's whole editor, in one function, so the pointer and the keyboard cannot answer differently. It writes the
+/// masks and `on`, through `Step`'s own writers; the 303's pitch and level on the step are left alone.
+pub fn toggle_hit(mut step: Step, drum: Drum, accent: bool) -> Step {
+    if step.is_hit(drum) {
+        if accent && !step.is_accented(drum) {
+            step.hit(drum, true);
+        } else {
+            step.clear_hit(drum);
+        }
+    } else {
+        step.hit(drum, accent);
+    }
+    step
+}
+
+/// Write `drum` on `step`, through [`toggle_hit`]: the one writer the cell click and `enter` both use, so the pointer and
+/// the keyboard cannot answer differently.
+///
+/// It reads the pattern from `SharedState` as it is this instant, never the frame's mirror — the engine may have written the
+/// step since the panel last painted, and a write from a stale copy would silently undo it — then mirrors it for the face,
+/// marks the session dirty and disarms a pending `CLEAR`, the rule every pattern edit keeps. The index is clamped, as every
+/// index on this face is.
+pub fn strike_step(
+    state: &mut PanelState,
+    shared: &SharedState,
+    step: usize,
+    drum: Drum,
+    accent: bool,
+) {
+    let index = step.min(STEPS_PER_PATTERN - 1);
+    let updated = toggle_hit(shared.pattern().steps[index], drum, accent);
+    shared.set_step(index, updated);
+    state.pattern = shared.pattern();
+    state.dirty = true;
+    super::clear::disarm(state);
 }
 
 /// One of the seven dials, in the order the face draws them.
@@ -390,21 +438,7 @@ fn draw_grid(
             );
             if response.clicked() {
                 let shift = ui.input(|input| input.modifiers.shift);
-                // The pattern as it is this instant, never the frame's mirror: the engine may have written this step since
-                // the panel last painted, and a write from a stale copy would silently undo it (Review Focus 1).
-                let mut updated = shared.pattern().steps[step];
-                if updated.is_hit(drum) {
-                    if shift && !updated.is_accented(drum) {
-                        updated.hit(drum, true);
-                    } else {
-                        updated.clear_hit(drum);
-                    }
-                } else {
-                    updated.hit(drum, shift);
-                }
-                shared.set_step(step, updated);
-                state.pattern = shared.pattern();
-                state.dirty = true;
+                strike_step(state, shared, step, drum, shift);
             }
         }
     }
@@ -680,12 +714,35 @@ mod tests {
     }
 
     #[test]
-    fn the_face_keys_are_the_walk_and_the_hit() {
+    fn the_face_keys_are_the_walk_the_step_and_the_write() {
         // One mapping for the face's keyboard. Up the grid is one row earlier in `Drum::ALL`, which is the order the rows
-        // are drawn in, so the sign and the catalogue cannot disagree; `h` with no shift is `HIT`; everything else is not
-        // this face's key.
-        assert_eq!(face_key(egui::Key::ArrowUp, true), Some(FaceKey::Move(-1)));
-        assert_eq!(face_key(egui::Key::ArrowDown, true), Some(FaceKey::Move(1)));
+        // are drawn in, so the sign and the catalogue cannot disagree; the step's arrows are the 303's plain pair, `enter`
+        // writes with shift as its accent, `h` strikes, and everything else is not this face's key.
+        assert_eq!(
+            face_key(egui::Key::ArrowUp, true),
+            Some(FaceKey::MoveVoice(-1))
+        );
+        assert_eq!(
+            face_key(egui::Key::ArrowDown, true),
+            Some(FaceKey::MoveVoice(1))
+        );
+        assert_eq!(
+            face_key(egui::Key::ArrowLeft, false),
+            Some(FaceKey::MoveStep(-1))
+        );
+        assert_eq!(
+            face_key(egui::Key::ArrowRight, false),
+            Some(FaceKey::MoveStep(1))
+        );
+        assert_eq!(
+            face_key(egui::Key::Enter, false),
+            Some(FaceKey::Write { accented: false })
+        );
+        assert_eq!(
+            face_key(egui::Key::Enter, true),
+            Some(FaceKey::Write { accented: true }),
+            "shift+enter is the accent gesture"
+        );
         assert_eq!(face_key(egui::Key::H, false), Some(FaceKey::Hit));
         assert_eq!(face_key(egui::Key::H, true), None, "shift+h is not the hit");
         assert_eq!(
@@ -696,15 +753,36 @@ mod tests {
         assert_eq!(
             face_key(egui::Key::ArrowUp, false),
             None,
-            "an unshifted arrow is the tempo's"
+            "an unshifted up arrow is the tempo's"
         );
-        for key in [
-            egui::Key::ArrowLeft,
-            egui::Key::ArrowRight,
-            egui::Key::Enter,
-        ] {
-            assert_eq!(face_key(key, true), None, "{key:?} is not this face's");
-        }
+        assert_eq!(
+            face_key(egui::Key::ArrowLeft, true),
+            None,
+            "shift+left is the pattern's, not a second way to move the step"
+        );
+        assert_eq!(face_key(egui::Key::ArrowRight, true), None);
+    }
+
+    #[test]
+    fn the_hit_gesture_adds_toggles_and_accents() {
+        // The grid's whole editor, in one function: a plain gesture adds or takes off, a shifted one accents, and an
+        // accented hit is taken off rather than accented twice.
+        let empty = Step::rest();
+        let plain = toggle_hit(empty, Drum::Snare, false);
+        assert!(plain.is_hit(Drum::Snare));
+        assert!(!plain.is_accented(Drum::Snare));
+        assert!(!toggle_hit(plain, Drum::Snare, false).is_hit(Drum::Snare));
+
+        let accented = toggle_hit(empty, Drum::Snare, true);
+        assert!(accented.is_hit(Drum::Snare));
+        assert!(accented.is_accented(Drum::Snare));
+        let lifted = toggle_hit(accented, Drum::Snare, true);
+        assert!(!lifted.is_hit(Drum::Snare), "a second shift takes it off");
+        let from_plain = toggle_hit(plain, Drum::Snare, true);
+        assert!(
+            from_plain.is_hit(Drum::Snare) && from_plain.is_accented(Drum::Snare),
+            "a shift on a plain strike accents it"
+        );
     }
 
     #[test]

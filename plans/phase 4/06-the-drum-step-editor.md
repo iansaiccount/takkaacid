@@ -167,5 +167,40 @@ becoming per device; a step's length or a per-step edit beyond the hit and its a
       and `column_rect` clamps). The reviewer's note that `column_rect` builds a row's 16 rects for one cell was left as it is:
       it is one small allocation a frame on the UI thread, not on the audio path, and `row_band`/`cell_rect` already own that
       geometry.
-- [ ] Task 2 —
+- [x] **Task 2 — the keys write.** `FaceKey` is now `MoveVoice`, `MoveStep`, `Write { accented }` and `Hit`; `face_key` maps plain
+      `left`/`right` to the step, `shift`+`up`/`down` to the voice, `enter` to the write (`shift` = accent) and `h` to the hit.
+      `drum_panel::toggle_hit(step, drum, accent)` is the grid's whole editor as one pure function, lifted out of the click, and
+      `strike_step(state, shared, step, drum, accent)` is the writer both hands use — **it takes the step**, which the plan's
+      Interfaces did not: the click writes the cell under the pointer, not the selected step, and one writer with a step
+      parameter is what keeps the two from disagreeing. `dispatch`'s `Drums` arm clamps the step with `move_selection` (so the
+      arrows stop at step 1 and 16), refuses both the walk and the write behind a card, writes through `strike_step`, and disarms
+      a pending `CLEAR`; `h` still sounds behind a card. The cell click is now four lines calling `strike_step`. Tests:
+      `the_arrows_move_the_selected_step_on_a_drum_face` (both ends clamped, no voice moved, no edit, `up` still the tempo),
+      `enter_writes_the_selected_voice_into_the_selected_step` (the hit lands on the selected step, unaccented, silent, dirty, and
+      a second `enter` takes it off), `shift_enter_is_the_accent_gesture` (all three of the click's cases),
+      `the_keyboard_and_the_pointer_write_the_same_step` (the click and `shift+enter` leave equal `Step`s),
+      `a_card_refuses_the_write_and_still_allows_the_hit`, `a_write_disarms_a_pending_clear`, and
+      `drum_panel::tests::the_hit_gesture_adds_toggles_and_accents`. `tests/keys.rs` now says `enter` and `left` are taken on
+      **both** faces (for different jobs), and `a_drum_device_ignores_the_keyboard_and_the_note_queue` expects
+      `Handled::Selection` from `enter` and asserts the write left no 303 note (pitch, octave, velocity, accent, slide — the
+      `on` bit follows the drum mask by `Step::hit`'s own rule, before this round). **Mutations: 4 of 4 caught, 0 skipped**
+      (`.superpowers/mutate_step_editor.py`) — the step arrows wrapping, a write that sounds, a write that leaves `CLEAR`
+      armed, and `shift+enter` writing a plain hit — each named by the test that caught it. Gates: `cargo test --workspace`
+      **892**, clippy `-D warnings`, `fmt --check`.
+      **The pointer's write disarms too:** the disarm moved out of `dispatch` and into `strike_step`, so the click and the key
+      keep the `CLEAR` rule together; `a_write_disarms_a_pending_clear` pins the key half and the click's own half is the same
+      call now, which is what the parity test protects.
+      **The book moved in this commit, one step ahead of Task 3**, because these keys turned two sentences into falsehoods
+      rather than omissions: page 15's four-keys paragraph, page 22's *No notes* bullet and page 20's `left`/`right` and
+      `enter` rows now say what the drum face does. Task 3 still owns page 22's grid prose, the pinned phrase and the picture.
+      **The fifth mutation, run when the reviewer asked for it:** removing the column's accent stroke fails
+      `the_selected_step_is_painted` (`.superpowers/mutate_column.py`), so Task 1's "the column not painted" is a caught
+      mutation and not a claim.
+      **Review: BLOCK on two Importants, five P2s, all actioned.** (1) The pointer's write did not disarm `CLEAR` while the
+      key's did — the click now goes through `strike_step`, which disarms, and the doc comments that said "masks only" and
+      "the mask and `on`" were corrected. (2) The book contradicted the panel at two sentences and Task 2's entry said nothing
+      about it — both sentences and page 20's two rows are fixed here, and the paragraph above records the rest as Task 3's. Of
+      the P2s: `PanelState::selected`'s doc, `a_card_is_up`'s list and `Handled::Refused`'s doc now name the drum face's step
+      move and write; the unit test is renamed for the step and the write; and the refused-arrow assertion also pins that the
+      selection did not move.
 - [ ] Task 3 —

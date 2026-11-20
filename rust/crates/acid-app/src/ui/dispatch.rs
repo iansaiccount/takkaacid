@@ -7,6 +7,7 @@
 
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
+use acid_core::pattern::STEPS_PER_PATTERN;
 use eframe::egui::{Event, Key};
 
 use super::{PanelState, drum_panel, kits, learn, selection, shortcuts, tape, transport};
@@ -32,7 +33,7 @@ pub enum Handled {
     Selection,
     /// A transport, tempo, pattern or help shortcut ran.
     Shortcut(shortcuts::Shortcut),
-    /// A face's own key, refused because a card is modal: the step editor's, or the drum face's voice walk.
+    /// A face's own key, refused because a card is modal: the step editor's, or the drum face's walk, step move and write.
     Refused,
     /// A drum voice was struck — `HIT`'s key. Nothing changed, and the press is spent.
     Hit,
@@ -135,13 +136,10 @@ pub fn handle(
         panel.device_request = Some(crate::device::Request::Select(index));
         return Handled::Rack;
     }
-    // A drum device's editor is the grid, not the keyboard: the step editor writes 303 pitches into a pattern and moves a
-    // border the drum face has no row to show. What that face does own is its selection, and `shift` and the arrows walk it
-    // up and down the grid. A walk is a selection and nothing more: it sounds nothing (`HIT` is how a voice is heard) and it
-    // edits nothing, so a pending CLEAR is left alone — the pattern it would clear has not moved.
-    //
-    // The transport and pattern shortcuts below are both machines' — one drum voice does not make the deck another deck — so
-    // only a face's own keys are decided here, and the face's rows are gone rather than every key.
+    // The drum face owns its own keys: `shift` and `up`/`down` walk the voice, plain `left`/`right` move the step, `enter`
+    // writes the selected voice into that step (`shift` accents it), and `h` strikes it without writing. The 303's step editor
+    // is not asked, because a drum face has no step row or note to edit. The transport and pattern shortcuts below are both
+    // machines' — one drum voice does not make the deck another deck — so only a face's own keys are decided here.
     match panel.showing_kind() {
         DeviceKind::Acid => match selection::dispatch(press.key, press.shift, panel, shared) {
             selection::Press::Applied => {
@@ -154,13 +152,13 @@ pub fn handle(
         },
         DeviceKind::Drums => {
             if let Some(face) = drum_panel::face_key(press.key, press.shift) {
+                // A card is modal for everything that moves a selection or writes a step; a hit is a sound, and the 303's
+                // letters already audition through one. `HIT`'s button is unreachable behind a card; its key is not.
+                if panel.a_card_is_up() && !matches!(face, drum_panel::FaceKey::Hit) {
+                    return Handled::Refused;
+                }
                 match face {
-                    drum_panel::FaceKey::Move(delta) => {
-                        // A card is modal for the keyboard as well as the pointer: a walk aimed at a grid nobody can see
-                        // would move a selection behind it.
-                        if panel.a_card_is_up() {
-                            return Handled::Refused;
-                        }
+                    drum_panel::FaceKey::MoveVoice(delta) => {
                         // `move_selection` clamps at both ends, so `shift+up` on the first row stays on it rather than
                         // wrapping to the last — the same rule the 303's step border keeps.
                         let walked = selection::move_selection(
@@ -171,8 +169,17 @@ pub fn handle(
                         panel.drum.selected = Drum::ALL[walked];
                         return Handled::Selection;
                     }
-                    // A hit is a sound, not a selection or an edit, so a card does not stop it: the 303's letters already
-                    // audition through one. `HIT`'s button is unreachable behind a card; its key is not.
+                    drum_panel::FaceKey::MoveStep(delta) => {
+                        panel.selected =
+                            selection::move_selection(panel.selected, delta, STEPS_PER_PATTERN);
+                        return Handled::Selection;
+                    }
+                    drum_panel::FaceKey::Write { accented } => {
+                        let step = panel.selected;
+                        let drum = panel.drum.selected;
+                        drum_panel::strike_step(panel, shared, step, drum, accented);
+                        return Handled::Selection;
+                    }
                     drum_panel::FaceKey::Hit => {
                         shared.request_audition(panel.drum.selected);
                         return Handled::Hit;
