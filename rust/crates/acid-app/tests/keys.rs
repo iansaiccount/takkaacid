@@ -62,14 +62,16 @@ fn a_panel_key_is_taken_and_returned_as_a_press() {
 /// A key the panel has no use for is the keyboard's, so it stays where the widgets can read it.
 #[test]
 fn a_key_the_panel_does_not_use_stays_in_the_frame() {
-    // `B` auditions a note; a copy is the clipboard's, and neither is a press the panel acts on.
+    // `B` is neither a note on an acid face (`A W S E D F T G Y H U J K` are) nor a shortcut, and a copy is the
+    // clipboard's: neither is a press the panel acts on. On a drum face `B` is the filter's band side, which is why this
+    // test names its face.
     let mut events = vec![press(Key::B, false), Event::Copy];
 
     assert!(dispatch::take_presses(&mut events, DeviceKind::Acid, false).is_empty());
     assert_eq!(
         events,
         vec![press(Key::B, false), Event::Copy],
-        "an audition key and a clipboard event are not the key path's to take"
+        "a key the panel has no use for and a clipboard event are not the key path's to take"
     );
 }
 
@@ -95,6 +97,24 @@ fn the_hit_key_is_taken_on_a_drum_face_and_left_for_the_note_on_an_acid_one() {
     );
     assert!(drums.is_empty(), "and the press is spent");
 
+    // The filter's three letters are the drum face's alone: on an acid face nothing in the panel wants them, so they stay in
+    // the frame for the widgets, and on a drum face every one of them is taken.
+    for key in [Key::L, Key::B, Key::P] {
+        let mut acid = vec![press(key, false)];
+        assert!(
+            dispatch::take_presses(&mut acid, DeviceKind::Acid, false).is_empty(),
+            "{key:?} is not an acid face's key"
+        );
+        assert_eq!(acid, vec![press(key, false)], "{key:?}: and it stays put");
+
+        let mut drums = vec![press(key, false)];
+        assert_eq!(
+            dispatch::take_presses(&mut drums, DeviceKind::Drums, false).len(),
+            1,
+            "{key:?} is a filter key on a drum face"
+        );
+        assert!(drums.is_empty(), "{key:?}: and the press is spent");
+    }
     // `Enter` and the plain arrows are the step editor's on **both** faces, for different jobs: the 303 toggles and selects
     // a step with them, the drum face writes the selected voice into the selected step and moves that selection. Both faces
     // take them, and a text field still owns them first.

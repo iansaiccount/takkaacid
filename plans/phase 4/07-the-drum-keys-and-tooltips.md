@@ -176,7 +176,30 @@ which are plan 06's.
 
 ## Progress
 
-- [ ] Task 1 —
+- [x] **Task 1 — the filter's letters.** `FaceKey::Filter(FilterKind)` and `drum_panel::filter_cell`'s
+      letters: plain `l`, `b`, `p` pick low, band and high, silent, and the segment click now goes through the same
+      `set_filter(state, shared, kind)`, which holds the click's `!choosing` guard so there is one writer and one guard (the
+      click's own `&& !choosing` is gone). `dispatch`'s `Drums` arm returns `Handled::Selection` for a filter letter — a spent
+      press, not a sound — and a card refuses it with the other edits, since a card covers the segments it clicks.
+      Tests: `drum_live::l_b_and_p_choose_the_filter_side` (the three letters write their three sides, no audition, the click
+      leaves the same filter, and with `learn == Choosing` no letter writes — the kit's name and `dirty` are watched too, so a
+      write of the side the voice already has, which would still copy a factory kit, cannot pass), plus the filter keys in
+      `tests/keys.rs`'s ownership test (taken on a drum face, left in the frame on an acid one) and
+      `a_card_refuses_the_voice_keys` (a refused `b` writes nothing). `drum_panel::tests::the_face_keys_are_the_walk_the_step_and_the_write`
+      gained the three filter arms — the plan names this test `…_the_walk_and_the_hit`; `the_face_keys_are_the_walk_the_step_and_the_write`
+      is the name it actually has — and its `Key::B` `None` assertion is now `Filter(Band)`, with `Key::A` carrying the
+      "other letters are silent" claim. **Mutations: 4 of 4 caught** (`.superpowers/mutate_filter_keys.py`): `H` on the filter
+      instead of `P` (named by the live test and the unit test), a filter letter that writes nothing, the dispatch arm that
+      reaches no writer, and the `LEARN` guard dropped — each fails a named test.
+      **Review: PASS on one Important and one Minor, both actioned, plus two notes taken.** The Important was the two `Handled`
+      doc comments that the new return made untrue: `Selection` now says "the face's current edit wrote — a step, or the
+      selected voice's filter" and `Refused` names the filter beside the walk, move and write. The Minor was the filter's card
+      refusal being unpinned — pinned in `a_card_refuses_the_voice_keys` above. Of the notes: a redundant `paint()` before the
+      click in the new test is gone (`click` settles its own frame); the `learn` loop now watches the kit's name and `dirty`;
+      and `tests/keys.rs`'s pre-existing "`B` auditions a note" comment was wrong (B is no note on either face) and is corrected
+      while in the file. The deferral of the book is deliberate and stale at three sentences — page 22's "the rest of the
+      letters stay silent here", page 15's "the letters are silent this phase", and page 20's keyboard table — and **the push
+      depends on Task 5**, which owns those pages. Gates: `cargo test --workspace` **893**, clippy `-D warnings`, `fmt --check`.
 - [ ] Task 2 —
 - [ ] Task 3 —
 - [ ] Task 4 —

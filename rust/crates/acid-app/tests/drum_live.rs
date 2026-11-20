@@ -928,6 +928,82 @@ fn the_filter_key_sets_the_voices_filter() {
 }
 
 #[test]
+fn l_b_and_p_choose_the_filter_side() {
+    // The filter is one three-way key and each side has a letter under it: `l`, `b` and `p` are the click without the
+    // pointer. `h` is the hit's key (the player kept it), so `HP` cannot have its own letter and takes `p`.
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    panel.drum.selected = Drum::Snare;
+    shared.take_audition();
+
+    for (key, kind) in [
+        (Key::L, FilterKind::Low),
+        (Key::B, FilterKind::Band),
+        (Key::P, FilterKind::High),
+    ] {
+        assert_eq!(
+            voice_press(&mut panel, &shared, &mut bank, key, false),
+            Handled::Selection,
+            "{key:?} is the drum face's key"
+        );
+        assert_eq!(
+            shared.kit().voices[Drum::Snare.index()].filter,
+            kind,
+            "{key:?} does not pick {kind:?}"
+        );
+    }
+    assert_eq!(
+        shared.take_audition(),
+        None,
+        "choosing a side is an edit, not a sound"
+    );
+
+    // The pointer's way to the same key: `click` settles a frame first, so the segment exists before it is hit. One writer,
+    // so the two cannot disagree.
+    let ctx = Context::default();
+    let mut clicked = drum_panel_state();
+    clicked.drum.selected = Drum::Snare;
+    click(
+        &ctx,
+        &mut clicked,
+        &shared,
+        drum_panel::filter_cell(&layout(screen()), FilterKind::Low).center(),
+        Modifiers::default(),
+    );
+    assert_eq!(
+        shared.kit().voices[Drum::Snare.index()].filter,
+        FilterKind::Low,
+        "the click and the letter are one gesture"
+    );
+
+    // A learn in progress is picking a control, not turning one: a letter writes nothing, the guard the click keeps. A write
+    // of the side the voice already has would still copy a factory kit, so the kit's name is watched as well as its filter.
+    let name = shared.kit().name.clone();
+    let dirty = panel.dirty;
+    panel.learn = acid_app::ui::learn::Step::Choosing;
+    for key in [Key::L, Key::B, Key::P] {
+        assert_eq!(
+            voice_press(&mut panel, &shared, &mut bank, key, false),
+            Handled::Selection,
+            "{key:?} is still a press the face owns"
+        );
+        assert_eq!(
+            shared.kit().voices[Drum::Snare.index()].filter,
+            FilterKind::Low,
+            "{key:?} wrote a filter during a learn"
+        );
+    }
+    assert_eq!(shared.kit().name, name, "a learn copied the kit");
+    assert_eq!(panel.dirty, dirty, "and marked the session unsaved");
+    assert_eq!(
+        shared.take_audition(),
+        None,
+        "and it sounded nothing either"
+    );
+}
+
+#[test]
 fn the_hit_key_auditions_the_selected_voice() {
     let ctx = Context::default();
     let shared = SharedState::new();
@@ -1315,6 +1391,20 @@ fn a_card_refuses_the_voice_keys() {
         "a refused press moves nothing"
     );
     assert_eq!(shared.take_audition(), None, "and sounds nothing");
+
+    // The filter's letters are the face's edits too, so the card is modal for them as well: the voice under it must not
+    // change. `B` is the side a fresh voice does not have, so a write would show.
+    let filter = shared.kit().voices[Drum::Kick.index()].filter;
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::B, false),
+        Handled::Refused,
+        "a card refuses the filter's letters"
+    );
+    assert_eq!(
+        shared.kit().voices[Drum::Kick.index()].filter,
+        filter,
+        "and a refused letter writes nothing"
+    );
 }
 
 #[test]

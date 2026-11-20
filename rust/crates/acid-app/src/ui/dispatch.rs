@@ -29,11 +29,12 @@ pub struct KeyPress {
 /// What the panel did with a press.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Handled {
-    /// The selection moved, or the selected step was edited.
+    /// The selection moved, or the face's current edit wrote — a step, or the selected voice's filter.
     Selection,
     /// A transport, tempo, pattern or help shortcut ran.
     Shortcut(shortcuts::Shortcut),
-    /// A face's own key, refused because a card is modal: the step editor's, or the drum face's walk, step move and write.
+    /// A face's own key, refused because a card is modal: the step editor's, or the drum face's walk, step move, write and
+    /// filter.
     Refused,
     /// A drum voice was struck — `HIT`'s key. Nothing changed, and the press is spent.
     Hit,
@@ -137,7 +138,8 @@ pub fn handle(
         return Handled::Rack;
     }
     // The drum face owns its own keys: `shift` and `up`/`down` walk the voice, plain `left`/`right` move the step, `enter`
-    // writes the selected voice into that step (`shift` accents it), and `h` strikes it without writing. The 303's step editor
+    // writes the selected voice into that step (`shift` accents it), `h` strikes it without writing, and `l`/`b`/`p` choose a
+    // side of the selected voice's filter. The 303's step editor
     // is not asked, because a drum face has no step row or note to edit. The transport and pattern shortcuts below are both
     // machines' — one drum voice does not make the deck another deck — so only a face's own keys are decided here.
     match panel.showing_kind() {
@@ -183,6 +185,12 @@ pub fn handle(
                     drum_panel::FaceKey::Hit => {
                         shared.request_audition(panel.drum.selected);
                         return Handled::Hit;
+                    }
+                    drum_panel::FaceKey::Filter(kind) => {
+                        // The filter's letters are the segment clicks: one writer, which keeps the click's `!choosing`
+                        // guard, and silent — a filter choice is an edit, not an audition.
+                        drum_panel::set_filter(panel, shared, kind);
+                        return Handled::Selection;
                     }
                 }
             }

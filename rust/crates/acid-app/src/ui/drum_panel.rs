@@ -64,14 +64,17 @@ pub enum FaceKey {
     Write { accented: bool },
     /// Strike the selected voice without writing it: `HIT`'s key, so a voice can be heard without the pointer.
     Hit,
+    /// Choose a side of the selected voice's filter: `l`, `b` and `p`, the letters under the three segments. `h` is the hit's
+    /// key, so the high side cannot have its own letter and takes `p`.
+    Filter(FilterKind),
 }
 
 /// What a key does on the drum face, if anything.
 ///
 /// One mapping for the face's keys: plain `left`/`right` move the step, `shift` and `up`/`down` walk the voice, `enter` writes
-/// the voice into the step (`shift` accents it), `h` strikes it, and everything else belongs to another reader — the transport,
-/// the patterns, or (on the 303's face) the notes. The same `h`, `enter` and arrows are the 303's, which is why the press filter
-/// has to be told which face is showing before it takes a press.
+/// the voice into the step (`shift` accents it), `h` strikes it, `l`/`b`/`p` choose a side of its filter, and everything else
+/// belongs to another reader — the transport, the patterns, or (on the 303's face) the notes. The same `h`, `enter` and arrows
+/// are the 303's, which is why the press filter has to be told which face is showing before it takes a press.
 pub fn face_key(key: egui::Key, shift: bool) -> Option<FaceKey> {
     match (key, shift) {
         (egui::Key::ArrowUp, true) => Some(FaceKey::MoveVoice(-1)),
@@ -80,6 +83,9 @@ pub fn face_key(key: egui::Key, shift: bool) -> Option<FaceKey> {
         (egui::Key::ArrowRight, false) => Some(FaceKey::MoveStep(1)),
         (egui::Key::Enter, _) => Some(FaceKey::Write { accented: shift }),
         (egui::Key::H, false) => Some(FaceKey::Hit),
+        (egui::Key::L, false) => Some(FaceKey::Filter(FilterKind::Low)),
+        (egui::Key::B, false) => Some(FaceKey::Filter(FilterKind::Band)),
+        (egui::Key::P, false) => Some(FaceKey::Filter(FilterKind::High)),
         _ => None,
     }
 }
@@ -122,6 +128,20 @@ pub fn strike_step(
     state.pattern = shared.pattern();
     state.dirty = true;
     super::clear::disarm(state);
+}
+
+/// Choose which side of the selected voice's filter the sample passes: the pointer's click on a segment and the letter under it
+/// are one gesture, and this is their one writer, so the two hands cannot answer differently.
+///
+/// Silent, like the click — a filter choice is an edit, not an audition — and it carries the click's `!choosing` guard: a
+/// `LEARN` in progress asks the player to pick a control, and a voice switched under a hand that meant to teach the controller
+/// would copy a factory kit for a move nobody asked for.
+pub fn set_filter(state: &mut PanelState, shared: &SharedState, kind: FilterKind) {
+    if state.learn == super::learn::Step::Choosing {
+        return;
+    }
+    let drum = state.drum.selected;
+    edit_voice(state, shared, drum, |voice| voice.filter = kind);
 }
 
 /// One of the seven dials, in the order the face draws them.
@@ -562,8 +582,8 @@ fn draw_dials(
             ui.scope_id().with(("drum-filter", kind.index())),
             egui::Sense::click(),
         );
-        if response.clicked() && !choosing {
-            edit_voice(state, shared, selected, |voice| voice.filter = kind);
+        if response.clicked() {
+            set_filter(state, shared, kind);
         }
     }
 
@@ -717,7 +737,8 @@ mod tests {
     fn the_face_keys_are_the_walk_the_step_and_the_write() {
         // One mapping for the face's keyboard. Up the grid is one row earlier in `Drum::ALL`, which is the order the rows
         // are drawn in, so the sign and the catalogue cannot disagree; the step's arrows are the 303's plain pair, `enter`
-        // writes with shift as its accent, `h` strikes, and everything else is not this face's key.
+        // writes with shift as its accent, `h` strikes, `l`/`b`/`p` pick a side of the filter, and everything
+        // else is not this face's key.
         assert_eq!(
             face_key(egui::Key::ArrowUp, true),
             Some(FaceKey::MoveVoice(-1))
@@ -745,8 +766,27 @@ mod tests {
         );
         assert_eq!(face_key(egui::Key::H, false), Some(FaceKey::Hit));
         assert_eq!(face_key(egui::Key::H, true), None, "shift+h is not the hit");
+        // The filter's three letters, one per side: `h` is the hit's key, so the high side takes `p`.
+        assert_eq!(
+            face_key(egui::Key::L, false),
+            Some(FaceKey::Filter(FilterKind::Low))
+        );
         assert_eq!(
             face_key(egui::Key::B, false),
+            Some(FaceKey::Filter(FilterKind::Band)),
+            "B is the band side, not a silent letter"
+        );
+        assert_eq!(
+            face_key(egui::Key::P, false),
+            Some(FaceKey::Filter(FilterKind::High))
+        );
+        assert_eq!(
+            face_key(egui::Key::L, true),
+            None,
+            "a shifted letter is not a filter key"
+        );
+        assert_eq!(
+            face_key(egui::Key::A, false),
             None,
             "the other letters are silent on this face"
         );
