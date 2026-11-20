@@ -18,7 +18,8 @@ The tempo readout sits in the top strip, in BPM, from **40–300**. Two things m
 There is a third way in, and it is not a nudge: a learned controller fader throws the tempo wherever you leave it
 ([`14-midi`](14-midi.md)).
 
-Holding `shift+up` or `shift+down` sweeps the tempo; the arrows are the only keys in the panel that repeat while held.
+Holding `shift+up` or `shift+down` sweeps the tempo; the up and down arrows are the only keys in the panel that repeat while
+held.
 
 
 ## Swing

@@ -60,7 +60,7 @@ In `rust/crates/acid-app/tests/drum_live.rs`, through `draw_panel` for the point
 `dispatch::handle` for the keys, the way `main` delivers them:
 
 - `the_arrows_move_the_selected_step_on_a_drum_face` — `right` takes 1 → 2, `left` back, clamped at 0 and at 15; the voice
-  selection does not move; the pattern does not change; plain `up`/`down` are still the tempo.
+  selection does not move; the pattern does not change; `shift+up`/`shift+down` are still the tempo.
 - `enter_writes_the_selected_voice_into_the_selected_step` — select `SNR`, step 2, `enter`: step 2 strikes `SNR` unaccented,
   the audition slot is empty (the write is silent), step 1 is untouched and the session is dirty; a second `enter` clears it.
 - `shift_enter_is_the_accent_gesture` — empty → accented; struck plain → accented; struck accented → cleared.

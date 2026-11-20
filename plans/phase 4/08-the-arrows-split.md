@@ -158,6 +158,24 @@ PR opens. Nothing in this plan is pushed until that review has been acted on and
       so they are records, not instructions; and page 22's "the transpose" among "everything a rack does" was reworded to "that
       device's own transpose".
       Gates after the fixes: `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check`, `./docs/guide/check.sh` ok.
+- [x] **Task 4 (second pass) — the pull request's own review.** With the PR open (github.com/iansaiccount/takkaacid#8), a second
+      subagent reviewed the branch against `main` and found **BLOCK on two Importants and four Minors**, all actioned here. The
+      first Important: the arrow-history sweep was a blind textual replace over a hand-listed seven files, so it missed
+      `docs/superpowers/specs/2026-11-07-step-selection-design.md` (`shift+left` / `shift+right` named as the selection keys, and
+      "unshifted arrows keep tempo"), `plans/phase 1/14-step-selection.md` (the Review-Focus pair, the task's own code sketch,
+      the implementation note, and two test names that never existed), `plans/phase 1/18-step-sequencer.md`'s Step 2 citing a test
+      name that no longer exists, `plans/phase 4/06`'s "plain `up`/`down` are still the tempo" (06 was not on the list), and
+      `plans/phase 4/03`'s dead test name — all rewritten to the split the code keeps. The second: `README.md` still described a
+      one-kind app ("one today, `ACID`", "one device is one voice"), and the drum machine — this branch's subject — was absent;
+      it now names `ACID` and `DRUMS`, links page 22, and its `RUN`/`STOP` and `SAVED`/`UNSAVED` lines (stale since phase 3, on
+      `main`) say the deck's `PLAY` / `PAUSE` / `STOP` and the amber-while-unsaved name. Of the Minors: nothing pinned that the
+      transpose does not dirty the session (now asserted in `transport_live`, and a mutation added — 5 of 5 caught); the
+      `check.sh` guard for the plain-arrow tempo was a substring trap that the *correct* card line would trip (anchored on a
+      non-`+` before `up`); page 9 said "the arrows" repeat where only `up` / `down` do; and `00-phase-4.md`'s State line said
+      the branch review had not happened, which Task 4 had already made false. One note actioned without a code change: the
+      wishlist's phase-3 road-ahead line promised "transpose for the whole synth from one control", now settled per device.
+      Gates after the second pass: `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check`, `./docs/guide/check.sh`
+      ok.
 
 
 ## Non-goals

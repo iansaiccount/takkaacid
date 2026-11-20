@@ -57,7 +57,9 @@ done
 # The arrows split at the modifier, and no page may go back to calling the plain pair the tempo's or the shifted pair the
 # note's. The pins below keep the new wording; these keep the old one out.
 ! grep -rqF 'plain up/down' src || { echo "the guide puts the tempo on the plain arrows again"; exit 1; }
-! grep -rqF 'up / down: tempo by 1 BPM' src || { echo "the guide gives the tempo the plain arrows again"; exit 1; }
+# Anchored so the *correct* card line (`shift+up / down: tempo by 1 BPM`, which a page may quote) cannot trip it: the
+# character before `up` must not be a `+`.
+! grep -rqE '(^|[^+])up / down: tempo' src || { echo "the guide gives the tempo the plain arrows again"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \

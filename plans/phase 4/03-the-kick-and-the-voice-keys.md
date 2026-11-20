@@ -169,7 +169,7 @@ next round and still needs its own design.
       the call it was, now inside `DeviceKind::Acid`. Tests: `plain_up_and_down_walk_the_selected_voice` (down to `SNR` and
       heard; a held key's repeat walks on and is heard; up again; clamped at both ends; the pattern untouched; the shifted arrow
       still nudging the tempo without moving a voice), `a_card_refuses_the_voice_keys`,
-      `the_voice_keys_leave_the_acid_note_alone` (`E` → `D#`), and `drum_panel`'s `the_voice_keys_are_shift_and_the_two_arrows`.
+      `the_voice_keys_leave_the_acid_note_alone` (`E` → `D#`), and `drum_panel`'s `the_face_keys_are_the_walk_the_step_and_the_write`.
       **Mutations: 4 of 4 caught, 0 skipped** (`.superpowers/mutate_voice_keys.py`) — no clamp (wraps), no audition, no card
       refusal, directions swapped — each named by the test that caught it. Gates: `cargo test --workspace` **880**, clippy, fmt,
       `./docs/guide/check.sh`. **Rulings:** the walk auditions (a click on a label is a preview, and a held key walks the kit by

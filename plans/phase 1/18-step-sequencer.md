@@ -55,7 +55,7 @@ UI state has to live in the audio/MIDI path.
 
 - [x] **Step 1: Flip the tests** — plain arrows move the selection and never touch the pattern; shift+arrows step the
   pattern and never move the selection; up/down edit the note; shift+up/down change the tempo.
-- [x] **Step 2: Run them to see the old mapping fail** (`shift_turns_the_arrows_into_editing_keys`, the dispatch glue
+- [x] **Step 2: Run them to see the old mapping fail** (the timing test they replace, the dispatch glue
   tests and the live selection tests all fail).
 - [x] **Step 3: Implement** — `edit_key` reads the plain arrows and `shortcut_for` reads the shifted ones, with the
   tempo nudges on the shifted pair.

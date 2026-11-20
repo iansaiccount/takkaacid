@@ -167,6 +167,12 @@ fn the_transpose_keys_ask_for_a_semitone_each_way() {
         panel.transport_request,
         Some(transport::Request::Transpose(-1))
     );
+    // A performance control, like `REVERSE`: nothing a song holds, so nothing to save. A row that dirtied the session for it
+    // would write a file for a press the save has no field for.
+    assert!(
+        !panel.dirty,
+        "the transpose is not in the save file, so it must not mark the session unsaved"
+    );
 }
 
 #[test]

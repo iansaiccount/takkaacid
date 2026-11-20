@@ -15,9 +15,11 @@ gates: `cargo test --workspace`, `cargo clippy --all-targets -- -D warnings`, `c
 
 ## What it is
 
-One device is one voice, sixteen steps, and the four knobs that make the sound: the oscillator's wave, the filter's cutoff and
-resonance, the envelope's decay, and how much the accent pushes through. It is not a sampler and not a workstation; it is
-the box that plays one line well — and one window holds up to four of them.
+An acid device is one voice, sixteen steps, and the four knobs that make the sound: the oscillator's wave, the filter's cutoff
+and resonance, the envelope's decay, and how much the accent pushes through. It is not a sampler and not a workstation; it is
+the box that plays one line well — and one window holds up to four of them. A **drum device** is the other machine: sixteen
+sample voices against the same sixteen steps, with its own kit
+([`docs/guide/src/22-the-drum-machine.md`](docs/guide/src/22-the-drum-machine.md)).
 
 - **Engine** (`rust/crates/acid-core`, no UI, no allocation in the audio callback): saw, square, sine and triangle
   oscillator; a resonant ladder low-pass filter; an envelope with accent-modulated decay; glide/slide; a soft limiter and
@@ -32,14 +34,16 @@ and its own name — and a strip above the panel is the whole rack: a cell per d
 cell the panel is showing outlined, a `M` key at the right end of each — that device's mute — and a `+` at the far right
 that adds one.
 
-- **Adding, picking, muting.** The strip's `+` opens a picker of the kinds a device can be (one today, `ACID`), and every
+- **Adding, picking, muting.** The strip's `+` opens a picker of the kinds a device can be (two today, `ACID` and `DRUMS` —
+  [the drum machine](docs/guide/src/22-the-drum-machine.md)), and every
   row of it is greyed once the rack holds four. Click a cell, or press `Ctrl+1` to `Ctrl+4`, to put that device on the
   panel. The `M` at a cell's right end mutes that device without stopping it — a 10 ms fade, not a cut — so a device that
   was running mutes late and unmutes back in time.
 - **One card per device.** `F3` opens the card for the device on the panel: its name, whether it plays what it hears or only
   answers controllers, which ports it hears and on which channel, its mute, its removal (`REMOVE` asks twice), and the theme
   it wears — one of twenty-two, from the list its `COLOUR` row opens.
-- **One transport, one clock.** `RUN`/`STOP` and the tempo belong to the rack and every device follows them; a device added
+- **One transport, one clock.** The deck's `PLAY` / `PAUSE` / `STOP` and the tempo belong to the rack and every device follows
+  them; a device added
   while the transport is running joins on the step the others are on, not at the top of the bar. Swing and the performance
   row are per device.
 - **MIDI learn is per device**, so the same controller number can drive a knob on two devices at once, and each device has
@@ -189,8 +193,8 @@ the mixed faces and anything that reads badly are this project's. What a theme i
 
 Five demos ship inside the binary — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and **Funk** — each a patch
 and a bank of eight variations of its line. They are read-only, and picking one loads it as a new song called "New song",
-unsaved. Saving is manual by default: `SAVE` writes, the wordmark says `SAVED` or `UNSAVED`, and a name that has changed
-writes a new file rather than moving the old one.
+unsaved. Saving is manual by default: `SAVE` writes, and the name is amber while the session is unsaved and plain silk once it
+is on disk; a name that has changed writes a new file rather than moving the old one.
 
 The whole of it — the card, its buttons, and exactly what a save does to a name — is
 [`docs/guide/src/12-songs-and-demos.md`](docs/guide/src/12-songs-and-demos.md).

@@ -41,8 +41,8 @@ the review is of the branch, not of each commit.
 (local only — nothing is pushed). `cargo test --workspace` **905**, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo fmt --check` and `./docs/guide/check.sh` are green at its head, and each task's own mutation run is recorded in the
 plans' `## Progress`. `SAVE_VERSION` is **11** — rounds 02–09 touched no field of it, so the rack round still takes **12**. The
-phase's whole-branch review is in `handover-phase-5`; the branch's own review is due at the pull request and has not happened
-yet.
+phase's whole-branch review is in `handover-phase-5`; the branch's own pre-PR review and the pull request's review were both
+taken, and their findings are fixed on the branch (plan 08's Task 4 records the first).
 
 **Rulings this phase rests on, and what they cost if wrong:**
 

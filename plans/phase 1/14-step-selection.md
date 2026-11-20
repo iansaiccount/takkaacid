@@ -23,9 +23,9 @@
 
 1. **A click while the help card is up must not select behind it** — the card is modal (Ruling 111); a click there closes the card and must leave the selection alone.
 2. **Ctrl+click toggles, and `ctrl` is read as `modifiers.ctrl`** — on Linux `command` and `ctrl` coincide, but reading the wrong one makes the toggle dead on every platform that differs.
-3. **Shift+arrow must not also fire its unshifted action** — shift+right moves the selection and must not change the pattern.
+3. **An arrow must not also fire the other pair's action** — `shift+right` chooses the pattern and must not move the selection; plain `right` moves the selection and must not change the pattern.
 4. **A drag on a rest brings the note in, and starts from the rest's own pitch** — ruled after review (2026-11-07): the drag keeps its pre-existing meaning (the spec's gesture table: "change pitch *and* select the step it started on"), so what a drag must never do is re-derive its base pitch from `last_pitch`; it starts from the rest's remembered `(pitch, octave)`.
-5. **The selection is clamped, not wrapped** — shift+left on step 1 stays on step 1; a wrap would silently jump to the far end mid-line.
+5. **The selection is clamped, not wrapped** — `left` on step 1 stays on step 1; a wrap would silently jump to the far end mid-line.
 
 ---
 
@@ -303,14 +303,14 @@ In `ui/selection.rs`:
 
 ```rust
 #[test]
-fn shift_turns_the_arrows_into_editing_keys() {
-    assert_eq!(edit_key(Key::ArrowRight, true), Some(EditKey::SelectNext));
-    assert_eq!(edit_key(Key::ArrowLeft, true), Some(EditKey::SelectPrev));
-    assert_eq!(edit_key(Key::ArrowUp, true), Some(EditKey::NoteUp));
-    assert_eq!(edit_key(Key::ArrowDown, true), Some(EditKey::NoteDown));
+fn the_plain_arrows_edit_the_step_and_shift_is_the_transport() {
+    assert_eq!(edit_key(Key::ArrowRight, false), Some(EditKey::SelectNext));
+    assert_eq!(edit_key(Key::ArrowLeft, false), Some(EditKey::SelectPrev));
+    assert_eq!(edit_key(Key::ArrowUp, false), Some(EditKey::NoteUp));
+    assert_eq!(edit_key(Key::ArrowDown, false), Some(EditKey::NoteDown));
     assert_eq!(edit_key(Key::Enter, false), Some(EditKey::ToggleSelected));
-    // Unshifted arrows belong to tempo and pattern; they must not be swallowed here.
-    assert_eq!(edit_key(Key::ArrowRight, false), None);
+    // Shifted arrows belong to the rack — the pattern and the tempo; they must not be swallowed here.
+    assert_eq!(edit_key(Key::ArrowRight, true), None);
 }
 ```
 
@@ -318,14 +318,14 @@ In `tests/selection_live.rs` (same harness as Task 3, plus a `key(at, key, modif
 
 ```rust
 #[test]
-fn shift_right_moves_the_selection_and_leaves_the_pattern_alone() {
+fn a_plain_arrow_moves_the_selection_and_leaves_the_pattern_alone() {
     // ... harness setup with a pattern in SharedState, then:
     assert_eq!(panel.selected, 1);
-    assert_eq!(shared.pattern().steps, before, "shift+right must not touch the pattern");
+    assert_eq!(shared.pattern().steps, before, "a plain arrow must not touch the pattern");
 }
 
 #[test]
-fn shift_up_raises_the_selected_note_one_semitone() {
+fn up_raises_the_selected_note_one_semitone() {
     // ... harness setup with step 0 on C0, then:
     let step = shared.pattern().steps[0];
     assert_eq!((step.pitch, step.octave_offset), (Pitch::CSharp, 0));
@@ -376,7 +376,7 @@ git commit -m "feat(ui): keyboard moves the selection and transposes its note"
 |---|---|---|
 | Click while the card is up must not select | `a_click_while_the_help_card_is_up_does_not_select` (`tests/selection_live.rs`: card visible, click a step, `selected` unchanged) | 3 |
 | `ctrl` read from `modifiers.ctrl` | `a_plain_click_only_selects_and_ctrl_click_toggles` + the ctrl+click live test | 3 |
-| Shift+arrow must not fire its unshifted action | `shift_right_moves_the_selection_and_leaves_the_pattern_alone` (the contract) and `ui::dispatch::tests::shift_right_moves_the_selection_and_never_reaches_the_pattern` (the glue, round-3 fix) | 4 |
+| An arrow must not fire the other pair's action | `a_plain_arrow_moves_the_selection_and_leaves_the_pattern_alone` (the contract) and `ui::dispatch::tests::shift_right_steps_the_pattern_and_leaves_the_selection_alone` (the glue, round-3 fix) | 4 |
 | Dragging a rest brings the note in from the rest's own pitch | live test `dragging_a_rest_selects_it_and_brings_it_in` | 3 |
 | Clamped, not wrapped | `the_selection_moves_and_clamps_at_both_ends` | 1 |
 | Keyboard must not edit behind the card (round-2 fix) | `the_help_card_refuses_the_editing_keys_instead_of_passing_them_on`, and `a_press_with_the_card_away_is_ours_and_applied` for the `NotOurs` half | 4 |
@@ -445,7 +445,8 @@ Round 2's deferred minors, now fixed:
 - **The glue line has a headless test.** The press loop moved out of `main.rs` (a binary, so untestable) into
   `ui::dispatch`: `presses(events, shift)` collects the frame's presses, `handle(press, panel, shared, bank)`
   resolves each one — step editor first, then the shortcuts — and reports `Handled`. `main.rs` is now a
-  three-line call. `shift_right_moves_the_selection_and_never_reaches_the_pattern` finally tests Review Focus 3
+  three-line call. `a_plain_arrow_moves_the_selection_and_leaves_the_pattern_alone` and
+  `shift_right_steps_the_pattern_and_leaves_the_selection_alone` finally test Review Focus 3
   end to end instead of leaning on `selection::dispatch` alone.
 - **Held keys no longer repeat their action.** Only the arrows repeat (`repeats_allowed`), so a held
   `Enter` cannot flip a step at frame rate and a held `shift+left` cannot race through the bank.
