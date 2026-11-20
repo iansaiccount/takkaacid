@@ -228,6 +228,33 @@ which are plan 06's.
       `len_utf8` like the helper. The book is still Task 5's — the same three sentences Task 1 recorded.
       Gates: `cargo test --workspace` **895**, clippy `-D warnings`, `fmt --check`.
 
-- [ ] Task 3 —
+- [x] **Task 3 — the nine tips.** `ui::tips::Control` gained `DrumAttack` … `DrumHit`, **appended** (`ALL` 40 → 49, `TIPS`
+      49, the nine entries last), with the plan's copy word for word — the table's `` `enter` `` is rendered as `enter`, because
+      a tooltip is plain text and backticks would print. Titles read `VOICE ATTACK` … `VOICE TUNE` and `HIT`, which is what
+      keeps them out of the 303's way: `CUT OFF`, `RESONANCE` and `DECAY` were already taken, and
+      `the_titles_are_distinct_so_two_controls_cannot_be_confused` still passes with all nine. `Control::for_dial` and
+      `Control::for_drum_key` sit beside `for_knob`, both exhaustive; `SHUFFLE` answers `Control::Shuffle` through
+      `for_drum_key`, so the device's swing keeps the one set of words it had rather than gaining a second. `draw_dials` calls
+      `tips::hover` on each dial's own `knob::knob` response, on each of the filter's three segments (one tip, the plan's
+      ruling) and on `HIT`; the grid's cells and its labels still get none.
+      Tests: `drum_live::every_drum_control_explains_itself` — a frame per second with the pointer settled, so egui's delay
+      passes, for all seven dials, all three segments and `HIT` — and `tips::tests::the_drum_face_has_its_own_help_for_every_control`
+      (`ALL.len() == 49`, the appended block in order, the seven dial titles reached through `Knob::ALL.map(Dial::for_knob)`,
+      the key titles, and every one of the nine reached by some drum control). **Mutations: 6 of 6 caught**
+      (`.superpowers/mutate_tips.py`): `DrumHit` wearing the filter's tip, `for_dial` answering the wrong control, `for_drum_key`
+      answering the wrong control, a drum title colliding with a 303 title, the filter key's hover call removed, and a dial's
+      hover ignoring the `TOOLTIPS` switch.
+      **Review: OK, one Minor actioned and four notes.** The Minor was that nothing exercised the `state.tooltips` argument at
+      the four new call sites — passing a literal `true` survived the suite — so the live test now also hovers the `ATTACK` dial
+      with the switch off and asserts the tip never arrives, and that mutation is in the script above (6 of 6 is one more than
+      the five the plan named). Of the notes: the live test is circular about *which* control a dial wears (`for_dial` both
+      paints and is asserted), which is recorded rather than fixed — the mapping is pinned non-circularly by literal titles in
+      `tips.rs` and literal dial labels in `drum_panel`'s own test, and what the live test uniquely proves is that the tip is
+      painted on that rect; `ui::tips` now names `ui::drum_panel`'s types while `drum_panel` names `tips`, a mutual module
+      dependency the plan mandates and the note records; and the hover loop is one local closure rather than a fourth copy of
+      `tips_live`'s. **The book is now one sentence false:** page 22's *No per-voice hover help yet* bullet is untrue as of
+      this commit — `check.sh` does not pin it, so the gate stays green, but the push depends on Task 5, which deletes it.
+      Gates: `cargo test --workspace` **897**, clippy `-D warnings`, `fmt --check`.
+
 - [ ] Task 4 —
 - [ ] Task 5 —

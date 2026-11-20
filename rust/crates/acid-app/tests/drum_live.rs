@@ -16,6 +16,7 @@ use acid_app::ui::layout::{layout, scale};
 use acid_app::ui::shortcuts::Shortcut;
 use acid_app::ui::strip::StripCell;
 use acid_app::ui::theme::{self, DESIGN_SIZE};
+use acid_app::ui::tips;
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::bank::PatternBank;
 use acid_core::drums::{Drum, FilterKind, KitVoice};
@@ -1866,4 +1867,79 @@ fn the_hit_and_the_filter_carry_underlines() {
             "{label}'s {letter} does not follow the face's scheme; painted: {light:?}"
         );
     }
+}
+
+/// The drum face's nine controls each say what they do on hover: the seven dials, the three-way filter key and `HIT`. The text
+/// is `ui::tips`' one table, so a control added to the face without an entry cannot be hovered into silence.
+#[test]
+fn every_drum_control_explains_itself() {
+    let l = layout(screen());
+    let mut cases: Vec<(Rect, tips::Control)> = Knob::ALL
+        .iter()
+        .map(|knob| {
+            (
+                drum_panel::dial_cells(&l)[knob.index()],
+                tips::Control::for_dial(Dial::for_knob(*knob)),
+            )
+        })
+        .collect();
+    // One tip for the filter key, not one per segment: it is one three-way control, and its words name all three sides.
+    for kind in FilterKind::ALL {
+        cases.push((
+            drum_panel::filter_cell(&l, kind),
+            tips::Control::for_drum_key(DrumKey::Filter),
+        ));
+    }
+    cases.push((
+        drum_panel::key_cell(&l, DrumKey::Hit),
+        tips::Control::for_drum_key(DrumKey::Hit),
+    ));
+
+    // One frame per second with the pointer settled after the first, the way `tests/tips_live.rs` does it: egui waits for the
+    // hand to stop moving before it shows a tip, so a `PointerMoved` every frame keeps it away.
+    let hover = |at: Pos2, tooltips: bool| {
+        let ctx = Context::default();
+        let shared = SharedState::new();
+        let mut panel = drum_panel_state();
+        panel.tooltips = tooltips;
+        let mut seen: Vec<String> = Vec::new();
+        for step in 0..5 {
+            let events = if step == 0 {
+                vec![Event::PointerMoved(at)]
+            } else {
+                Vec::new()
+            };
+            let input = RawInput {
+                screen_rect: Some(screen()),
+                time: Some(f64::from(step)),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+            output.textures_delta.clear();
+            seen.extend(said(&output));
+        }
+        seen
+    };
+
+    for (rect, control) in cases {
+        let seen = hover(rect.center(), true);
+        assert!(
+            seen.iter().any(|text| text.contains(control.tip().what)),
+            "{control:?} showed no help on hover; painted: {seen:?}"
+        );
+    }
+
+    // The switch is the panel's, not the 303's: with help turned off the same hover says nothing. `tests/tips_live.rs` proves
+    // the readouts' half of the rule; this proves the drum face reads the same flag.
+    let seen = hover(
+        drum_panel::dial_cells(&l)[Knob::Waveform.index()].center(),
+        false,
+    );
+    assert!(
+        !seen
+            .iter()
+            .any(|text| text.contains(tips::Control::DrumAttack.tip().what)),
+        "help that is turned off must not talk on the drum face: {seen:?}"
+    );
 }

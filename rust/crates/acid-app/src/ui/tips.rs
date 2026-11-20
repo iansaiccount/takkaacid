@@ -90,11 +90,23 @@ pub enum Control {
     Copy,
     /// The row's PASTE: whatever pattern the clipboard holds onto the pattern on the panel.
     Paste,
+    /// The drum face's seven dials, the three-way filter key and `HIT` — the same slots the 303 spends on its knobs and keys,
+    /// carrying the selected voice's words instead of the 303's. Appended, so no existing control's position in the table moves;
+    /// the titles are `VOICE …` because `CUT OFF`, `RESONANCE` and `DECAY` are already the 303's knobs' names.
+    DrumAttack,
+    DrumDecay,
+    DrumSustain,
+    DrumRelease,
+    DrumCutoff,
+    DrumResonance,
+    DrumTune,
+    DrumFilter,
+    DrumHit,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 40] = [
+    pub const ALL: [Control; 49] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -135,6 +147,15 @@ impl Control {
         Control::TransposeUp,
         Control::Copy,
         Control::Paste,
+        Control::DrumAttack,
+        Control::DrumDecay,
+        Control::DrumSustain,
+        Control::DrumRelease,
+        Control::DrumCutoff,
+        Control::DrumResonance,
+        Control::DrumTune,
+        Control::DrumFilter,
+        Control::DrumHit,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -180,6 +201,15 @@ impl Control {
             Control::DeviceMute => TIPS[26],
             Control::DeviceAdd => TIPS[27],
             Control::DeviceCaret => TIPS[28],
+            Control::DrumAttack => TIPS[40],
+            Control::DrumDecay => TIPS[41],
+            Control::DrumSustain => TIPS[42],
+            Control::DrumRelease => TIPS[43],
+            Control::DrumCutoff => TIPS[44],
+            Control::DrumResonance => TIPS[45],
+            Control::DrumTune => TIPS[46],
+            Control::DrumFilter => TIPS[47],
+            Control::DrumHit => TIPS[48],
         }
     }
 
@@ -198,10 +228,38 @@ impl Control {
             Knob::Accent => Control::Accent,
         }
     }
+
+    /// The help for one of the drum face's dials, beside [`Control::for_knob`] and for its reason: the catalogue names no view
+    /// type, and the arms are written out so a dial added to the face fails to compile here.
+    pub fn for_dial(dial: crate::ui::drum_panel::Dial) -> Control {
+        use crate::ui::drum_panel::Dial;
+
+        match dial {
+            Dial::Attack => Control::DrumAttack,
+            Dial::Decay => Control::DrumDecay,
+            Dial::Sustain => Control::DrumSustain,
+            Dial::Release => Control::DrumRelease,
+            Dial::Cutoff => Control::DrumCutoff,
+            Dial::Resonance => Control::DrumResonance,
+            Dial::Tune => Control::DrumTune,
+        }
+    }
+
+    /// The help for one of the drum face's keys. `SHUFFLE` is the device's swing, the same control the 303 has, so it keeps
+    /// that one tip; the filter key and `HIT` are the face's own and have their own words.
+    pub fn for_drum_key(key: crate::ui::drum_panel::DrumKey) -> Control {
+        use crate::ui::drum_panel::DrumKey;
+
+        match key {
+            DrumKey::Filter => Control::DrumFilter,
+            DrumKey::Shuffle => Control::Shuffle,
+            DrumKey::Hit => Control::DrumHit,
+        }
+    }
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 40] = [
+const TIPS: [Tip; 49] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -402,6 +460,51 @@ const TIPS: [Tip; 40] = [
         what: "Pastes the clipboard's pattern into the pattern on the panel. A pattern is text, so this works across windows.",
         shortcut: Some("CTRL+V"),
     },
+    Tip {
+        title: "VOICE ATTACK",
+        what: "How fast the voice reaches full level after a hit.",
+        shortcut: None,
+    },
+    Tip {
+        title: "VOICE DECAY",
+        what: "How fast a hit falls from its peak towards SUSTAIN.",
+        shortcut: None,
+    },
+    Tip {
+        title: "VOICE SUSTAIN",
+        what: "The level the voice holds while its gate is open. A drum arrives at 0, so a hit falls unless you raise it.",
+        shortcut: None,
+    },
+    Tip {
+        title: "VOICE RELEASE",
+        what: "How long the voice takes to fade once the gate closes.",
+        shortcut: None,
+    },
+    Tip {
+        title: "VOICE CUT OFF",
+        what: "The filter's corner, in the 303's own knob positions.",
+        shortcut: None,
+    },
+    Tip {
+        title: "VOICE RESONANCE",
+        what: "How much the corner is emphasised.",
+        shortcut: None,
+    },
+    Tip {
+        title: "VOICE TUNE",
+        what: "The voice's pitch, in semitones either way.",
+        shortcut: None,
+    },
+    Tip {
+        title: "VOICE FILTER",
+        what: "Which side of the voice's filter the sample passes: low, band or high.",
+        shortcut: Some("L / B / P: pick a side"),
+    },
+    Tip {
+        title: "HIT",
+        what: "Strikes the selected voice, stopped or running. Writing a step is enter.",
+        shortcut: Some("H"),
+    },
 ];
 
 /// The help for `control`, or nothing at all when the player has turned the hints off.
@@ -427,6 +530,7 @@ pub fn hover(response: &Response, wants_help: bool, control: Control) {
 mod tests {
     use super::*;
     use crate::knobs::Knob;
+    use crate::ui::drum_panel::{Dial, DrumKey};
 
     #[test]
     fn the_table_matches_the_panel_order_and_holds_every_control_once() {
@@ -555,5 +659,65 @@ mod tests {
             None,
             "a silent panel stays silent"
         );
+    }
+
+    #[test]
+    fn the_drum_face_has_its_own_help_for_every_control() {
+        // The drum face's controls are appended to the one catalogue, so no existing position moves: the nine new entries
+        // are the last nine, in the order the face draws them — seven dials, then the filter key, `SHUFFLE` and `HIT`.
+        assert_eq!(Control::ALL.len(), 49);
+        assert_eq!(
+            &Control::ALL[40..],
+            [
+                Control::DrumAttack,
+                Control::DrumDecay,
+                Control::DrumSustain,
+                Control::DrumRelease,
+                Control::DrumCutoff,
+                Control::DrumResonance,
+                Control::DrumTune,
+                Control::DrumFilter,
+                Control::DrumHit,
+            ]
+        );
+
+        // The two mappings that cross into the face's catalogues, answered for every dial it draws and every key it has.
+        // `SHUFFLE` is the device's swing, the same control the 303 keeps, so it answers with that one tip rather than a
+        // second set of words for the same atomic.
+        let dials: Vec<&str> = Knob::ALL
+            .iter()
+            .map(|knob| Control::for_dial(Dial::for_knob(*knob)).tip().title)
+            .collect();
+        assert_eq!(
+            dials,
+            [
+                "VOICE ATTACK",
+                "VOICE DECAY",
+                "VOICE SUSTAIN",
+                "VOICE RELEASE",
+                "VOICE CUT OFF",
+                "VOICE RESONANCE",
+                "VOICE TUNE",
+            ]
+        );
+        assert_eq!(
+            Control::for_drum_key(DrumKey::Filter).tip().title,
+            "VOICE FILTER"
+        );
+        assert_eq!(Control::for_drum_key(DrumKey::Shuffle), Control::Shuffle);
+        assert_eq!(Control::for_drum_key(DrumKey::Hit).tip().title, "HIT");
+
+        // Every drum control is one of the nine, so no dial or key can be left wearing the 303's words.
+        let mut reached: Vec<Control> = Knob::ALL
+            .iter()
+            .map(|knob| Control::for_dial(Dial::for_knob(*knob)))
+            .collect();
+        reached.extend(DrumKey::ALL.iter().map(|key| Control::for_drum_key(*key)));
+        for control in &Control::ALL[40..] {
+            assert!(
+                reached.contains(control),
+                "{control:?} is in the catalogue but no drum control reaches it"
+            );
+        }
     }
 }

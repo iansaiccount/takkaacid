@@ -570,7 +570,7 @@ fn draw_dials(
         cell_ui.set_clip_rect(*cell);
         let mut value = before;
         let mut scratch = before;
-        knob::knob(
+        let response = knob::knob(
             &mut cell_ui,
             egui::Id::unique(("drum-dial", slot)),
             dial.label(),
@@ -578,6 +578,8 @@ fn draw_dials(
             diameter,
             p,
         );
+        // One call, like `SHUFFLE` below: the tip is the table's, and the mapping from a dial to it is `for_dial`.
+        tips::hover(&response, state.tooltips, tips::Control::for_dial(dial));
         value = value.clamp(0.0, 1.0);
         state.knobs[slot] = value;
         if !choosing && (value - before).abs() > 1e-6 {
@@ -616,6 +618,12 @@ fn draw_dials(
             ui.scope_id().with(("drum-filter", kind.index())),
             egui::Sense::click(),
         );
+        // One tip for the three-way key, not one per segment: it is one control and its words name all three sides.
+        tips::hover(
+            &response,
+            state.tooltips,
+            tips::Control::for_drum_key(DrumKey::Filter),
+        );
         if response.clicked() {
             set_filter(state, shared, kind);
         }
@@ -639,7 +647,11 @@ fn draw_dials(
         diameter,
         p,
     );
-    tips::hover(&response, state.tooltips, tips::Control::Shuffle);
+    tips::hover(
+        &response,
+        state.tooltips,
+        tips::Control::for_drum_key(DrumKey::Shuffle),
+    );
     if super::learn::highlight(state.learn, crate::midi::cc::CcTarget::Swing) {
         super::panel::learn_highlight(ui.painter(), cell, s, p);
     }
@@ -669,6 +681,11 @@ fn draw_dials(
         false,
         p,
         Some('H'),
+    );
+    tips::hover(
+        &hit,
+        state.tooltips,
+        tips::Control::for_drum_key(DrumKey::Hit),
     );
     if hit.clicked() {
         shared.request_audition(selected);
