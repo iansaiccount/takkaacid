@@ -183,6 +183,20 @@ card line for the arrows beyond what is already there.
       the same way as a press) rather than end to end, because the note nudge clamps to `-12..=24` and a second live test would
       only re-assert the clamp.
       Gates: `cargo test --workspace` **901**, clippy `-D warnings`, `fmt --check`.
-- [ ] Task 2 —
+- [x] **Task 2 — the face's words.** The card's keyboard block now shows the arrows as two pairs — `shift+left / right: previous
+      or next pattern`, `shift+up / down: tempo by 1 BPM`, then `left / right: move the selection, on either face` and
+      `up / down: note up or down; on drums, which voice` — with the same seventeen lines, so the card's height is untouched
+      (`the_card_fits_inside_the_panel_at_both_scale_extremes` and `the_painted_card_stays_inside_its_rect_at_every_scale` both
+      still pass). The three tips that name the tempo's key say `shift`: `TEMPO -` `shift+down arrow: one BPM slower`, `TEMPO +`
+      `shift+up arrow: one BPM faster`, and the `TEMPO` readout `shift+up / down arrow: one BPM faster or slower`. No control
+      gained or lost a tip and the catalogue's order did not move. Tests: `help_live::the_help_card_knows_the_drum_face` asks
+      for the two swapped lines as painted, and `tips::tests::the_tempo_tips_name_the_modifier` walks the three tempo tips for
+      the word `shift`. **Mutations: 3 of 3 caught** (`.superpowers/mutate_words.py`): the tempo line back on the plain arrows,
+      the note line back on `shift`, and the readout's tip teaching the plain pair. The second one **survived the first run** —
+      a card with *both* arrow pairs behind `shift` satisfied every needle — so the live test now also asks that
+      `shift+up / down: note up or down` is *not* painted, which is the assertion the mutation caught. No review was dispatched:
+      the branch is reviewed at the pull request now.
+      Gates: `cargo test --workspace` **902**, clippy `-D warnings`, `fmt --check`.
 - [ ] Task 3 —
+
 

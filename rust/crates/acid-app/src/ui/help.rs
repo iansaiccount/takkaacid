@@ -30,13 +30,13 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "Z / X: computer keyboard octave down / up",
                 "SPACE: play or pause, same as PLAY / PAUSE",
                 "shift+left / right: previous or next pattern",
-                "up / down: tempo by 1 BPM",
-                // The keys the two faces share are one line each, with the drum face's answer folded in: five new lines do not
-                // fit the card, so the drum face adds two of its own.
+                // The arrows split at the modifier, so the card shows them as two pairs: `shift` is the rack's — the pattern
+                // and the tempo — and the plain pair is the face's. Same lines, same budget.
+                "shift+up / down: tempo by 1 BPM",
                 "left / right: move the selection, on either face",
+                "up / down: note up or down; on drums, which voice",
                 "STEP: key down writes, key up walks on",
                 "backspace: rest, shift+note: write where you are",
-                "shift+up / down: note up or down; on drums, which voice",
                 "enter: note on or off; on drums write that voice; shift accents",
                 // The drum face's own two keys: the hit and the filter's three letters.
                 "h: strike the selected voice (HIT)",

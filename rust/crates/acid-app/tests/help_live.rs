@@ -86,6 +86,9 @@ fn the_help_card_knows_the_drum_face() {
         "move the selection, on either face",
         "on drums, which voice",
         "on drums write that voice; shift accents",
+        // The arrows split at the modifier: `shift` is the rack's — the pattern and the tempo — the plain pair is the face's.
+        "shift+up / down: tempo by 1 BPM",
+        "up / down: note up or down; on drums, which voice",
         // The drum face's own two lines.
         "h: strike the selected voice (HIT)",
         "l / b / p: the filter's low, band, high",
@@ -95,6 +98,13 @@ fn the_help_card_knows_the_drum_face() {
             "the help card should say {wanted:?}: {said}"
         );
     }
+
+    // One line per arrow pair, and the pairing is the point: the tempo behind `shift`, the note plain. A card that said both
+    // behind `shift` would satisfy every needle above, so the wrong pairing is asked for by name.
+    assert!(
+        !said.contains("shift+up / down: note up or down"),
+        "the card puts the note behind shift again: {said}"
+    );
 }
 
 /// Every painted piece of text with the rectangle it occupies — the card's lines are geometry as much as words.

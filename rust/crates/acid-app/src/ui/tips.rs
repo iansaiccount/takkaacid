@@ -323,12 +323,12 @@ const TIPS: [Tip; 49] = [
     Tip {
         title: "TEMPO -",
         what: "One BPM slower.",
-        shortcut: Some("down arrow: one BPM slower"),
+        shortcut: Some("shift+down arrow: one BPM slower"),
     },
     Tip {
         title: "TEMPO +",
         what: "One BPM faster.",
-        shortcut: Some("up arrow: one BPM faster"),
+        shortcut: Some("shift+up arrow: one BPM faster"),
     },
     Tip {
         title: "LEARN",
@@ -373,7 +373,7 @@ const TIPS: [Tip; 49] = [
     Tip {
         title: "TEMPO",
         what: "How fast the sequencer runs, in BPM. Click it while LEARN is picking to teach a controller.",
-        shortcut: Some("up / down arrow: one BPM faster or slower"),
+        shortcut: Some("shift+up / down arrow: one BPM faster or slower"),
     },
     Tip {
         title: "PATTERN",
@@ -642,6 +642,22 @@ mod tests {
                 Control::for_knob(*knob),
                 Control::ALL[index],
                 "{knob:?} is in the wrong slot"
+            );
+        }
+    }
+
+    #[test]
+    fn the_tempo_tips_name_the_modifier() {
+        // `shift` is the rack's for the arrows, so every tip that names the tempo's key has to say so: a player hovering
+        // `TEMPO +` must not be told a key that now moves the selection.
+        for control in [Control::TempoUp, Control::TempoDown, Control::Tempo] {
+            let shortcut = control
+                .tip()
+                .shortcut
+                .unwrap_or_else(|| panic!("{control:?} names its key"));
+            assert!(
+                shortcut.contains("shift"),
+                "{control:?} teaches the wrong arrow: {shortcut:?}"
             );
         }
     }
