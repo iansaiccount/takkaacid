@@ -1,7 +1,7 @@
 # Plan 03 — the kick does not sound, and the drum face has no keyboard
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, each commit reviewed by a
-> dispatched subagent before it lands (this repo's rule, which is stricter than the skill's default).
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
+> branch at the pull request (`AGENTS.md`).
 
 **Goal:** the `808` kit's kick is heard on the speakers people actually have, and `shift+up` / `shift+down` walk the drum
 face's selected voice up and down its grid, hearing each one it lands on.

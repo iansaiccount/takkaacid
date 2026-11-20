@@ -1,7 +1,7 @@
 # Plan 06 — the drum face's step editor
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, each commit reviewed by a
-> dispatched subagent before it lands (this repo's rule). This plan is one of two written together; plan 07 is the other.
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
+> branch at the pull request (`AGENTS.md`). This plan is one of two written together; plan 07 is the other.
 
 **Goal:** the drum face edits a *step*, like the 303's: `left` / `right` move a visible selection across the sixteen steps,
 `enter` writes the selected voice into it, `shift+enter` is the accent gesture, and the selection does not move on a write

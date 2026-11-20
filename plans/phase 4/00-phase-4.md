@@ -28,8 +28,8 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
 **Spec:** [`docs/superpowers/specs/2026-11-18-drum-machine-design.md`](../../docs/superpowers/specs/2026-11-18-drum-machine-design.md)
 — approved in conversation on 2026-11-18. The plan argues from it; where they disagree, the spec wins and this plan is wrong.
 
-**Gate:** unchanged from phases 1–3 — the three workspace commands, `docs/guide/check.sh` when the book moves, and a fresh
-subagent review before every commit (`AGENTS.md`).
+**Gate:** unchanged from phases 1–3 — the three workspace commands, `docs/guide/check.sh` when the book moves, and a subagent
+review of the branch at the pull request (`AGENTS.md`). Commits are made with the gates green and the Progress lines current;
 
 **State: complete, 2026-11-19; six rounds since, the last finished 2026-11-20.** All ten tasks are committed on `phase-4`
 (local only — nothing is pushed). The branch is the whole round: `cargo test --workspace` **899**, `cargo clippy --workspace

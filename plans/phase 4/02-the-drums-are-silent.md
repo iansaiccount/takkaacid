@@ -1,7 +1,7 @@
 # Plan 02 — the drums are silent, and the kit cannot be replaced
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, each commit reviewed by a
-> dispatched subagent before it lands (this repo's rule, which is stricter than the skill's default).
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
+> branch at the pull request (`AGENTS.md`).
 
 **Goal:** a drum machine makes a sound when it is added, plays the pattern drawn on it, says which kit it is playing, and lets
 a player hear any single voice with one click.

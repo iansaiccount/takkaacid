@@ -77,42 +77,40 @@ Then `./docs/guide/check.sh`, which proves every page and every image a page nam
 
 
 
-## Review before commit
+## Review at the pull request
 
-**No commit is made unreviewed.** A task's last step is: run the gates, review the diff against what the task said it would do,
-action what the review found, and commit in the same breath. A review whose findings land in a later commit has gated nothing;
-a review nobody acted on is worse than no review, because it looks like one.
+**The branch is reviewed, not every commit.** A task's last step is: run the gates, keep the task's `## Progress` line current,
+and commit. The review happens once, on the branch, when it is ready for a pull request — a subagent reads the whole diff against
+the plans that produced it, and what it finds is fixed on the branch before the PR merges. A change the player asks to have
+reviewed is reviewed when they ask, wherever it sits.
 
-**The reviewer is a subagent.** Dispatch one for every review, as a separate agent that did not write the code and has not seen
-the session that did. The executor reviewing its own diff is not a review: it reads what it meant to write, and the questions
-below are exactly the ones an author cannot answer about their own work. There is no fallback to self-review — if the harness
-offers no subagent tool, say so and stop before the commit rather than pretend the diff was gated: record the blocked review
-in the plan's `## Progress` and take it to the human partner, because an unreachable reviewer is a blocked round, not a licence
-to review your own work.
+**The reviewer is a subagent.** Dispatch one as a separate agent that did not write the code and has not seen the session that
+did. The executor reviewing its own branch is not a review: it reads what it meant to write, and the questions below are exactly
+the ones an author cannot answer about their own work. There is no fallback to self-review — if the harness offers no subagent
+tool, say so and stop before opening the PR rather than pretend the branch was gated: record the blocked review in the plan's
+`## Progress` and take it to the human partner, because an unreachable reviewer is a blocked round, not a licence to review your
+own work.
 
-Give it the task's **Files** and **Interfaces** blocks and the diff, not the whole plan, so it judges the change against what
-was claimed rather than against the reasoning that produced it. It reports; it does not edit — a round has one writer, and the
-executor applies what the review found, so that the commit that lands is the one that was read. It answers:
+Give it the plans' **Files** and **Interfaces** blocks and the branch's diff against the base, not the session's reasoning, so it
+judges the change against what was claimed. It reports; it does not edit — a round has one writer, and the executor applies what
+the review found, so that what merges is what was read. It answers:
 
-- **Does the diff do what the task said, and only that?** Extra work smuggled into a commit is a finding.
+- **Does the branch do what the plans said, and only that?** Extra work smuggled into a branch is a finding.
 - **Does it break a convention in this file?** A second hand-kept list, a `_` arm on a catalogue enum, a font glyph, a lock or an
   allocation on the audio path, a change to the save file, an `egui::Id` renamed.
 - **What does it leave untested, and is that deliberate?** A missing test is a finding; a deferred one must be in the plan's
   Progress with the reason.
 
-Findings are fixed before the commit, and the task's `## Progress` line records what the review found and what was done about it
-— including a finding the executor disagrees with, which is written down with the reason it stood rather than dropped.
-
 **Act on the findings yourself, then carry on.** A review is not a question for the player: the executor fixes what it found,
-records it, commits, and moves to the next task in the same breath — the reviewing loop is the quiet part of the work, not a
-checkpoint. Stop and ask only when a finding needs a decision that is the player's and not the code's: a face they will see, a
-word they will read, a feature that is not this round's, or a finding whose two fixes cost materially different things. Everything
-else — a duplicated mapping, a missing test, a doc that lies, a `_` arm, a gap in a catalogue — is the executor's to settle. A
-subagent that could not be reached, timed out, or answered about the wrong commit is a review that did not happen: re-dispatch
-it, and do not commit on the strength of the gates alone.
+records it, and merges once the gates are green again. Stop and ask only when a finding needs a decision that is the player's and
+not the code's: a face they will see, a word they will read, a feature that is not this round's, or a finding whose two fixes
+cost materially different things. Everything else — a duplicated mapping, a missing test, a doc that lies, a `_` arm, a gap in a
+catalogue — is the executor's to settle. A subagent that could not be reached, timed out, or answered about the wrong diff is a
+review that did not happen: re-dispatch it, and do not open the PR on the strength of the gates alone.
 
-The whole-branch review at the end of a phase is not a substitute for these: it catches what the seams between tasks hide, not
-what one commit hid.
+A review nobody acted on is worse than no review, because it looks like one: the plans' `## Progress` records what the branch
+review found and what was done about it, including a finding the executor disagrees with, which is written down with the reason
+it stood rather than dropped.
 
 ## Planning
 

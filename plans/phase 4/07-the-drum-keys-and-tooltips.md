@@ -1,7 +1,7 @@
 # Plan 07 — the drum face's keys, underlines and tooltips
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, each commit reviewed by a
-> dispatched subagent before it lands (this repo's rule). This plan is one of two written together; plan 06 is the other.
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
+> branch at the pull request (`AGENTS.md`). This plan is one of two written together; plan 06 is the other.
 
 **Goal:** the drum face's keys can be learned by eye — the letter that presses a key is underlined on it — the filter is
 reachable from the keyboard, and every control on the face says what it does on hover. The guide, the in-app help card and the

@@ -1,7 +1,7 @@
 # Plan 01 — the drum machine
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, each commit reviewed by a
-> dispatched subagent before it lands (this repo's rule, which is stricter than the skill's default).
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
+> branch at the pull request (`AGENTS.md`).
 
 **Goal:** a second machine in the rack — sixteen sample voices against the 303's sixteen steps, with per-voice ADSR, filter and
 tuning, three factory kits, custom kits from the player's own WAVs, and a factory drum bank for each demo variation.
