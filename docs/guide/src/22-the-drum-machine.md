@@ -40,6 +40,13 @@ keys, because a card is modal.
 **`h`** strikes the selected voice — the same hit as `HIT` — so a kit can be walked with the arrows and heard with one key. A
 card does not stop it: a hit is a sound, not an edit. The rest of the letters stay silent here; they are the 303's notes.
 
+The step is edited the same way, one step over: **`left` / `right` move the selected step**, a lit column across the sixteen
+rows, and **`enter` writes the selected voice into it** — silently, as a 303 step is written without a sound; a second `enter`
+takes the hit off again. **`shift+enter`** is the grid's accent gesture, so an empty cell takes an accented hit, a plain strike
+is accented and an accented one is taken off. The selection stays where it is after a write, unlike the 303's `STEP`, because a
+step here holds sixteen voices and a hand writes several before moving on. `HIT` and `h` still play the voice without writing
+it, either of them with the bar stopped.
+
 ## The dials
 
 The seven knobs stay where the 303 puts them and are **the selected voice's**, not the machine's:

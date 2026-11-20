@@ -56,7 +56,8 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'the whole repair' \
             'the next play carries on from there' 'tape deck' 'writes as you go' 'DRUMS' \
             'drum bank' 'KICK' 'LP | BP | HP' 'drum machine' \
-            'walk it up and down the grid' 'strikes the selected voice'; do
+            'walk it up and down the grid' 'strikes the selected voice' \
+            'move the selected step' 'writes the selected voice into it'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done
 echo "guide: ok"

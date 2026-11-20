@@ -203,4 +203,22 @@ becoming per device; a step's length or a per-step edit beyond the hit and its a
       the P2s: `PanelState::selected`'s doc, `a_card_is_up`'s list and `Handled::Refused`'s doc now name the drum face's step
       move and write; the unit test is renamed for the step and the write; and the refused-arrow assertion also pins that the
       selection did not move.
-- [ ] Task 3 —
+- [x] **Task 3 — the book and the picture.** Page 22's grid section now says the lit column, `left`/`right`, `enter` and
+      `shift+enter`, the silent write, the 303's walk-on that this face deliberately does not do, and `HIT`/`h` beside it — on
+      top of Task 2's three sentence fixes (page 15's four-keys paragraph, page 22's *No notes* bullet, page 20's `left`/`right`
+      and `enter` rows). `check.sh` pins `move the selected step` and `writes the selected voice into it` beside the two drum
+      pins from the last round. **`drum-face.png` retaken** on `Xvfb :87 -screen 0 2200x1500x24` (geometry checked first,
+      `2000 1400` or better, then the window at `1960x1340`) with `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-06`, empty: `+` →
+      `DRUMS`, the notice waited out, the pointer parked outside the window. The picture shows the round's change — the first
+      step's column lit — and its `img/README.md` row records the new state and command, including why the grid is empty (a
+      first run's drum machine has no bank; the earlier picture's demo bank is no longer part of it). Looked at before keeping:
+      the column is visible, no tooltip and no notice are in the frame. Gates: `cargo test --workspace` **892**, clippy
+      `-D warnings`, `fmt --check`, `./docs/guide/check.sh` ok.
+      **Review: BLOCK on one Important and two P2s, all actioned.** The Important was the session recipe I had reordered in
+      `img/README.md`: opening the kit browser with `F3` puts its shield over the panel, so a later `BANKS` click would close the
+      browser instead of opening the bank browser — the steps are back in their performable order, the "both pictures" sentence
+      is scoped to `kit-browser.png`, and the retake carries its date. Of the P2s: page 22 said "the `HIT` key is the one to
+      reach for when the bar is stopped", which implies a difference between `HIT` and `h` that the code does not have (they are
+      one audition path), so it now says either of them plays the voice with the bar stopped; and the reviewer's note that the
+      column sits on step 1, which is also a beat-framed column, is recorded in the picture's row rather than retaken — the
+      full-height stroke and the per-cell frame read apart.
