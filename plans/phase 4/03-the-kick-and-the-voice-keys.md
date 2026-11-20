@@ -185,3 +185,5 @@ next round and still needs its own design.
       `is_panel_key` claimed the keys through the acid mapping alone, so it now asks `drum_panel::voice_move` too — redundancy by
       construction today, and the comment says which question each mapping answers; one assertion message claimed a check its
       line did not make (the selection is asserted); and this entry is the record the reviewer asked for.
+      **Superseded by [`04-hit-is-the-only-sound`](04-hit-is-the-only-sound.md): the label click and the walk are silent, and `HIT`
+      is the one sound.** This entry is the record of what plan 03 shipped, not of what the face does today.

@@ -25,18 +25,17 @@ A click on a cell strikes that voice on that step; a click on a struck cell take
 the 303's own accent gesture, louder and brighter — and an accent is printed brighter than a plain strike, so the pattern
 reads at a glance. Every fourth column is framed in the silk, which is where the beats are.
 
-Clicking a row's **label** selects that voice **and hears it**: its label becomes a lit plate in the accent, its row carries
-a faint band behind the cells, the name is printed above the dials — and the voice plays once, so a row is something you can
-identify by ear without writing it into the bar. `SHIFT`-clicking the label **mutes** that voice — the label prints dim and
-the row's cells lose their accent, but they stay readable, so a muted voice can be found and unmuted by eye. A mute is not a
-sound, so a `SHIFT`-click does not play anything.
+Clicking a row's **label** selects that voice: its label becomes a lit plate in the accent, its row carries a faint band behind
+the cells, and the name is printed above the dials. Neither a selection nor a mute makes a sound — `HIT` is how a voice is heard.
+`SHIFT`-clicking the label **mutes** that voice: the label prints dim and the row's cells lose their accent, but they stay
+readable, so a muted voice can be found and unmuted by eye.
 
 `SHIFT` is the modifier throughout: a strike, an accent, a mute has a plain click and a `SHIFT`-click, never a menu.
 
 The keyboard reaches the same selection: **`shift+up` / `shift+down` walk it up and down the grid** — the rows are the
-grid's own order, `KICK` at the top — and each voice they land on is heard, so a kit can be walked by ear. Held down, the walk
-repeats; it stops at the top row and the bottom one rather than wrapping round. While a card is up the walk is spent, like the
-editing keys, because a card is modal.
+grid's own order, `KICK` at the top. The walk selects and does not sound, like a click on a label. Held down, it repeats; it
+stops at the top row and the bottom one rather than wrapping round. While a card is up the walk is spent, like the editing
+keys, because a card is modal.
 
 ## The dials
 

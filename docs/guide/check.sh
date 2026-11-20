@@ -46,6 +46,7 @@ done
 ! grep -rqF 'not yet on disk, `UNSAVED`' src || { echo "the guide spells a word the face no longer prints"; exit 1; }
 ! grep -rqF 'MY SONGS' src || { echo "the guide names the bank browser as it was, not as it is"; exit 1; }
 ! grep -rqF 'the next start begins from the top of the bar' src || { echo "the guide gives the pause the stop's rule"; exit 1; }
+! grep -rqE 'hears it|walked by ear|identify by ear' src || { echo "the guide sells a selection by ear"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \

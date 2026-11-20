@@ -124,8 +124,8 @@ pub fn handle(
     }
     // A drum device's editor is the grid, not the keyboard: the step editor writes 303 pitches into a pattern and moves a
     // border the drum face has no row to show. What that face does own is its selection, and `shift` and the arrows walk it
-    // up and down the grid, hearing each voice it lands on — the preview a click on the voice's label already gives. The walk
-    // is a selection and not an edit, so a pending CLEAR is left alone: the pattern it would clear has not moved.
+    // up and down the grid. A walk is a selection and nothing more: it sounds nothing (`HIT` is how a voice is heard) and it
+    // edits nothing, so a pending CLEAR is left alone — the pattern it would clear has not moved.
     //
     // The transport and pattern shortcuts below are both machines' — one drum voice does not make the deck another deck — so
     // only a face's own keys are decided here, and the face's rows are gone rather than every key.
@@ -141,8 +141,8 @@ pub fn handle(
         },
         DeviceKind::Drums => {
             if let Some(delta) = drum_panel::voice_move(press.key, press.shift) {
-                // A card is modal for the keyboard as well as the pointer: a walk aimed at a grid nobody can see would
-                // select and sound a voice behind it.
+                // A card is modal for the keyboard as well as the pointer: a walk aimed at a grid nobody can see would move
+                // a selection behind it.
                 if panel.a_card_is_up() {
                     return Handled::Refused;
                 }
@@ -151,7 +151,6 @@ pub fn handle(
                 let walked =
                     selection::move_selection(panel.drum.selected.index(), delta, Drum::ALL.len());
                 panel.drum.selected = Drum::ALL[walked];
-                shared.request_audition(panel.drum.selected);
                 return Handled::Selection;
             }
         }

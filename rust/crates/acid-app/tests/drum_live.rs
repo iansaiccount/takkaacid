@@ -371,10 +371,10 @@ fn a_shift_click_accents_it() {
 }
 
 #[test]
-fn clicking_a_voices_label_auditions_it() {
-    // The label is the voice's preview key: a click selects the voice for the dials *and* asks to hear it, so a row is
-    // something a player can identify without writing it into the bar. `HIT` plays the selected voice; this plays the one
-    // under the pointer.
+fn clicking_a_voices_label_selects_without_sounding_it() {
+    // The label selects the voice for the dials, and that is all: a selection is not a hit, and `HIT` is how a voice is
+    // heard. (It used to audition, added when a machine could arrive with no kit and one click was the only way to find out
+    // which row was silent; the kit arrives now, and the player hears an unsolicited hit on every row they click.)
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = drum_panel_state();
@@ -392,11 +392,11 @@ fn clicking_a_voices_label_auditions_it() {
     assert_eq!(panel.drum.selected, Drum::Snare, "the label still selects");
     assert_eq!(
         shared.take_audition(),
-        Some(Drum::Snare),
-        "one click on a voice's label has to be heard"
+        None,
+        "a selection is not a hit; `HIT` plays the selected voice"
     );
 
-    // A `SHIFT`-click is still the mute: a mute is not a sound, so it does not audition.
+    // A `SHIFT`-click is still the mute: a mute is not a sound, and neither is a selection.
     click(
         &ctx,
         &mut panel,
@@ -1167,8 +1167,8 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
 #[test]
 fn shift_up_and_down_walk_the_selected_voice() {
     // The grid is the drum face's editor, so the arrows walk its rows the way they walk the 303's steps: `shift+down` is
-    // the row below, `shift+up` the row above, and each voice the walk lands on is heard — the preview a click on its label
-    // already gives, from the keyboard.
+    // the row below, `shift+up` the row above. A walk is a selection and nothing more — no voice sounds as it passes, because
+    // `HIT` is how a voice is heard.
     let shared = SharedState::new();
     let mut panel = drum_panel_state();
     let mut bank = PatternBank::new_empty();
@@ -1186,8 +1186,8 @@ fn shift_up_and_down_walk_the_selected_voice() {
     );
     assert_eq!(
         shared.take_audition(),
-        Some(Drum::Snare),
-        "and the voice it lands on is heard"
+        None,
+        "the walk itself makes no sound; `HIT` plays the voice"
     );
 
     assert_eq!(
@@ -1199,7 +1199,7 @@ fn shift_up_and_down_walk_the_selected_voice() {
         Drum::Kick,
         "up the grid is the previous one"
     );
-    assert_eq!(shared.take_audition(), Some(Drum::Kick));
+    assert_eq!(shared.take_audition(), None, "and going back is silent too");
 
     // Both ends clamp, the rule the 303's step border keeps: a walk past the first row or the last is the same selection,
     // not a jump to the other end of the grid.
@@ -1214,14 +1214,14 @@ fn shift_up_and_down_walk_the_selected_voice() {
     );
 
     // A held key repeats, and the walk is meant to carry on: `dispatch::presses` lets an arrow's repeat through, so holding
-    // `shift+down` walks row after row and hears each one — the kit goes past at a walking pace.
+    // `shift+down` walks row after row, silently.
     let mut repeated = Handled::Nothing;
     for press in dispatch::presses(&[key_repeat(Key::ArrowDown, Modifiers::SHIFT)]) {
         repeated = dispatch::handle(press, &mut panel, &shared, &mut bank);
     }
     assert_eq!(repeated, Handled::Selection, "a repeat is still a walk");
     assert_eq!(panel.drum.selected, Drum::Snare, "and it walks on");
-    assert_eq!(shared.take_audition(), Some(Drum::Snare));
+    assert_eq!(shared.take_audition(), None, "a held key sounds nothing");
     for _ in 0..Drum::ALL.len() + 4 {
         voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true);
     }

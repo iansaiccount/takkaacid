@@ -325,10 +325,8 @@ fn draw_grid(
                 shared.drum_mute.store(muted ^ bit, Ordering::Relaxed);
             } else {
                 state.drum.selected = drum;
-                // The label is the voice's preview key: one click selects the voice for the dials *and* hears it, so a row is
-                // something a player can identify without writing it into the bar. `HIT` plays the selected voice; this plays
-                // the one under the pointer. A `SHIFT`-click still mutes and does not audition, because a mute is not a sound.
-                shared.request_audition(drum);
+                // A selection is not a hit. The label picks the voice the dials edit; `HIT` is how it is heard, and a
+                // `SHIFT`-click is the mute — neither moves the pointer to the voice under it into a sound.
             }
         }
 
