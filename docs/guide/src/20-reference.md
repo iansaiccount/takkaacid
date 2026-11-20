@@ -38,8 +38,8 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | `R` | record (drawn, not wired yet) |
 | `left` / `right` | move the selection one step, on either face |
 | `shift+left` / `shift+right` | previous / next pattern |
-| `shift+up` / `shift+down` | note up / down a step on an acid device; on a drum device, the previous / next voice, repeating while held |
-| `up` / `down` | tempo, one BPM (and they repeat while held) |
+| `up` / `down` | note up / down a step on an acid device; on a drum device, the previous / next voice, repeating while held |
+| `shift+up` / `shift+down` | tempo, one BPM (and they repeat while held) |
 | `enter` | note on or off; on a drum device, write the selected voice into the step (`shift` accents it) |
 | `backspace` | empty the step to a rest, while editing |
 | `F1`, `shift+?`, or the `?` | the help card |

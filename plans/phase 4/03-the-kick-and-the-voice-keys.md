@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
 > branch at the pull request (`AGENTS.md`).
 
-**Goal:** the `808` kit's kick is heard on the speakers people actually have, and `shift+up` / `shift+down` walk the drum
+**Goal:** the `808` kit's kick is heard on the speakers people actually have, and `up` / `down` walk the drum
 face's selected voice up and down its grid, hearing each one it lands on.
 
 **Spec:** none. The drum machine's spec
@@ -36,7 +36,7 @@ moving air it cannot move, with no click above it to announce the hit. The kit t
 ### The drum face has no keyboard
 
 `ui::dispatch` gates the step editor off for a drum device (its editor is the grid) and then falls through to
-`shortcuts::shortcut_for`. `shift+up` / `shift+down` are the 303's note nudges, matched only in `selection::edit_key`, so on
+`shortcuts::shortcut_for`. `up` / `down` are the 303's note nudges, matched only in `selection::edit_key`, so on
 a drum face they mean nothing at all: the press is a panel key (`is_panel_key` asks `edit_key`) and resolves to
 `Handled::Nothing`. A player who has selected a voice with a click has no keyboard way to reach the next one, which is the
 gesture the face is shaped for — sixteen rows, one selection.
@@ -51,7 +51,7 @@ gesture the face is shaped for — sixteen rows, one selection.
 - **A kick must keep energy above the sub.** `tests/kits.rs` gains one test over all three kits: a kick that loses more than
   90% of its RMS to a two-pole 200 Hz high-pass is a kick nobody hears on a laptop. The defect measures 5.4%; the three fixed
   kicks measure 17.6%, 21.0% and 23.2%.
-- **`shift+up` / `shift+down` walk the drum face's selection.** `drum_panel::voice_move(key, shift) -> Option<i8>` is the one
+- **`up` / `down` walk the drum face's selection.** `drum_panel::voice_move(key, shift) -> Option<i8>` is the one
   mapping (-1 up the grid, +1 down it, `Drum::ALL`'s order, which is the rows' order). `dispatch::handle` applies it for a
   `Drums` device before the shortcuts: the selection moves with `selection::move_selection` over `Drum::ALL.len()` — so it
   **clamps**, it does not wrap — and each voice it lands on is **auditioned**, the same `request_audition` a click on the
@@ -67,21 +67,21 @@ gesture the face is shaped for — sixteen rows, one selection.
 | The `808`'s kick is replaced by `bd_fat` rather than keeping the inaudible `bd_808` sine | The kit's kick is no longer literally Sonic Pi's "808 bass drum". Putting it back is one row in `refresh.py` and a re-run; the synthesized sweep is in the wishlist. |
 | Audibility is pinned as "at least 10% of RMS survives a two-pole 200 Hz high-pass" | A genuinely deep kick that only a large speaker can move would fail the test. The number is the defect's own (5.4% before, 17–23% after) and is a threshold to argue with, not a law. |
 | The walk auditions every voice it lands on | A player who wants silent navigation hears a hit per press, and a held key walks the kit by ear (which is the point). The other way is deleting one `request_audition` line. |
-| The walk clamps rather than wraps | `shift+down` from `SHK` reaching `KICK` would be a jump across the whole grid; clamping is `move_selection`'s existing rule for the step border. |
+| The walk clamps rather than wraps | `down` from `SHK` reaching `KICK` would be a jump across the whole grid; clamping is `move_selection`'s existing rule for the step border. |
 
 ## Tests that make it safe
 
 - `tests/kits.rs::every_factory_kick_is_audible_above_the_sub_bass` — a two-pole 200 Hz high-pass helper in the test file, and
   every factory kit's `KICK` keeps **≥ 10%** of its RMS above it. Fails on today's `808` at 5.4%.
-- `tests/drum_live.rs::shift_up_and_down_walk_the_selected_voice` — a drum panel and a `PatternBank`, presses delivered through
-  `dispatch::presses` and `dispatch::handle` the way `main` delivers them: `shift+down` takes `KICK` → `SNR` and leaves
-  `Some(Drum::Snare)` in the audition slot; `shift+up` takes it back; at `KICK`, `shift+up` stays `KICK`; at `SHK`,
-  `shift+down` stays `SHK`; and the pattern's steps do not change, because a selection is not an edit.
-- `tests/drum_live.rs::a_card_refuses_the_voice_keys` — with the help card up, `shift+down` answers `Handled::Refused`, leaves
+- `tests/drum_live.rs::plain_up_and_down_walk_the_selected_voice` — a drum panel and a `PatternBank`, presses delivered through
+  `dispatch::presses` and `dispatch::handle` the way `main` delivers them: `down` takes `KICK` → `SNR` and leaves
+  `Some(Drum::Snare)` in the audition slot; `up` takes it back; at `KICK`, `up` stays `KICK`; at `SHK`,
+  `down` stays `SHK`; and the pattern's steps do not change, because a selection is not an edit.
+- `tests/drum_live.rs::a_card_refuses_the_voice_keys` — with the help card up, `down` answers `Handled::Refused`, leaves
   the selection on `KICK` and audits nothing, the `Press::Refused` rule the step editor already keeps.
-- `tests/drum_live.rs::the_voice_keys_leave_the_acid_note_alone` — on an acid device, `shift+down` still nudges the selected
+- `tests/drum_live.rs::the_voice_keys_leave_the_acid_note_alone` — on an acid device, `down` still nudges the selected
   step's note, so the drum mapping did not swallow the 303's.
-- `drum_panel`'s own unit test — `voice_move` is `-1`/`+1`/`None` for exactly `shift+up`, `shift+down` and everything else, and
+- `drum_panel`'s own unit test — `voice_move` is `-1`/`+1`/`None` for exactly `up`, `down` and everything else, and
   the two directions are the grid's up and down.
 
 ## Tasks
@@ -166,7 +166,7 @@ next round and still needs its own design.
 - [x] **Task 2 — the voice keys.** `drum_panel::voice_move(key, shift) -> Option<i8>` is the one mapping (-1 up the grid,
       +1 down it, `Drum::ALL`'s order), and `dispatch::handle`'s `DeviceKind::Drums` arm walks `panel.drum.selected` with
       `selection::move_selection` — clamped, not wrapped — and requests the audition of every voice it lands on. The acid arm is
-      the call it was, now inside `DeviceKind::Acid`. Tests: `shift_up_and_down_walk_the_selected_voice` (down to `SNR` and
+      the call it was, now inside `DeviceKind::Acid`. Tests: `plain_up_and_down_walk_the_selected_voice` (down to `SNR` and
       heard; a held key's repeat walks on and is heard; up again; clamped at both ends; the pattern untouched; the plain arrow
       still nudging the tempo without moving a voice), `a_card_refuses_the_voice_keys`,
       `the_voice_keys_leave_the_acid_note_alone` (`E` → `D#`), and `drum_panel`'s `the_voice_keys_are_shift_and_the_two_arrows`.

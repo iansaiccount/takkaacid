@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit, reviewed by a dispatched subagent
 > before it lands (this repo's rule).
 
-**Goal:** selecting a voice on the drum face — by clicking its label or by walking the grid with `shift+up` / `shift+down` —
+**Goal:** selecting a voice on the drum face — by clicking its label or by walking the grid with `up` / `down` —
 makes no sound. `HIT` plays the selected voice; nothing else does.
 
 **Spec:** none. This is the player's correction to plan 03's ruling, in their words: *"Stop the drum hits sounding when I
@@ -21,13 +21,13 @@ Two places sound a voice as a side effect of moving the selection, and both were
   the label's preview.
 
 The player has now used both and does not want them: a selection is not a hit. It also made the walk unusable as navigation —
-holding `shift+down` fired a hit per row.
+holding `down` fired a hit per row.
 
 ## The design
 
 - **The label selects and mutes; it does not sound.** A plain click sets `panel.drum.selected` (and so the dials and the
   plate); a `SHIFT`-click still toggles the mute. No `request_audition`.
-- **The walk selects; it does not sound.** `shift+up` / `shift+down` still clamp, still refuse behind a card, still leave the
+- **The walk selects; it does not sound.** `up` / `down` still clamp, still refuse behind a card, still leave the
   acid face's note nudge alone, and still repeat while held — silently.
 - **`HIT` is the one sound**, with the transport stopped or not, exactly as it is today.
 
@@ -48,7 +48,7 @@ In `rust/crates/acid-app/tests/drum_live.rs`, through `draw_panel` for the click
 - `clicking_a_voices_label_selects_without_sounding_it` (renames and inverts plan 02's test) — a plain click on `SNR`'s label
   leaves `panel.drum.selected == Drum::Snare` and `shared.take_audition() == None`; a `SHIFT`-click still mutes and still does
   not select.
-- `shift_up_and_down_walk_the_selected_voice` — keeps every assertion it has except the auditions: after `shift+down` and
+- `plain_up_and_down_walk_the_selected_voice` — keeps every assertion it has except the auditions: after `down` and
   after the held repeat, `shared.take_audition()` is `None` while the selection has moved.
 
 Mutations: put an audition back in the label click, and in the walk — each must fail a named test — beside plan 03's four

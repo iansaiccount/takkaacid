@@ -50,7 +50,7 @@ selection behind would make the border lie about what the keyboard edits.
 | Keys | Action |
 |---|---|
 | shift+left / shift+right | move the selection one step, clamped at 16 and 1 |
-| shift+up / shift+down | raise or lower the selected step's note by a semitone |
+| up / down | raise or lower the selected step's note by a semitone |
 | enter | toggle the selected step on or off |
 
 A semitone per press, chromatic, clamped to the panel's existing `-12..=24` absolute range — the same range

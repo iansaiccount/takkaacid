@@ -197,6 +197,25 @@ card line for the arrows beyond what is already there.
       `shift+up / down: note up or down` is *not* painted, which is the assertion the mutation caught. No review was dispatched:
       the branch is reviewed at the pull request now.
       Gates: `cargo test --workspace` **902**, clippy `-D warnings`, `fmt --check`.
-- [ ] Task 3 —
+- [x] **Task 3 — the book, the history and the picture.** Page 8: the octave's table row and the step-row paragraph now name
+      `up` / `down`; page 9's tempo bullet and its "holding …" line name `shift+up` / `shift+down`; page 15's drum paragraph, its
+      four editing keys and its drum editing paragraph all say the plain pair; page 20's keyboard table swaps the two arrow rows;
+      page 22's walk is **`up` / `down` walk it up and down the grid** with the rack's pair said beside it. `check.sh` gains the
+      pin `` '| `shift+up` / `shift+down` | tempo' ``, and the older pins (`walk it up and down the grid`, `strikes the selected
+      voice`, the drum-face ones) all still pass. **The history is rewritten to match**, as the round's ruling says: the phase-1
+      plans 14 and 18, the step-selection spec and phase-4 plans 03, 04, 05 and 07 read as they would have had the arrows always
+      split this way, and the two old test names they cite became `plain_up_and_down_walk_the_selected_voice`. Git history is
+      untouched; this plan's Progress is the record of the change. **`help-card.png` retaken** on `Xvfb :91 -screen 0
+      2200x1500x24` with `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-08`, emptied: `getdisplaygeometry` said `2200 1500` before the
+      launch and the window measured `1960x1340`. `xdotool key --window <id> F1` printed `XGetInputFocus returned the focused
+      window of 1` and delivered nothing on this launch, so the first grab was the face; moving the pointer inside, focusing the
+      window and pressing `F1` brought the card up, and it was grabbed with the pointer parked outside. Looked at: the two
+      swapped pairs are on it, the card still fits, and no tip or notice is in the frame. `img/README.md` records the retake and
+      the row is updated; `00-phase-4.md` lists 08 and its State line is current. `drum-face.png` is not retaken — nothing the
+      face draws moved. **Mutations: none for this task** — it is prose and a picture, and `check.sh` is the gate it can fail
+      (the pins were proved by adding them and watching them hold, and the negative guards by the transpose round's script).
+      No review was dispatched; the branch review is Task 4.
+      Gates: `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check`, `./docs/guide/check.sh` ok.
+
 
 

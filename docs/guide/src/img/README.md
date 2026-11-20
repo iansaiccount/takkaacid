@@ -42,6 +42,13 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
   outside the window for that grab too, so no tip and no notice is in either picture. The grid is empty because a first run's
   drum machine has no bank; `drum-face.png`'s step column sits on step 1, which is also a beat-framed column, and the stroke is
   full height where the frame is per cell, so the two read apart.
+- **`help-card.png` was retaken again on 2026-11-20**, in the arrows round: the card's two arrow lines changed, so the picture did.
+  `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-08`, emptied first, on `Xvfb :91 -screen 0 2200x1500x24` (`getdisplaygeometry` said
+  `2200 1500` before the app was launched; `getwindowgeometry` said `1960x1340`). `F1` opened the card with the pointer first
+  moved inside the window and the window focused — on that launch `xdotool key --window <id> F1` alone printed
+  `XGetInputFocus returned the focused window of 1` and delivered nothing, so the first grab came out as the face again. The
+  pointer was then parked outside the window and the card grabbed with no tip and no notice in it. The picture is over the
+  first-run acid face, which is what a fresh session shows; the card is the same over either face.
 
 ## The images
 
@@ -49,7 +56,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 |---|---|---|
 | `img/first-sound.png` | a first run: one device in the strip, `SONG New song` with the name in amber (the session is unsaved), pattern `A1`, the Slow Acid demo, stopped | launch, wait for the window |
 | `img/running.png` | the transport running: `PLAY` lit in the tape deck, `PAUSE` dark | `space` from the first-sound state |
-| `img/help-card.png` | the help card over the panel, with the drum face's keys on it: `left / right` on either face, the drum voice on `shift+up` / `down`, the write and its accent on `enter`, and the two lines of its own — `h` and `l` / `b` / `p` | `F1` on the drum session above, pointer parked outside the window |
+| `img/help-card.png` | the help card over the panel: the arrows as two pairs (`shift+left` / `right` the pattern, `shift+up` / `down` the tempo, then the plain `left` / `right` and `up` / `down` for the face), the drum face's keys folded into those lines, and its two own lines — `h` and `l` / `b` / `p` | `F1` on the arrows round's session (below), pointer parked outside the window |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
 | `img/banks-card.png` | the bank browser: `New song`, the five demo banks, an empty `MY BANKS` | click `BANKS` |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |

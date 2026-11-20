@@ -32,10 +32,11 @@ readable, so a muted voice can be found and unmuted by eye.
 
 `SHIFT` is the modifier throughout: a strike, an accent, a mute has a plain click and a `SHIFT`-click, never a menu.
 
-The keyboard reaches the same selection: **`shift+up` / `shift+down` walk it up and down the grid** — the rows are the
+The keyboard reaches the same selection: **`up` / `down` walk it up and down the grid** — the rows are the
 grid's own order, `KICK` at the top. The walk selects and does not sound, like a click on a label. Held down, it repeats; it
 stops at the top row and the bottom one rather than wrapping round. While a card is up the walk is spent, like the editing
-keys, because a card is modal.
+keys, because a card is modal. The row above the grid is the rack's, so `shift+up` / `shift+down` are the tempo and
+`shift+left` / `shift+right` the pattern.
 
 **`h`** strikes the selected voice — the same hit as `HIT` — so a kit can be walked with the arrows and heard with one key. A
 card does not stop it: a hit is a sound, not an edit. The other letters play nothing here — they are the 303's notes — apart

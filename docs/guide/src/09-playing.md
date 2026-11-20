@@ -13,12 +13,12 @@ while it is paused.
 The tempo readout sits in the top strip, in BPM, from **40–300**. Two things move it a BPM at a time:
 
 - the small, stacked `-` and `+` beside the tempo's number, one BPM each way.
-- `up` and `down` on the computer keyboard.
+- `shift+up` and `shift+down` on the computer keyboard.
 
 There is a third way in, and it is not a nudge: a learned controller fader throws the tempo wherever you leave it
 ([`14-midi`](14-midi.md)).
 
-Holding `up` or `down` sweeps the tempo; those two are the only keys in the panel that repeat while held.
+Holding `shift+up` or `shift+down` sweeps the tempo; the arrows are the only keys in the panel that repeat while held.
 
 
 ## Swing

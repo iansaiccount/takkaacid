@@ -67,6 +67,7 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'move the selected step' 'writes the selected voice into it' \
             '`l`, `b` and `p`' 'control is underlined on it' 'stopped or running' \
             'moves **the device on the panel**' \
+            '| `shift+up` / `shift+down` | tempo' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done

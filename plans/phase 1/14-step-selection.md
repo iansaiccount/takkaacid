@@ -396,7 +396,7 @@ a note; if a later task needs to nudge a note from elsewhere, call it rather tha
 A reviewer subagent graded the shipped work against this plan. Its findings and the human partner's rulings:
 
 - **Important 1 — the help card still said "click: note on or off".** Fixed in `ui/help.rs`: the card now reads
-  "click: select the step" / "ctrl+click: note on or off" and names the new keys (shift+left / right, shift+up /
+  "click: select the step" / "ctrl+click: note on or off" and names the new keys (shift+left / right, up /
   down, enter). `the_help_card_names_every_gesture_and_shortcut` pins those two exact lines so it cannot rot.
   This plan never listed `help.rs` in a task's files — it is on Task 4's `Modify:` list now, and the "Review Focus → tests" table points at the tests that actually exist.
 - **Important 2 — the keyboard edited behind the modal card.** Fixed: `selection::dispatch` returns the new

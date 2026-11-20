@@ -17,7 +17,7 @@ A held key keeps the note sounding; the gate closes when every mapped key is up.
 a computer key and a MIDI keyboard play the same oscillator on the device the panel is showing, and the last one pressed
 wins. A key released while a MIDI note is sounding ends that note too — one voice, one gate, no exceptions.
 On a drum device the letters play nothing — its voices belong to the grid — except `h`, which strikes the selected voice;
-`l` / `b` / `p` choose a side of that voice's filter, and `shift+up` / `shift+down` walk the grid's selection instead
+`l` / `b` / `p` choose a side of that voice's filter, and `up` / `down` walk the grid's selection instead
 ([`22-the-drum-machine`](22-the-drum-machine.md)).
 
 What you hear when you play a key is the same pitch that key would write into a step, so auditioning and editing can never
@@ -35,12 +35,12 @@ selected step instead of the voice.
 The four keys that do the editing, in the order you will meet them:
 
 - `left` / `right` move the selection one step.
-- `shift+up` / `shift+down` move the selected note up or down a step.
+- `up` / `down` move the selected note up or down a step.
 - `enter` turns the selected step on and off.
 - `backspace` empties it to a rest, while you are editing.
 
 On a drum device the same keys edit the grid, because a step there holds sixteen voices and no note: `left` / `right` move the
-selected step, `shift+up` / `shift+down` move the selected voice, `enter` writes that voice into that step and `shift+enter`
+selected step, `up` / `down` move the selected voice, `enter` writes that voice into that step and `shift+enter`
 accents it. `l` / `b` / `p` choose the low, band or high side of the selected voice's filter, and the letter that presses a
 control is underlined on it, so the face says its own keys. Nothing is written as a note, and the selection does not walk on
 after a write.

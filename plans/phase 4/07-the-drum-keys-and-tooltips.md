@@ -52,7 +52,7 @@ is in **Rulings**: `H` cannot be both `HIT` and `HP`, since the player kept `h` 
   px against a card of `662` (`ui/help.rs`, `theme::DESIGN_SIZE`), and today's `L = 38` leaves **four lines** of slack
   (`ui/help.rs::the_card_fits_inside_the_panel_at_both_scale_extremes` is the test that says so). So the drum answers are
   **folded into lines that already exist** where they can be — `left / right` becomes "move the selection, on either face",
-  `shift+up / down` gains "on a drum device, the voice above or below", `enter` gains "on a drum device, write the selected
+  `up / down` gains "on a drum device, the voice above or below", `enter` gains "on a drum device, write the selected
   voice" — and only **two** lines are added: `h: strike the selected voice (HIT)` and `l / b / p: the filter's low, band,
   high`. Five new lines would not fit, and that test would fail at every scale.
   | title | control | `what` | `shortcut` |
@@ -136,7 +136,7 @@ pattern moves.
 
 **Files:** `rust/crates/acid-app/src/ui/help.rs` (the `KEYBOARD` lines and the height), `tests/help_live.rs`.
 
-1. Fold the drum answers into the existing `left / right`, `shift+up / down` and `enter` lines, and add only the two new
+1. Fold the drum answers into the existing `left / right`, `up / down` and `enter` lines, and add only the two new
    lines (`h`, `l / b / p`) — four lines of slack exist and five new lines do not fit. Add the lines; let
    `help_content_height` follow; `the_card_fits_inside_the_panel_at_both_scale_extremes` must stay green.
 2. A live test asks for the painted lines; run — expected FAIL, then PASS.
@@ -257,7 +257,7 @@ which are plan 06's.
       Gates: `cargo test --workspace` **897**, clippy `-D warnings`, `fmt --check`.
 
 - [x] **Task 4 — the help card.** The drum answers are folded into the three lines the faces share — `left / right: move the
-      selection, on either face`, `shift+up / down: note up or down; on drums, which voice`, and
+      selection, on either face`, `up / down: note up or down; on drums, which voice`, and
       `enter: note on or off; on drums write that voice; shift accents` — and only two lines are new: `h: strike the selected
       voice (HIT)` and `l / b / p: the filter's low, band, high`. `help_content_height` follows the array (nothing hand-wrote a
       count), and `the_card_fits_inside_the_panel_at_both_scale_extremes` stays green: `L` goes 38 → 40, 634.8 design px

@@ -4,14 +4,14 @@
 > before it lands (this repo's rule).
 
 **Goal:** on a drum machine, `h` strikes the voice the dials are on — the keyboard's `HIT` — so a kit can be walked with
-`shift+up` / `shift+down` and heard with one key, without the pointer.
+`up` / `down` and heard with one key, without the pointer.
 
 **Spec:** none. It is the player's answer to "is there a shortcut for the hit?", which the harness could not give: `HIT` is a
 click only today. This plan adds the key; the rest of the face is plan 03's and plan 04's.
 
 ## What is wrong today
 
-`HIT` is a button and nothing else. `ui/dispatch`'s `Drums` arm answers `shift+up` / `shift+down` (the walk) and then falls
+`HIT` is a button and nothing else. `ui/dispatch`'s `Drums` arm answers `up` / `down` (the walk) and then falls
 through to the shortcuts, none of which is a hit; the audition keys in `ui::mod`'s `play_computer_keys` are the 303's and mean
 nothing on a drum face. So plan 04's silent selection leaves a keyboard player with no way to hear the voice they selected.
 
@@ -22,7 +22,7 @@ must make one hit rather than a burst.
 ## The design
 
 - **One mapping for the drum face's keys.** `drum_panel::FaceKey { Move(i8), Hit }` and
-  `drum_panel::face_key(key, shift) -> Option<FaceKey>` replace `voice_move`: `shift+up`/`shift+down` are `Move`,
+  `drum_panel::face_key(key, shift) -> Option<FaceKey>` replace `voice_move`: `up`/`down` are `Move`,
   `h` with no shift is `Hit`, everything else is `None`. A face's keys live in one place, so a reader asking "what does this
   face own" has one function to read.
 - **The key filter asks the face.** `dispatch::is_panel_key(key, kind, shift, ctrl)`, `dispatch::presses(events, kind)` and
@@ -56,8 +56,8 @@ two drum sentences gain the exception; page 20's keyboard table says what `h` do
 - `tests/keys.rs::the_hit_key_is_taken_on_a_drum_face_and_left_for_the_note_on_an_acid_one` — the same event through
   `dispatch::take_presses`: on a drum device it is taken out of the frame, on an acid device it is left in it for
   `play_computer_keys` to play as a note.
-- `drum_panel`'s unit test, replacing the `voice_move` one — `face_key` maps exactly `shift+up` → `Move(-1)`,
-  `shift+down` → `Move(1)`, `h` → `Hit`, and everything else (including `shift+h`) → `None`.
+- `drum_panel`'s unit test, replacing the `voice_move` one — `face_key` maps exactly `up` → `Move(-1)`,
+  `down` → `Move(1)`, `h` → `Hit`, and everything else (including `shift+h`) → `None`.
 - `dispatch`'s unit test — `is_panel_key(Key::H, …)` is true on `Drums` and false on `Acid`.
 
 Mutations: `h` mapped on the acid face too (the note is stolen), `h` returning `Move`, and the hit not auditioning — each must
@@ -97,7 +97,7 @@ for `HIT` on the 303 (it has no HIT); making the hit repeat while held; a settin
 ## Progress
 
 - [x] **Task 1 — the hit key.** `drum_panel::FaceKey { Move(i8), Hit }` and `face_key` replaced `voice_move` as the face's one
-      key mapping: `shift+up`/`shift+down` are `Move`, `h` with no shift is `Hit`, `shift+h` is nothing. `dispatch`'s
+      key mapping: `up`/`down` are `Move`, `h` with no shift is `Hit`, `shift+h` is nothing. `dispatch`'s
       `is_panel_key`, `presses` and `take_presses` now take the `DeviceKind` the panel is showing — a `match kind` written out,
       so a third machine must choose — because the same `h` is one of the 303's notes; `main` passes `showing_kind()`. The
       `Drums` arm answers `Hit` with `shared.request_audition(panel.drum.selected)` and `Handled::Hit`, and a card does not stop
