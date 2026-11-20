@@ -17,6 +17,12 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
   walk of the selection make no sound; `HIT` is how a voice is heard.
 - [`05-the-hit-key`](05-the-hit-key.md) — the keyboard's `HIT`: on a drum face `h` strikes the selected voice, and the press filter
   now asks which face is showing, because the same `h` is one of the 303's notes.
+- [`06-the-drum-step-editor`](06-the-drum-step-editor.md) — **planned, next.** The drum grid gains the 303's step editor: plain
+  `left` / `right` move a lit column, `enter` writes the selected voice into that step (silently; `shift+enter` accents), and
+  the selection does not advance on a write.
+- [`07-the-drum-keys-and-tooltips`](07-the-drum-keys-and-tooltips.md) — **planned, after 06.** The filter takes `L` / `B` / `P`,
+  each key underlines the letter that presses it (`H` on `HIT`), every drum control gets a tooltip, and the help card learns
+  the drum face's keys.
 
 **Spec:** [`docs/superpowers/specs/2026-11-18-drum-machine-design.md`](../../docs/superpowers/specs/2026-11-18-drum-machine-design.md)
 — approved in conversation on 2026-11-18. The plan argues from it; where they disagree, the spec wins and this plan is wrong.
@@ -24,11 +30,11 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
 **Gate:** unchanged from phases 1–3 — the three workspace commands, `docs/guide/check.sh` when the book moves, and a fresh
 subagent review before every commit (`AGENTS.md`).
 
-**State: complete, 2026-11-19; four rounds since.** All ten tasks are committed on `phase-4` (local only — nothing is
-pushed). The branch is the whole round: `cargo test --workspace` **870**, `cargo clippy --workspace --all-targets -- -D
-warnings`, `cargo fmt --check` and `./docs/guide/check.sh` all green at its head, and each task's own mutation run is recorded
-in the plan's `## Progress`. `SAVE_VERSION` is **11**; the rack round takes **12**. The whole-branch review's findings are in
-`handover-phase-5`.
+**State: complete, 2026-11-19; four rounds since, two planned (06, 07).** All ten tasks are committed on `phase-4` (local
+only — nothing is pushed). The branch is the whole round: `cargo test --workspace` **870**, `cargo clippy --workspace
+--all-targets -- -D warnings`, `cargo fmt --check` and `./docs/guide/check.sh` all green at its head, and each task's own
+mutation run is recorded in the plan's `## Progress`. `SAVE_VERSION` is **11**; the rack round takes **12**. The whole-branch
+review's findings are in `handover-phase-5`.
 
 **Rulings this phase rests on, and what they cost if wrong:**
 
