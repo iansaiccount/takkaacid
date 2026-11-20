@@ -4,9 +4,9 @@
 
 A second kind of device, in the same rack and on the same bar: **sixteen sample voices against the sixteen steps**, where
 the 303 has one voice against the same sixteen. Add one with `+` on the strip and pick `DRUMS`
-([`18-a-rack-of-devices`](18-a-rack-of-devices.md)); everything a rack does — the transport, the tempo, `REVERSE`, the
-transpose, the themes — it does to the drums the same way ([`05-the-three-cards`](05-the-three-cards.md) is the cards,
-[`04-the-face`](04-the-face.md) the face the two machines share).
+([`18-a-rack-of-devices`](18-a-rack-of-devices.md)); everything a rack does — the transport, the tempo, `REVERSE`, that
+device's own transpose, the themes — it does to the drums the same way ([`05-the-three-cards`](05-the-three-cards.md) is the
+cards, [`04-the-face`](04-the-face.md) the face the two machines share).
 
 ## The grid
 
@@ -119,7 +119,7 @@ A drum bank is patterns, not a song. The grooves last the session — a save sti
 
 - **No notes.** A drum machine takes no notes at all this round: no letter plays a note on it
   ([`15-keyboard`](15-keyboard.md)) — `h` strikes a voice, and nothing writes a pitch — a MIDI note on its channel is silent
-  ([`14-midi`](14-midi.md)), and `STEP` lights and toggles while writing nothing. `shift` and `up`/`down` move between its
+  ([`14-midi`](14-midi.md)), and `STEP` lights and toggles while writing nothing. `up`/`down` move between its
   voices and `left`/`right` between its steps; `enter` writes that voice into that step and `shift+enter` accents it, and no
   letter writes a note. MIDI pads and per-voice controllers are a later round.
 - **No step row, no performance row.** The grid's columns are the steps, and `OCT`, `CLEAR`, `RANDOM`, the density and the

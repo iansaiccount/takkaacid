@@ -380,7 +380,7 @@ git commit -m "feat(ui): keyboard moves the selection and transposes its note"
 | Dragging a rest brings the note in from the rest's own pitch | live test `dragging_a_rest_selects_it_and_brings_it_in` | 3 |
 | Clamped, not wrapped | `the_selection_moves_and_clamps_at_both_ends` | 1 |
 | Keyboard must not edit behind the card (round-2 fix) | `the_help_card_refuses_the_editing_keys_instead_of_passing_them_on`, and `a_press_with_the_card_away_is_ours_and_applied` for the `NotOurs` half | 4 |
-| A held key must not repeat a toggle (round-3 fix) | `ui::dispatch::tests::a_held_key_repeats_only_for_the_tempo` | 4 |
+| A held key must not repeat a toggle (round-3 fix) | `ui::dispatch::tests::only_the_arrows_repeat_out_of_the_frame` | 4 |
 | Keycap note and drag readout must not collide (round-3 fix) | `step_key::tests::a_dragged_keycap_leaves_the_pitch_to_the_readout` | 2 |
 
 ## Handoff
@@ -447,8 +447,8 @@ Round 2's deferred minors, now fixed:
   resolves each one — step editor first, then the shortcuts — and reports `Handled`. `main.rs` is now a
   three-line call. `shift_right_moves_the_selection_and_never_reaches_the_pattern` finally tests Review Focus 3
   end to end instead of leaning on `selection::dispatch` alone.
-- **Held keys no longer repeat their action.** Only the tempo nudges repeat (`repeats_allowed`), so a held
-  `Enter` cannot flip a step at frame rate and a held arrow cannot race through the bank.
+- **Held keys no longer repeat their action.** Only the arrows repeat (`repeats_allowed`), so a held
+  `Enter` cannot flip a step at frame rate and a held `shift+left` cannot race through the bank.
   `presses` reads egui's `repeat` flag, which `key_pressed` did not expose.
 - **The keycap stands back while its step is dragged.** `StepView::dragging` suppresses the centre note, leaving
   the cell's live-pitch readout as the only label; pinned by `a_dragged_keycap_leaves_the_pitch_to_the_readout`.

@@ -138,6 +138,28 @@ The three tasks are three commits. The review is of the **branch**, at the pull 
 the three tasks' Files and Interfaces blocks and `git diff` against the base, and what it finds is fixed on the branch before the
 PR opens. Nothing in this plan is pushed until that review has been acted on and the gates are green again.
 
+- [x] **Task 4 — the branch review.** One subagent read the tree at the branch tip against the plans and the book (it had no
+      shell, so it judged the tree rather than the diff — recorded, and the diff was read by the executor). Verdict **BLOCK** on
+      four Important and six Minor findings, **all actioned in this commit**, none behavioural:
+      (1) page 22's *No notes* bullet still put the voice walk behind `shift` — now the plain pair, and `check.sh` gained two
+      negative guards (`plain up/down`, `up / down: tempo by 1 BPM`) so the retired wording cannot come back;
+      (2) `dispatch::as_press`'s comment still said "only … a tempo nudge", which Task 1's Progress had claimed fixed — it had
+      not, because that edit failed and was never re-attempted; it says "one of the arrows" now, and the tempo tip's assertion
+      message says `shift + up / down`;
+      (3) phase-1 plan 18 still stated the old split in three sentences ("plain up/down keep the tempo nudges") and phase-1 plan
+      14 still said "Only the tempo nudges repeat" and cited a test name that no longer exists — both rewritten;
+      (4) `00-phase-4.md`'s plan-03 line still said `shift+up` / `shift+down` walk the voice — now plain `up` / `down`. Of the
+      Minors: plan 03's Progress said the *plain* arrow nudge the tempo (now the shifted one); `state.rs`'s two `transpose` docs
+      and three in `acid-core/src/drums.rs` still called it the rack's (they are the device's); plans 04 and 05 were the two
+      headers the policy sweep missed (both now say the branch is reviewed at the PR); and `handover-phase-5.md` — the file 00
+      calls the live handover — opened with the old 870-test gate line and "the whole-branch review is the commit that carries
+      this file", so it now carries a *Superseded for the head of the branch* note pointing at 00's State. Notes taken without
+      a change: `handover-task-2..10` state the per-commit rule but each opens with a "Superseded — kept for the record" banner,
+      so they are records, not instructions; and page 22's "the transpose" among "everything a rack does" was reworded to "that
+      device's own transpose".
+      Gates after the fixes: `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check`, `./docs/guide/check.sh` ok.
+
+
 ## Non-goals
 
 A settings switch for either arrangement; moving `left` / `right` or the pattern keys; a different repeat rate for a held walk;

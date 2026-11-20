@@ -563,7 +563,7 @@ mod tests {
         assert_eq!(Control::Pattern.tip().title, "PATTERN");
         assert!(
             Control::Tempo.tip().shortcut.is_some(),
-            "the arrows nudge it"
+            "shift + up / down nudge it"
         );
         assert!(
             Control::Pattern.tip().shortcut.is_some(),

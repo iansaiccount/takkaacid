@@ -107,7 +107,7 @@ fn as_press(event: &Event, kind: DeviceKind) -> Option<KeyPress> {
             modifiers,
             ..
         } => {
-            // A key repeats only if it is a tempo nudge; everything else acts once per real press.
+            // A key repeats only if it is one of the arrows; everything else acts once per real press.
             let allowed = !*repeat || repeats_allowed(*key);
             (allowed && is_panel_key(*key, kind, modifiers.shift, modifiers.ctrl)).then_some(
                 KeyPress {

@@ -21,7 +21,7 @@ UI state has to live in the audio/MIDI path.
 - **STEP mode** does the same and then selects the next step, wrapping from 16 to 1. It is remembered while the app
   runs but is not saved: a session should not reopen mid-edit.
 - **The arrows are swapped** (operator's ruling): plain left/right walk the steps, shift+left/right choose the pattern.
-  Up/down keep the note edit, and plain up/down keep the tempo nudges.
+  Up/down edit the note, and shift+up/down are the tempo nudges.
 - **Only the notes the computer keyboard already maps** are reachable in step mode (the home row, C..C). The MIDI path
   accepts any note and folds it into the panel's `-12..=24` range.
 - **Not in this plan:** rests typed from the keyboard, per-step velocity, a scrolling long pattern, or recording while
@@ -54,11 +54,11 @@ UI state has to live in the audio/MIDI path.
 - Test: both files' unit tests, `rust/crates/acid-app/src/ui/dispatch.rs`, `rust/crates/acid-app/tests/selection_live.rs`
 
 - [x] **Step 1: Flip the tests** — plain arrows move the selection and never touch the pattern; shift+arrows step the
-  pattern and never move the selection; up/down still edit the note; plain up/down still change the tempo.
+  pattern and never move the selection; up/down edit the note; shift+up/down change the tempo.
 - [x] **Step 2: Run them to see the old mapping fail** (`shift_turns_the_arrows_into_editing_keys`, the dispatch glue
   tests and the live selection tests all fail).
 - [x] **Step 3: Implement** — `edit_key` reads the plain arrows and `shortcut_for` reads the shifted ones, with the
-  tempo nudges kept unshifted.
+  tempo nudges on the shifted pair.
 - [x] **Step 4: Verify and commit.**
 
 ### Task 2: a note writes the selected step

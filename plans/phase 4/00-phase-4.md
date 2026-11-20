@@ -11,7 +11,7 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
 - [`02-the-drums-are-silent`](02-the-drums-are-silent.md) — the defect round after the phase: a drum device added from the picker
   had no kit, a kit refused to load because the rig's rate was never learned, and the face did not say which kit it played.
 - [`03-the-kick-and-the-voice-keys`](03-the-kick-and-the-voice-keys.md) — the `808` kit's kick was a 40 Hz sine, inaudible on a
-  small speaker, so it is replaced by an audible CC0 kick and pinned by a test; `shift+up` / `shift+down` walk the drum face's
+  small speaker, so it is replaced by an audible CC0 kick and pinned by a test; `up` / `down` walk the drum face's
   selected voice up and down the grid.
 - [`04-hit-is-the-only-sound`](04-hit-is-the-only-sound.md) — the player's correction to plan 03: a click on a voice's label and a
   walk of the selection make no sound; `HIT` is how a voice is heard.

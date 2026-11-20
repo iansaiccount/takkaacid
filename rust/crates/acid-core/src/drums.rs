@@ -277,7 +277,7 @@ struct DrumVoice {
     running: bool,
     env: Envelope,
     filter: MultimodeFilter,
-    /// The sample's read rate, `2^(semitones/12)`, from the kit's TUNE and the rack's transpose.
+    /// The sample's read rate, `2^(semitones/12)`, from the kit's TUNE and the device's transpose.
     increment: f32,
     /// The voice's cutoff with no accent on it, in hertz.
     cutoff_hz: f32,
@@ -312,7 +312,7 @@ impl DrumVoice {
     /// ramp state of their own: re-stating one rebuilds a coefficient and nothing else.
     fn shape(&mut self, voice: &KitVoice, transpose: i32) {
         // A kit's samples are decoded at the engine's own rate (task 6), so the read rate is one sample per sample plus
-        // whatever TUNE and the rack's transpose ask for.
+        // whatever TUNE and the device's transpose ask for.
         self.increment = 2f32.powf((voice.tune + transpose as f32) / 12.0);
         self.cutoff_hz = param::cutoff_hz(voice.cutoff);
         self.filter.set_kind(voice.filter);
@@ -414,7 +414,7 @@ struct DrumMachine {
     voices: [DrumVoice; Drum::ALL.len()],
     /// One bit per voice, packed by [`Kit::mute_mask`].
     mute_mask: u16,
-    /// Rack transpose in semitones, on top of each voice's own TUNE. Not saved, as the 303's is not.
+    /// The device's transpose in semitones, on top of each voice's own TUNE. Not saved, as the 303's is not.
     transpose: i32,
     /// A hit with no step under it — the face's `HIT` — served at the next render. One slot: a second request before the
     /// next block replaces the first, because a hand cannot press twice inside ten milliseconds and a queue would have to

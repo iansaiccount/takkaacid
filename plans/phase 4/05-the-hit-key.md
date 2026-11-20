@@ -1,7 +1,7 @@
 # Plan 05 — `h` strikes the selected voice
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit, reviewed by a dispatched subagent
-> before it lands (this repo's rule).
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
+> branch at the pull request (`AGENTS.md`).
 
 **Goal:** on a drum machine, `h` strikes the voice the dials are on — the keyboard's `HIT` — so a kit can be walked with
 `up` / `down` and heard with one key, without the pointer.

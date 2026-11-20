@@ -1,7 +1,7 @@
 # Plan 04 — `HIT` is the only sound a selection makes
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit, reviewed by a dispatched subagent
-> before it lands (this repo's rule).
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of the
+> branch at the pull request (`AGENTS.md`).
 
 **Goal:** selecting a voice on the drum face — by clicking its label or by walking the grid with `up` / `down` —
 makes no sound. `HIT` plays the selected voice; nothing else does.

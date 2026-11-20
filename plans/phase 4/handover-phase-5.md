@@ -17,6 +17,11 @@ only** — nothing is pushed, and the player decides when it goes up. Gates at t
 `./docs/guide/check.sh` — all green. `SAVE_VERSION` is **11** (`SavedState::kit`); the rack round takes **12**. The
 whole-branch review of the phase is the commit that carries this file; its findings are quoted at the bottom.
 
+> **Superseded for the head of the branch.** This file was written when phase 4's ten tasks were the tip. Seven rounds have
+> landed since (`02`–`09`), so the gate line above is history: `plans/phase 4/00-phase-4.md`'s **State** paragraph is the
+> current one, and its round list is the current history. The rules it states still hold; the branch review it calls done is
+> now due again at the pull request (`AGENTS.md`).
+
 ## What phase 4 shipped, in one page
 
 - **A second device kind.** `DeviceKind::{Acid, Drums}`; a `DRUMS` device has its own state, bank, ports, channel, colour and

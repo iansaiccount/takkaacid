@@ -119,8 +119,9 @@ and the book is what must not lie.
       (`.superpowers/mutate_transpose.py`): the write landing on the first device, the cell's clamp dropped, the readout printing
       a constant, and the old fan-out put back. The last one **survived the first run** — nothing changed a device's transpose
       and then fanned out — so `a_transport_change_carries_no_transpose` was written to catch it.
-      The branch review at the pull request has not happened yet (AGENTS.md: it is the branch, not the commit).
-      Gates: `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check`.
+      The branch review was taken after both tasks and its findings are recorded in plan 08's Task 4; three of them touched this
+      round's files (`state.rs`'s two transpose docs and three in `acid-core/src/drums.rs` still said the rack's) and are fixed
+      in that commit. Gates: `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check`.
 - [x] **Task 2 — the book.** Page 4: `REVERSE` is this device's direction and the transpose pair moves **the device on the
       panel**, with the readout between the keys said to be that device's and a second machine said to keep its own. Page 18's
       «what the whole rack forgets together — each device's `REVERSE` direction and the rack's transpose» is now «two things each

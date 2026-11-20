@@ -108,7 +108,7 @@ pub struct Parameters {
     pub transport: crate::device::Transport,
     /// The direction this device's line runs in — asked for, and taken at the bar line.
     pub reversed: bool,
-    /// The rack's performance transpose, on top of the saved TUNING knob. Deliberately not part of the patch.
+    /// This device's performance transpose, on top of the saved TUNING knob. Deliberately not part of the patch.
     pub transpose: i32,
 }
 
@@ -132,7 +132,7 @@ pub struct SharedState {
     pub transport: AtomicU8,
     /// A direction asked for: the engine's sequencer takes it at the bar line, so this is a request the audio thread reads.
     pub reversed: AtomicBool,
-    /// The rack's performance transpose, mirrored here like the transport. Never saved.
+    /// This device's performance transpose. Its own, never fanned out from another device, and never saved.
     pub transpose: std::sync::atomic::AtomicI32,
     /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
     /// sequencer keeps running underneath, so unmuting rejoins on the beat instead of restarting the pattern.
