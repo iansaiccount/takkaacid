@@ -142,19 +142,45 @@ fn a_typing_hand_takes_nothing_out_of_the_frame() {
     );
 }
 
-/// Only the tempo nudges repeat; a held Enter flips a step at frame rate and a held pattern arrow races the bank.
+/// A key event as egui delivers it, with the modifiers the press arrived with.
+fn shifted(key: Key, repeat: bool) -> Event {
+    Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat,
+        modifiers: Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        },
+    }
+}
+
+/// Only the arrows repeat, under either modifier: a held plain arrow walks the face's selection and a held `shift` sweeps the
+/// tempo. A held Enter flips a step at frame rate and a held pattern arrow races the bank.
 #[test]
-fn only_a_tempo_nudge_repeats_out_of_the_frame() {
-    let mut events = vec![press(Key::ArrowUp, true), press(Key::Enter, true)];
+fn only_the_arrows_repeat_out_of_the_frame() {
+    let mut events = vec![
+        shifted(Key::ArrowUp, true),
+        press(Key::Enter, true),
+        press(Key::ArrowDown, false),
+    ];
 
     assert_eq!(
         dispatch::take_presses(&mut events, DeviceKind::Acid, false),
-        vec![KeyPress {
-            key: Key::ArrowUp,
-            shift: false,
-            ctrl: false
-        }],
-        "a held arrow is a sweep; a held Enter is refused"
+        vec![
+            KeyPress {
+                key: Key::ArrowUp,
+                shift: true,
+                ctrl: false
+            },
+            KeyPress {
+                key: Key::ArrowDown,
+                shift: false,
+                ctrl: false
+            },
+        ],
+        "a held arrow sweeps or walks; a held Enter is refused"
     );
     assert_eq!(
         events,

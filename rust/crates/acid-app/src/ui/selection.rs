@@ -19,16 +19,16 @@ pub enum EditKey {
     ToggleSelected,
 }
 
-/// Shift turns the arrows into editing keys; enter toggles. Unshifted arrows keep tempo and pattern.
+/// The plain arrows edit the selected step: `left` / `right` walk the steps and `up` / `down` move its note; enter toggles.
+/// `shift` belongs to the rack — the pattern on `left` / `right` and the tempo on `up` / `down` — so nothing here takes it.
 pub fn edit_key(key: Key, shift: bool) -> Option<EditKey> {
-    // The plain arrows walk the steps, because that is what an arrow does in a step sequencer; shift reaches past
-    // the step to the pattern, and shift+up/down still edits the note. (Ruled by the operator: the old pairing put
-    // the frequent action behind a modifier.)
+    // The plain arrows are the step sequencer's, because that is what an arrow does in a step sequencer; `shift` reaches past
+    // the step to the rack, which is why the tempo is there and not here.
     match (key, shift) {
         (Key::ArrowRight, false) => Some(EditKey::SelectNext),
         (Key::ArrowLeft, false) => Some(EditKey::SelectPrev),
-        (Key::ArrowUp, true) => Some(EditKey::NoteUp),
-        (Key::ArrowDown, true) => Some(EditKey::NoteDown),
+        (Key::ArrowUp, false) => Some(EditKey::NoteUp),
+        (Key::ArrowDown, false) => Some(EditKey::NoteDown),
         (Key::Enter, _) => Some(EditKey::ToggleSelected),
         _ => None,
     }
@@ -189,18 +189,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_plain_arrows_walk_the_steps_and_shift_still_edits_the_note() {
-        // The plain arrows are the step sequencer's; shift reaches past the step to the pattern (see `shortcuts`)
-        // and keeps the note edit for up/down.
+    fn the_plain_arrows_edit_the_step_and_shift_is_the_transport() {
+        // The plain arrows are the step editor's: `left` / `right` walk the steps and `up` / `down` move the selected note.
+        // `shift` is the rack's — the pattern on `left` / `right`, the tempo on `up` / `down` (see `shortcuts`) — so this
+        // module takes no shifted arrow and the transport keeps all four.
         assert_eq!(edit_key(Key::ArrowRight, false), Some(EditKey::SelectNext));
         assert_eq!(edit_key(Key::ArrowLeft, false), Some(EditKey::SelectPrev));
-        assert_eq!(edit_key(Key::ArrowUp, true), Some(EditKey::NoteUp));
-        assert_eq!(edit_key(Key::ArrowDown, true), Some(EditKey::NoteDown));
+        assert_eq!(edit_key(Key::ArrowUp, false), Some(EditKey::NoteUp));
+        assert_eq!(edit_key(Key::ArrowDown, false), Some(EditKey::NoteDown));
         assert_eq!(edit_key(Key::Enter, false), Some(EditKey::ToggleSelected));
-        // Shift+left/right belongs to the pattern shortcut; this module must not swallow it.
         assert_eq!(edit_key(Key::ArrowRight, true), None);
         assert_eq!(edit_key(Key::ArrowLeft, true), None);
-        assert_eq!(edit_key(Key::ArrowUp, false), None);
+        assert_eq!(edit_key(Key::ArrowUp, true), None);
+        assert_eq!(edit_key(Key::ArrowDown, true), None);
     }
 
     #[test]
@@ -244,8 +245,9 @@ mod tests {
     #[test]
     fn the_help_card_refuses_the_editing_keys_instead_of_passing_them_on() {
         // Review finding 2: the card is modal for the pointer, so it must be modal for the keyboard too.
-        // A refused press is swallowed rather than handed to the shortcuts, or shift+right would quietly
-        // change the pattern behind the card.
+        // A refused press is swallowed rather than handed to the shortcuts, so a note nudge or an `enter` aimed at a card
+        // cannot edit the step behind it. The rack's own keys are not this module's, so `shift+arrows` (the pattern and the
+        // tempo) and `space` still leave it as `NotOurs` and act.
         let shared = crate::state::SharedState::new();
         let before = shared.pattern();
         let mut panel = PanelState {
@@ -255,7 +257,7 @@ mod tests {
         for (key, shift) in [
             (Key::Enter, false),
             (Key::ArrowRight, false),
-            (Key::ArrowUp, true),
+            (Key::ArrowUp, false),
         ] {
             assert_eq!(
                 dispatch(key, shift, &mut panel, &shared),

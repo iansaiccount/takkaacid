@@ -100,14 +100,13 @@ fn filter_letter(kind: FilterKind) -> char {
 
 /// What a key does on the drum face, if anything.
 ///
-/// One mapping for the face's keys: plain `left`/`right` move the step, `shift` and `up`/`down` walk the voice, `enter` writes
-/// the voice into the step (`shift` accents it), `h` strikes it, `l`/`b`/`p` choose a side of its filter, and everything else
-/// belongs to another reader — the transport, the patterns, or (on the 303's face) the notes. The same `h`, `enter` and arrows
-/// are the 303's, which is why the press filter has to be told which face is showing before it takes a press.
+/// One mapping for the face's keys: plain `left`/`right` move the step, plain `up`/`down` walk the voice, `enter` writes the
+/// voice into the step (`shift` accents it), `h` strikes it, `l`/`b`/`p` choose a side of its filter — and `shift` on either
+/// arrow pair is the rack's (the pattern on `left`/`right`, the tempo on `up`/`down`), so nothing here takes a shifted arrow.
 pub fn face_key(key: egui::Key, shift: bool) -> Option<FaceKey> {
     match (key, shift) {
-        (egui::Key::ArrowUp, true) => Some(FaceKey::MoveVoice(-1)),
-        (egui::Key::ArrowDown, true) => Some(FaceKey::MoveVoice(1)),
+        (egui::Key::ArrowUp, false) => Some(FaceKey::MoveVoice(-1)),
+        (egui::Key::ArrowDown, false) => Some(FaceKey::MoveVoice(1)),
         (egui::Key::ArrowLeft, false) => Some(FaceKey::MoveStep(-1)),
         (egui::Key::ArrowRight, false) => Some(FaceKey::MoveStep(1)),
         (egui::Key::Enter, _) => Some(FaceKey::Write { accented: shift }),
@@ -795,15 +794,14 @@ mod tests {
     #[test]
     fn the_face_keys_are_the_walk_the_step_and_the_write() {
         // One mapping for the face's keyboard. Up the grid is one row earlier in `Drum::ALL`, which is the order the rows
-        // are drawn in, so the sign and the catalogue cannot disagree; the step's arrows are the 303's plain pair, `enter`
-        // writes with shift as its accent, `h` strikes, `l`/`b`/`p` pick a side of the filter, and everything
-        // else is not this face's key.
+        // are drawn in, so the sign and the catalogue cannot disagree; the plain arrows are the face's, `enter` writes with
+        // shift as its accent, `h` strikes, `l`/`b`/`p` pick a side of the filter, and a `shift`ed arrow is the rack's.
         assert_eq!(
-            face_key(egui::Key::ArrowUp, true),
+            face_key(egui::Key::ArrowUp, false),
             Some(FaceKey::MoveVoice(-1))
         );
         assert_eq!(
-            face_key(egui::Key::ArrowDown, true),
+            face_key(egui::Key::ArrowDown, false),
             Some(FaceKey::MoveVoice(1))
         );
         assert_eq!(
@@ -838,9 +836,14 @@ mod tests {
             "the other letters are silent on this face"
         );
         assert_eq!(
-            face_key(egui::Key::ArrowUp, false),
+            face_key(egui::Key::ArrowUp, true),
             None,
-            "an unshifted up arrow is the tempo's"
+            "a shifted up arrow is the tempo's"
+        );
+        assert_eq!(
+            face_key(egui::Key::ArrowDown, true),
+            None,
+            "and so is a shifted down arrow"
         );
         assert_eq!(
             face_key(egui::Key::ArrowLeft, true),

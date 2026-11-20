@@ -413,7 +413,7 @@ fn enter_on_an_open_card_does_not_edit_the_step_behind_it() {
     for (key, shift) in [
         (Key::Enter, false),
         (Key::ArrowRight, false),
-        (Key::ArrowUp, true),
+        (Key::ArrowUp, false),
     ] {
         assert_eq!(
             dispatch::handle(
@@ -437,6 +437,22 @@ fn enter_on_an_open_card_does_not_edit_the_step_behind_it() {
     );
     assert_eq!(panel.selected, 0, "and the selection did not move");
     assert!(!panel.dirty);
+
+    // The rack is not behind the card: a shifted arrow nudges the tempo exactly as `space` stops the transport.
+    assert_eq!(
+        dispatch::handle(
+            dispatch::KeyPress {
+                key: Key::ArrowUp,
+                shift: true,
+                ctrl: false
+            },
+            &mut panel,
+            &state,
+            &mut bank
+        ),
+        dispatch::Handled::Shortcut(acid_app::ui::shortcuts::Shortcut::TempoUp),
+        "shift+up is the tempo, and a card leaves the rack working"
+    );
 
     // The shortcuts that stop the transport and close the card still reach them: refusing every key would trap a player
     // behind a card that the keyboard cannot dismiss.

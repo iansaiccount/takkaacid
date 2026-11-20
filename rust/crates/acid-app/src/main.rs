@@ -192,7 +192,7 @@ impl eframe::App for TakkaApp {
             panel_ui::dispatch::escape(&mut self.panel, self.rack.state());
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
-        // `ui::dispatch`). A held key repeats only for the tempo nudges.
+        // `ui::dispatch`). A held arrow repeats — plain ones move the face's selection, `shift`ed ones nudge the tempo.
         //
         // The presses are *taken* out of the frame, not read: a logic-only tick (a minimised window) is handed the last
         // pass's events again, and the panel repaints every 200 ms, so a reader would replay the same Space or arrow until

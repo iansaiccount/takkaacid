@@ -312,12 +312,25 @@ fn a_shifted_arrow_is_left_for_the_pattern_shortcut() {
 }
 
 #[test]
-fn shift_up_raises_the_selected_note_one_semitone() {
+fn up_raises_the_selected_note_one_semitone() {
     let shared = lit_shared();
     let mut panel = PanelState::default();
-    selection_dispatch(egui::Key::ArrowUp, true, &mut panel, &shared);
+    selection_dispatch(egui::Key::ArrowUp, false, &mut panel, &shared);
     let step = shared.pattern().steps[0];
     assert_eq!((step.pitch, step.octave_offset), (Pitch::CSharp, 0));
+}
+
+#[test]
+fn shift_up_is_the_transports_and_leaves_the_note_alone() {
+    // `shift` is the rack's: the note editor must not swallow it, or the tempo nudge behind it would never run.
+    let shared = lit_shared();
+    let mut panel = PanelState::default();
+    assert!(
+        !selection_dispatch(egui::Key::ArrowUp, true, &mut panel, &shared),
+        "shift+up belongs to the tempo"
+    );
+    let step = shared.pattern().steps[0];
+    assert_eq!((step.pitch, step.octave_offset), (Pitch::C, 0));
 }
 
 #[test]

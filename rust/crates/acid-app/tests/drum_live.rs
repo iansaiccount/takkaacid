@@ -82,7 +82,7 @@ fn key_press(key: Key, modifiers: Modifiers) -> Event {
 }
 
 /// The same press, flagged as the repeat a held key sends: `dispatch::presses` lets an arrow's repeat through, and a held
-/// `shift+down` is meant to keep walking the grid.
+/// `down` is meant to keep walking the grid.
 fn key_repeat(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
@@ -1288,10 +1288,10 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
 }
 
 #[test]
-fn shift_up_and_down_walk_the_selected_voice() {
-    // The grid is the drum face's editor, so the arrows walk its rows the way they walk the 303's steps: `shift+down` is
-    // the row below, `shift+up` the row above. A walk is a selection and nothing more — no voice sounds as it passes, because
-    // `HIT` is how a voice is heard.
+fn plain_up_and_down_walk_the_selected_voice() {
+    // The grid is the drum face's editor, so the arrows walk its rows the way they walk the 303's steps: `down` is the row
+    // below, `up` the row above. A walk is a selection and nothing more — no voice sounds as it passes, because `HIT` is how a
+    // voice is heard.
     let shared = SharedState::new();
     let mut panel = drum_panel_state();
     let mut bank = PatternBank::new_empty();
@@ -1299,7 +1299,7 @@ fn shift_up_and_down_walk_the_selected_voice() {
     shared.take_audition();
 
     assert_eq!(
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true),
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, false),
         Handled::Selection
     );
     assert_eq!(
@@ -1314,7 +1314,7 @@ fn shift_up_and_down_walk_the_selected_voice() {
     );
 
     assert_eq!(
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, false),
         Handled::Selection
     );
     assert_eq!(
@@ -1327,7 +1327,7 @@ fn shift_up_and_down_walk_the_selected_voice() {
     // Both ends clamp, the rule the 303's step border keeps: a walk past the first row or the last is the same selection,
     // not a jump to the other end of the grid.
     assert_eq!(
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, false),
         Handled::Selection
     );
     assert_eq!(
@@ -1337,10 +1337,10 @@ fn shift_up_and_down_walk_the_selected_voice() {
     );
 
     // A held key repeats, and the walk is meant to carry on: `dispatch::presses` lets an arrow's repeat through, so holding
-    // `shift+down` walks row after row, silently.
+    // `down` walks row after row, silently.
     let mut repeated = Handled::Nothing;
     for press in dispatch::presses(
-        &[key_repeat(Key::ArrowDown, Modifiers::SHIFT)],
+        &[key_repeat(Key::ArrowDown, Modifiers::default())],
         panel.showing_kind(),
     ) {
         repeated = dispatch::handle(press, &mut panel, &shared, &mut bank);
@@ -1349,7 +1349,7 @@ fn shift_up_and_down_walk_the_selected_voice() {
     assert_eq!(panel.drum.selected, Drum::Snare, "and it walks on");
     assert_eq!(shared.take_audition(), None, "a held key sounds nothing");
     for _ in 0..Drum::ALL.len() + 4 {
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true);
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, false);
     }
     assert_eq!(
         panel.drum.selected,
@@ -1357,12 +1357,12 @@ fn shift_up_and_down_walk_the_selected_voice() {
         "and the bottom row is the bottom"
     );
 
-    // A selection is not an edit, and the plain arrows still belong to the tempo.
+    // A selection is not an edit, and the shifted arrows are the tempo's.
     assert_eq!(shared.pattern(), pattern, "no step changed");
     assert_eq!(
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, false),
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
         Handled::Shortcut(Shortcut::TempoUp),
-        "unshifted arrows are still the tempo's, and they moved no voice"
+        "shift+up is the tempo, and it moved no voice"
     );
     assert_eq!(
         panel.drum.selected,
@@ -1382,7 +1382,7 @@ fn a_card_refuses_the_voice_keys() {
     shared.take_audition();
 
     assert_eq!(
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true),
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, false),
         Handled::Refused,
         "the help card is up"
     );
@@ -1392,6 +1392,14 @@ fn a_card_refuses_the_voice_keys() {
         "a refused press moves nothing"
     );
     assert_eq!(shared.take_audition(), None, "and sounds nothing");
+
+    // The rack is not behind the card, so the tempo still nudges, exactly as `space` still stops the transport.
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
+        Handled::Shortcut(Shortcut::TempoUp),
+        "a shifted arrow is the rack's, and the card leaves it working"
+    );
+    assert_eq!(panel.drum.selected, Drum::Kick, "and it walks no voice");
 
     // The filter's letters are the face's edits too, so the card is modal for them as well: the voice under it must not
     // change. `B` is the side a fresh voice does not have, so a write would show.
@@ -1410,15 +1418,15 @@ fn a_card_refuses_the_voice_keys() {
 
 #[test]
 fn the_voice_keys_leave_the_acid_note_alone() {
-    // The drum face owns `shift+up`/`shift+down` for its rows and the 303 owns the same two keys for the selected note. One
-    // mapping must not swallow the other: this is the pairing that proves the drum arm is the drum face's only.
+    // The two faces read the same keys differently: plain `up`/`down` move the acid note and, on the drum face, the voice;
+    // `shift+up`/`shift+down` are the rack's tempo on both. One mapping must not swallow the other.
     let shared = SharedState::new();
     shared.set_step(0, Step::note(Pitch::E, 0));
     let mut panel = acid_panel_state();
     let mut bank = PatternBank::new_empty();
 
     assert_eq!(
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, true),
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowDown, false),
         Handled::Selection
     );
     let nudged = shared.pattern().steps[0];
@@ -1426,12 +1434,23 @@ fn the_voice_keys_leave_the_acid_note_alone() {
     assert_eq!(
         (nudged.pitch, nudged.octave_offset),
         (Pitch::DSharp, 0),
-        "shift+down on an acid face still moves the note down a semitone"
+        "down on an acid face moves the note down a semitone"
     );
     assert_eq!(
         panel.drum.selected,
         Drum::Kick,
         "and it moved no drum voice"
+    );
+    assert_eq!(
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
+        Handled::Shortcut(Shortcut::TempoUp),
+        "shift+up is the tempo on an acid face too"
+    );
+    let after = shared.pattern().steps[0];
+    assert_eq!(
+        (after.pitch, after.octave_offset),
+        (Pitch::DSharp, 0),
+        "and the tempo moved no note"
     );
 }
 
@@ -1560,9 +1579,9 @@ fn the_arrows_move_the_selected_step_on_a_drum_face() {
         "a step move is not a voice move"
     );
     assert_eq!(shared.pattern(), pattern, "and not an edit");
-    // The unshifted up and down arrows are still the tempo's, and they move no step.
+    // The shifted arrows are the tempo's, and they move no step.
     assert_eq!(
-        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, false),
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
         Handled::Shortcut(Shortcut::TempoUp)
     );
     assert_eq!(panel.selected, STEPS_PER_PATTERN - 1);

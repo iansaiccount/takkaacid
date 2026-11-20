@@ -1,9 +1,9 @@
 //! Keyboard dispatch: which presses the panel acts on, and how each one is resolved.
 //!
-//! The order is the point. The step editor sees a press first, so shift+arrows never reach the transport and
-//! pattern shortcuts that act on the same four keys; and a press the step editor refuses while the help card
-//! is up is spent, so a modal card cannot be edited behind. Both rules live here rather than in `main.rs`
-//! because `main.rs` is a binary and cannot be tested.
+//! The order is the point. A face sees a press first, so its own keys are decided before the transport's, and a press the
+//! step editor refuses while a help card is up is spent, so a modal card cannot be edited behind — while the rack's keys,
+//! `shift+arrows` among them, still act. Both rules live here rather than in `main.rs` because `main.rs` is a binary and
+//! cannot be tested.
 
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
@@ -35,6 +35,7 @@ pub enum Handled {
     Shortcut(shortcuts::Shortcut),
     /// A face's own key, refused because a card is modal: the step editor's, or the drum face's walk, step move, write and
     /// filter.
+    /// The rack's keys are not a face's, so `shift+arrows` (the pattern and the tempo) and `space` still act behind a card.
     Refused,
     /// A drum voice was struck — `HIT`'s key. Nothing changed, and the press is spent.
     Hit,
@@ -44,8 +45,9 @@ pub enum Handled {
     Rack,
 }
 
-/// Whether holding the key may repeat its action: only the tempo nudges, where a held key is a sweep. A held
-/// Enter would flip a step at frame rate and a held arrow would race through the patterns.
+/// Whether holding the key may repeat its action: only the arrows, which walk or sweep while held — plain ones move the face's
+/// selection, `shift`ed ones nudge the tempo. A held Enter would flip a step at frame rate and a held `shift+left` would race
+/// through the patterns.
 fn repeats_allowed(key: Key) -> bool {
     matches!(key, Key::ArrowUp | Key::ArrowDown)
 }
@@ -137,11 +139,11 @@ pub fn handle(
         panel.device_request = Some(crate::device::Request::Select(index));
         return Handled::Rack;
     }
-    // The drum face owns its own keys: `shift` and `up`/`down` walk the voice, plain `left`/`right` move the step, `enter`
-    // writes the selected voice into that step (`shift` accents it), `h` strikes it without writing, and `l`/`b`/`p` choose a
-    // side of the selected voice's filter. The 303's step editor
-    // is not asked, because a drum face has no step row or note to edit. The transport and pattern shortcuts below are both
-    // machines' — one drum voice does not make the deck another deck — so only a face's own keys are decided here.
+    // The drum face owns its own keys: plain `left`/`right` move the step and `up`/`down` walk the voice, `enter` writes the
+    // selected voice into that step (`shift` accents it), `h` strikes it without writing, and `l`/`b`/`p` choose a side of the
+    // selected voice's filter. The 303's step editor is not asked, because a drum face has no step row or note to edit. The
+    // transport and pattern shortcuts below are both machines' — one drum voice does not make the deck another deck — so only a
+    // face's own keys are decided here.
     match panel.showing_kind() {
         DeviceKind::Acid => match selection::dispatch(press.key, press.shift, panel, shared) {
             selection::Press::Applied => {
@@ -161,8 +163,8 @@ pub fn handle(
                 }
                 match face {
                     drum_panel::FaceKey::MoveVoice(delta) => {
-                        // `move_selection` clamps at both ends, so `shift+up` on the first row stays on it rather than
-                        // wrapping to the last — the same rule the 303's step border keeps.
+                        // `move_selection` clamps at both ends, so `up` on the first row stays on it rather than wrapping to
+                        // the last — the same rule the 303's step border keeps.
                         let walked = selection::move_selection(
                             panel.drum.selected.index(),
                             delta,
@@ -679,18 +681,25 @@ mod tests {
     }
 
     #[test]
-    fn a_held_key_repeats_only_for_the_tempo() {
-        // A held Enter used to toggle the step at frame rate; a held pattern arrow raced through the bank.
+    fn only_the_arrows_repeat_out_of_the_frame() {
+        // A held Enter would flip a step at frame rate and a held `shift+left` would race through the bank. The arrows are
+        // the one pair that walks or sweeps while held, under either modifier: plain ones move the face's selection.
         let events = vec![
             key_event(Key::Enter, false, true),
             key_event(Key::ArrowUp, false, true),
+            key_event(Key::ArrowDown, true, true),
             key_event(Key::ArrowRight, false, true),
+            key_event(Key::ArrowRight, true, true),
         ];
-        let pressed: Vec<Key> = presses(&events, DeviceKind::Acid)
+        let pressed: Vec<(Key, bool)> = presses(&events, DeviceKind::Acid)
             .iter()
-            .map(|p| p.key)
+            .map(|p| (p.key, p.shift))
             .collect();
-        assert_eq!(pressed, vec![Key::ArrowUp], "only the tempo nudge repeats");
+        assert_eq!(
+            pressed,
+            vec![(Key::ArrowUp, false), (Key::ArrowDown, true)],
+            "only the arrows repeat, and the shift travels with the one that had it"
+        );
     }
 
     #[test]
@@ -738,7 +747,7 @@ mod tests {
         for (key, shift) in [
             (Key::Enter, false),
             (Key::ArrowRight, false),
-            (Key::ArrowUp, true),
+            (Key::ArrowUp, false),
         ] {
             assert_eq!(
                 handle(
@@ -771,6 +780,22 @@ mod tests {
                 &mut bank
             ),
             Handled::Shortcut(shortcuts::Shortcut::PlayStop)
+        );
+
+        // The rack's keys are not the face's, so the card leaves them working: a shifted arrow nudges the tempo exactly as
+        // `space` stops the transport.
+        assert_eq!(
+            handle(
+                KeyPress {
+                    key: Key::ArrowUp,
+                    shift: true,
+                    ctrl: false
+                },
+                &mut panel,
+                &shared,
+                &mut bank
+            ),
+            Handled::Shortcut(shortcuts::Shortcut::TempoUp)
         );
     }
 
