@@ -256,5 +256,28 @@ which are plan 06's.
       this commit — `check.sh` does not pin it, so the gate stays green, but the push depends on Task 5, which deletes it.
       Gates: `cargo test --workspace` **897**, clippy `-D warnings`, `fmt --check`.
 
-- [ ] Task 4 —
+- [x] **Task 4 — the help card.** The drum answers are folded into the three lines the faces share — `left / right: move the
+      selection, on either face`, `shift+up / down: note up or down; on drums, which voice`, and
+      `enter: note on or off; on drums write that voice; shift accents` — and only two lines are new: `h: strike the selected
+      voice (HIT)` and `l / b / p: the filter's low, band, high`. `help_content_height` follows the array (nothing hand-wrote a
+      count), and `the_card_fits_inside_the_panel_at_both_scale_extremes` stays green: `L` goes 38 → 40, 634.8 design px
+      against a card of 662 at 1.0x, 27.2 px of slack. Tests: `help_live::the_help_card_knows_the_drum_face` (the five painted
+      lines, through `draw_panel`) and `help_live::the_painted_card_stays_inside_its_rect_at_every_scale` (new: the card
+      painted at 0.65x, 1.0x and 1.6x with every line it draws inside `card_rect`, because the budget test measures the
+      formula and the card is drawn from galley heights the formula only assumes). **Mutations: 4 of 4 caught**
+      (`.superpowers/mutate_help.py`): the `h` line removed, the shared selection line put back as it was, four lines too many
+      (caught by both card tests), and the drum write losing its accent clause.
+      **Review: PASS on three Minors and two notes, all actioned.** (1) The card never said `shift+enter` accents the drum
+      write — the only accent line on it was the pointer's `shift+click` — so the `enter` line now carries `; shift accents`
+      (63 chars, inside the card's 64) and a mutation proves it. (2) The plan's folded copy was shortened and the shorter line
+      read as the voice's pitch: `on drums, the voice` is now `on drums, which voice`, and this line records the change from
+      the plan's "on a drum device, the voice above or below" — the plan's words do not fit 64 characters, so the card's copy
+      is a ruling, not a slip. (3) The budget test measures the formula rather than the paint, and this round halved the
+      slack; that is the new painted-extent test above. Of the notes: the words-only live test collects every text shape in the
+      frame, so it proves the *frame* painted the words, not that the card did — the needles are unique to `help.rs` today and
+      the new geometry test pins the card's own lines to its rect, which closes it in practice; and the two comments in the
+      array no longer cite a test by name. **The book is behind on `l`/`b`/`p` (page 22's "the rest of the letters stay silent
+      here") while this card tells the player they work**, so the push still depends on Task 5.
+      Gates: `cargo test --workspace` **899**, clippy `-D warnings`, `fmt --check`.
+
 - [ ] Task 5 —

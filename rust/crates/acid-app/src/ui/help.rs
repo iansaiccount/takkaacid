@@ -31,11 +31,16 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "SPACE: play or pause, same as PLAY / PAUSE",
                 "shift+left / right: previous or next pattern",
                 "up / down: tempo by 1 BPM",
-                "left / right: move the selection",
+                // The keys the two faces share are one line each, with the drum face's answer folded in: five new lines do not
+                // fit the card, so the drum face adds two of its own.
+                "left / right: move the selection, on either face",
                 "STEP: key down writes, key up walks on",
                 "backspace: rest, shift+note: write where you are",
-                "shift+up / down: note up or down",
-                "enter: note on or off",
+                "shift+up / down: note up or down; on drums, which voice",
+                "enter: note on or off; on drums write that voice; shift accents",
+                // The drum face's own two keys: the hit and the filter's three letters.
+                "h: strike the selected voice (HIT)",
+                "l / b / p: the filter's low, band, high",
                 "F1 or shift+?: this card, F2: settings, F3: the device card",
                 "F3 then COLOUR: a device's face repaints in amber",
                 "Ctrl+1..4: pick the device the panel shows",
