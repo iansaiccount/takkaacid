@@ -714,6 +714,44 @@ fn factory_kits_are_three_kits_of_sixteen_audible_voices() {
     }
 }
 
+/// The share of a sample's RMS that survives a two-pole high-pass at `hz`: how much of the hit a speaker that cannot move
+/// `hz` still has to work with. Two one-pole sections, because a kick is judged by the top of its body, not by one pole's
+/// gentle slope.
+fn share_above(samples: &[f32], rate: f32, hz: f32) -> f32 {
+    let rc = 1.0 / (std::f32::consts::TAU * hz);
+    let a = rc / (rc + 1.0 / rate);
+    let mut filtered = samples.to_vec();
+    for _ in 0..2 {
+        let (mut previous_in, mut previous_out) = (0.0, 0.0);
+        for value in &mut filtered {
+            let input = *value;
+            previous_out = a * (previous_out + input - previous_in);
+            previous_in = input;
+            *value = previous_out;
+        }
+    }
+    acid_core::analysis::rms(&filtered) / acid_core::analysis::rms(samples)
+}
+
+#[test]
+fn every_factory_kick_is_audible_above_the_sub_bass() {
+    // A kick's fundamental sits below what a laptop, a monitor and a phone can move, so what a player hears of one is its
+    // attack and the top of its body. This is the defect it pins: the `808`'s kick was a 40 Hz sine with only 5.4% of its
+    // RMS above 200 Hz, so on anything smaller than a subwoofer it was silent — reported as "the sample is missing". The
+    // three kicks measure 5.4% before this round, 17.6% (the 909's) and 23.2% (the acoustic), and 21.0% after it.
+    let rate = 48_000.0;
+    for kit in factory_kits(rate) {
+        let kick = &kit.voices[Drum::Kick.index()].sample;
+        let share = share_above(kick, rate, 200.0);
+        assert!(
+            share >= 0.10,
+            "{}: the kick keeps only {:.1}% of its level above 200 Hz, which a small speaker will not sound",
+            kit.name,
+            share * 100.0
+        );
+    }
+}
+
 #[test]
 fn every_factory_voice_plays_the_file_named_after_it() {
     // The compiled-in tables are positional: row `Drum::index()` *is* that voice, and the file name in each row is the only

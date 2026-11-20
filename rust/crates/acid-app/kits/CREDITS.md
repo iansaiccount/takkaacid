@@ -44,7 +44,7 @@ A drum machine kit, long and dark. The kick, snare, hats and electro voices are 
 
 | file | voice | recording | source | licence |
 | --- | --- | --- | --- | --- |
-| `808/KICK.wav` | KICK | 808 bass drum | <https://raw.githubusercontent.com/smpldsnds/sonic-pi-samples/main/samples/bd_808.ogg> | CC0 (Sonic Pi's sample set) |
+| `808/KICK.wav` | KICK | fat bass drum | <https://raw.githubusercontent.com/smpldsnds/sonic-pi-samples/main/samples/bd_fat.ogg> | CC0 (Sonic Pi's sample set) |
 | `808/SNR.wav` | SNR | snare drum | <https://raw.githubusercontent.com/smpldsnds/sonic-pi-samples/main/samples/sn_dolf.ogg> | CC0 (Sonic Pi's sample set) |
 | `808/RIM.wav` | RIM | electro tick | <https://raw.githubusercontent.com/smpldsnds/sonic-pi-samples/main/samples/elec_tick.ogg> | CC0 (Sonic Pi's sample set) |
 | `808/CLAP.wav` | CLAP | hand clap | <https://raw.githubusercontent.com/smpldsnds/sonic-pi-samples/main/samples/perc_snap2.ogg> | CC0 (Sonic Pi's sample set) |

@@ -97,6 +97,21 @@ What would have to move: `load_kit_now` grows the one thing it is missing — wh
 rate-change arm publishes with `set_kit` (the edit path, which keeps the mask) and leaves the first load on `adopt_kit`. It
 is `main`'s, which has no test, so paying it means the rate-change arm leaving `main` for a function a test can call.
 
+### A synthesized 808 kick, rather than a recording of one
+
+**What it would do.** Give the `808` kit a kick built the way the machine built it: a pitch-swept sine (about 120 Hz down to
+50 Hz in 40 ms) with a short click on top, peak-normalised and faded like every other file. It keeps an 808's pitch *and* its
+attack, which none of the kicks auditioned from Sonic Pi's set has in both at once (VCSL's bass drums were not auditioned).
+
+**Why not now.** The `808`'s kick was a 40 Hz sine nobody could hear (plan 03, `plans/phase 4/03-the-kick-and-the-voice-keys.md`);
+`bd_fat` fixed the report with a recording, which is the smaller change and keeps `CREDITS.md`'s claim true — every file in
+`kits/` is a recording from Sonic Pi's set or VCSL, and the page says there are two collections. A synthesized file is a third
+provenance kind.
+
+**What would have to move.** `refresh.py` grows one branch that writes a voice from code instead of fetching it, and the credits
+generator learns to print "synthesized by this script" for that row with the sweep's numbers beside it.
+`every_factory_kick_is_audible_above_the_sub_bass` in `tests/kits.rs` already holds whatever lands.
+
 ### The drum machine's gain, and the snap it cannot take
 
 `Engine::set_volume` jumps its smoother when nothing is playing and the drum machine's gain always ramps

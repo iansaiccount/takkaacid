@@ -66,7 +66,9 @@ KITS = {
         ("vcsl", "Idiophones/Struck Idiophones/Shaker, Small/Mid_Shaker_Slap_rr1.wav", "Small shaker, slap"),
     ],
     "808": [
-        ("sp", "bd_808", "808 bass drum"),
+        # `bd_808` is a 40 Hz sine with almost nothing above it: on any speaker smaller than a subwoofer the kit's kick
+        # was silent (5.4% of its RMS above 200 Hz). `bd_fat` keeps the pitch of a drum machine kick and has an attack.
+        ("sp", "bd_fat", "fat bass drum"),
         ("sp", "sn_dolf", "snare drum"),
         ("sp", "elec_tick", "electro tick"),
         ("sp", "perc_snap2", "hand clap"),
