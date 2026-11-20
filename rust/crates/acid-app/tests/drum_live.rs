@@ -1727,3 +1727,143 @@ fn a_write_disarms_a_pending_clear() {
         "a write makes a pending CLEAR stale"
     );
 }
+
+/// Every line segment the frame painted, with the stroke it was drawn in: an underline is a shape, not a font style.
+fn lines(output: &FullOutput) -> Vec<(Pos2, Pos2, egui::Stroke)> {
+    fn walk(shape: &Shape, out: &mut Vec<(Pos2, Pos2, egui::Stroke)>) {
+        match shape {
+            Shape::LineSegment { points, stroke } => out.push((points[0], points[1], *stroke)),
+            Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
+#[test]
+fn the_hit_and_the_filter_carry_underlines() {
+    // The letter that presses a key is underlined on it, so the face's keyboard can be learned by eye. The mark is an egui
+    // line in the palette's ink — not a glyph, and not a literal colour — and it sits under that one glyph, which is what
+    // makes it the mnemonic rather than a line across the key.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = drum_panel_state();
+    let l = layout(screen());
+    let s = scale(screen());
+    let painted = lines(&paint(&ctx, &mut panel, &shared));
+    let palette = theme::palette(Scheme::Black);
+    // The selected voice's own side is the lit one, so the three segments do not all print in the same ink.
+    let lit = shared.kit().voices[panel.drum.selected.index()].filter;
+
+    // The mark the frame paints under the `letter` of `label`, if its glyph's own box has one in `ink`: nothing else in the
+    // frame satisfies the box, which is what makes the mark the mnemonic rather than a line that happens to be there.
+    let under = |painted: &[(Pos2, Pos2, egui::Stroke)],
+                 rect: Rect,
+                 label: &str,
+                 letter: char,
+                 font: &egui::FontId,
+                 ink: egui::Color32| {
+        let size = ctx.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(label.to_string(), font.clone(), egui::Color32::PLACEHOLDER)
+                .rect
+                .size()
+        });
+        let text = Rect::from_center_size(rect.center(), size);
+        // The glyph's own box, measured by the font that draws it: everything before the letter, then the letter.
+        let (from, to) = ctx.fonts_mut(|fonts| {
+            let mut width = |text: &str| {
+                fonts
+                    .layout_no_wrap(text.to_string(), font.clone(), egui::Color32::PLACEHOLDER)
+                    .rect
+                    .width()
+            };
+            let start = label
+                .find(letter)
+                .expect("the label prints the letter it is pressed by");
+            let end = start + letter.len_utf8();
+            (
+                width(&label[..start]),
+                width(&label[..start]) + width(&label[start..end]),
+            )
+        });
+        painted
+            .iter()
+            .find(|(start, end, stroke)| {
+                stroke.color == ink
+                    && (start.y - end.y).abs() < 0.01
+                    && text.y_range().contains(start.y)
+                    && (start.x.min(end.x) - (text.left() + from)).abs() < 1.0
+                    && (start.x.max(end.x) - (text.left() + to)).abs() < 1.0
+            })
+            .map(|(start, end, _)| (*start, *end))
+    };
+
+    let hit = drum_panel::key_cell(&l, DrumKey::Hit);
+    let mut cases = vec![(
+        hit,
+        "HIT",
+        'H',
+        acid_app::ui::transport::key_font(hit),
+        palette.silkscreen,
+        theme::palette(Scheme::ChoirPastel).silkscreen,
+    )];
+    // The letter each segment presses is stated here rather than read off the label: `HP` prints an `H` its mark must not
+    // underline, so a test that took the head of the label would agree with the very bug this pins.
+    for (kind, letter) in [
+        (FilterKind::Low, 'L'),
+        (FilterKind::Band, 'B'),
+        (FilterKind::High, 'P'),
+    ] {
+        cases.push((
+            drum_panel::filter_cell(&l, kind),
+            kind.label(),
+            letter,
+            theme::legend(11.0 * s),
+            if kind == lit {
+                palette.lit_ink
+            } else {
+                palette.silkscreen
+            },
+            if kind == lit {
+                theme::palette(Scheme::ChoirPastel).lit_ink
+            } else {
+                theme::palette(Scheme::ChoirPastel).silkscreen
+            },
+        ));
+    }
+
+    for (rect, label, letter, font, ink, _) in &cases {
+        let (start, end) =
+            under(&painted, *rect, label, *letter, font, *ink).unwrap_or_else(|| {
+                panic!(
+                    "{label}'s {letter} is not underlined under its own glyph; painted: {painted:?}"
+                )
+            });
+        assert!(
+            rect.contains_rect(Rect::from_points(&[start, end]).expand(1.0)),
+            "{label}'s underline escapes its key: {start:?}-{end:?} in {rect:?}"
+        );
+    }
+
+    // The same marks in the other scheme, looked for in that scheme's own ink. A literal copy of the black scheme's ink
+    // passes the loop above and fails here — which is the check, because the whole frame is full of other lines (the tempo
+    // stepper's `-` and `+`) and an `any line in the palette` walk would pass with no underline at all.
+    panel.scheme = Scheme::ChoirPastel;
+    let light = lines(&paint(&ctx, &mut panel, &shared));
+    let light_palette = theme::palette(Scheme::ChoirPastel);
+    assert_ne!(
+        light_palette.silkscreen, palette.silkscreen,
+        "the two schemes must paint different ink for this to prove anything"
+    );
+    for (rect, label, letter, font, _, light_ink) in &cases {
+        assert!(
+            under(&light, *rect, label, *letter, font, *light_ink).is_some(),
+            "{label}'s {letter} does not follow the face's scheme; painted: {light:?}"
+        );
+    }
+}

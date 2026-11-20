@@ -200,7 +200,34 @@ which are plan 06's.
       while in the file. The deferral of the book is deliberate and stale at three sentences — page 22's "the rest of the
       letters stay silent here", page 15's "the letters are silent this phase", and page 20's keyboard table — and **the push
       depends on Task 5**, which owns those pages. Gates: `cargo test --workspace` **893**, clippy `-D warnings`, `fmt --check`.
-- [ ] Task 2 —
+- [x] **Task 2 — the underlines.** `ui::text::with_mnemonic` paints a centred label and one `1 * scale` line under one glyph,
+      in the ink it is given; `transport_button` grew `mnemonic: Option<char>` (its four callers pass `None` except `HIT`, whose
+      `H` is marked) and the filter's three segments are painted by the same helper. The line's weight and its drop below the
+      text follow the font's own point size against the legend's 13 px: one design pixel at 1.0x for `HIT`, a lighter mark on
+      the 11 px segment captions. The letter and the key that presses it are **one table** (`FILTER_KEYS`), `face_key`'s filter
+      arm and the printed letter both derived from it, because two matches answering one question is the drift this round is
+      about: the first cut took the label's head, and `HP`'s head is `H` — `HIT`'s key. The unit test caught it before the
+      picture did, which is why `filter_letter` exists as a mapping rather than a `label().chars().next()`.
+      Tests: `drum_live::the_hit_and_the_filter_carry_underlines` (a line under `H` on `HIT` and under `L`/`B`/`P` on the
+      three segments, each inside its glyph's own advance box and inside its key, in the palette's ink in **both** schemes) and
+      `drum_panel::tests::the_filter_letters_are_the_keys_that_press_them` (the pair, both ways, and that each label prints
+      the letter under it). **Mutations: 3 of 3 caught** (`.superpowers/mutate_underlines.py`): a mark in a literal colour, no
+      mark at all, and a mark spanning the whole label instead of the glyph. Task 1's four were re-run after the table landed
+      and still catch: 4 of 4.
+      **Review: BLOCK on one Important and two Minors, all actioned, plus four notes.** The Important was that the test's
+      second-scheme half was vacuous — `any line in the frame in the light ink` is satisfied by the tempo stepper's `-`/`+`
+      bars, so the literal-colour mutation survived. It now re-runs the per-case glyph-box search against the light frame in
+      that scheme's own ink, which is what catches the mutation above (proven by re-running it). Of the Minors: the
+      `font.size / 13.0` weight was documented as "one pixel at 1.0x whatever the control", which is false for the 11 px
+      segment caption — the doc now says what the arithmetic does, and the picture was checked at the guide's size before the
+      claim stood; and the letter↔key pair was a second hand-kept mapping beside `face_key`, so both now derive from
+      `FILTER_KEYS` and the walk test's three duplicate assertions are one pointer to the pairing test. Of the notes: the test
+      measures the glyph with egui's own fonts, independent of the helper's code but not of its method (recorded — the risk it
+      pins is *which* glyph, which is the `HP` bug above); `with_mnemonic` now `debug_assert!`s when a label does not print its
+      letter; `text::fit` measures through the new `advance` so there is one spelling; and the test slices the letter with
+      `len_utf8` like the helper. The book is still Task 5's — the same three sentences Task 1 recorded.
+      Gates: `cargo test --workspace` **895**, clippy `-D warnings`, `fmt --check`.
+
 - [ ] Task 3 —
 - [ ] Task 4 —
 - [ ] Task 5 —

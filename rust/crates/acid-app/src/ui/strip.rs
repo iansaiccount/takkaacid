@@ -165,6 +165,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &
             "M",
             cell.muted,
             p,
+            None,
         );
         tips::hover(&mute, state.tooltips, tips::Control::DeviceMute);
         if mute.clicked() {

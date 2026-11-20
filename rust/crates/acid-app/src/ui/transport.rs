@@ -125,10 +125,12 @@ pub fn cell(area: Rect, which: Cell) -> Rect {
 /// A key on one of the cards. Every card is painted in the black scheme whatever the face behind it does, so this is the one
 /// place that says so — a card that took the face's palette would go amber over an amber device.
 pub fn card_button(ui: &mut egui::Ui, id: &str, rect: Rect, label: &str, lit: bool) -> Response {
-    transport_button(ui, id, rect, label, lit, &theme::BLACK)
+    transport_button(ui, id, rect, label, lit, &theme::BLACK, None)
 }
 
 /// A rectangular transport key. `lit` paints the legend in the palette's `lit_ink`, the way RUN glows while playing.
+///
+/// `mnemonic` is the letter that presses this key from the keyboard: it is underlined on the key, so a face says its own keys.
 pub fn transport_button(
     ui: &mut egui::Ui,
     id: &str,
@@ -136,6 +138,7 @@ pub fn transport_button(
     label: &str,
     lit: bool,
     p: &theme::Palette,
+    mnemonic: Option<char>,
 ) -> Response {
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     let scale = key_scale(rect);
@@ -152,13 +155,29 @@ pub fn transport_button(
         p.silkscreen_stroke(scale),
         egui::StrokeKind::Inside,
     );
-    painter.text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        key_font(rect),
-        legend,
-    );
+    // The letter that presses the key is underlined on it; a key with no key has only its caption.
+    match mnemonic {
+        Some(letter) => {
+            super::text::with_mnemonic(
+                painter,
+                rect,
+                label,
+                key_font(rect),
+                legend,
+                letter,
+                legend,
+            );
+        }
+        None => {
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                key_font(rect),
+                legend,
+            );
+        }
+    }
     if response.hovered() {
         // The ring follows the legend's rule, because it is drawn on the same face: a lit key's is `panel_raised`, where
         // the face's accent is unreadable in the amber scheme, and an unlit key's well takes the accent.

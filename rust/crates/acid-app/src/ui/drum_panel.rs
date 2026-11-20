@@ -69,6 +69,35 @@ pub enum FaceKey {
     Filter(FilterKind),
 }
 
+/// The filter's three sides and the key that presses each: one row per side, and the only place the pairing is written down.
+///
+/// Two questions are answered by the same row — which key picks a side, and which letter the face prints under it — because
+/// the answer is the same letter. The letter is not the head of the segment's label: `HP` opens with `H`, which is `HIT`'s key,
+/// and that collision is why the high side took `P`.
+const FILTER_KEYS: [(FilterKind, egui::Key); 3] = [
+    (FilterKind::Low, egui::Key::L),
+    (FilterKind::Band, egui::Key::B),
+    (FilterKind::High, egui::Key::P),
+];
+
+/// The side of the filter a key picks, if it is one of [`FILTER_KEYS`]' letters.
+fn filter_kind(key: egui::Key) -> Option<FilterKind> {
+    FILTER_KEYS
+        .iter()
+        .find(|(_, pressed)| *pressed == key)
+        .map(|(kind, _)| *kind)
+}
+
+/// The letter printed under a side of the filter: the key that presses it, named. The mark and the key are one row of
+/// [`FILTER_KEYS`], so an underline cannot press a different side than the letter above it.
+fn filter_letter(kind: FilterKind) -> char {
+    FILTER_KEYS
+        .iter()
+        .find(|(side, _)| *side == kind)
+        .and_then(|(_, key)| key.name().chars().next())
+        .unwrap_or(' ')
+}
+
 /// What a key does on the drum face, if anything.
 ///
 /// One mapping for the face's keys: plain `left`/`right` move the step, `shift` and `up`/`down` walk the voice, `enter` writes
@@ -83,9 +112,9 @@ pub fn face_key(key: egui::Key, shift: bool) -> Option<FaceKey> {
         (egui::Key::ArrowRight, false) => Some(FaceKey::MoveStep(1)),
         (egui::Key::Enter, _) => Some(FaceKey::Write { accented: shift }),
         (egui::Key::H, false) => Some(FaceKey::Hit),
-        (egui::Key::L, false) => Some(FaceKey::Filter(FilterKind::Low)),
-        (egui::Key::B, false) => Some(FaceKey::Filter(FilterKind::Band)),
-        (egui::Key::P, false) => Some(FaceKey::Filter(FilterKind::High)),
+        // The filter's letters are the face's only other unshifted keys: the table is where that choice lives, so a letter
+        // moved to another side moves its underline with it.
+        (key, false) => filter_kind(key).map(FaceKey::Filter),
         _ => None,
     }
 }
@@ -570,12 +599,17 @@ fn draw_dials(
             p.silkscreen_stroke(s),
             egui::StrokeKind::Inside,
         );
-        ui.painter().text(
-            rect.center(),
-            Align2::CENTER_CENTER,
+        // The letter that presses this side is underlined on it, in the caption's own ink: the face's keys can be learned
+        // by eye, and a line in the accent would not read on a lit segment's raised face.
+        let ink = if lit { p.lit_ink } else { p.silkscreen };
+        super::text::with_mnemonic(
+            ui.painter(),
+            rect,
             kind.label(),
             theme::legend(11.0 * s),
-            if lit { p.lit_ink } else { p.silkscreen },
+            ink,
+            filter_letter(kind),
+            ink,
         );
         let response = ui.interact(
             rect,
@@ -625,9 +659,17 @@ fn draw_dials(
         state.dirty = true;
     }
 
-    // HIT auditions the selected voice with the transport stopped.
-    let hit =
-        transport::transport_button(ui, "drum-hit", key_cell(l, DrumKey::Hit), "HIT", false, p);
+    // HIT auditions the selected voice, stopped or running, and `h` on the keyboard is the same hit — so the key says which
+    // letter presses it.
+    let hit = transport::transport_button(
+        ui,
+        "drum-hit",
+        key_cell(l, DrumKey::Hit),
+        "HIT",
+        false,
+        p,
+        Some('H'),
+    );
     if hit.clicked() {
         shared.request_audition(selected);
     }
@@ -766,20 +808,8 @@ mod tests {
         );
         assert_eq!(face_key(egui::Key::H, false), Some(FaceKey::Hit));
         assert_eq!(face_key(egui::Key::H, true), None, "shift+h is not the hit");
-        // The filter's three letters, one per side: `h` is the hit's key, so the high side takes `p`.
-        assert_eq!(
-            face_key(egui::Key::L, false),
-            Some(FaceKey::Filter(FilterKind::Low))
-        );
-        assert_eq!(
-            face_key(egui::Key::B, false),
-            Some(FaceKey::Filter(FilterKind::Band)),
-            "B is the band side, not a silent letter"
-        );
-        assert_eq!(
-            face_key(egui::Key::P, false),
-            Some(FaceKey::Filter(FilterKind::High))
-        );
+        // The filter's letters are the face's other unshifted keys; which letter picks which side is
+        // `the_filter_letters_are_the_keys_that_press_them`'s claim, because it is also the mark the face prints.
         assert_eq!(
             face_key(egui::Key::L, true),
             None,
@@ -823,6 +853,28 @@ mod tests {
             from_plain.is_hit(Drum::Snare) && from_plain.is_accented(Drum::Snare),
             "a shift on a plain strike accents it"
         );
+    }
+
+    #[test]
+    fn the_filter_letters_are_the_keys_that_press_them() {
+        // The mark under each side and the key that presses it are one row of the table, and every one of those letters is
+        // printed by the label it sits under — `HP` prints an `H` too, so "the label contains the letter" is not the same
+        // claim as "the label's head is the letter", which is exactly why the high side took `P`.
+        for (kind, letter, key) in [
+            (FilterKind::Low, 'L', egui::Key::L),
+            (FilterKind::Band, 'B', egui::Key::B),
+            (FilterKind::High, 'P', egui::Key::P),
+        ] {
+            assert_eq!(filter_kind(key), Some(kind), "{key:?} is the {kind:?} key");
+            assert_eq!(face_key(key, false), Some(FaceKey::Filter(kind)));
+            assert_eq!(filter_letter(kind), letter, "{kind:?}'s mark");
+            assert!(
+                kind.label().contains(letter),
+                "{} does not print the letter that presses it",
+                kind.label()
+            );
+        }
+        assert_eq!(filter_kind(egui::Key::A), None, "not every key is a side");
     }
 
     #[test]

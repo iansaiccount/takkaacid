@@ -49,7 +49,7 @@ pub(super) fn switch_key(
     key: Key<'_>,
     p: &theme::Palette,
 ) -> bool {
-    let response = transport::transport_button(ui, key.id, key.rect, key.label, key.lit, p);
+    let response = transport::transport_button(ui, key.id, key.rect, key.label, key.lit, p, None);
     let clicked = response.clicked();
     tips::hover(&response, state.tooltips, key.control);
     clicked
