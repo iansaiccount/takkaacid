@@ -280,4 +280,37 @@ which are plan 06's.
       here") while this card tells the player they work**, so the push still depends on Task 5.
       Gates: `cargo test --workspace` **899**, clippy `-D warnings`, `fmt --check`.
 
-- [ ] Task 5 —
+- [x] **Task 5 — the book and the pictures.** Page 22: the filter's `l`, `b` and `p`, the underlines (`H` on `HIT`, `L`, `B` and
+      `P` under the filter's sides), the hover help, and `HIT` "stopped or running" in both places that make the claim; the
+      *No per-voice hover help yet* bullet is deleted outright and a negative guard in `check.sh` keeps it from returning. Page
+      15: the "letters are silent this phase" sentence now names `h`, `l` / `b` / `p` and the walk, the drum editing paragraph
+      gains the filter's letters and the underline, and the "one voice" paragraph's letter list names them too. Page 20: a new
+      keyboard-table row for `l` / `b` / `p`, and the drum-face paragraph gains the underline and hover sentences. `check.sh`
+      pins '`l`, `b` and `p`', 'control is underlined on it', 'stopped or running' and 'Every control in the row explains
+      itself', with the two older drum pins ('walk it up and down the grid', 'strikes the selected voice') untouched.
+      **Both pictures retaken** on `Xvfb :89 -screen 0 2200x1500x24`: `xdotool getdisplaygeometry` said `2200 1500` before the
+      app was launched, `getwindowgeometry` said `1960x1340`, `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-07` emptied, `+` → `DRUMS`,
+      the notice waited out, the pointer parked outside the window for `drum-face.png`; `F1` for `help-card.png`, sent as
+      `xdotool key --window <id> F1` because an unfocused window under Xvfb ignores a bare key and the first grab of the card
+      came out as the face again. Both grabs were looked at: the `H` on `HIT` and the `L`/`B`/`P` on the filter are visible, the
+      card's five drum lines are on it and the card still fits, and no tip or notice is in either frame (checked in a separate
+      `-crop` grab first, never by cutting the finished picture). `img/README.md` gained the session paragraph and both rows;
+      `00-phase-4.md` lists 07 as a finished round and its State line says **899** tests and `SAVE_VERSION` **11**; the
+      wishlist's "The help card knows only the 303's keys" is deleted, per that file's own rule.
+      **Mutations: 4 of 4 caught** (`.superpowers/mutate_guide.py`): the underline claim gone from all three pages, the `HIT`
+      claim back to stopped-only, the retired bullet returned, and the filter's letters gone — each fails `check.sh` by name.
+      **Review: BLOCK on three Importants and three Minors, all actioned.** (1) "each name what they do and the key that does
+      it" was false for the seven dials — no key presses them — so the sentence now says the dials say what they do and the
+      filter key and `HIT` name the letter. (2) Page 15 had a duplicated "On a drum device" left from the rewrite, leaving the
+      sentence without a subject. (3) Page 22 contradicted itself on this round's own fact — `HIT` "with the bar stopped" in one
+      paragraph, "stopped or running" in the next — and both now agree with the tip. Of the Minors: the hover claim got a
+      positive pin (it was only negatively guarded), the wishlist deletion left a double blank line, and 07 is written in the
+      list as a finished round rather than "in flight". Of the notes: page 15's letter list now names the filter's letters; the
+      `state.rs` doc comment for `request_audition` still said "with the transport stopped" — a doc the round's tip exposed as a
+      lie — so it says "stopped or running" now and the rust gates were re-run for it; and the README's old step-editor-round
+      bullet is folded into the new session paragraph, with the column still described. **The pin for the underline claim is
+      narrower than the first attempt** ('control is underlined on it', not 'underlined on it') because the picture ledger uses
+      the shorter phrase in its own row — which is what a mutation caught, since the ledger alone would have satisfied the
+      pin while all three pages lost the claim.
+      Gates: `cargo test --workspace` **899**, clippy `-D warnings`, `fmt --check`, `./docs/guide/check.sh` ok.
+

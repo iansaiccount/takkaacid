@@ -391,7 +391,7 @@ impl SharedState {
         self.kit.store(Arc::new(kit));
     }
 
-    /// Ask for a voice to be heard with the transport stopped. The renderer drains it at the next block.
+    /// Ask for a voice to be heard, stopped or running. The renderer drains it at the next block.
     pub fn request_audition(&self, drum: Drum) {
         // `Drum::index` is the only spelling of a voice's slot, and this is the one place it becomes the `-1`-sentinel number.
         self.audition.store(drum.index() as i32, Ordering::Relaxed);

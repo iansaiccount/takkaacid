@@ -30,6 +30,7 @@ Three tables and the files: every gesture, the factory controller map, and the w
 |---|---|
 | `A W S E D F T G Y H U J K` | play a chromatic scale; with `shift` or `STEP`, write the note to the selected step |
 | `h` | on a drum device, strike the selected voice — `HIT`'s key |
+| `l` / `b` / `p` | on a drum device, the low, band or high side of the selected voice's filter |
 | `Z` / `X` | octave down / up, two either way |
 | `space` | play / pause, same as `PLAY` / `PAUSE` |
 | `,` | step the playhead back a bar (drawn, not wired yet) |
@@ -115,8 +116,10 @@ machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, 
 and `SHUFFLE` set apart from the seven because it is the device's swing. That voice's name is printed above the dials. The
 grid's sixteen rows are `KICK`, `SNR`, `RIM`, `CLAP`, `CHH`, `OHH`, `LOT`, `MID`, `HTOM`, `CRS`, `RDE`, `CWB`, `LCO`, `HCO`,
 `CLV`, `SHK`, one per voice top to bottom, and one cell per step: a click strikes, `SHIFT`-click accents, a click on the
-label selects the voice and `SHIFT`-click on the label mutes it. `OCT`, `CLEAR`, `RANDOM` and the density and scale dials are
-not on that face, `STEP` lights and writes nothing there, and the machine takes no notes this round.
+label selects the voice and `SHIFT`-click on the label mutes it. The letter that presses a control is underlined on it — `H`
+on `HIT`, `L`, `B` and `P` under the filter's sides — and each of those nine controls explains itself on hover. `OCT`, `CLEAR`,
+`RANDOM` and the density and scale dials are not on that face, `STEP` lights and writes nothing there, and the machine takes no
+notes this round.
 
 **The clipboard's notices**, in the same corridor as the name: `copied A1`, `pasted A1 into A2`, `the clipboard has no pattern`.
 

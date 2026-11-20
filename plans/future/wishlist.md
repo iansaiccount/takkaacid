@@ -165,18 +165,6 @@ transport change, not a sequencer change.
 
 ## Panel
 
-### The help card knows only the 303's keys
-
-**What it would do.** `ui/help.rs` lists the 303's keys — the scale, the arrows, `shift+up` / `shift+down` for the note — and
-says nothing about the drum face's: `shift+up` / `shift+down` walk the voices and `h` strikes the selected one. Plans 03 and 05
-each added a key the card does not know, so a player reading it on a drum machine gets the other face's answer.
-
-**Why not now.** The card is a face: a line more or less changes its measured height (`help_content_height`) and the pinned
-`help-card.png`, so it is a round of its own rather than a line at the end of another.
-
-**What would have to move.** `ui/help.rs`'s keyboard block gains a drum-face line, the card's height follows it, a live test
-asks for the painted text, and `img/README.md` records the retaken picture.
-
 ### Drag to reorder devices
 
 Rejected in phase 2 because the rack's selection, the strip's cells and the input filters all key on position and a drag is a

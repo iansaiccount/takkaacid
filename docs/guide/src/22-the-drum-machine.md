@@ -38,14 +38,15 @@ stops at the top row and the bottom one rather than wrapping round. While a card
 keys, because a card is modal.
 
 **`h`** strikes the selected voice — the same hit as `HIT` — so a kit can be walked with the arrows and heard with one key. A
-card does not stop it: a hit is a sound, not an edit. The rest of the letters stay silent here; they are the 303's notes.
+card does not stop it: a hit is a sound, not an edit. The other letters play nothing here — they are the 303's notes — apart
+from the filter's `l`, `b` and `p`, below.
 
 The step is edited the same way, one step over: **`left` / `right` move the selected step**, a lit column across the sixteen
 rows, and **`enter` writes the selected voice into it** — silently, as a 303 step is written without a sound; a second `enter`
 takes the hit off again. **`shift+enter`** is the grid's accent gesture, so an empty cell takes an accented hit, a plain strike
 is accented and an accented one is taken off. The selection stays where it is after a write, unlike the 303's `STEP`, because a
 step here holds sixteen voices and a hand writes several before moving on. `HIT` and `h` still play the voice without writing
-it, either of them with the bar stopped.
+it, either of them with the bar stopped or running.
 
 ## The dials
 
@@ -61,10 +62,15 @@ The seven knobs stay where the 303 puts them and are **the selected voice's**, n
 | `RESONANCE` | how much the corner is emphasised |
 | `TUNE` | the voice's pitch, in semitones either way |
 
-Beside the waveform switch's place is a three-way key, **`LP | BP | HP`** — low-pass, band-pass, high-pass. It is a different
-filter from the 303's on purpose (a state-variable one, where the 303's is a ladder), but its cutoff and resonance are the
-303's own knob positions, so a `BP` open hat and a `LP` kick are the same idea heard two ways. **`HIT`** plays the
-selected voice once, with the transport stopped, which is how a voice is tuned without writing it into the bar.
+Beside the waveform switch's place is a three-way key, **`LP | BP | HP`** — low-pass, band-pass, high-pass, picked from the
+keyboard with `l`, `b` and `p`. It is a different filter from the 303's on purpose (a state-variable one, where the 303's is a
+ladder), but its cutoff and resonance are the 303's own knob positions, so a `BP` open hat and a `LP` kick are the same idea
+heard two ways. **`HIT`** plays the selected voice once, stopped or running, which is how a voice is tuned without writing it
+into the bar.
+
+The letter that presses a control is underlined on it — `H` on `HIT`, `L`, `B` and `P` under the filter's three sides — so
+the keyboard can be learned by eye and not only from this page. Every control in the row explains itself on hover: the
+dials say what they do, and the filter key and `HIT` name the letter that presses them.
 
 **`SHUFFLE`** is the odd one out and sits apart from the seven, between the filter key and `HIT`: it is not the voice's
 dial, it is the **device's** swing — the same clock control the 303 keeps in its performance row, and it swings the drums
@@ -119,8 +125,6 @@ A drum bank is patterns, not a song. The grooves last the session — a save sti
   scale are the 303's. `BANK`, `PATTERN`, `COPY`, `PASTE`, `SAVE`, `BANKS` and `STEP` keep their places on the switches row.
 - **One hit per voice at a time.** A second strike on the same voice retriggers it rather than layering, and a hat's
   choke group — the closed hat cuts the open one — is how the pair sounds like one hi-hat.
-- **No per-voice hover help yet.** The seven dials, the filter key and `HIT` print their captions and nothing more; the
-  shared keys keep the 303's tips.
 - **`LEARN` has nothing to teach on the drum's own controls.** A drum voice takes no controller this round, so on a drum face
   `LEARN` can bind the shared controls — `VOLUME`, and the tempo and pattern readouts — and nothing on the voice's dials, the
   filter key or `HIT`. Those stand still while it is choosing a control, rather than turning the voice under a hand that meant
