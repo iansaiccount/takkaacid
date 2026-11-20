@@ -19,7 +19,7 @@ pub enum Request {
     Pause,
     /// Run this device's line the other way. The engine takes it at the bar line, so a mid-bar press waits.
     Reverse(bool),
-    /// Move the whole rack a semitone, as a performance control.
+    /// Move this device a semitone, as a performance control.
     Transpose(i32),
     Stop,
     /// One BPM, in the direction of the key.
@@ -56,6 +56,17 @@ pub const NOTHING_TO_PAUSE: &str = "NOTHING TO PAUSE";
 /// stay here, beside the `Request` they answer. In the library rather than in `main` so the answer has a test.
 pub fn pause(rack: &mut crate::device::Rack) -> bool {
     rack.set_transport(crate::device::Transport::Paused)
+}
+
+/// Move the device on the panel by `semitones`, clamped to an octave.
+///
+/// **The one place a `Request::Transpose` writes.** It is the machine in front of you's own performance control: the cell is
+/// the one its engine reads and the one the row's readout prints, so the two keys cannot move a device the row is not showing,
+/// and a second device keeps whatever transpose it has. Nothing is saved — like `REVERSE`, it belongs to a set, not to a song —
+/// so this answers nothing about the session being dirty.
+pub fn apply_transpose(rack: &crate::device::Rack, semitones: i32) {
+    let state = rack.state();
+    state.set_transpose((state.transpose() + semitones).clamp(-12, 12));
 }
 
 /// Take the "a controller moved the tempo" flag from **every** device, and answer whether any of them had one.
@@ -271,6 +282,36 @@ mod tests {
         assert!(
             NOTHING_TO_PAUSE.is_ascii(),
             "the face may not print a glyph"
+        );
+    }
+
+    #[test]
+    fn the_transpose_moves_the_device_on_the_panel_and_no_other() {
+        // The transpose is a performance control and it belongs to the machine in front of you: the row prints that device's
+        // cell, so the write lands on that cell and nowhere else.
+        let mut rack = crate::device::Rack::from_saved(&crate::persist::SavedState::default());
+        rack.add(crate::device::DeviceKind::Acid)
+            .expect("room for a second");
+        rack.select(1);
+        apply_transpose(&rack, 3);
+        assert_eq!(rack.devices()[1].state.transpose(), 3);
+        assert_eq!(
+            rack.devices()[0].state.transpose(),
+            0,
+            "the other device is untouched"
+        );
+
+        rack.select(0);
+        apply_transpose(&rack, -20);
+        assert_eq!(
+            rack.devices()[0].state.transpose(),
+            -12,
+            "an octave down is the floor"
+        );
+        assert_eq!(
+            rack.devices()[1].state.transpose(),
+            3,
+            "and the second keeps its own"
         );
     }
 

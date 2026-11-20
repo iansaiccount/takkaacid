@@ -159,8 +159,8 @@ impl eframe::App for TakkaApp {
                     }
                 }
                 panel_ui::transport::Request::Transpose(semitones) => {
-                    let next = (self.rack.transpose() + semitones).clamp(-12, 12);
-                    self.rack.set_transpose(next);
+                    // The transpose is the device on the panel's: the row's readout, the engine and this write are one cell.
+                    panel_ui::transport::apply_transpose(&self.rack, semitones);
                 }
                 panel_ui::transport::Request::NudgeTempo(direction) => {
                     // The tempo is in the save file, so a nudge changes the document. `apply_nudge` moves it and answers

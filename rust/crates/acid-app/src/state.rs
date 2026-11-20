@@ -301,11 +301,13 @@ impl SharedState {
         self.reversed.store(reversed, Ordering::Relaxed);
     }
 
-    /// The rack's performance transpose, in semitones. Not part of the patch and not saved.
+    /// The device's performance transpose, in semitones. Not part of the patch and not saved: it is the machine's own, so a
+    /// second device on the rack keeps its own.
     pub fn transpose(&self) -> i32 {
         self.transpose.load(Ordering::Relaxed)
     }
 
+    /// Move this device by a semitone, clamped to an octave.
     pub fn set_transpose(&self, semitones: i32) {
         self.transpose
             .store(semitones.clamp(-12, 12), Ordering::Relaxed);

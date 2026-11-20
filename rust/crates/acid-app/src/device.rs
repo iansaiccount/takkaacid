@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use acid_core::timing::clamp_bpm;
 use arc_swap::ArcSwap;
@@ -405,8 +405,6 @@ pub struct Rack {
     /// thread; the devices' own copies are mirrors of it, never a second opinion. Every device follows it, so a play starts
     /// them all on one frame — the downbeats coincide rather than drifting apart by a block.
     transport: AtomicU8,
-    /// The rack's performance transpose, in semitones: one number for every device, like the tempo, and never saved.
-    transpose: AtomicI32,
     /// The rack's tempo: one cell, and the same cell in every device's `SharedState`. The panel, an external clock and a
     /// tempo controller all write it, and every engine reads it at its next block, so no fan-out and no frame stands between
     /// a hand and the sound. Swing stays each device's own.
@@ -436,7 +434,6 @@ impl Rack {
             selected: 0,
             next_number,
             transport: AtomicU8::new(Transport::Stopped.byte()),
-            transpose: AtomicI32::new(0),
             tempo_bpm,
             bus: Arc::new(ArcSwap::from_pointee(BusState {
                 slots: Vec::new(),
@@ -618,18 +615,6 @@ impl Rack {
         true
     }
 
-    /// The rack's performance transpose, in semitones.
-    pub fn transpose(&self) -> i32 {
-        self.transpose.load(Ordering::Relaxed)
-    }
-
-    /// Move the whole rack by a semitone. A performance control: the patch's TUNING knob is untouched and nothing is saved.
-    pub fn set_transpose(&self, semitones: i32) {
-        self.transpose
-            .store(semitones.clamp(-12, 12), Ordering::Relaxed);
-        self.sync_transport();
-    }
-
     pub fn tempo_bpm(&self) -> f32 {
         self.tempo_bpm.get()
     }
@@ -649,16 +634,12 @@ impl Rack {
 
     /// Fan the transport out to every device.
     ///
-    /// Only the transport needs it: the tempo is one cell every device already holds, so there is no tempo to carry. Called
-    /// when the rack's transport changes and when a device joins, never per frame.
+    /// Only the transport needs it: the tempo is one cell every device already holds, and the transpose is each device's own,
+    /// so neither is carried. Called when the rack's transport changes and when a device joins, never per frame.
     pub fn sync_transport(&self) {
         let transport = self.transport();
-        let transpose = self.transpose();
         for device in &self.devices {
             device.state.set_transport(transport);
-            // The transpose rides the same fan-out: it is one number for the rack, and a device that joined late has to hear
-            // the one the others are playing.
-            device.state.set_transpose(transpose);
         }
     }
 }

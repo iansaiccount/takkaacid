@@ -3,7 +3,7 @@
 //! Everything here drives the public API the way `main` does, so a change to how the rack is shaped fails here before it
 //! reaches a window or a sound card.
 
-use acid_app::device::{AddError, Device, DeviceKind, MAX_DEVICES, Rack, RemoveError};
+use acid_app::device::{AddError, Device, DeviceKind, MAX_DEVICES, Rack, RemoveError, Transport};
 use acid_app::persist;
 use acid_core::bank::PatternBank;
 
@@ -559,29 +559,67 @@ fn a_device_carries_its_own_scheme() {
     );
 }
 
-/// The transpose is one number for the rack, clamped to an octave, and it reaches every device — including one that joined later,
-/// because it rides the transport's fan-out.
+/// The transpose is each device's own, clamped to an octave: the rack keeps no number of its own for it.
 #[test]
-fn the_transpose_clamps_to_an_octave_and_reaches_every_device() {
+fn a_device_carries_its_own_transpose() {
     let mut rack = one();
     rack.add(DeviceKind::Acid).expect("a second");
 
-    rack.set_transpose(13);
-    assert_eq!(rack.transpose(), 12, "an octave up is the ceiling");
-    for device in rack.devices() {
-        assert_eq!(
-            device.state.transpose(),
-            12,
-            "every device hears the rack's transpose"
-        );
-    }
+    rack.devices()[0].state.set_transpose(13);
+    assert_eq!(
+        rack.devices()[0].state.transpose(),
+        12,
+        "an octave up is the ceiling"
+    );
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        0,
+        "and a second device is not moved by it"
+    );
 
-    rack.set_transpose(-99);
-    assert_eq!(rack.transpose(), -12, "and an octave down the floor");
-    for device in rack.devices() {
-        assert_eq!(device.state.transpose(), -12);
-    }
+    rack.devices()[1].state.set_transpose(-99);
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -12,
+        "an octave down is the floor"
+    );
+    assert_eq!(
+        rack.devices()[0].state.transpose(),
+        12,
+        "each keeps its own"
+    );
 
-    rack.set_transpose(0);
-    assert_eq!(rack.transpose(), 0);
+    rack.devices()[0].state.set_transpose(0);
+    assert_eq!(rack.devices()[0].state.transpose(), 0);
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -12,
+        "and resetting one leaves the other"
+    );
+}
+
+/// A transport change fans the transport out and carries nothing else: the transpose is each device's own, so a play must not
+/// copy the selected device's onto the rest — the fan-out it used to ride.
+#[test]
+fn a_transport_change_carries_no_transpose() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+    rack.devices()[0].state.set_transpose(4);
+    rack.devices()[1].state.set_transpose(-2);
+
+    rack.set_transport(Transport::Playing);
+    assert_eq!(rack.devices()[0].state.transpose(), 4, "a play moved it");
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -2,
+        "and the other device kept its own"
+    );
+
+    rack.devices()[0].state.set_transpose(7);
+    rack.sync_transport();
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -2,
+        "a fan-out must not copy one device's transpose onto another"
+    );
 }

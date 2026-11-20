@@ -82,9 +82,9 @@ pub enum Control {
     Reverse,
     /// The row's TBC key: a cell kept for the player, with nothing decided behind it.
     Tbc,
-    /// The row's TRANS -: the whole rack down a semitone, as a performance control.
+    /// The row's TRANS -: this device down a semitone, as a performance control.
     TransposeDown,
-    /// The row's TRANS +: the whole rack up a semitone.
+    /// The row's TRANS +: this device up a semitone.
     TransposeUp,
     /// The row's COPY: the pattern on the panel onto the clipboard, as text.
     Copy,
@@ -442,12 +442,12 @@ const TIPS: [Tip; 49] = [
     },
     Tip {
         title: "TRANS -",
-        what: "Moves the whole rack down a semitone. A performance control: the TUNING knobs are untouched and nothing is saved.",
+        what: "Moves this device down a semitone. A performance control: the TUNING knobs are untouched, the other devices stay put, and nothing is saved.",
         shortcut: None,
     },
     Tip {
         title: "TRANS +",
-        what: "Moves the whole rack up a semitone. A performance control: the TUNING knobs are untouched and nothing is saved.",
+        what: "Moves this device up a semitone. A performance control: the TUNING knobs are untouched, the other devices stay put, and nothing is saved.",
         shortcut: None,
     },
     Tip {

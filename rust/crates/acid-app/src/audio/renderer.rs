@@ -46,7 +46,7 @@ pub fn apply(params: &Parameters, engine: &mut Engine) {
 /// live in the kit — task 4's ruling, and the face writes them there — so pushing them into the machine would be a second
 /// source of truth for one dial. The master volume has no engine to sit in (a drum machine has none), so it is the renderer's
 /// gain: [`apply_volume`], below. What is left is the rack's and the device's — tempo, swing, the transport, the direction and
-/// the transpose — and those a drum machine takes exactly as the 303 does.
+/// the device's own transpose — and those a drum machine takes exactly as the 303 does.
 pub fn apply_drums(params: &Parameters, drums: &mut Drums) {
     drums.set_bpm(params.tempo_bpm);
     drums.set_swing(params.swing);
@@ -151,7 +151,7 @@ impl Machine {
         }
     }
 
-    /// The rack's performance transpose, heard at once.
+    /// The device's performance transpose, heard at once.
     fn set_transpose(&mut self, semitones: i32) {
         match self {
             Machine::Acid(engine) => engine.set_transpose(semitones),

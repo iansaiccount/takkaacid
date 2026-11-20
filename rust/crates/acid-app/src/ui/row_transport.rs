@@ -1,5 +1,5 @@
-//! The transport row: the device's direction, the rack's transpose and its readout, two cells still labelled `TBC`, and the
-//! MIDI LEARN key.
+//! The transport row: the device's direction, its transpose and the transpose's readout, two cells still labelled `TBC`, and
+//! the MIDI LEARN key.
 
 use eframe::egui;
 
@@ -64,7 +64,8 @@ pub(super) fn draw(
             state.notify("TBC IS NOT DECIDED YET");
         }
     }
-    // The transpose pair: the whole rack, a semitone at a time, as performance and never as the patch.
+    // The transpose pair: this device, a semitone at a time, as performance and never as the patch. The readout and both keys'
+    // litness read `shared`, the device on the panel, so the row shows exactly the cell the keys write.
     if switch_key(
         ui,
         state,

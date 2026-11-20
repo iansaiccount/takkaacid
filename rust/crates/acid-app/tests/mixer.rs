@@ -549,9 +549,9 @@ fn a_drum_device_sounds_through_the_mixer() {
     let state = Arc::clone(&solo.devices()[0].state);
     // Unity gain, so the renderer's master gain is a multiplication by one and the three blocks compare exactly.
     state.volume.set(1.0);
-    // A transpose and a shuffle the rack asked for: the machine the renderer owns has to hear each of them exactly as the one
-    // built beside it does, or the two blocks would differ.
-    solo.set_transpose(5);
+    // A transpose and a shuffle the device asked for: the machine the renderer owns has to hear each of them exactly as the
+    // one built beside it does, or the two blocks would differ.
+    state.set_transpose(5);
     state.swing.set(0.4);
 
     // Two steps' worth at 130 BPM, which is past the first step boundary: a swung bar's step 1 begins later than a straight
