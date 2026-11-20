@@ -50,6 +50,10 @@ done
 # The drum machine's nine controls did print their captions and nothing more, and this round gave every one of them a tip: the
 # bullet that said so is deleted from page 22, and this guard is why a rewrite cannot put the claim back.
 ! grep -rqF 'No per-voice hover help yet' src || { echo "the guide says the drum controls have no hover help"; exit 1; }
+# The transpose was one number for the rack; it is the device on the panel's now. The old claim cannot come back, and the new one
+# is pinned below.
+! grep -rqF 'moves the whole rack' src || { echo "the guide makes the transpose rack-wide again"; exit 1; }
+! grep -rqF 'the whole rack forgets together' src || { echo "the guide says the rack forgets one transpose"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \
@@ -62,6 +66,7 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'walk it up and down the grid' 'strikes the selected voice' \
             'move the selected step' 'writes the selected voice into it' \
             '`l`, `b` and `p`' 'control is underlined on it' 'stopped or running' \
+            'moves **the device on the panel**' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done

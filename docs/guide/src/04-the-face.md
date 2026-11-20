@@ -68,7 +68,8 @@ learned controller instead ([`11-the-bank`](11-the-bank.md)).
 ![The transport](img/transport.png)
 
 **`REVERSE`**, **`TRANS -`** and **`TRANS +`** with the transpose's own readout between them, **`TBC` twice**, and
-**`LEARN`**. `REVERSE` is this device's direction and the transpose pair moves the whole rack; `LEARN` is how a MIDI
+**`LEARN`**. `REVERSE` is this device's direction and the transpose pair moves **the device on the panel** — the readout
+between the two keys is that device's, and a second machine keeps its own; `LEARN` is how a MIDI
 controller gets taught a control ([`14-midi`](14-midi.md)). The deck above is the transport
 ([`09-playing`](09-playing.md)); this row is the performance.
 

@@ -68,9 +68,10 @@ one's.
 ## What a restart costs
 
 The session file still holds one device — the first one's patterns, patch, kit, swing and learned controllers, plus the first
-MIDI port the app had open. Everything else is in memory: the others' names, patterns, ports and colours, and **two things
-the whole rack forgets together** — each device's `REVERSE` direction and the rack's transpose. Both are performance, not
-patch: they are deliberately outside the file, so a restart brings every device back running forwards and in tune.
+MIDI port the app had open. Everything else is in memory: the others' names, patterns, ports and colours, and **two things each
+device forgets for itself** — its `REVERSE` direction and its own transpose. Both are performance, not patch: they are
+deliberately outside the file, so a restart brings every device back running forwards and in tune, and one machine playing a
+semitone up never drags the others with it.
 
 A kit is the one sound that outlives the file. A kit that was edited — a copy of a factory kit, or one imported — has a
 *folder* written beside the session when it is saved, so the samples come back even when the second machine's name does not;

@@ -24,18 +24,25 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
   hover: the filter takes `L` / `B` / `P`, the letter that presses a control is underlined on it (`H` on `HIT`, `L` / `B` / `P`
   on the filter), each of the nine explains itself on hover, and the help card, the guide and its two pictures learn the drum
   face's keys.
+- [`08-the-arrows-split`](08-the-arrows-split.md) — the arrows split one way: `shift` is the rack's (the pattern on
+  `shift+left` / `right`, the tempo on `shift+up` / `down`) and the plain pair is the face's (the note on the 303, the voice on
+  the drums), with the card, the tips and the guide rewritten to match.
+- [`09-the-transpose-is-the-devices`](09-the-transpose-is-the-devices.md) — `TRANS -` / `TRANS +` move the device on the panel
+  and leave the rest of the rack where it was, and the rack keeps no transpose of its own to fan out.
 
 **Spec:** [`docs/superpowers/specs/2026-11-18-drum-machine-design.md`](../../docs/superpowers/specs/2026-11-18-drum-machine-design.md)
 — approved in conversation on 2026-11-18. The plan argues from it; where they disagree, the spec wins and this plan is wrong.
 
 **Gate:** unchanged from phases 1–3 — the three workspace commands, `docs/guide/check.sh` when the book moves, and a subagent
 review of the branch at the pull request (`AGENTS.md`). Commits are made with the gates green and the Progress lines current;
+the review is of the branch, not of each commit.
 
-**State: complete, 2026-11-19; six rounds since, the last finished 2026-11-20.** All ten tasks are committed on `phase-4`
-(local only — nothing is pushed). The branch is the whole round: `cargo test --workspace` **899**, `cargo clippy --workspace
---all-targets -- -D warnings`, `cargo fmt --check` and `./docs/guide/check.sh` all green at its head, and each task's own
-mutation run is recorded in the plans' `## Progress`. `SAVE_VERSION` is **11** — rounds 02–07 touched no field of it, so the
-rack round still takes **12**. The whole-branch review's findings are in `handover-phase-5`.
+**State: complete, 2026-11-19; eight rounds since, the last finished 2026-11-20.** All ten tasks are committed on `phase-4`
+(local only — nothing is pushed). `cargo test --workspace` **905**, `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo fmt --check` and `./docs/guide/check.sh` are green at its head, and each task's own mutation run is recorded in the
+plans' `## Progress`. `SAVE_VERSION` is **11** — rounds 02–09 touched no field of it, so the rack round still takes **12**. The
+phase's whole-branch review is in `handover-phase-5`; the branch's own review is due at the pull request and has not happened
+yet.
 
 **Rulings this phase rests on, and what they cost if wrong:**
 

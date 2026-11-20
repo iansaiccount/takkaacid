@@ -121,5 +121,16 @@ and the book is what must not lie.
       and then fanned out — so `a_transport_change_carries_no_transpose` was written to catch it.
       The branch review at the pull request has not happened yet (AGENTS.md: it is the branch, not the commit).
       Gates: `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check`.
-- [ ] Task 2 —
+- [x] **Task 2 — the book.** Page 4: `REVERSE` is this device's direction and the transpose pair moves **the device on the
+      panel**, with the readout between the keys said to be that device's and a second machine said to keep its own. Page 18's
+      «what the whole rack forgets together — each device's `REVERSE` direction and the rack's transpose» is now «two things each
+      device forgets for itself — its `REVERSE` direction and its own transpose», with the consequence spelled out (one machine a
+      semitone up never drags the others). `check.sh` pins `moves **the device on the panel**` and guards both retired sentences
+      («moves the whole rack», «the whole rack forgets together»); `00-phase-4.md` lists 08 and 09 and its State line is brought
+      up to **905** tests and eight rounds. **Mutations: 3 of 3 caught** (`.superpowers/mutate_transpose_book.py`): the rack-wide
+      claim put back, the device claim dropped, and page 18's per-device sentence reverted. The third **survived the first
+      run** — page 18's claim had no guard of its own — so `check.sh` gained the second negative grep, which is what caught it.
+      No review was dispatched: the branch is reviewed at the pull request.
+      Gates: `./docs/guide/check.sh` ok; the code gates are Task 1's and unchanged by this commit.
+
 
