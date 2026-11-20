@@ -151,7 +151,7 @@ impl eframe::App for TakkaApp {
                     self.rack
                         .set_transport(acid_app::device::Transport::Stopped);
                 }
-                // The two performers: a direction this device's line runs in, and a semitone for the whole rack. Both are
+                // The two performers: a direction this device's line runs in, and a semitone on this device. Both are
                 // performance, neither is saved, and the engine takes the direction at the bar line.
                 panel_ui::transport::Request::Reverse(reversed) => {
                     if let Some(device) = self.rack.devices().get(self.panel.strip.selected) {
