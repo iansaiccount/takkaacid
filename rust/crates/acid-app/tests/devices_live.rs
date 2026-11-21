@@ -36,6 +36,7 @@ fn panel_of(names: &[(&str, bool, bool)]) -> PanelState {
         .enumerate()
         .map(|(index, (name, running, muted))| StripCell {
             name: (*name).to_string(),
+            kind: acid_app::device::DeviceKind::Acid,
             // Numbers are stable for a device's life and are not the cell's position: `panel_of` hands them out in order.
             number: index + 1,
             scheme: acid_app::device::Scheme::Black,

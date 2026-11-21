@@ -31,8 +31,8 @@ pub enum Shortcut {
     ToggleHelp,
 }
 
-/// Which shortcut a key press means. Shift picks the pattern out of the arrows; the tempo nudges stay unshifted,
-/// because shift+up/down belongs to the note editor.
+/// Which shortcut a key press means. `shift` is the rack's: it picks the pattern out of `left` / `right` and the tempo out of
+/// `up` / `down`. The plain arrows are the face's — the step, the note, the voice — so they mean nothing to the transport.
 pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
     match (key, shift) {
         (Key::Space, _) => Some(Shortcut::PlayStop),
@@ -40,8 +40,8 @@ pub fn shortcut_for(key: Key, shift: bool) -> Option<Shortcut> {
         (Key::Comma, false) => Some(Shortcut::SeekBack),
         (Key::Period, false) => Some(Shortcut::SeekForward),
         (Key::R, false) => Some(Shortcut::Record),
-        (Key::ArrowUp, false) => Some(Shortcut::TempoUp),
-        (Key::ArrowDown, false) => Some(Shortcut::TempoDown),
+        (Key::ArrowUp, true) => Some(Shortcut::TempoUp),
+        (Key::ArrowDown, true) => Some(Shortcut::TempoDown),
         (Key::ArrowRight, true) => Some(Shortcut::NextPattern),
         (Key::ArrowLeft, true) => Some(Shortcut::PrevPattern),
         (Key::F1, _) => Some(Shortcut::ToggleHelp),
@@ -185,5 +185,28 @@ mod tests {
             Some(Shortcut::ToggleHelp)
         );
         assert_eq!(shortcut_for(Key::B, false), None);
+    }
+
+    #[test]
+    fn the_arrows_split_at_the_modifier() {
+        // `shift` is the rack's: the pattern on `left` / `right` and the tempo on `up` / `down`. The plain arrows belong to the
+        // face — the step, the note, the voice — so the transport never sees them.
+        assert_eq!(shortcut_for(Key::ArrowUp, true), Some(Shortcut::TempoUp));
+        assert_eq!(
+            shortcut_for(Key::ArrowDown, true),
+            Some(Shortcut::TempoDown)
+        );
+        assert_eq!(shortcut_for(Key::ArrowUp, false), None);
+        assert_eq!(shortcut_for(Key::ArrowDown, false), None);
+        assert_eq!(
+            shortcut_for(Key::ArrowRight, true),
+            Some(Shortcut::NextPattern)
+        );
+        assert_eq!(
+            shortcut_for(Key::ArrowLeft, true),
+            Some(Shortcut::PrevPattern)
+        );
+        assert_eq!(shortcut_for(Key::ArrowRight, false), None);
+        assert_eq!(shortcut_for(Key::ArrowLeft, false), None);
     }
 }

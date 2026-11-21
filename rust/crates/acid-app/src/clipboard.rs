@@ -71,6 +71,9 @@ mod tests {
             accent: true,
             slide: true,
             velocity: 1,
+            // The drum masks are part of the step a clipboard carries; a 303 fixture strikes no voice.
+            hits: 0,
+            accents: 0,
         };
         Pattern::from_steps(steps)
     }

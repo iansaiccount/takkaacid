@@ -13,6 +13,9 @@ use crate::device::{DeviceKind, Request};
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StripCell {
     pub name: String,
+    /// What kind of machine this is. The panel draws one face or the other from it, and the cell is the only place
+    /// `draw_panel` can learn what it is showing: it knows `PanelState` and `SharedState`, never the rack.
+    pub kind: DeviceKind,
     /// The device's number, which is stable for its life and never reused. The cell's *position* moves when a device
     /// before it is removed; anything the panel keeps per device — the editor slots — is keyed by this, not by the index.
     pub number: usize,
@@ -162,6 +165,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &
             "M",
             cell.muted,
             p,
+            None,
         );
         tips::hover(&mute, state.tooltips, tips::Control::DeviceMute);
         if mute.clicked() {

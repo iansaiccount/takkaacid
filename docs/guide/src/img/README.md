@@ -24,6 +24,31 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
   `xdotool key F1` for the keys. The button rects are in the layout (`ui/layout.rs`, `ui/strip.rs`, `ui/device_card.rs`);
   do not read them off a screenshot, because a key's painted label and its hit area are not always where the eye puts them
   (this round's first attempt clicked `SAVE` six times while believing it was clicking `SONGS`).
+- **The two drum-machine pictures** (`drum-face.png`, `kit-browser.png`) were retaken on 2026-11-20, from a session of their own:
+  `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-51`, emptied first, on `Xvfb :88 -screen 0 2200x1500x24` (the screen must be at least
+  the design size doubled — check `xdotool getdisplaygeometry` before trusting a grab), the same scale factor and software GL.
+  The app was launched on a first run and then driven: `+` → `DRUMS` added `DRUMS 2`, which arrives on `808` (so the browser reads
+  `NOW: 808 - READ ONLY`), then `BANKS` → `Hard Techno Acid` twice loaded that demo's drum bank into it (the session was unsaved,
+  so the row asked first), and `F3` → the card's `KIT` row opened the browser, which is where `kit-browser.png` comes from. No
+  device was saved, so that picture shows a first run's rack with one extra machine on it.
+- **The keys-and-tooltips round's two pictures** (`drum-face.png`, `help-card.png`) were retaken on 2026-11-20 from a session of
+  their own: `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-07`, emptied first, on `Xvfb :89 -screen 0 2200x1500x24` — `DISPLAY=:89
+  xdotool getdisplaygeometry` said `2200 1500` before the app was launched, and `xdotool getwindowgeometry` then said
+  `1960x1340`. `+` → `DRUMS` added `DRUMS 2`, which arrives on `808`; the notice was waited out and the pointer parked outside
+  the window for `drum-face.png`, which is where the new underlines under `H` on `HIT` and `L`/`B`/`P` on the filter are visible
+  (checked in a separate `-crop` grab before the picture was kept, never by cutting the finished image). `F1` put the card up
+  for `help-card.png`, sent as `xdotool key --window <id> F1`: under Xvfb with no window manager the window never takes the
+  keyboard focus, so a bare `xdotool key` is delivered nowhere and the grab comes out as the face again. The pointer was parked
+  outside the window for that grab too, so no tip and no notice is in either picture. The grid is empty because a first run's
+  drum machine has no bank; `drum-face.png`'s step column sits on step 1, which is also a beat-framed column, and the stroke is
+  full height where the frame is per cell, so the two read apart.
+- **`help-card.png` was retaken again on 2026-11-20**, in the arrows round: the card's two arrow lines changed, so the picture did.
+  `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-08`, emptied first, on `Xvfb :91 -screen 0 2200x1500x24` (`getdisplaygeometry` said
+  `2200 1500` before the app was launched; `getwindowgeometry` said `1960x1340`). `F1` opened the card with the pointer first
+  moved inside the window and the window focused — on that launch `xdotool key --window <id> F1` alone printed
+  `XGetInputFocus returned the focused window of 1` and delivered nothing, so the first grab came out as the face again. The
+  pointer was then parked outside the window and the card grabbed with no tip and no notice in it. The picture is over the
+  first-run acid face, which is what a fresh session shows; the card is the same over either face.
 
 ## The images
 
@@ -31,12 +56,14 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 |---|---|---|
 | `img/first-sound.png` | a first run: one device in the strip, `SONG New song` with the name in amber (the session is unsaved), pattern `A1`, the Slow Acid demo, stopped | launch, wait for the window |
 | `img/running.png` | the transport running: `PLAY` lit in the tape deck, `PAUSE` dark | `space` from the first-sound state |
-| `img/help-card.png` | the help card over the panel | `F1` |
+| `img/help-card.png` | the help card over the panel: the arrows as two pairs (`shift+left` / `right` the pattern, `shift+up` / `down` the tempo, then the plain `left` / `right` and `up` / `down` for the face), the drum face's keys folded into those lines, and its two own lines — `h` and `l` / `b` / `p` | `F1` on the arrows round's session (below), pointer parked outside the window |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
 | `img/banks-card.png` | the bank browser: `New song`, the five demo banks, an empty `MY BANKS` | click `BANKS` |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
-| `img/picker.png` | the picker: the `ACID` row and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
+| `img/picker.png` | the picker: the `ACID` and `DRUMS` rows and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
+| `img/drum-face.png` | the drum machine's face: `DRUMS 2` selected, `KICK` the selected voice, the grid empty with **the first step's column lit** — the step a key writes to — the seven voice dials, `LP | BP | HP` with `L`, `B` and `P` underlined on it, `SHUFFLE`, and `HIT` with its `H` underlined, and `KIT 808` at the right-hand end of the caption line above the dials | from the picker: click `+`, click `DRUMS`, wait for the notice to clear, and park the pointer outside the window (a hover tooltip would land in the picture). Retaken in the keys-and-tooltips round, so the picture says its own keys by eye; the pattern is left empty on purpose, as a first run's drum machine is |
+| `img/kit-browser.png` | the kit browser: `FACTORY` with `808`, `909` and `Acoustic`, each `- READ ONLY`, `MY KITS` under them and empty, `NOW: 808 - READ ONLY` — the kit a drum machine arrives on | `F3` on the drum device; click the card's `KIT` row |
 | `img/two-devices.png` | two devices, `ACID 1` black and selected, `ACID 2` on `FESTIVAL CITRUS` | from the picker, click `ACID`; `ctrl+2`; `F3`; click `COLOUR`; click the `FESTIVAL CITRUS` row; `Escape`; `ctrl+1` |
 | `img/strip.png` | the same strip, cropped: a black cell, a teal one, and `+` | `-crop 1960x76+0+24` in the state above |
 | `img/clipboard-notice.png` | the status line reading `pasted A1 into A2` | `ctrl+c`, `shift+Right`, `ctrl+v`, grabbed within the second, before the notice clears |

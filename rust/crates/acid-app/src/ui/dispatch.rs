@@ -1,15 +1,17 @@
 //! Keyboard dispatch: which presses the panel acts on, and how each one is resolved.
 //!
-//! The order is the point. The step editor sees a press first, so shift+arrows never reach the transport and
-//! pattern shortcuts that act on the same four keys; and a press the step editor refuses while the help card
-//! is up is spent, so a modal card cannot be edited behind. Both rules live here rather than in `main.rs`
-//! because `main.rs` is a binary and cannot be tested.
+//! The order is the point. A face sees a press first, so its own keys are decided before the transport's, and a press the
+//! step editor refuses while a help card is up is spent, so a modal card cannot be edited behind — while the rack's keys,
+//! `shift+arrows` among them, still act. Both rules live here rather than in `main.rs` because `main.rs` is a binary and
+//! cannot be tested.
 
 use acid_core::bank::PatternBank;
+use acid_core::drums::Drum;
+use acid_core::pattern::STEPS_PER_PATTERN;
 use eframe::egui::{Event, Key};
 
-use super::{PanelState, learn, selection, shortcuts, tape, transport};
-use crate::device::MAX_DEVICES;
+use super::{PanelState, drum_panel, kits, learn, selection, shortcuts, tape, transport};
+use crate::device::{DeviceKind, MAX_DEVICES};
 use crate::state::SharedState;
 
 /// One press the panel handles: the key, and which of the modifiers it cares about were down.
@@ -27,29 +29,44 @@ pub struct KeyPress {
 /// What the panel did with a press.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Handled {
-    /// The selection moved, or the selected step was edited.
+    /// The selection moved, or the face's current edit wrote — a step, or the selected voice's filter.
     Selection,
     /// A transport, tempo, pattern or help shortcut ran.
     Shortcut(shortcuts::Shortcut),
-    /// The step editor's key, refused because the help card is modal.
+    /// A face's own key, refused because a card is modal: the step editor's, or the drum face's walk, step move, write and
+    /// filter.
+    /// The rack's keys are not a face's, so `shift+arrows` (the pattern and the tempo) and `space` still act behind a card.
     Refused,
+    /// A drum voice was struck — `HIT`'s key. Nothing changed, and the press is spent.
+    Hit,
     /// Nothing in the panel wanted this key.
     Nothing,
     /// The rack: `Ctrl` and a digit asked for one of the devices, and `main` answers it after the frame.
     Rack,
 }
 
-/// Whether holding the key may repeat its action: only the tempo nudges, where a held key is a sweep. A held
-/// Enter would flip a step at frame rate and a held arrow would race through the patterns.
+/// Whether holding the key may repeat its action: only the arrows, which walk or sweep while held — plain ones move the face's
+/// selection, `shift`ed ones nudge the tempo. A held Enter would flip a step at frame rate and a held `shift+left` would race
+/// through the patterns.
 fn repeats_allowed(key: Key) -> bool {
     matches!(key, Key::ArrowUp | Key::ArrowDown)
 }
 
-/// Whether the panel has anything to do with this key at all.
-pub fn is_panel_key(key: Key, shift: bool, ctrl: bool) -> bool {
-    (ctrl && device_key(key).is_some())
-        || shortcuts::shortcut_for(key, shift).is_some()
-        || selection::edit_key(key, shift).is_some()
+/// Whether the panel has anything to do with this key at all, **on the face it is showing**.
+///
+/// The face is asked because one key is two things: `h` is a note on the 303 and `HIT` on a drum machine, so a filter that
+/// did not ask would either steal the note or leave the hit unrouted. What both faces share — a `Ctrl` digit, the transport
+/// and the pattern keys — is answered first.
+pub fn is_panel_key(key: Key, kind: DeviceKind, shift: bool, ctrl: bool) -> bool {
+    if (ctrl && device_key(key).is_some()) || shortcuts::shortcut_for(key, shift).is_some() {
+        return true;
+    }
+    // Each face chooses its own keys, written out so a third machine has to choose rather than inherit one of these. The
+    // 303's letters are notes, and are read inside `draw_panel` rather than taken out of the frame.
+    match kind {
+        DeviceKind::Acid => selection::edit_key(key, shift).is_some(),
+        DeviceKind::Drums => drum_panel::face_key(key, shift).is_some(),
+    }
 }
 
 /// The keys `Ctrl` and a digit use, in device order.
@@ -72,13 +89,16 @@ pub fn device_key(key: Key) -> Option<usize> {
 /// the moment of the press, so a key pressed in the same frame its modifier went down is still that key with that modifier;
 /// filtering on `input.modifiers` dropped a ctrl+digit that arrived inside one frame, which made `Ctrl+1..4` dead for
 /// anything faster than a hand (`ui::keys` documents the same rule for the audition keys). A headless run found it.
-pub fn presses(events: &[Event]) -> Vec<KeyPress> {
-    events.iter().filter_map(as_press).collect()
+pub fn presses(events: &[Event], kind: DeviceKind) -> Vec<KeyPress> {
+    events
+        .iter()
+        .filter_map(|event| as_press(event, kind))
+        .collect()
 }
 
 /// The press one event carries, if it is one the panel acts on: a key going down, that the panel has a use for, and
 /// either the real press or a repeat the key is allowed.
-fn as_press(event: &Event) -> Option<KeyPress> {
+fn as_press(event: &Event, kind: DeviceKind) -> Option<KeyPress> {
     match event {
         Event::Key {
             key,
@@ -87,13 +107,15 @@ fn as_press(event: &Event) -> Option<KeyPress> {
             modifiers,
             ..
         } => {
-            // A key repeats only if it is a tempo nudge; everything else acts once per real press.
+            // A key repeats only if it is one of the arrows; everything else acts once per real press.
             let allowed = !*repeat || repeats_allowed(*key);
-            (allowed && is_panel_key(*key, modifiers.shift, modifiers.ctrl)).then_some(KeyPress {
-                key: *key,
-                shift: modifiers.shift,
-                ctrl: modifiers.ctrl,
-            })
+            (allowed && is_panel_key(*key, kind, modifiers.shift, modifiers.ctrl)).then_some(
+                KeyPress {
+                    key: *key,
+                    shift: modifiers.shift,
+                    ctrl: modifiers.ctrl,
+                },
+            )
         }
         _ => None,
     }
@@ -117,14 +139,64 @@ pub fn handle(
         panel.device_request = Some(crate::device::Request::Select(index));
         return Handled::Rack;
     }
-    match selection::dispatch(press.key, press.shift, panel, shared) {
-        selection::Press::Applied => {
-            // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
-            super::clear::disarm(panel);
-            return Handled::Selection;
+    // The drum face owns its own keys: plain `left`/`right` move the step and `up`/`down` walk the voice, `enter` writes the
+    // selected voice into that step (`shift` accents it), `h` strikes it without writing, and `l`/`b`/`p` choose a side of the
+    // selected voice's filter. The 303's step editor is not asked, because a drum face has no step row or note to edit. The
+    // transport and pattern shortcuts below are both machines' — one drum voice does not make the deck another deck — so only a
+    // face's own keys are decided here.
+    match panel.showing_kind() {
+        DeviceKind::Acid => match selection::dispatch(press.key, press.shift, panel, shared) {
+            selection::Press::Applied => {
+                // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
+                super::clear::disarm(panel);
+                return Handled::Selection;
+            }
+            selection::Press::Refused => return Handled::Refused,
+            selection::Press::NotOurs => {}
+        },
+        DeviceKind::Drums => {
+            if let Some(face) = drum_panel::face_key(press.key, press.shift) {
+                // A card is modal for everything that moves a selection or writes a step; a hit is a sound, and the 303's
+                // letters already audition through one. `HIT`'s button is unreachable behind a card; its key is not.
+                if panel.a_card_is_up() && !matches!(face, drum_panel::FaceKey::Hit) {
+                    return Handled::Refused;
+                }
+                match face {
+                    drum_panel::FaceKey::MoveVoice(delta) => {
+                        // `move_selection` clamps at both ends, so `up` on the first row stays on it rather than wrapping to
+                        // the last — the same rule the 303's step border keeps.
+                        let walked = selection::move_selection(
+                            panel.drum.selected.index(),
+                            delta,
+                            Drum::ALL.len(),
+                        );
+                        panel.drum.selected = Drum::ALL[walked];
+                        return Handled::Selection;
+                    }
+                    drum_panel::FaceKey::MoveStep(delta) => {
+                        panel.selected =
+                            selection::move_selection(panel.selected, delta, STEPS_PER_PATTERN);
+                        return Handled::Selection;
+                    }
+                    drum_panel::FaceKey::Write { accented } => {
+                        let step = panel.selected;
+                        let drum = panel.drum.selected;
+                        drum_panel::strike_step(panel, shared, step, drum, accented);
+                        return Handled::Selection;
+                    }
+                    drum_panel::FaceKey::Hit => {
+                        shared.request_audition(panel.drum.selected);
+                        return Handled::Hit;
+                    }
+                    drum_panel::FaceKey::Filter(kind) => {
+                        // The filter's letters are the segment clicks: one writer, which keeps the click's `!choosing`
+                        // guard, and silent — a filter choice is an edit, not an audition.
+                        drum_panel::set_filter(panel, shared, kind);
+                        return Handled::Selection;
+                    }
+                }
+            }
         }
-        selection::Press::Refused => return Handled::Refused,
-        selection::Press::NotOurs => {}
     }
     let Some(shortcut) = shortcuts::shortcut_for(press.key, press.shift) else {
         return Handled::Nothing;
@@ -160,31 +232,24 @@ pub fn handle(
         return Handled::Shortcut(shortcut);
     }
     shortcuts::apply(shortcut, shared, bank);
-    // The settings card is panel state too, and there is room for one card: opening it clears the other three. The device
-    // card goes the same way it came — through `close_device_card`, so its mirror cannot outlive it — and the rule is
-    // symmetric because a one-way rule is a state two keystrokes away, not a corner.
+    // The settings card is panel state too, and there is room for one card. Every other card goes through
+    // `put_cards_away`, which is the one spelling of the rule — a keyboard arm that lists the others by hand forgets the
+    // next card added, and the kit browser was that card.
     if matches!(shortcut, shortcuts::Shortcut::ToggleSettings) {
-        panel.settings_open = !panel.settings_open;
-        if panel.settings_open {
-            panel.help_visible = false;
-            panel.songs.card = None;
-            panel.close_device_card();
-            panel.device_picker.open = false;
-        }
+        let opening = !panel.settings_open;
+        panel.put_cards_away();
+        panel.settings_open = opening;
     }
-    // The help card is panel state, so it is toggled here rather than in `apply` — and it follows the same one-card rule
-    // as F2 in the other direction: opening help puts the settings card away, or help would paint over a card that is
-    // still open and Escape would close the one nobody can see first.
+    // The help card follows the same rule in the other direction: opening help puts every other card away, or help would
+    // paint over a card that is still open and Escape would close the one nobody can see first.
     if matches!(shortcut, shortcuts::Shortcut::ToggleHelp) {
-        panel.help_visible = !panel.help_visible;
-        if panel.help_visible {
-            panel.settings_open = false;
-            panel.close_device_card();
-            panel.device_picker.open = false;
-        }
+        let opening = !panel.help_visible;
+        panel.put_cards_away();
+        panel.help_visible = opening;
     }
-    // The device card is the topmost of the four inside the panel, so it is the second thing Escape gives up on and the
-    // one F3 toggles. Opening it puts the other four away, because there is room for one card.
+    // The device card is the topmost of the five inside the panel, so it is the second thing Escape gives up on and the
+    // one F3 toggles. Opening it puts the other four away — the kit browser among them, which is the card that opens from
+    // this one — because there is room for one card.
     if matches!(shortcut, shortcuts::Shortcut::ToggleDeviceCard) {
         if panel.device_card.open.is_some() {
             panel.close_device_card();
@@ -205,12 +270,10 @@ pub fn handle(
 }
 
 /// Escape gives up on one thing at a time, in the order the cards are painted: the picker (over everything), then the device
-/// card, then the settings card, then help, then the songs card, then a learn in progress. Returns whether there was anything
-/// to close.
-///
-/// The topmost card first is the rule; the songs card is the exception already — it is painted over help but closed after
-/// it — and the device card is the one card that needed the rule to hold, because it is the one a hand opens by accident.
-/// It lives here rather than in `main` because the order is the behaviour, and `main` is a binary no test can call.
+/// card, then the kit browser, then the settings card, then help, then the songs card, then a learn in progress. Returns
+/// whether there was anything to close. The topmost card first is the rule, and the songs card is the exception already — it
+/// is painted over help but closed after it. It lives here rather than in `main` because the order is the behaviour, and
+/// `main` is a binary no test can call.
 pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
     // The picker is painted last, so it is the first thing Escape gives up on; then the device card under it.
     if panel.device_picker.open {
@@ -225,6 +288,12 @@ pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
     }
     if panel.device_card.open.is_some() {
         panel.close_device_card();
+        return true;
+    }
+    if panel.kits.open {
+        // The kit browser is the device card's sibling, opened from it and painted over the panel: Escape puts it away
+        // before the card that opened it, which is the same order they are painted in.
+        kits::close(panel);
         return true;
     }
     if panel.settings_open {
@@ -250,13 +319,13 @@ pub fn escape(panel: &mut PanelState, shared: &SharedState) -> bool {
 /// Take this frame's key events out of the frame and turn them into presses, leaving every other event for the widgets
 /// that follow. Taking rather than reading is what makes a press happen once: egui leaves the last pass's events in place
 /// for a logic-only tick, so a reader would replay a Space or an Enter every 200 ms while the window is hidden.
-pub fn take_presses(events: &mut Vec<Event>, typing: bool) -> Vec<KeyPress> {
+pub fn take_presses(events: &mut Vec<Event>, kind: DeviceKind, typing: bool) -> Vec<KeyPress> {
     // A focused text field's keys are the field's: its space bar is a space, not the transport.
     if typing {
         return Vec::new();
     }
     let mut taken = Vec::new();
-    events.retain(|event| match as_press(event) {
+    events.retain(|event| match as_press(event, kind) {
         Some(press) => {
             taken.push(press);
             false
@@ -612,15 +681,25 @@ mod tests {
     }
 
     #[test]
-    fn a_held_key_repeats_only_for_the_tempo() {
-        // A held Enter used to toggle the step at frame rate; a held pattern arrow raced through the bank.
+    fn only_the_arrows_repeat_out_of_the_frame() {
+        // A held Enter would flip a step at frame rate and a held `shift+left` would race through the bank. The arrows are
+        // the one pair that walks or sweeps while held, under either modifier: plain ones move the face's selection.
         let events = vec![
             key_event(Key::Enter, false, true),
             key_event(Key::ArrowUp, false, true),
+            key_event(Key::ArrowDown, true, true),
             key_event(Key::ArrowRight, false, true),
+            key_event(Key::ArrowRight, true, true),
         ];
-        let pressed: Vec<Key> = presses(&events).iter().map(|p| p.key).collect();
-        assert_eq!(pressed, vec![Key::ArrowUp], "only the tempo nudge repeats");
+        let pressed: Vec<(Key, bool)> = presses(&events, DeviceKind::Acid)
+            .iter()
+            .map(|p| (p.key, p.shift))
+            .collect();
+        assert_eq!(
+            pressed,
+            vec![(Key::ArrowUp, false), (Key::ArrowDown, true)],
+            "only the arrows repeat, and the shift travels with the one that had it"
+        );
     }
 
     #[test]
@@ -630,7 +709,10 @@ mod tests {
             key_event(Key::Enter, false, false),
             key_event(Key::F1, false, false),
         ];
-        let pressed: Vec<Key> = presses(&events).iter().map(|p| p.key).collect();
+        let pressed: Vec<Key> = presses(&events, DeviceKind::Acid)
+            .iter()
+            .map(|p| p.key)
+            .collect();
         assert_eq!(pressed, vec![Key::Enter, Key::F1], "B is an audition key");
     }
 
@@ -638,7 +720,7 @@ mod tests {
     fn shift_travels_with_the_press_it_arrived_on() {
         let events = vec![key_event(Key::ArrowUp, true, false)];
         assert_eq!(
-            presses(&events),
+            presses(&events, DeviceKind::Acid),
             vec![KeyPress {
                 key: Key::ArrowUp,
                 shift: true,
@@ -647,7 +729,7 @@ mod tests {
         );
         // `?` is only the help key with shift, so an unshifted one is not the panel's.
         let events = vec![key_event(Key::Questionmark, false, false)];
-        assert!(presses(&events).is_empty());
+        assert!(presses(&events, DeviceKind::Acid).is_empty());
     }
 
     #[test]
@@ -665,7 +747,7 @@ mod tests {
         for (key, shift) in [
             (Key::Enter, false),
             (Key::ArrowRight, false),
-            (Key::ArrowUp, true),
+            (Key::ArrowUp, false),
         ] {
             assert_eq!(
                 handle(
@@ -699,6 +781,22 @@ mod tests {
             ),
             Handled::Shortcut(shortcuts::Shortcut::PlayStop)
         );
+
+        // The rack's keys are not the face's, so the card leaves them working: a shifted arrow nudges the tempo exactly as
+        // `space` stops the transport.
+        assert_eq!(
+            handle(
+                KeyPress {
+                    key: Key::ArrowUp,
+                    shift: true,
+                    ctrl: false
+                },
+                &mut panel,
+                &shared,
+                &mut bank
+            ),
+            Handled::Shortcut(shortcuts::Shortcut::TempoUp)
+        );
     }
 
     #[test]
@@ -715,12 +813,26 @@ mod tests {
 
     #[test]
     fn a_ctrl_digit_is_a_panel_key_and_a_bare_digit_is_not() {
-        assert!(is_panel_key(Key::Num2, false, true));
-        assert!(!is_panel_key(Key::Num2, false, false));
+        assert!(is_panel_key(Key::Num2, DeviceKind::Acid, false, true));
+        assert!(!is_panel_key(Key::Num2, DeviceKind::Acid, false, false));
         assert!(
-            !is_panel_key(Key::Num5, false, true),
+            !is_panel_key(Key::Num5, DeviceKind::Acid, false, true),
             "a digit past the last device is not the panel's"
         );
+    }
+
+    #[test]
+    fn the_face_decides_whether_a_letter_is_the_panels() {
+        // `h` is the 303's note and a drum machine's hit: one key, two faces, so the filter has to be told which is showing.
+        assert!(is_panel_key(Key::H, DeviceKind::Drums, false, false));
+        assert!(!is_panel_key(Key::H, DeviceKind::Acid, false, false));
+        assert!(
+            !is_panel_key(Key::H, DeviceKind::Drums, true, false),
+            "shift+h is not the hit"
+        );
+        // A key every face shares needs no face to answer.
+        assert!(is_panel_key(Key::Space, DeviceKind::Drums, false, false));
+        assert!(is_panel_key(Key::Space, DeviceKind::Acid, false, false));
     }
 
     #[test]
@@ -737,7 +849,7 @@ mod tests {
                 ..Modifiers::NONE
             },
         }];
-        let pressed = presses(&events);
+        let pressed = presses(&events, DeviceKind::Acid);
         assert_eq!(pressed.len(), 1, "a ctrl digit is the panel's");
         assert!(pressed[0].ctrl, "and the ctrl travels with the press");
 

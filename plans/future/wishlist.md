@@ -15,11 +15,32 @@ Agreed during phase 2 and deliberately deferred: phase 2 saves the first device 
 the first are lost on restart** (the picker card says so).
 
 The round that lands it: `SavedState` gains `#[serde(default)] pub devices: Vec<SavedDevice>` where `SavedDevice` holds
-`{ name, kind, inputs, bank, knobs }`; the flat v9 fields (`bank`, `knobs`, `bpm`, `swing`, `midi_input`, `cc_map`) stay as
-device 1's mirror so a file written by a v9 build still loads as a one-device song and a file written by this build still
-opens in a v9 build with device 1 intact. `SAVE_VERSION` goes to 10, `tests/persist.rs` gains the new pin next to the old
+`{ name, kind, inputs, bank, knobs }`; the flat fields (`bank`, `knobs`, `bpm`, `swing`, `midi_input`, `cc_map`, `kit`) stay as
+device 1's mirror so a file written by a build before this round still loads as a one-device song and a file written by this
+build still opens in an older build with device 1 intact. **`SAVE_VERSION` goes to 12** — the drum machine's kit took 11, so
+the rack round is 12 — and `tests/persist.rs` gains the new pin next to the old
 one, and the picker card's footnote goes away. `sanitize` learns to repair a `devices` list the way it repairs a bank:
 one device minimum, at most `MAX_DEVICES`, names made distinct.
+
+## The save file
+
+### A file from a newer build is refused, not relabelled
+
+**What it would do.** `persist::open`, `load_song` and `import_song` compare a document's `version` with `SAVE_VERSION` and
+refuse one that is newer, naming the version it found — instead of today's behaviour, where `upgraded` stamps its own version
+over whatever it read and the next save quietly rewrites a newer document as an older one. Phase 4's spec names this exact
+loss as a risk: "a version-9 build reading a version-10 file loses the drum steps silently, which `SAVE_VERSION` is there to
+prevent." The number does not prevent it today; nothing reads it before `upgraded` overwrites them.
+
+**Why not now.** Phase 4's task 2 bumps the version to 10 and pins it in `tests/persist.rs`, which is what a bump has to do.
+Teaching the load path to refuse is a behaviour change to the one path every file goes through, and it needs a decision the
+bump does not: what the app opens instead of the file, and what it says about it.
+
+**What would have to move.** `persist::load` already returns a `Result`, so the refusal is a new error variant naming the
+version and the file; the decision is in `open`, whose rule is "a wrong save file means start again, so the app always opens".
+A newer file needs the second face of that rule — a first run, and a `PanelState::notice` on the status line saying the file was
+newer than this build. `import_song` and `load_song` follow it. The comparison belongs in `persist`; the notice and its live test
+belong with the panel.
 
 ## Transport and racks
 
@@ -54,13 +75,81 @@ or the top strip. It waits for a second opinion on where it sits, because the to
 
 ## Machine
 
-### A second device type
+### A third device type
 
-`device::DeviceKind` is a one-entry catalogue with an exhaustive `match`, on purpose: adding a variant must fail to compile
-wherever a decision is owed. The likely second one is a drum machine or a 606, which means the thing that renders a device stops
-being an `acid_core::Engine` and becomes a `Box<dyn Voice>`-ish trait object. Note where that lives: not on `device::Device`
-(`kind`, `state`, `bank`, `inputs`, `number`, `name`, `scheme`) but in `audio::renderer::AudioRenderer`, one per mixer slot.
-Do it only when there is a real second type to build against, not before.
+`device::DeviceKind` is a two-entry catalogue (`ACID`, `DRUMS`) with an exhaustive `match`, on purpose: adding a variant
+fails to compile wherever a decision is owed. The drum machine was the first second type, and it landed as
+`audio::renderer::Machine` — an enum inside `AudioRenderer`, one arm per kind — rather than as the `Box<dyn Voice>` trait
+object this entry used to imagine: two kinds of machine are an enum with every arm written out, and a trait object earns its
+place at the third, when the arms stop fitting on a screen. When that third kind arrives, the trait is the shape to reach
+for, and the enum stays as the front door that says which one. Note where it lives: not on `device::Device` (`state`,
+`bank`, `inputs`, `number`, `name`, `scheme`) but in `audio::renderer::AudioRenderer`, one per mixer slot, built from the
+`kind` the device's `SharedState` carries.
+
+### A rate change must not undo the player's mutes
+
+Re-decoding every drum device's kit at a new sample rate (`main`'s rate-change arm) goes through `load_kit_now`, which is a
+**load** and calls `SharedState::adopt_kit` — so the kit's own `mute` flags become the mask again, and the player's
+shift-clicked mutes come back to life when they switch audio device. That call is right for a kit the player picked and
+wrong for a kit being re-decoded; phase 4's task 8 made it audible, because before that the mask reached no machine.
+
+What would have to move: `load_kit_now` grows the one thing it is missing — whether this is a load or a re-decode — or the
+rate-change arm publishes with `set_kit` (the edit path, which keeps the mask) and leaves the first load on `adopt_kit`. It
+is `main`'s, which has no test, so paying it means the rate-change arm leaving `main` for a function a test can call.
+
+### A synthesized 808 kick, rather than a recording of one
+
+**What it would do.** Give the `808` kit a kick built the way the machine built it: a pitch-swept sine (about 120 Hz down to
+50 Hz in 40 ms) with a short click on top, peak-normalised and faded like every other file. It keeps an 808's pitch *and* its
+attack, which none of the kicks auditioned from Sonic Pi's set has in both at once (VCSL's bass drums were not auditioned).
+
+**Why not now.** The `808`'s kick was a 40 Hz sine nobody could hear (plan 03, `plans/phase 4/03-the-kick-and-the-voice-keys.md`);
+`bd_fat` fixed the report with a recording, which is the smaller change and keeps `CREDITS.md`'s claim true — every file in
+`kits/` is a recording from Sonic Pi's set or VCSL, and the page says there are two collections. A synthesized file is a third
+provenance kind.
+
+**What would have to move.** `refresh.py` grows one branch that writes a voice from code instead of fetching it, and the credits
+generator learns to print "synthesized by this script" for that row with the sweep's numbers beside it.
+`every_factory_kick_is_audible_above_the_sub_bass` in `tests/kits.rs` already holds whatever lands.
+
+### The drum machine's gain, and the snap it cannot take
+
+`Engine::set_volume` jumps its smoother when nothing is playing and the drum machine's gain always ramps
+(`audio::renderer::apply_volume`), so a VOLUME moved on a stopped drum device fades the next `HIT` in over its 10 ms where a
+303 would start at level.
+
+What would have to move: `Drums` needs to answer the same question the engine answers — `Engine::is_playing_something()` is only
+half of it, and the condition `set_volume` actually snaps on is `!playing && !voice.is_active()`, so the machine needs both a
+"the transport is not running" and a "no voice is sounding" answer over its sixteen voices and its sequencer — and then
+`apply_volume` takes them and snaps, exactly as `Engine::set_volume` does. It is deferred because it is one more predicate with
+no consumer until something else needs it, and because the fade it costs is 10 ms of a hit that was just pressed. The test that
+would see it does not exist yet: it needs the transport **stopped** (which is when the snap fires, and which
+`the_volume_knob_sets_a_drum_devices_level` is not — its rack is playing), a `HIT` requested in the block the knob moves, and the
+hit's opening level compared against its settled one.
+
+### A drum voice takes no controller, so `LEARN` has half a face on one
+
+`LEARN` is on every face, `VOLUME` answers it on both, and a drum machine's seven dials, filter key and `HIT` do not: there is
+no `midi::cc::CcTarget` for a drum voice this phase (the spec's non-goal), so pressing `LEARN` on a drum face and clicking a
+dial picks nothing. The dials now stand still while it is choosing — a drag used to turn the voice and, on a factory kit, copy
+the whole kit under a free name — but the key still reads as if the face could be taught.
+
+**What would have to move.** Either a `CcTarget` per voice (a filled extension of `midi::cc`, a mapping from `Drum` to a
+controller number, and the renderer reading sixteen more CCs — the round that also gives the machine MIDI pads), or hiding
+`LEARN` on a drum face the way the 303's rows are hidden, which is a face change and therefore the player's call. Until then
+the page says which of the two it is (page 22: "`LEARN` has nothing to teach here").
+
+### The retired `Arc<Kit>` is freed on the audio thread
+
+`audio::renderer`'s module doc names it: when a kit is swapped, the mixer's copy of the old `Arc<Kit>` drops its last
+reference during the render call, and `tests/no_alloc.rs` counts allocations, so it cannot see a **free**. It happens once per
+published kit, which a dial drag makes once per value — a small, bounded cost on the audio thread that is deliberate and
+written down rather than hidden.
+
+What would have to move: publish on pointer release rather than per frame (a `response.drag_stopped()` arm in
+`ui::kits::edit`), or hand the retired `Arc` back to the UI thread through a slot the callback only ever pushes to and never
+frees. Either is a change to `ui::kits::edit`, which is the one seam a kit edit goes through.
+
 
 ### Per-device audio outs (stems)
 
@@ -100,7 +189,8 @@ same when it earns one. Naming a phase here is not opening it.
 the tempo's `+` and `−` beside it, and the song's load and save icons where the session name is. The transport leaves the synth
 altogether: the row under the panel loses `RUN`, `STOP`, `TEMPO −`, `TEMPO +` and keeps `VOLUME`, and the four cells it frees
 become `REVERSE`, `TBC`, `TRANSPOSE −`, `TRANSPOSE +` (one semitone at a time). Reverse per pattern, so one device can run its
-line backwards while the others run forwards; transpose for the whole synth from one control. `BACK`, `FORWARD` and `RECORD`
+line backwards while the others run forwards; transpose the device on the panel, as plan 09 later settled it. `BACK`, `FORWARD`
+and `RECORD`
 are drawn and reachable by keyboard now, and recede as not-yet-wired; `LOAD` and `SAVE` wait for the song document, because the
 room they would reserve is the status line's (`plans/phase 3/01-the-tape-transport.md`).
 

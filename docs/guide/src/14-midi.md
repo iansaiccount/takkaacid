@@ -32,7 +32,9 @@ A note from the keyboard plays the voice with its own **velocity**. Two rules de
   a keyboard player can type a line the way the computer keyboard does.
 
 There is one voice, and the MIDI keyboard and the computer keyboard share it. The last note wins; releasing the computer
-keys closes the gate, which also ends a MIDI note that was sounding.
+keys closes the gate, which also ends a MIDI note that was sounding. **A drum machine takes no notes from a keyboard this
+phase** — its card still opens ports and a channel, and a note arriving there changes nothing — because its sixteen voices are
+the grid's, not the keyboard's.
 
 ## `LEARN`: teaching a control
 

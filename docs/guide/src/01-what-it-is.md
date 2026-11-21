@@ -1,10 +1,13 @@
 # What it is
 
-takka-acid is a bass synthesizer built to do one thing: play a single acid line, very well.
+takka-acid is a bass synthesizer built to do one thing: play a single acid line, very well — and, in the same window, a drum
+machine to play it over.
 
-One device is **one voice** and **sixteen steps**. That is the whole machine. You write a line of up to sixteen notes, you
-shape one sound with seven knobs, and the same voice plays both. 64 patterns sit in **eight banks of eight** — `A1` through
-`H8` — so a whole night of lines fits in one session.
+One device is **one voice** (the 303) or **sixteen of them** (the drums), and **sixteen steps**: that is the whole machine.
+You write a bar of up to sixteen steps, you shape the sound, and the same sixteen steps play it. The 303 is a line of
+notes and the drum machine is a grid of strikes, but they are the same bar, the same clock, the same bank and the same
+transport — [`22-the-drum-machine`](22-the-drum-machine.md) is the second machine. 64 patterns sit in **eight banks of
+eight** — `A1` through `H8` — so a whole night of lines fits in one session.
 
 One window can hold **four** of those machines. The strip above the panel is the rack: a cell per device, the one you are
 editing outlined, each with its own patterns, its own sound, its own name and its own colour. Nothing about writing a line
@@ -27,8 +30,12 @@ retriggering, which is where the 303's liquid phrasing comes from.
 
 ## What it is not
 
-It is not a sampler, not a workstation, and not a plugin. There is no piano roll, no layers, no chords — one line at a
-time, on purpose. If you want a polysynth or a drum machine, this is the wrong door.
+It is not a sampler, not a workstation, and not a plugin. There is no piano roll, no layers and no chords — the 303 clone is
+one line at a time, on purpose. If you want a polysynth, this is the wrong door.
+
+The drum machine plays samples, but it is not a sampler either: each of its sixteen voices is one sample with an envelope, a
+filter and a tuning, in a kit, and nothing on the face slices, maps or layers one. What it adds is rhythm, not sampling —
+[`22-the-drum-machine`](22-the-drum-machine.md) says what it is.
 
 What it does have: five demo songs to start from, sixty-four patterns to fill, MIDI in for a keyboard or a controller,
 and a save file that keeps it all.

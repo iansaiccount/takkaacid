@@ -49,15 +49,16 @@ selection behind would make the border lie about what the keyboard edits.
 
 | Keys | Action |
 |---|---|
-| shift+left / shift+right | move the selection one step, clamped at 16 and 1 |
-| shift+up / shift+down | raise or lower the selected step's note by a semitone |
+| left / right | move the selection one step, clamped at 16 and 1 |
+| up / down | raise or lower the selected step's note by a semitone |
 | enter | toggle the selected step on or off |
 
 A semitone per press, chromatic, clamped to the panel's existing `-12..=24` absolute range — the same range
 and the same helper the vertical drag uses (`edit::nudge_pitch`). Nudging a rest turns it into a note at the
 nudged pitch, matching how accent and slide already force a step on.
 
-Shift+arrows are free: unshifted arrows keep tempo (up/down) and pattern (left/right).
+The arrows are the editor's; `shift` is the rack's — `shift+left` / `shift+right` choose the pattern and `shift+up` /
+`shift+down` nudge the tempo — so a shifted arrow never edits a step.
 
 ## Selection lifetime
 

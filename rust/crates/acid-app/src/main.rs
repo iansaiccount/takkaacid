@@ -36,6 +36,12 @@ fn main() -> eframe::Result {
     // The randomise dials are panel state too, so they travel the same way.
     let saved_density = saved.density.clamp(0.0, 1.0);
     let saved_scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
+    // The kit the session's device plays. Absent means the default factory kit, which is what a session saved before the
+    // drum machine has; the name is not resolved to samples until there is a running device to say what rate to decode at.
+    let saved_kit = saved
+        .kit
+        .clone()
+        .unwrap_or_else(|| acid_app::kits::default_name().to_string());
 
     // One mix bus per stream: rebuilt at the device's rate whenever the stream reopens. Every device's engine lives in it, so
     // the rack can add or remove one without the stream noticing.
@@ -89,6 +95,8 @@ fn main() -> eframe::Result {
                 midi: Midi::new(midi_enabled, tempo_cell, midi_bus),
                 pending_pattern: None,
                 last_position: 0,
+                kit_rate: None,
+                kit_wanted: saved_kit,
             }))
         }),
     )
@@ -112,6 +120,12 @@ struct TakkaApp {
     pending_pattern: Option<usize>,
     /// The transport step seen last frame, so a bar crossed between frames is still noticed.
     last_position: usize,
+    /// The rate the kit was decoded at, or `None` before there was a running device to ask. A kit's samples are
+    /// resampled to this rate when the kit loads, so it is also the answer to "has the rate changed since the last load?".
+    kit_rate: Option<f32>,
+    /// The kit the session says the saved device plays, by name. Read from the file at startup and after a song load, and
+    /// set by the browser; the live kit is what is played, and this is what it is reloaded from when the rate moves.
+    kit_wanted: String,
 }
 
 impl eframe::App for TakkaApp {
@@ -137,7 +151,7 @@ impl eframe::App for TakkaApp {
                     self.rack
                         .set_transport(acid_app::device::Transport::Stopped);
                 }
-                // The two performers: a direction this device's line runs in, and a semitone for the whole rack. Both are
+                // The two performers: a direction this device's line runs in, and a semitone on this device. Both are
                 // performance, neither is saved, and the engine takes the direction at the bar line.
                 panel_ui::transport::Request::Reverse(reversed) => {
                     if let Some(device) = self.rack.devices().get(self.panel.strip.selected) {
@@ -145,8 +159,8 @@ impl eframe::App for TakkaApp {
                     }
                 }
                 panel_ui::transport::Request::Transpose(semitones) => {
-                    let next = (self.rack.transpose() + semitones).clamp(-12, 12);
-                    self.rack.set_transpose(next);
+                    // The transpose is the device on the panel's: the row's readout, the engine and this write are one cell.
+                    panel_ui::transport::apply_transpose(&self.rack, semitones);
                 }
                 panel_ui::transport::Request::NudgeTempo(direction) => {
                     // The tempo is in the save file, so a nudge changes the document. `apply_nudge` moves it and answers
@@ -159,23 +173,14 @@ impl eframe::App for TakkaApp {
         // the panel is not showing. `draw_panel` drains the drawn device; this drains the rest, so no fader-moved tempo is left
         // unsaved because it was heard by a device off screen.
         self.panel.dirty |= panel_ui::transport::take_tempo_moved(&self.rack);
-        let status = self.rack.state().status();
-        let text = match &status {
-            AudioStatus::Starting => "starting".to_string(),
-            AudioStatus::Running { .. } => self.rig.status().to_string(),
-            AudioStatus::Failed { reason } => format!("failed: {reason}"),
-        };
-        if text != self.rig.status() {
-            self.rack.state().set_status(match &status {
-                AudioStatus::Running {
-                    device,
-                    sample_rate,
-                } => AudioStatus::Running {
-                    device: device.clone(),
-                    sample_rate: *sample_rate,
-                },
-                other => other.clone(),
-            });
+        // The rig owns the stream, so it owns the status: every device's state is told what it says, from the typed answer the
+        // rig builds (the stream's own device name and rate, never the display line). This used to read the *state's* status and
+        // write the same value back, which is why `main::sample_rate` answered `None` for ever and no kit ever loaded.
+        let status = self.rig.audio_status();
+        for device in self.rack.devices() {
+            if device.state.status() != status {
+                device.state.set_status(status.clone());
+            }
         }
         // Escape gives up on one thing at a time; the order lives in `ui::dispatch` so it can be tested. It is *taken* out of
         // the frame for the same reason the presses are: `key_pressed` counts presses over the event buffer, and a logic-only
@@ -187,15 +192,18 @@ impl eframe::App for TakkaApp {
             panel_ui::dispatch::escape(&mut self.panel, self.rack.state());
         }
         // One press, one action: the step editor first, then the transport and pattern shortcuts (see
-        // `ui::dispatch`). A held key repeats only for the tempo nudges.
+        // `ui::dispatch`). A held arrow repeats — plain ones move the face's selection, `shift`ed ones nudge the tempo.
         //
         // The presses are *taken* out of the frame, not read: a logic-only tick (a minimised window) is handed the last
         // pass's events again, and the panel repaints every 200 ms, so a reader would replay the same Space or arrow until
         // the window came back. Nothing is taken while a text field has the keyboard — the field's letters are letters, and
         // its space bar is a space rather than the transport. `ui::mod`'s audition keys ask the same question, and both must,
         // or a name typed into a card plays notes and stops the transport.
-        let presses =
-            ctx.input_mut(|input| panel_ui::dispatch::take_presses(&mut input.events, typing));
+        // The face is part of the question: `h` is a note on the 303 and `HIT` on a drum machine, so what the panel takes
+        // from the frame depends on which face is showing.
+        let kind = self.panel.showing_kind();
+        let presses = ctx
+            .input_mut(|input| panel_ui::dispatch::take_presses(&mut input.events, kind, typing));
         let pattern_before = self.rack.bank().current();
         for press in presses {
             let device = self.rack.device_mut();
@@ -388,29 +396,51 @@ impl eframe::App for TakkaApp {
                 }
                 panel_ui::banks::Request::Load(name) => self.load_song_now(&dir, &name),
                 panel_ui::banks::Request::LoadDemo(index) => {
-                    if let Some(demo) = demo::songs().into_iter().nth(index) {
-                        self.save();
-                        let device = self.rack.device_mut();
-                        persist::apply_saved(&demo.state, &device.state, &mut device.bank);
-                        self.rack.set_tempo_bpm(demo.state.bpm);
-                        panel_ui::pattern_swap::adopt(
-                            &mut self.panel,
-                            self.rack.state(),
-                            self.rack.bank(),
-                        );
-                        self.pending_pattern = None;
-                        // A demo is not a file: it arrives as a new song under a name, and nothing of it is on disk until
-                        // the player renames and saves it.
-                        self.panel.songs.name = Some(demo::NEW_SONG.to_string());
-                        self.panel.songs.file = None;
-                        self.panel.songs.card = None;
-                        self.panel.dirty = true;
-                        self.panel.tooltips = demo.state.tooltips;
-                        self.panel.autosave = demo.state.autosave;
-                        self.panel.set_density(demo.state.density);
-                        self.panel.set_scale(panel_ui::scale::Scale::from_index(
-                            demo.state.scale as usize,
-                        ));
+                    // The five rows are the demos' own names on either face, so what a row *does* is the device's kind —
+                    // the one question `Device::kind` answers. Written out, so a third machine has to decide here.
+                    match self.rack.device().kind() {
+                        device::DeviceKind::Acid => {
+                            if let Some(demo) = demo::songs().into_iter().nth(index) {
+                                self.save();
+                                let device = self.rack.device_mut();
+                                persist::apply_saved(&demo.state, &device.state, &mut device.bank);
+                                self.rack.set_tempo_bpm(demo.state.bpm);
+                                panel_ui::pattern_swap::adopt(
+                                    &mut self.panel,
+                                    self.rack.state(),
+                                    self.rack.bank(),
+                                );
+                                self.pending_pattern = None;
+                                // A demo is not a file: it arrives as a new song under a name, and nothing of it is on
+                                // disk until the player renames and saves it.
+                                self.panel.songs.name = Some(demo::NEW_SONG.to_string());
+                                self.panel.songs.file = None;
+                                self.panel.songs.card = None;
+                                self.panel.dirty = true;
+                                self.panel.tooltips = demo.state.tooltips;
+                                self.panel.autosave = demo.state.autosave;
+                                self.panel.set_density(demo.state.density);
+                                self.panel.set_scale(panel_ui::scale::Scale::from_index(
+                                    demo.state.scale as usize,
+                                ));
+                            }
+                        }
+                        device::DeviceKind::Drums => {
+                            // The whole of what a demo on a drum machine is lives in `demo::load_drum_bank`: its patterns,
+                            // its tempo and its shuffle, and nothing else — not the kit, not the session's name.
+                            self.save();
+                            if let Some(name) = demo::load_drum_bank(&mut self.rack, index) {
+                                panel_ui::pattern_swap::adopt(
+                                    &mut self.panel,
+                                    self.rack.state(),
+                                    self.rack.bank(),
+                                );
+                                self.pending_pattern = None;
+                                self.panel.songs.card = None;
+                                self.panel.dirty = true;
+                                self.notice(format!("loaded the {name} drum bank"));
+                            }
+                        }
                     }
                 }
             }
@@ -436,6 +466,7 @@ impl eframe::App for TakkaApp {
             {
                 self.panel.device_card.offer(
                     &device.name,
+                    device.kind(),
                     &device.inputs,
                     midi::ports::list_ports().unwrap_or_default(),
                 );
@@ -449,12 +480,65 @@ impl eframe::App for TakkaApp {
             && let Some(device) = self.rack.devices().get(index)
         {
             self.panel.device_card.route_from(&device.inputs);
-            // The scheme is a reading of the same device, refreshed the same way: the key on the card shows what the rack
-            // holds, so a click on it moves the key on the next frame and not before.
+            // The scheme and the kit are readings of the same device, refreshed the same way: a key on the card shows what the
+            // rack holds, so a click on it — or an edit on the panel that copies a factory kit — moves the card on the next
+            // frame and not before.
             self.panel.device_card.scheme_from(device.scheme);
+            self.panel.device_card.kit_from(&device.state.kit().name);
         }
         if let Some(request) = self.panel.settings_request.take() {
             self.apply_settings_request(request);
+        }
+        // The kit's samples are resampled to the rate the running device plays at, and never to a default: a kit decoded at
+        // the wrong rate plays every voice at the wrong pitch, and nothing in the face would say why. So the kit loads the
+        // frame the device says what rate it runs at — and again if that rate ever changes. The renderer follows the state's
+        // kit once a block, so a reload reaches the sound without the audio thread decoding anything.
+        if let Some(rate) = self.sample_rate() {
+            match self.kit_rate {
+                None => {
+                    self.kit_rate = Some(rate);
+                    let wanted = self.kit_wanted.clone();
+                    // Device 1: the save file is one device, and the kit it names is that device's (the spec's rule, and the
+                    // reason `saved_device` exists at all). A first device that is not a drum machine has no kit to load, and
+                    // asking the library for one would report a kit the machine does not play.
+                    if self.rack.saved_device().kind().has_kit() {
+                        self.load_kit_now(0, &wanted, rate);
+                    }
+                }
+                Some(loaded) if loaded != rate => {
+                    // A rate change re-decodes every drum device's kit: a voice decoded at the old rate plays at the wrong
+                    // pitch. An edit that has not been written is written **first, at the old rate** — the one its samples are
+                    // at — because `save_kit` stamps that rate into every WAV it writes; adopting the new rate first would
+                    // label old samples with a new rate and the reload would then play them sharp for ever. That is why the write
+                    // comes before the new rate is adopted: the order is the fix, not a tidy-up's choice.
+                    self.write_kit();
+                    self.kit_rate = Some(rate);
+                    let live: Vec<(usize, String)> = self
+                        .rack
+                        .devices()
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, device)| device.kind().has_kit())
+                        .map(|(index, device)| (index, device.state.kit().name.clone()))
+                        .collect();
+                    for (index, name) in live {
+                        self.load_kit_now(index, &name, rate);
+                    }
+                }
+                Some(_) => {}
+            }
+            // A drum machine is built on the `Init` kit — sixteen voices and no samples — because a state cannot decode a WAV;
+            // the rate is only known here. So every drum device that has never had a kit is given the default factory kit the
+            // frame this runs: a device the player has just added is device 2 or later, and nothing else ever loads its kit.
+            for device in self.rack.devices() {
+                acid_app::kits::fill_if_silent(&device.state, rate);
+            }
+        }
+        // The kits on offer, read when they are needed: on the first frame — the copy a factory edit makes has to know which
+        // names are taken, and that is not a moment the card is open for — when the card opens, and after a copy is named.
+        if self.panel.kits.refresh {
+            self.panel.kits.refresh = false;
+            self.panel.kits.names = persist::kit_names(&persist::kits_dir());
         }
         // MIDI: collect a finished probe, then start another one if one is due. Probing never blocks this
         // thread — it runs on a spawned thread and reports through a channel.
@@ -516,6 +600,8 @@ impl eframe::App for TakkaApp {
             .iter()
             .map(|device| panel_ui::strip::StripCell {
                 name: device.name.clone(),
+                // The face the panel draws is the kind's: a drum device gets the grid, an acid device the step row.
+                kind: device.kind(),
                 // The panel's per-device editor slots are keyed by this, so a removal cannot hand one device's step,
                 // step mode and randomise dials to its neighbour.
                 number: device.number,
@@ -540,6 +626,7 @@ impl eframe::App for TakkaApp {
         // output picker; both live in the settings card now, so nothing is painted outside the panel.
         panel_ui::draw_panel(&mut self.panel, self.rack.state(), ui);
         self.apply_device_request();
+        self.apply_kits_request();
         if let Some(name) = self.panel.picker.output_choice.take() {
             self.rig.request_device(Some(name));
         }
@@ -550,6 +637,198 @@ impl TakkaApp {
     /// The selected device's state, as the panel, the shortcuts and the save file want it.
     fn state(&self) -> &state::SharedState {
         self.rack.state()
+    }
+
+    /// The rate the running audio device plays at, if there is one.
+    ///
+    /// A kit is decoded at this rate and never at a default: a voice decoded at the wrong rate plays at the wrong pitch, and
+    /// nothing in the face would say why. While the device is still starting nothing is decoded, and a drum device is silent
+    /// until its kit arrives — which is exactly what a device with no samples sounds like.
+    ///
+    /// The rig answers, not a device's state: the state mirrors the stream and can lag it, and this used to read that mirror —
+    /// which nothing ever wrote, so the rate was `None` for ever and no kit was ever loaded. See the status block in `logic`.
+    fn sample_rate(&self) -> Option<f32> {
+        self.rig.sample_rate()
+    }
+
+    /// Publish the kit `name` into device `index`, decoding it at `rate`.
+    ///
+    /// A factory name comes out of the binary; anything else is a folder in the library. A kit that will not load is a
+    /// notice and nothing more: the device keeps the kit it has, so a broken folder does not silence the machine.
+    fn load_kit_now(&mut self, index: usize, name: &str, rate: f32) -> bool {
+        let mut problems = Vec::new();
+        let kit = if acid_app::kits::is_factory(name) {
+            acid_app::kits::factory_kit(name, rate)
+        } else if name == acid_core::drums::DEFAULT_KIT_NAME {
+            // The default kit is not a folder and never was: a drum machine that has not picked one holds `Init`, and a
+            // reload loop asking the library for it would report a kit that does not exist. Silence is the honest answer.
+            Some(acid_core::drums::default_kit())
+        } else {
+            match persist::load_kit(&persist::kits_dir(), name, rate) {
+                Ok(loaded) => {
+                    problems = loaded.problems;
+                    Some(loaded.kit)
+                }
+                Err(error) => {
+                    self.kit_notice(format!("could not load the kit {name}: {error}"));
+                    None
+                }
+            }
+        };
+        // One notice for the whole kit: `PanelState::notice` is one line, so a `notice` per voice would say only the last.
+        // The voices are still named, in the decoder's own words, because a player holding a kit wants to know *which* file.
+        if !problems.is_empty() {
+            let named: Vec<String> = problems.iter().map(|problem| problem.to_string()).collect();
+            self.kit_notice(format!("kit {name}: {}", named.join("; ")));
+        }
+        let Some(kit) = kit else {
+            return false;
+        };
+        let Some(device) = self.rack.devices().get(index) else {
+            return false;
+        };
+        // A load, not an edit: the kit's own mutes become the device's starting mask, so a kit that ships with its cowbell
+        // off arrives with the cowbell off (`adopt_kit`, beside `set_kit`, says why they are two methods).
+        device.state.adopt_kit(kit);
+        true
+    }
+
+    /// Write the kit that was edited into the library, and only that one — the device the write is owed comes from the panel,
+    /// by number.
+    ///
+    /// A kit is two things on disk — a name in the save file and a folder of samples — so a save writes the folder only when
+    /// the kit changed. Rewriting two megabytes of WAV on every autosave tick is not a save, it is a disk burner; the name is
+    /// written every time, because it is part of the document.
+    ///
+    /// The **edited** device is not always the selected one: a player can turn a dial on the second drum machine, click back to
+    /// the bass, and save. So the panel records *which* device is owed the write (`PanelState::kit_dirty`), and this reads that
+    /// number. The document still names only the saved device's kit (this phase's rule), so a kit edited on a second drum
+    /// machine lands in the library where the browser lists it and is named by the rack round — but it is written.
+    fn write_kit(&mut self) -> bool {
+        let Some(number) = self.panel.kit_dirty else {
+            return true;
+        };
+        let Some(rate) = self.kit_rate else {
+            // No rate means no kit was ever decoded, so nothing was edited either.
+            return true;
+        };
+        let Some(device) = self
+            .rack
+            .devices()
+            .iter()
+            .find(|device| device.number == number)
+        else {
+            // The device that was edited has been removed since; the kit went with it, and a number is never reused.
+            self.panel.kit_dirty = None;
+            return true;
+        };
+        let kit = device.state.kit();
+        if acid_app::kits::is_reserved(&kit.name) {
+            // A factory kit has no folder to write: an edit copies it before it lands. Reaching this is a copy that did not
+            // happen, and writing into a folder named after a kit that ships is the one thing this must never do.
+            self.panel.kit_dirty = None;
+            return true;
+        }
+        match persist::save_kit(&kit, &persist::kits_dir(), rate) {
+            Ok(_) => {
+                self.panel.kit_dirty = None;
+                true
+            }
+            Err(error) => {
+                // The flag stays, so the next save tries again — and the caller must not report the session saved, or a full
+                // disk would cost the player their kit with the status line saying everything was kept.
+                self.kit_notice(format!("could not save the kit: {error}"));
+                false
+            }
+        }
+    }
+
+    /// A load onto the selected device cancels the write *that device* was owed, and leaves every other device's alone: the
+    /// edit a second drum machine is owed is not the selected device's to forgive.
+    fn forgive_kit_write(&mut self) {
+        if self.panel.kit_dirty == Some(self.rack.device().number) {
+            self.panel.kit_dirty = None;
+        }
+    }
+
+    /// Do what the kit browser asked for. It is the card's sibling, so its own list is refreshed after anything moves it.
+    fn apply_kits_request(&mut self) {
+        let Some(request) = self.panel.kits_request.take() else {
+            return;
+        };
+        match request {
+            panel_ui::kits::Request::Close => panel_ui::kits::close(&mut self.panel),
+            panel_ui::kits::Request::Load(name) => {
+                let Some(rate) = self.kit_rate else {
+                    self.kit_notice(
+                        "the audio device is not running yet, so no kit can be loaded".to_string(),
+                    );
+                    return;
+                };
+                // The kit lands on the device whose card opened the browser, which is the selected one. A load is not an
+                // edit, so the write this device was owed is cancelled — another device's is not. The confirmation waits for
+                // the load: a "could not load" notice must not be overwritten by a `kit: X` that never happened.
+                let loaded = self.load_kit_now(self.rack.selected(), &name, rate);
+                // Only a load that happened forgives the write: a kit that did not load leaves the device playing the edited
+                // kit, so the folder is still owed it.
+                if loaded {
+                    self.forgive_kit_write();
+                }
+                self.kit_wanted = name.clone();
+                self.panel.kits.names = persist::kit_names(&persist::kits_dir());
+                if loaded {
+                    self.kit_notice(format!("kit: {name}"));
+                }
+            }
+            panel_ui::kits::Request::Import => {
+                let Some(rate) = self.kit_rate else {
+                    self.kit_notice(
+                        "the audio device is not running yet, so no kit can be imported"
+                            .to_string(),
+                    );
+                    return;
+                };
+                let picked = rfd::FileDialog::new()
+                    .set_title("Import a kit folder")
+                    .pick_folder();
+                let Some(from) = picked else {
+                    return;
+                };
+                // A kit's folder is its name, so that is the name asked for; a taken one lands beside it.
+                let wanted = from
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let library = persist::kits_dir();
+                match persist::import_kit(&from, &wanted, &library, rate) {
+                    Ok(imported) => {
+                        let name = imported.name.clone();
+                        self.panel.kits.names = persist::kit_names(&library);
+                        let loaded = self.load_kit_now(self.rack.selected(), &name, rate);
+                        if loaded {
+                            self.forgive_kit_write();
+                        }
+                        self.kit_wanted = name.clone();
+                        // One notice, and it is the *last* one this frame, so it can say what to do: a voice that did not come
+                        // with the folder is silent in the copy, and the file the document now names is the repair.
+                        if imported.problems.is_empty() && loaded {
+                            self.kit_notice(format!("imported the kit {name}"));
+                        } else if !imported.problems.is_empty() {
+                            let named: Vec<String> = imported
+                                .problems
+                                .iter()
+                                .map(|problem| problem.to_string())
+                                .collect();
+                            self.kit_notice(format!(
+                                "imported {name}, but {} - put that file in its folder and load it again",
+                                named.join("; ")
+                            ));
+                        }
+                    }
+                    Err(error) => self.kit_notice(format!("could not import the kit: {error}")),
+                }
+            }
+        }
     }
 
     /// Do what the settings card asked for. The folds and CLOSE never arrive here — they are the card's own state — and
@@ -713,8 +992,12 @@ impl TakkaApp {
         saved.density = self.panel.density;
         saved.scale = self.panel.scale.index() as u8;
         let dir = persist::data_dir();
+        // The kit's folder, when it was edited: the name is in the document above, the samples are their own files. A folder
+        // that would not write leaves the session unsaved, so SAVE is still the player's to press again.
+        let kit_written = self.write_kit();
         match persist::save(&dir, &saved) {
-            Ok(()) => self.panel.dirty = false,
+            Ok(()) if kit_written => self.panel.dirty = false,
+            Ok(()) => {}
             Err(error) => eprintln!("takka-acid: could not save: {error}"),
         }
         // A session that came from a song keeps that file current: SAVE means "keep this", not "keep half of it".
@@ -743,6 +1026,17 @@ impl TakkaApp {
         self.panel.dirty = false;
         self.panel.songs.name = Some(name.to_string());
         self.panel.songs.file = Some(name.to_string());
+        // The kit a song names, decoded at the rate this device runs at. A song written before the drum machine names none,
+        // which is the default factory kit.
+        self.kit_wanted = saved
+            .kit
+            .clone()
+            .unwrap_or_else(|| acid_app::kits::default_name().to_string());
+        if let Some(rate) = self.kit_rate {
+            let wanted = self.kit_wanted.clone();
+            // A song's kit lands on the device the song was applied to, which is the selected one.
+            self.load_kit_now(self.rack.selected(), &wanted, rate);
+        }
         self.panel.tooltips = saved.tooltips;
         self.panel.autosave = saved.autosave;
         self.panel.set_density(saved.density);
@@ -764,12 +1058,17 @@ impl TakkaApp {
     /// Write the session into the library under `name`, and make that song the session's own. `as_copy` only changes the
     /// words: a copy lands under a name that is free, so saving one never overwrites the song it came from.
     fn write_song(&mut self, dir: &std::path::Path, name: &str, as_copy: bool) {
+        // The kit's folder travels with the song's name for it, so a song that names an edited kit brings its samples too. A
+        // folder that would not write leaves the session unsaved, so SAVE is still the player's to press again.
+        self.write_kit();
         let saved = self.session_for_disk(name);
         match persist::save_song(dir, name, &saved) {
             Ok(()) => {
                 self.panel.songs.name = Some(name.to_string());
                 self.panel.songs.file = Some(name.to_string());
-                self.panel.dirty = false;
+                if self.panel.kit_dirty.is_none() {
+                    self.panel.dirty = false;
+                }
                 // The session file remembers which song is open, or the next restart would open nothing.
                 let _ = persist::save(dir, &self.session_for_disk(name));
                 if let Some(card) = self.panel.songs.card.as_mut() {
@@ -804,6 +1103,16 @@ impl TakkaApp {
     /// Say something on the status line. It survives the card that asked for it, and it clears itself.
     fn notice(&mut self, message: String) {
         self.panel.notify(message);
+    }
+
+    /// Say something about a kit: on the status line, and — while the browser is up — on the browser's own line, because the
+    /// browser is the whole panel and a notice painted under a card is a notice nobody reads. One seam for every kit message:
+    /// the load's failure, its per-voice problems, a copy's name, an import's hole, and the two "not running yet" refusals.
+    fn kit_notice(&mut self, message: String) {
+        if self.panel.kits.open {
+            self.panel.kits.message = Some(message.clone());
+        }
+        self.notice(message);
     }
 }
 

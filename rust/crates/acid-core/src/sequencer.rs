@@ -1,17 +1,42 @@
-//! The sequencer: it owns the step clock and turns pattern steps into voice events.
+//! The sequencer: it owns the step clock and turns pattern steps into performer events.
 //!
 //! `render` splits every block at the next step boundary, so a note starts on the exact sample the clock
-//! names whatever block size the audio device asks for. `start` and `stop` take no voice — they leave a
-//! pending action that the next `render` applies, which keeps the audio callback the only place that
-//! touches the voice's gate.
+//! names whatever block size the audio device asks for. `Sequencer`'s own `start` and `stop` take no performer — they leave
+//! a pending action that the next `render` applies, which keeps *this* half of the transport on the audio thread. A machine
+//! that has to silence itself (the drum machine's audition has no transport to close its gate) does it in its own `stop`, and
+//! that call belongs on the thread that renders it.
+//!
+//! What a step *sounds like* is not the clock's question. The bar, `REVERSE`, swing, pause, the bar line and the
+//! sample-accurate start are one implementation for every machine in the rack; "make this step sound" is a `Performer`,
+//! and the 303's voice and the drum machine are two of them.
 
 use std::sync::Arc;
 
 use crate::clock::Clock;
-use crate::pattern::{Pattern, STEPS_PER_PATTERN};
-use crate::voice::Voice;
+use crate::pattern::{Pattern, STEPS_PER_PATTERN, Step};
 
-/// Plays a `Pattern` through a `Voice`, one step at a time.
+/// What a machine does when the clock hands it a step.
+///
+/// The clock renders *through* the performer: every path in [`Sequencer::render`] — the wait before a late start, the tail
+/// after a stop, the block loop — goes through these four methods, which is why `render` is one of them. A machine cannot
+/// keep a second clock and drift, because it is never asked for samples the clock did not place.
+pub trait Performer: Sized {
+    /// Make `step` sound. A step is both worlds' type, so each machine reads its own half: the 303 reads the note, the
+    /// drums read the masks.
+    fn step(&mut self, step: &Step);
+
+    /// Close the gate. A stop, or the end of a note: the tail folds away through the release rather than being cut.
+    fn release(&mut self);
+
+    /// Render the next `out.len()` samples.
+    fn render(&mut self, out: &mut [f32]);
+
+    /// Clear the per-run state a start must not inherit — the 303's slide history. Called on the step a start begins with,
+    /// never mid-run.
+    fn arm(&mut self);
+}
+
+/// Plays a `Pattern` through a [`Performer`], one step at a time.
 pub struct Sequencer {
     clock: Clock,
     pattern: Arc<Pattern>,
@@ -23,8 +48,6 @@ pub struct Sequencer {
     /// A direction asked for while the bar is running. It waits for the wrap: flipping under the line would put the two halves
     /// of a bar out of phase, and a bar is the unit the whole instrument agrees on.
     reverse_pending: Option<bool>,
-    /// Whether the step that was just played carried a slide, so the next note glides into place.
-    prev_slide: bool,
     running: bool,
     /// `start` triggered step 0 but had no voice: the next `render` sends it.
     trigger_pending: bool,
@@ -46,7 +69,6 @@ impl Sequencer {
             position: 0,
             reverse: false,
             reverse_pending: None,
-            prev_slide: false,
             running: false,
             trigger_pending: false,
             gate_close_pending: false,
@@ -117,14 +139,14 @@ impl Sequencer {
     /// Render up to the sample a delayed start was told to begin on, and arm it there. Answers the offset the rest of the
     /// block begins at: zero when no start is pending, and `out.len()` when the start is still to come in a later block.
     ///
-    /// Nothing sounds and the clock does not move while it waits. The voice still renders, so a release tail from a previous
-    /// run fades rather than being cut.
-    fn wait_out_start(&mut self, voice: &mut Voice, out: &mut [f32]) -> usize {
+    /// Nothing sounds and the clock does not move while it waits. The performer still renders, so a release tail from a
+    /// previous run fades rather than being cut.
+    fn wait_out_start<P: Performer>(&mut self, performer: &mut P, out: &mut [f32]) -> usize {
         let Some((step, left)) = self.pending_later else {
             return 0;
         };
         let waiting = left.min(out.len());
-        voice.render(&mut out[..waiting]);
+        performer.render(&mut out[..waiting]);
         if waiting < left {
             self.pending_later = Some((step, left - waiting));
             return waiting;
@@ -138,11 +160,13 @@ impl Sequencer {
     ///
     /// The clock kept counting through a silence, so it is put back on a boundary: otherwise the first step after a start is
     /// whatever fraction of a step the previous run happened to leave, and with swing it can even be the short half of the
-    /// pair. A fifth field of arming is added here once, not in every way of starting.
+    /// pair.
+    ///
+    /// One thing a start means is **not** here: the performer's own `arm`. That is called where the pending step fires, because
+    /// a machine is handed the step it arms for.
     fn arm(&mut self) {
         self.clock.restart();
         self.running = true;
-        self.prev_slide = false;
         self.trigger_pending = true;
         self.gate_close_pending = false;
     }
@@ -219,48 +243,37 @@ impl Sequencer {
         &self.clock
     }
 
-    /// Apply the trigger rule for one step and remember whether it slides.
-    fn trigger(&mut self, voice: &mut Voice, position: usize) {
-        // Backwards reads the pattern from its other end while the clock keeps walking forward: the position, the bar and
-        // `last_position` all still mean what they meant, and only the step that sounds is mirrored.
+    /// Hand one step to the performer.
+    ///
+    /// Backwards reads the pattern from its other end while the clock keeps walking forward: the position, the bar and the
+    /// step count all still mean what they meant, and only the step that sounds is mirrored. What makes a step sound is the
+    /// performer's: a rest, and a drum step striking no voice, are both silence there — the clock does not decide it.
+    fn deliver<P: Performer>(&mut self, performer: &mut P, position: usize) {
         let step = self.pattern.steps[if self.reverse {
             STEPS_PER_PATTERN - 1 - position
         } else {
             position
         }];
-        // A rest, and a note transposed outside the instrument's range, are the same thing to the voice: silence. The
-        // step keeps its flags and its note, so transposing back brings it in again.
-        if !step.on || !step.audible() {
-            voice.note_off();
-            // A rest cannot glide out of anything. A rest keeps its flags, so it may carry `slide`; letting
-            // that through would retune the next note with the gate still shut and it would never sound.
-            self.prev_slide = false;
-            return;
-        }
-        if self.prev_slide {
-            // The previous step asked to slide into this one: retune without retriggering the envelopes.
-            voice.glide_to(step.hz());
-        } else {
-            // A step carries its own velocity; `note_on` would play it at full scale.
-            voice.note_at(step.hz(), step.accent, step.velocity);
-        }
-        self.prev_slide = step.slide;
+        performer.step(&step);
     }
 
     /// Render the next `out.len()` samples, starting whatever step is due inside that block.
     ///
-    /// When stopped, this still renders the voice so a stop fades the release tail instead of cutting it.
-    pub fn render(&mut self, voice: &mut Voice, out: &mut [f32]) {
+    /// When stopped, this still renders the performer so a stop fades the release tail instead of cutting it.
+    pub fn render<P: Performer>(&mut self, performer: &mut P, out: &mut [f32]) {
         self.bar_line = None;
-        let head = self.wait_out_start(voice, out);
+        let head = self.wait_out_start(performer, out);
         let out = &mut out[head..];
         if self.gate_close_pending {
-            voice.note_off();
+            performer.release();
             self.gate_close_pending = false;
         }
         if self.trigger_pending {
-            self.trigger(voice, self.position);
             self.trigger_pending = false;
+            // The performer is armed on the step a start begins with: what a machine keeps for a run — the 303's slide
+            // history — is cleared here, once, rather than in every way of starting a line.
+            performer.arm();
+            self.deliver(performer, self.position);
             // A start on the downbeat *is* a bar line, and the rack goes by what its devices announce: this is the one that
             // releases a device waiting to join after a stop.
             if self.position == 0 {
@@ -268,7 +281,7 @@ impl Sequencer {
             }
         }
         if !self.running {
-            voice.render(out);
+            performer.render(out);
             return;
         }
 
@@ -278,7 +291,7 @@ impl Sequencer {
             // Render up to the boundary and no further. The `max(1.0)` keeps a sub-sample remainder
             // from stalling the loop: a block never shrinks to zero, it just overshoots by under a sample.
             let take = left.min(self.clock.samples_until_next_step().max(1.0) as usize);
-            voice.render(&mut out[offset..offset + take]);
+            performer.render(&mut out[offset..offset + take]);
             offset += take;
 
             let crossed = self.clock.advance_by(take);
@@ -295,7 +308,7 @@ impl Sequencer {
                 {
                     self.reverse = next;
                 }
-                self.trigger(voice, self.position);
+                self.deliver(performer, self.position);
             }
         }
     }

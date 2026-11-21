@@ -12,7 +12,7 @@
 use eframe::egui::{self, Align2, Pos2, Rect};
 
 use super::{PanelState, clear, modal, text, theme, tips, transport};
-use crate::device::Request;
+use crate::device::{DeviceKind, Request};
 use crate::midi::route::{Channel, InputFilter, Ports, Role};
 
 /// The card's padding, row height, gap and title, in design pixels: the settings card's own measurements, so the two cards
@@ -54,6 +54,12 @@ pub struct Card {
     pub themes: Themes,
     /// When REMOVE was first clicked: the same two-click switch `PanelState::clear_armed_at` is, and spent the same way. `None`
     /// means the key says `REMOVE`; a fresh `Some` means it says `CONFIRM?` and the next click asks the rack.
+    /// What kind of machine this card is about: a drum device's card carries the kit's row, an acid device's does not. A
+    /// reading of the device, filled by `offer` and refreshed with the route.
+    pub kind: DeviceKind,
+    /// The kit this device plays, by name — the kit browser's answer, shown on the row that opens it. A reading like the
+    /// scheme: `main` refreshes it while the card is up, so an edit on the panel moves the name the card shows.
+    pub kit: String,
     pub armed_remove: Option<std::time::Instant>,
 }
 
@@ -70,6 +76,10 @@ impl Default for Card {
             channel: Channel::All,
             scheme: crate::device::Scheme::Black,
             themes: Themes::default(),
+            // An acid device: only a drum machine's card has a kit row, and a card nobody has filled is about the kind
+            // that has been there longest.
+            kind: DeviceKind::Acid,
+            kit: String::new(),
             armed_remove: None,
         }
     }
@@ -79,8 +89,15 @@ impl Card {
     ///
     /// `main` calls this the frame the card opens, because the panel cannot read the rack and enumerating the ports costs a
     /// round trip. `armed_remove` falls back to disarmed: the arming belongs to one opening, never to the next.
-    pub fn offer(&mut self, name: &str, inputs: &InputFilter, ports: Vec<String>) {
+    pub fn offer(
+        &mut self,
+        name: &str,
+        kind: DeviceKind,
+        inputs: &InputFilter,
+        ports: Vec<String>,
+    ) {
         self.name = name.to_string();
+        self.kind = kind;
         self.armed_remove = None;
         self.ports = ports.into_iter().map(|port| (port, false)).collect();
         // A port the filter names but the machine no longer reports keeps its row. Unplugging a controller must not quietly
@@ -114,6 +131,12 @@ impl Card {
     pub fn scheme_from(&mut self, scheme: crate::device::Scheme) {
         self.scheme = scheme;
     }
+
+    /// The card's reading of the kit this device plays. A reading like the scheme: the row says what the machine holds, so
+    /// an edit on the panel that copies a factory kit moves the name the card shows.
+    pub fn kit_from(&mut self, kit: &str) {
+        self.kit = kit.to_string();
+    }
 }
 
 /// The card's rect inside `panel`: centred, and wide enough for a name and a row of ports.
@@ -121,8 +144,10 @@ impl Card {
 /// The height is the room the rows are laid out in, not the height that gets painted: `paint` draws the face as tall as the
 /// rows it has, so a card with no ports is shorter than this rect and a machine with more ports than `ROOM_FOR_PORTS` grows
 /// past it downward. Either way the rows are where `rows` puts them, which is what a test clicks.
-pub fn card_rect(panel: Rect, s: f32) -> Rect {
-    let rows = 3 + ROOM_FOR_PORTS + 1;
+pub fn card_rect(panel: Rect, s: f32, kind: DeviceKind) -> Rect {
+    // The rows the room is cut for: the name, the role, `ALL PORTS`, the ports, the channel, the colour, then the keys —
+    // and a drum card's kit row, which is one row more.
+    let rows = 3 + ROOM_FOR_PORTS + 1 + usize::from(kind.has_kit());
     let height = PADDING + TITLE + rows as f32 * (ROW + GAP) + AIR + ROW + PADDING;
     Rect::from_center_size(
         panel.center(),
@@ -341,6 +366,9 @@ pub struct Rows {
     pub channel_down: Rect,
     pub channel_up: Rect,
     /// The `COLOUR` key: which way round the device paints its face, and a click asks for the other one.
+    /// The `KIT` key, on a drum device's card only: the kit the device plays, and a click opens the browser. `None` on an
+    /// acid device, whose card has no kit to name.
+    pub kit: Option<Rect>,
     pub scheme: Rect,
     pub mute: Rect,
     pub remove: Rect,
@@ -378,8 +406,17 @@ pub fn rows(card_area: Rect, s: f32, card: &Card) -> Rows {
 
     // COLOUR: one key, captioned with the scheme the device is on, because there are two and the row already says which.
     let scheme = row(y, width * 0.45);
-    y += (ROW + GAP) * s + PADDING * s;
-
+    y += (ROW + GAP) * s;
+    // KIT: a drum machine's sound is a kit, so its card says which one and carries the key that opens the browser. An acid
+    // device has no kit and gets no row.
+    let kit = if card.kind.has_kit() {
+        let rect = row(y, width * 0.45);
+        y += (ROW + GAP) * s;
+        Some(rect)
+    } else {
+        None
+    };
+    y += PADDING * s;
     let mute = row(y, 66.0 * s);
     let remove = Rect::from_min_size(
         Pos2::new(mute.right() + GAP * 2.0 * s, y),
@@ -398,6 +435,7 @@ pub fn rows(card_area: Rect, s: f32, card: &Card) -> Rows {
         channel_down,
         channel_up,
         scheme,
+        kit,
         mute,
         remove,
         close,
@@ -419,7 +457,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         return;
     }
 
-    let area = card_rect(panel, s);
+    let area = card_rect(panel, s, state.device_card.kind);
     let rows = rows(area, s, &state.device_card);
     // What this frame's clicks asked for. It is one slot, so a frame can only mean one thing; the card collects it here and
     // writes it once, at the end, so that "any other key puts the arming away" can be one rule rather than eight.
@@ -481,6 +519,11 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         ("COLOUR", rows.scheme),
     ] {
         caption(ui.painter(), text, rect, s);
+    }
+    if let Some(kit) = rows.kit {
+        // A drum machine's row is captioned KIT and the key says which kit is playing. The row exists on a drum card only,
+        // so an acid card's labels are exactly what they were.
+        caption(ui.painter(), "KIT", kit, s);
     }
 
     // The name is the one row that is a field rather than a key. It is a widget, so it is registered after the face and
@@ -628,6 +671,22 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         }
     }
 
+    // KIT: the drum machine's sound. The key says which kit the device is playing and opens the browser, which is where the
+    // other ones are — the card is where a device is set up, and the panel is where it is played.
+    if let Some(rect) = rows.kit {
+        let font = transport::key_font(rect);
+        let label = text::fit(
+            ui.painter(),
+            &state.device_card.kit,
+            font,
+            rect.width() - 8.0 * s,
+        );
+        let key = transport::card_button(ui, "device-card-kit", rect, &label, false);
+        if key.clicked() {
+            // The browser is another card, so this one goes: one card at a time, and `open` is the only way in.
+            super::kits::open(state);
+        }
+    }
     // MUTE: this device's own mute, read from the strip's mirror of the rack — the panel's only reading of it.
     let muted = device_muted(&state.strip, index);
     let mute = transport::card_button(ui, "device-card-mute", rows.mute, mute_label(muted), muted);
@@ -918,6 +977,7 @@ mod tests {
         };
         card.offer(
             "BASS",
+            DeviceKind::Acid,
             &InputFilter::everything(),
             ports.into_iter().map(str::to_string).collect(),
         );
@@ -929,7 +989,7 @@ mod tests {
     #[test]
     fn the_rows_sit_inside_the_card_and_the_key_rows_sit_below_the_ports() {
         let s = 1.0;
-        let area = card_rect(panel(), s);
+        let area = card_rect(panel(), s, DeviceKind::Acid);
         let few = rows(area, s, &filled(vec!["Launchkey MIDI"]));
         let many = rows(area, s, &filled(vec!["a", "b"]));
 
@@ -965,12 +1025,54 @@ mod tests {
         );
     }
 
+    /// A drum device's card carries the kit's row and an acid device's does not — and the row is inside the card at both
+    /// ends of the scale the panel is tested at, which is what a new row can break (Review Focus 4).
+    #[test]
+    fn a_drum_card_carries_the_kit_row_and_an_acid_card_does_not() {
+        for s in [0.65, 1.0, 1.6] {
+            for kind in DeviceKind::ALL {
+                let area = card_rect(panel(), s, kind);
+                let mut card = Card {
+                    kind,
+                    ..Card::default()
+                };
+                card.offer("DRUMS 1", kind, &InputFilter::everything(), Vec::new());
+                let laid = rows(area, s, &card);
+                match kind {
+                    DeviceKind::Drums => {
+                        let kit = laid.kit.expect("a drum card has a kit row");
+                        assert!(
+                            area.contains_rect(kit),
+                            "the kit row escapes the card at {s}x: {kit:?} in {area:?}"
+                        );
+                        assert!(
+                            laid.scheme.bottom() <= kit.top() && kit.bottom() <= laid.mute.top(),
+                            "the kit row sits between COLOUR and the keys at {s}x"
+                        );
+                    }
+                    DeviceKind::Acid => assert!(
+                        laid.kit.is_none(),
+                        "an acid device has no kit, so its card has no row for one"
+                    ),
+                }
+                // Either way the keys are one row and they are inside the card.
+                for rect in [laid.mute, laid.remove, laid.close] {
+                    assert!(
+                        area.contains_rect(rect),
+                        "{rect:?} is not in the card at {s}x"
+                    );
+                }
+            }
+        }
+    }
+
     /// The ticks are the filter's answer, not the widget's: `offer` asks `Ports` and nothing else.
     #[test]
     fn a_ports_tick_follows_the_devices_filter() {
         let mut card = Card::default();
         card.offer(
             "BASS",
+            DeviceKind::Acid,
             &InputFilter {
                 ports: crate::midi::route::Ports::Named(vec!["nanoKONTROL".into()]),
                 ..InputFilter::everything()
@@ -988,6 +1090,7 @@ mod tests {
         // A device that hears everything ticks every port the machine reports, without a list of its own.
         card.offer(
             "ACID 1",
+            DeviceKind::Acid,
             &InputFilter::everything(),
             vec!["Launchkey MIDI".into()],
         );
@@ -1006,6 +1109,7 @@ mod tests {
         let mut card = Card::default();
         card.offer(
             "BASS",
+            DeviceKind::Acid,
             &InputFilter {
                 ports: crate::midi::route::Ports::Named(vec![
                     "Launchkey MIDI".into(),

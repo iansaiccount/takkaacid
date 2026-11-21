@@ -97,6 +97,7 @@ fn two_device_panel() -> PanelState {
     panel.strip.cells = vec![
         StripCell {
             name: "ACID 1".into(),
+            kind: acid_app::device::DeviceKind::Acid,
             number: 1,
             scheme: acid_app::device::Scheme::Black,
             running: false,
@@ -104,6 +105,7 @@ fn two_device_panel() -> PanelState {
         },
         StripCell {
             name: "BASS".into(),
+            kind: acid_app::device::DeviceKind::Acid,
             number: 2,
             scheme: acid_app::device::Scheme::Black,
             running: false,
@@ -207,7 +209,7 @@ fn the_close_key_asks_main_to_put_the_card_away() {
 
     let s = acid_app::ui::layout::scale(screen());
     let rows = device_card::rows(
-        device_card::card_rect(layout(screen()).panel, s),
+        device_card::card_rect(layout(screen()).panel, s, panel.device_card.kind),
         s,
         &panel.device_card,
     );
@@ -246,7 +248,7 @@ fn typing_a_name_and_confirming_asks_the_rack_to_rename_the_device() {
 
     let s = acid_app::ui::layout::scale(screen());
     let rows = device_card::rows(
-        device_card::card_rect(layout(screen()).panel, s),
+        device_card::card_rect(layout(screen()).panel, s, panel.device_card.kind),
         s,
         &panel.device_card,
     );
@@ -297,7 +299,7 @@ fn a_click_away_from_the_field_does_not_rename_anything() {
 
     let s = acid_app::ui::layout::scale(screen());
     let rows = device_card::rows(
-        device_card::card_rect(layout(screen()).panel, s),
+        device_card::card_rect(layout(screen()).panel, s, panel.device_card.kind),
         s,
         &panel.device_card,
     );
@@ -343,7 +345,7 @@ fn a_click_on_one_of_the_cards_own_rows_answers_and_leaves_it_standing() {
 
     let s = acid_app::ui::layout::scale(screen());
     let rows = device_card::rows(
-        device_card::card_rect(layout(screen()).panel, s),
+        device_card::card_rect(layout(screen()).panel, s, panel.device_card.kind),
         s,
         &panel.device_card,
     );
@@ -411,7 +413,7 @@ fn enter_on_an_open_card_does_not_edit_the_step_behind_it() {
     for (key, shift) in [
         (Key::Enter, false),
         (Key::ArrowRight, false),
-        (Key::ArrowUp, true),
+        (Key::ArrowUp, false),
     ] {
         assert_eq!(
             dispatch::handle(
@@ -435,6 +437,22 @@ fn enter_on_an_open_card_does_not_edit_the_step_behind_it() {
     );
     assert_eq!(panel.selected, 0, "and the selection did not move");
     assert!(!panel.dirty);
+
+    // The rack is not behind the card: a shifted arrow nudges the tempo exactly as `space` stops the transport.
+    assert_eq!(
+        dispatch::handle(
+            dispatch::KeyPress {
+                key: Key::ArrowUp,
+                shift: true,
+                ctrl: false
+            },
+            &mut panel,
+            &state,
+            &mut bank
+        ),
+        dispatch::Handled::Shortcut(acid_app::ui::shortcuts::Shortcut::TempoUp),
+        "shift+up is the tempo, and a card leaves the rack working"
+    );
 
     // The shortcuts that stop the transport and close the card still reach them: refusing every key would trap a player
     // behind a card that the keyboard cannot dismiss.
@@ -469,7 +487,7 @@ fn typing_into_the_name_field_writes_no_step_and_stops_no_transport() {
 
     let s = acid_app::ui::layout::scale(screen());
     let rows = device_card::rows(
-        device_card::card_rect(layout(screen()).panel, s),
+        device_card::card_rect(layout(screen()).panel, s, panel.device_card.kind),
         s,
         &panel.device_card,
     );
@@ -525,7 +543,7 @@ fn open_card(panel: &mut PanelState, index: usize, ports: &[(&str, bool)]) {
 fn card_rows(panel: &PanelState) -> device_card::Rows {
     let s = acid_app::ui::layout::scale(screen());
     device_card::rows(
-        device_card::card_rect(layout(screen()).panel, s),
+        device_card::card_rect(layout(screen()).panel, s, panel.device_card.kind),
         s,
         &panel.device_card,
     )
@@ -935,6 +953,7 @@ fn at_the_cap_every_row_is_greyed_and_a_click_still_says_so() {
     panel.strip.cells = (0..acid_app::device::MAX_DEVICES)
         .map(|index| StripCell {
             name: format!("ACID {}", index + 1),
+            kind: acid_app::device::DeviceKind::Acid,
             number: index + 1,
             scheme: acid_app::device::Scheme::Black,
             running: false,
@@ -1095,7 +1114,7 @@ fn open_theme_list(panel: &mut PanelState, shared: &SharedState, ctx: &Context) 
 }
 
 fn list_rows(panel: &PanelState) -> device_card::ThemeRows {
-    let area = device_card::card_rect(screen(), 1.0);
+    let area = device_card::card_rect(screen(), 1.0, panel.device_card.kind);
     device_card::theme_rows(
         &device_card::rows(area, 1.0, &panel.device_card),
         screen(),
@@ -1169,7 +1188,7 @@ fn the_list_stays_on_the_panel_and_never_covers_the_key_that_opened_it() {
     let ctx = Context::default();
     open_theme_list(&mut panel, &state, &ctx);
 
-    let area = device_card::card_rect(screen(), 1.0);
+    let area = device_card::card_rect(screen(), 1.0, panel.device_card.kind);
     let card = device_card::rows(area, 1.0, &panel.device_card);
     let list = list_rows(&panel);
     assert!(
@@ -1197,7 +1216,7 @@ fn the_list_stays_on_the_panel_and_never_covers_the_key_that_opened_it() {
 fn the_list_keeps_its_gap_whether_it_opens_up_or_down() {
     let mut panel = two_device_panel();
     panel.device_card.themes.top = 0;
-    let area = device_card::card_rect(screen(), 1.0);
+    let area = device_card::card_rect(screen(), 1.0, panel.device_card.kind);
     let card = device_card::rows(area, 1.0, &panel.device_card);
 
     // A panel with its top far above the card: the list has room above and must take it, leaving the gap on that side.

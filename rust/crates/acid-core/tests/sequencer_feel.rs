@@ -44,7 +44,12 @@ fn a_slide_flag_on_a_rest_does_not_silence_the_next_note() {
     let sr = 48_000.0;
     let mut seq = Sequencer::new(sr);
     let mut steps = [Step::rest(); 16];
-    steps[0] = Step::note(Pitch::A, 0);
+    // The note before the rest slides, so the slide history is *set* when the rest arrives: a rest that keeps it would let
+    // the slide through and retune the note after it with the gate still shut, and it would never sound at all.
+    steps[0] = Step {
+        slide: true,
+        ..Step::note(Pitch::A, 0)
+    };
     steps[1] = Step {
         slide: true,
         ..Step::rest()

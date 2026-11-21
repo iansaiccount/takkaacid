@@ -6,9 +6,11 @@ pub mod controls;
 pub mod device_card;
 pub mod dispatch;
 pub mod display;
+pub mod drum_panel;
 pub mod edit;
 pub mod help;
 pub mod keys;
+pub mod kits;
 pub mod knob;
 pub mod layout;
 pub mod learn;
@@ -80,8 +82,22 @@ pub struct PanelState {
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
-    /// The step the keyboard edits; always in `0..16`, never saved.
+    /// The step the face edits — the 303's border, the drum grid's lit column; always in `0..16`, never saved.
     pub selected: usize,
+    /// The drum face's editor: which voice its dials are on. Panel-wide, not per device — plan 01, task 4's ruling. Not
+    /// saved: the kit it edits is in memory only this phase.
+    pub drum: drum_panel::DrumView,
+    /// The kit browser: the kits that ship and the player's own, and the list `main` reads for it. The list outlives the
+    /// card, because the copy a first edit of a factory kit makes has to know which names are already taken.
+    pub kits: kits::Kits,
+    /// **Which** device's kit has been edited since its folder was last written, by its number — the identity that does not
+    /// move when a device before it is removed. A kit is two things on disk (a name in the save file, a folder of samples), and
+    /// writing two megabytes of WAV on every save is not a save. The number is here rather than a bare `bool` because the
+    /// device that was edited need not be the one selected when the save happens, and a write aimed at the wrong device loses
+    /// the player's kit.
+    pub kit_dirty: Option<usize>,
+    /// What the kit browser asked for; consumed by `main`, which owns the kits on disk.
+    pub kits_request: Option<kits::Request>,
     /// The port picker: what is on offer and what the player chose.
     pub picker: PickerState,
     /// The VOLUME knob, kept separate from the seven tone knobs.
@@ -138,7 +154,8 @@ pub struct PanelState {
     /// way `pattern` is filled from the device's state, because the panel paints and never owns the list.
     pub strip: strip::Strip,
     /// Which way round to paint the face: the selected device's scheme, filled by `main` every frame the way the strip is.
-    /// The four cards ignore it — they are furniture, and stay black whatever the face does.
+    /// The five cards ignore it — they are furniture, and stay black whatever the face does. The picker is the sixth surface
+    /// over the panel and is furniture too.
     pub scheme: crate::device::Scheme,
     /// Set by the strip and by `Ctrl+1..4`, drained by `main` after the frame. The panel cannot reach the rack, so asking
     /// is the only way it can select a device, mute one or add one.
@@ -203,6 +220,10 @@ impl Default for PanelState {
             picker: PickerState::default(),
             help_visible: false,
             selected: 0,
+            drum: drum_panel::DrumView::default(),
+            kits: kits::Kits::default(),
+            kit_dirty: None,
+            kits_request: None,
             clear_armed_at: None,
             copied: None,
             copy_text: None,
@@ -247,11 +268,22 @@ impl PanelState {
     /// F3, the caret on the strip's selected cell and `main`'s `Request::Open` all arrive here, so the one-card rule cannot
     /// be remembered at two of the three and forgotten at the last.
     pub fn open_device_card(&mut self, index: usize) {
+        self.put_cards_away();
         self.device_card.open = Some(index);
+    }
+
+    /// Put every card away: the one spelling of "one card at a time".
+    ///
+    /// Every path that *opens* a card calls this and then sets its own flag, so a card added later cannot be forgotten by
+    /// four callers that each list the others by hand — which is what the kit browser was, and what made Escape give up a
+    /// card nobody could see.
+    pub fn put_cards_away(&mut self) {
+        self.device_card = device_card::Card::default();
         self.device_picker.open = false;
         self.settings_open = false;
         self.help_visible = false;
         self.songs.card = None;
+        kits::close(self);
     }
 
     /// Put the device card away, mirror and all: its name, its route and its arming are readings of one device, and none of
@@ -262,13 +294,25 @@ impl PanelState {
     pub fn close_device_card(&mut self) {
         self.device_card = device_card::Card::default();
     }
+    /// Whether any card is open over the panel.
+    ///
+    /// The one spelling of "the face is covered", asked by everything that would otherwise change something a card hides: the
+    /// step editor's arrows and `Enter`, the drum face's voice walk, step move and step writes, the computer keyboard's step
+    /// writes, and a MIDI note waiting to be placed. A card is modal by design, so a writer that does not ask this is a write a
+    /// player cannot see.
+    pub fn a_card_is_up(&self) -> bool {
+        self.help_visible
+            || self.settings_open
+            || self.kits.open
+            || self.songs.card.is_some()
+            || self.device_card.open.is_some()
+            || self.device_picker.open
+    }
+
     /// Show the picker, and put every other card away: there is room for one, and this is the one that adds a device.
     pub fn open_device_picker(&mut self) {
+        self.put_cards_away();
         self.device_picker.open = true;
-        self.close_device_card();
-        self.settings_open = false;
-        self.help_visible = false;
-        self.songs.card = None;
     }
 
     /// The notice still worth showing at `now`, if any.
@@ -291,6 +335,23 @@ impl PanelState {
     /// Adopt a randomise density, clamped to the knob's travel.
     pub fn set_density(&mut self, density: f32) {
         self.density = density.clamp(0.0, 1.0);
+    }
+
+    /// What kind of machine the strip says is on the panel.
+    ///
+    /// `main` owns the rack and fills the strip each frame, so this is a reading of that mirror — the panel may be a frame
+    /// behind a removal, which is why it is a `get` and why an empty rack answers the acid face. One method for the two
+    /// places that ask: `draw_panel` decides which face to paint from it, and `dispatch` decides whether the keyboard's step
+    /// editor belongs to this machine.
+    pub fn showing_kind(&self) -> crate::device::DeviceKind {
+        self.strip
+            .cells
+            .get(
+                self.strip
+                    .selected
+                    .min(self.strip.cells.len().saturating_sub(1)),
+            )
+            .map_or(crate::device::DeviceKind::Acid, |cell| cell.kind)
     }
 }
 
@@ -366,6 +427,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         .strip
         .selected
         .min(state.strip.cells.len().saturating_sub(1));
+    // What kind of machine is on the panel. The strip is the only place the panel can learn it.
+    let kind = state.showing_kind();
     // The strip is a mirror, so the device under the editor can change between frames: save the outgoing device's editor and
     // load the incoming one's. Both are keyed by the device's *number*, because a removal moves every later device's
     // position and would otherwise hand the survivor the removed device's step, step mode and randomise dials. A device the
@@ -405,14 +468,23 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // A focused text field owns the keyboard, and the panel's audition keys are not an exception: with the cursor in the
     // device card's name field, `A` and shift+`A` are a letter and a capital, not a note and a step. The device card is the
     // first field on the face that a player types a *name* into, which is what made this reachable.
-    play_computer_keys(shared, ui, state);
+    //
+    // A drum device does not answer the computer keyboard at all: its notes are not the 303's pitches, and the grid is the
+    // editor. The keys are left to the shortcuts and to nothing else.
+    if kind == crate::device::DeviceKind::Acid {
+        play_computer_keys(shared, ui, state);
+    }
 
     // Every MIDI note still waiting while the panel is editing (step mode, or shift held) belongs to the selected
     // step. The queue is drained rather than peeked: two notes inside one frame are two steps, each at its own
     // velocity — one slot and a counter used to lose the first of them.
-    let editing = state.step_mode || ui.input(|input| input.modifiers.shift);
+    // A card over the face is modal: a note that would land in a step nobody can see is drained and dropped, not placed.
+    let editing =
+        (state.step_mode || ui.input(|input| input.modifiers.shift)) && !state.a_card_is_up();
     while let Some(waiting) = shared.notes.pop() {
-        if !editing {
+        // The queue is drained for every kind — a note that arrived while a drum device was on the panel must not be placed
+        // later — but only the 303 writes it into a step. A drum device's MIDI notes are a later round.
+        if !editing || kind != crate::device::DeviceKind::Acid {
             continue;
         }
         let (pitch, octave) = edit::from_midi_note(waiting.note);
@@ -442,9 +514,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // face is read back from the catalogue rather than from a slot list. The WAVEFORM knob is the exception — a switch,
     // its position is worked out where the knob is drawn, because only there is it known whether the hand or a learned
     // controller owns it.
-    for knob in Knob::ALL {
-        if knob.kind() == Kind::Dial {
-            state.knobs[knob.index()] = knob.read(shared);
+    // A drum face fills its seven slots from the selected voice's kit fields inside `drum_panel`, so this 303 read must not
+    // run and overwrite them with the 303's atomics.
+    if kind == crate::device::DeviceKind::Acid {
+        for knob in Knob::ALL {
+            if knob.kind() == Kind::Dial {
+                state.knobs[knob.index()] = knob.read(shared);
+            }
         }
     }
     state.tempo = shared.tempo_bpm.get();
@@ -587,8 +663,17 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         font,
         colour,
     );
-    row_knobs::draw(state, shared, ui, &l, s, p);
-    row_perform::draw(state, shared, ui, &l, s, p);
+    match kind {
+        crate::device::DeviceKind::Acid => {
+            row_knobs::draw(state, shared, ui, &l, s, p);
+            row_perform::draw(state, shared, ui, &l, s, p);
+        }
+        crate::device::DeviceKind::Drums => {
+            // The dials, the filter key, SHUFFLE, HIT and the grid replace the knob, performance and step rows: on a drum
+            // device the 303's rows are gone, not inert.
+            drum_panel::draw(state, shared, ui, &l, s, p);
+        }
+    }
     // VOLUME has its own corner of the top strip, before the wordmark, so the row below never needed a cell for it.
     let volume_rect = panel::volume_knob_rect(l.top);
     let mut volume_ui = ui.new_child(egui::UiBuilder::new().max_rect(volume_rect));
@@ -638,84 +723,89 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         state.dirty = true;
     }
 
-    let keys = layout::step_cells(l.steps);
-    for (i, cell) in keys.iter().enumerate() {
-        let step = state.pattern.steps[i % STEPS_PER_PATTERN];
-        let view = step_key::step_view(
-            &step,
-            i,
-            state.position,
-            state.playing,
-            i % STEPS_PER_PATTERN == state.selected,
-            state.drag.is_some_and(|(dragged, ..)| dragged == i),
-            // A slide only glides into a step that sounds, so the keycap needs to know about the next one.
-            state.pattern.steps[(i + 1) % STEPS_PER_PATTERN].on,
-        );
-        let response = step_key::step_key(ui, i, &step, &view, *cell, p);
-        let (shift, alt, ctrl) =
-            ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.ctrl));
-        // Every click moves the selection, editing or not: the outline must always say where the keyboard
-        // and the next gesture will land.
-        if response.clicked() || response.drag_started() {
-            state.selected = i % STEPS_PER_PATTERN;
-        }
-        let gesture = edit::gesture_from_input(
-            response.clicked(),
-            shift,
-            alt,
-            ctrl,
-            response.double_clicked(),
-        );
-        if let Some(gesture) = gesture
-            && gesture != edit::StepGesture::Select
-        {
-            let edited = edit::apply_gesture(step, gesture, state.last_pitch, state.last_octave);
-            if edited.on {
-                state.last_pitch = edited.pitch;
-                state.last_octave = edited.octave_offset;
-            }
-            shared.set_step(i % STEPS_PER_PATTERN, edited);
-            state.pattern = shared.pattern();
-            state.dirty = true;
-            // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
-            clear::disarm(state);
-        }
-
-        // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
-        // the drag returns to the original note instead of walking further away. Dragging a rest brings it in
-        // at the dragged pitch: with ctrl+click being the only other way to make a note, this is how a fresh
-        // note gets its pitch from the mouse.
-        if response.dragged() {
-            let (index, start_pitch, start_octave, moved) = match state.drag {
-                Some((dragged, pitch, octave, moved)) if dragged == i => {
-                    (dragged, pitch, octave, moved)
-                }
-                _ => (i, step.pitch, step.octave_offset, 0.0),
-            };
-            let moved = moved + response.drag_delta().y;
-            state.drag = Some((index, start_pitch, start_octave, moved));
-            let (pitch, octave) = edit::drag_pitch((start_pitch, start_octave), moved, shift);
-            let dragged = Step {
-                on: true,
-                pitch,
-                octave_offset: octave,
-                ..step
-            };
-            state.last_pitch = pitch;
-            state.last_octave = octave;
-            shared.set_step(index, dragged);
-            state.pattern = shared.pattern();
-            state.dirty = true;
-            clear::disarm(state);
-            ui.painter().text(
-                cell.center(),
-                egui::Align2::CENTER_CENTER,
-                edit::pitch_name(pitch, octave),
-                theme::legend(10.0 * s),
-                p.silkscreen,
+    // The step row is the 303's editor; a drum device's columns are the grid's cells, and drawing the row would give the
+    // face two editors and the player a step border nothing on the drum face shows.
+    if kind == crate::device::DeviceKind::Acid {
+        let keys = layout::step_cells(l.steps);
+        for (i, cell) in keys.iter().enumerate() {
+            let step = state.pattern.steps[i % STEPS_PER_PATTERN];
+            let view = step_key::step_view(
+                &step,
+                i,
+                state.position,
+                state.playing,
+                i % STEPS_PER_PATTERN == state.selected,
+                state.drag.is_some_and(|(dragged, ..)| dragged == i),
+                // A slide only glides into a step that sounds, so the keycap needs to know about the next one.
+                state.pattern.steps[(i + 1) % STEPS_PER_PATTERN].on,
             );
-        } else {
-            state.drag = None;
+            let response = step_key::step_key(ui, i, &step, &view, *cell, p);
+            let (shift, alt, ctrl) =
+                ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.ctrl));
+            // Every click moves the selection, editing or not: the outline must always say where the keyboard
+            // and the next gesture will land.
+            if response.clicked() || response.drag_started() {
+                state.selected = i % STEPS_PER_PATTERN;
+            }
+            let gesture = edit::gesture_from_input(
+                response.clicked(),
+                shift,
+                alt,
+                ctrl,
+                response.double_clicked(),
+            );
+            if let Some(gesture) = gesture
+                && gesture != edit::StepGesture::Select
+            {
+                let edited =
+                    edit::apply_gesture(step, gesture, state.last_pitch, state.last_octave);
+                if edited.on {
+                    state.last_pitch = edited.pitch;
+                    state.last_octave = edited.octave_offset;
+                }
+                shared.set_step(i % STEPS_PER_PATTERN, edited);
+                state.pattern = shared.pattern();
+                state.dirty = true;
+                // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
+                clear::disarm(state);
+            }
+
+            // Drag changes the pitch. The movement is accumulated from where the press started, so reversing
+            // the drag returns to the original note instead of walking further away. Dragging a rest brings it in
+            // at the dragged pitch: with ctrl+click being the only other way to make a note, this is how a fresh
+            // note gets its pitch from the mouse.
+            if response.dragged() {
+                let (index, start_pitch, start_octave, moved) = match state.drag {
+                    Some((dragged, pitch, octave, moved)) if dragged == i => {
+                        (dragged, pitch, octave, moved)
+                    }
+                    _ => (i, step.pitch, step.octave_offset, 0.0),
+                };
+                let moved = moved + response.drag_delta().y;
+                state.drag = Some((index, start_pitch, start_octave, moved));
+                let (pitch, octave) = edit::drag_pitch((start_pitch, start_octave), moved, shift);
+                let dragged = Step {
+                    on: true,
+                    pitch,
+                    octave_offset: octave,
+                    ..step
+                };
+                state.last_pitch = pitch;
+                state.last_octave = octave;
+                shared.set_step(index, dragged);
+                state.pattern = shared.pattern();
+                state.dirty = true;
+                clear::disarm(state);
+                ui.painter().text(
+                    cell.center(),
+                    egui::Align2::CENTER_CENTER,
+                    edit::pitch_name(pitch, octave),
+                    theme::legend(10.0 * s),
+                    p.silkscreen,
+                );
+            } else {
+                state.drag = None;
+            }
         }
     }
 
@@ -890,13 +980,13 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The card must not re-close on the click that opened it, so dismissal reads the frame-start value.
     let help_was_visible = state.help_visible;
     if gear_response.clicked() {
-        // One card at a time: the gear asks for settings and puts the other two away.
+        // One card at a time: the gear asks for settings, and every other card goes — the kit browser included, or Escape
+        // would give up a card nobody can see.
+        state.put_cards_away();
         state.settings_open = true;
-        state.help_visible = false;
-        state.songs.card = None;
     }
     if help_response.clicked() && !help_was_visible {
-        state.settings_open = false;
+        state.put_cards_away();
         state.help_visible = true;
     }
     if help_was_visible {
@@ -919,8 +1009,11 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // The card names the session by what the session is on, not by what the library file happens to be: a first run
         // and a demo have a name and no file, and the header must not call them untitled while the field says otherwise.
         let session = state.songs.name.clone();
+        // Which machine the panel is showing, so the card's armed rows warn about the right thing: a 303's demo row replaces
+        // the session, a drum machine's replaces that device's grid.
+        let kind = state.showing_kind();
         if let Some(card) = state.songs.card.as_mut() {
-            request = banks::paint(ui, l.panel, s, card, session.as_deref(), state.dirty);
+            request = banks::paint(ui, l.panel, s, card, session.as_deref(), state.dirty, kind);
         }
         if shield.clicked() {
             request = Some(banks::Request::Close);
@@ -929,6 +1022,21 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             Some(banks::Request::Close) => state.songs.card = None,
             Some(other) => state.songs.request = Some(other),
             None => {}
+        }
+    }
+    // The kit browser is the device card's sibling — the card's `KIT` key opens it — and it is painted before the device
+    // card because only one card is ever up, and the card is what opens over everything else.
+    if state.kits.open {
+        let shield = modal::shield(ui, window, "kits-shield");
+        let request = kits::paint(ui, state, shared, l.panel, s);
+        if shield.clicked() {
+            kits::close(state);
+        } else {
+            match request {
+                Some(kits::Request::Close) => kits::close(state),
+                Some(other) => state.kits_request = Some(other),
+                None => {}
+            }
         }
     }
     // Both device cards are painted last, the picker over the device card, so nothing draws over either. They are here
@@ -968,7 +1076,9 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
         for action in keys::key_actions(&input.events) {
             match action {
                 keys::KeyAction::Press { key, shift } => {
-                    let editing = state.step_mode || shift;
+                    // A card over the face is modal, the same rule the step editor's arrows and `Enter` keep: behind a card a
+                    // note key is an audition, not a step write. The key is still remembered (`fresh`) so it walks nothing.
+                    let editing = (state.step_mode || shift) && !state.a_card_is_up();
                     // Only a key that *writes a step* is remembered. Every other key (arrows, Z/X, anything else) must be
                     // left alone: its press is replied to elsewhere, and its release would otherwise walk the border —
                     // pressing left walked back one step and the release immediately walked forward again.
@@ -1010,7 +1120,7 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
                 keys::KeyAction::Release { key } => {
                     // Only a key this panel wrote with walks on: an auditioned note is not an edit, and a release with
                     // no press behind it (a lost frame, a stuck key) moves nothing.
-                    if keys::release(&mut state.placed, key) && state.step_mode {
+                    if keys::release(&mut state.placed, key) && state.step_mode && !state.a_card_is_up() {
                         selection::walk(state);
                     }
                 }
@@ -1124,20 +1234,23 @@ fn draw_settings(
 ///
 /// Opening reads the songs directory, so it is not something to do twice a frame; nothing else remembers what is on disk.
 fn open_banks(state: &mut PanelState) {
-    state.songs.card = match state.songs.card {
-        Some(_) => None,
-        None => Some(banks::Banks {
-            names: crate::persist::list_songs(&crate::persist::data_dir()),
-            // The demos are built into the binary, so the card only needs their names to list them.
-            demos: crate::demo::songs()
-                .iter()
-                .map(|demo| demo.name.to_string())
-                .collect(),
-            name: state.songs.name.clone().unwrap_or_default(),
-            open: state.songs.file.clone(),
-            ..banks::Banks::default()
-        }),
-    };
+    if state.songs.card.is_some() {
+        state.songs.card = None;
+        return;
+    }
+    // One card at a time, in the one place that says so: the browser goes too, or Escape would give up a card nobody can see.
+    state.put_cards_away();
+    state.songs.card = Some(banks::Banks {
+        names: crate::persist::list_songs(&crate::persist::data_dir()),
+        // The demos are built into the binary, so the card only needs their names to list them.
+        demos: crate::demo::songs()
+            .iter()
+            .map(|demo| demo.name.to_string())
+            .collect(),
+        name: state.songs.name.clone().unwrap_or_default(),
+        open: state.songs.file.clone(),
+        ..banks::Banks::default()
+    });
 }
 
 /// The pattern on the panel, as the clipboard's text — the same text, `from` included, that `Ctrl+C` writes. A copy that did

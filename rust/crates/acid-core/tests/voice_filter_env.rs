@@ -1,4 +1,5 @@
 use acid_core::analysis::brightness;
+use acid_core::sequencer::Performer;
 use acid_core::voice::Voice;
 
 #[test]

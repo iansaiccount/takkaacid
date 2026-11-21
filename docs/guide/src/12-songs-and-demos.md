@@ -10,6 +10,14 @@ keys along the bottom.
 ([`11-the-bank`](11-the-bank.md)). Clicking one loads it as a **new** song: named `New song`, not yet on disk — its name
 sits in amber until you save it, which is how the face says "not yet written".
 
+On a drum machine the same five rows load that demo's **drum bank** instead: eight grooves into `A1` to `A8`, at the
+demo's tempo and shuffle, with that machine's kit and the session's name left exactly as they were. The tempo is the whole
+rack's, though — one cell, every machine on it — so loading a bank also retunes the 303s beside it, and that tempo, unlike a
+second device's grooves, is what a save keeps. A drum bank is patterns, not a song — nothing is renamed and no sound is loaded with it.
+A save writes the first device alone ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)), so a drum machine's grooves are
+kept when it is that first device and last the session when it is not. [`22-the-drum-machine`](22-the-drum-machine.md) is the
+drum machine's own page, its grid and its kits.
+
 **`MY BANKS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
 click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
 
@@ -18,10 +26,11 @@ Every row has a small `x` at its right end. One click turns it into `SURE`; the 
 
 ## One song, one rack
 
-A song is the first device: its bank, its patch, its tempo and swing, its learned controllers. The other devices in the rack
-— their names, patterns, ports and colours — are not in the file, and a restart brings back one machine. That is the save
-format's limit this round, and the picker says so on its own line: `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`
-([`18-a-rack-of-devices`](18-a-rack-of-devices.md)).
+A song is the first device: its bank, its patch, its kit's name, its tempo and swing, its learned controllers. The other
+devices in the rack — their names, patterns, kits, ports and colours — are not in the file, and a restart brings back one
+machine. That is the save format's limit this round, and the picker says so on its own line: `NAMES AND EXTRA DEVICES ARE NOT
+SAVED YET` ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)). A kit's *folder* is written beside the file, so an edited kit
+comes back even when the machine that played it does not.
 
 ## What a save does to a name
 

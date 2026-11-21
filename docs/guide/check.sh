@@ -31,7 +31,7 @@ done
   done
 
 # 4. the facts that must not drift (phase 2's rack, card, colour and clipboard; the themes' source and its credit; phase 3's
-#    deck, pause, transpose row, banks and copy/paste)
+#    deck, pause, transpose row, banks and copy/paste; phase 4's drum machine and the drum banks its demos carry)
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
 # The phase replaced the saved word and moved the name out of the middle; both are claims a rewrite can put back, and neither is
 # a positive fact, so each needs its own guard.
@@ -46,12 +46,35 @@ done
 ! grep -rqF 'not yet on disk, `UNSAVED`' src || { echo "the guide spells a word the face no longer prints"; exit 1; }
 ! grep -rqF 'MY SONGS' src || { echo "the guide names the bank browser as it was, not as it is"; exit 1; }
 ! grep -rqF 'the next start begins from the top of the bar' src || { echo "the guide gives the pause the stop's rule"; exit 1; }
+! grep -rqE 'hears it|walked by ear|identify by ear' src || { echo "the guide sells a selection by ear"; exit 1; }
+# The drum machine's nine controls did print their captions and nothing more, and this round gave every one of them a tip: the
+# bullet that said so is deleted from page 22, and this guard is why a rewrite cannot put the claim back.
+! grep -rqF 'No per-voice hover help yet' src || { echo "the guide says the drum controls have no hover help"; exit 1; }
+# The transpose was one number for the rack; it is the device on the panel's now. The old claim cannot come back, and the new one
+# is pinned below.
+! grep -rqF 'moves the whole rack' src || { echo "the guide makes the transpose rack-wide again"; exit 1; }
+! grep -rqF 'the whole rack forgets together' src || { echo "the guide says the rack forgets one transpose"; exit 1; }
+# The arrows split at the modifier, and no page may go back to calling the plain pair the tempo's or the shifted pair the
+# note's. The pins below keep the new wording; these keep the old one out.
+! grep -rqF 'plain up/down' src || { echo "the guide puts the tempo on the plain arrows again"; exit 1; }
+# Anchored so the *correct* card line (`shift+up / down: tempo by 1 BPM`, which a page may quote) cannot trip it: the
+# character before `up` must not be a `+`.
+! grep -rqE '(^|[^+])up / down: tempo' src || { echo "the guide gives the tempo the plain arrows again"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \
             'it makes no sound until the bar the rack is in finishes' 'NOTHING TO PAUSE' \
             'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE' \
-            'the next play carries on from there' 'tape deck' 'writes as you go'; do
+            '`KIT`' '`MY KITS`' 'Acoustic' \
+            'the whole repair' \
+            'the next play carries on from there' 'tape deck' 'writes as you go' 'DRUMS' \
+            'drum bank' 'KICK' 'LP | BP | HP' 'drum machine' \
+            'walk it up and down the grid' 'strikes the selected voice' \
+            'move the selected step' 'writes the selected voice into it' \
+            '`l`, `b` and `p`' 'control is underlined on it' 'stopped or running' \
+            'moves **the device on the panel**' \
+            '| `shift+up` / `shift+down` | tempo' \
+            'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done
 echo "guide: ok"

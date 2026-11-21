@@ -8,6 +8,12 @@ use acid_app::state::SharedState;
 use acid_core::analysis::peak;
 use acid_core::oscillator::Waveform;
 
+/// The step the renderer last published into the state: the number the panel's chase reads, so a test reads the bar the way
+/// a player does rather than reaching into whichever machine rendered it.
+fn step(state: &SharedState) -> usize {
+    state.position.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[test]
 fn applying_parameters_reaches_the_engine_knobs() {
     let s = SharedState::new();
@@ -155,13 +161,13 @@ fn a_pause_through_the_seam_keeps_the_bar_and_a_resume_carries_on() {
     let half = (timing::step_duration_samples(0, 130.0, 48_000.0, 0.0) / 2.0).round() as usize;
     let mut block = vec![0.0; half];
     r.render_into(&mut block);
-    let held = r.engine().position();
+    let held = step(&s);
 
     // Pause: silent, and the step stays where it was.
     s.set_transport(Transport::Paused);
     let mut quiet = vec![1.0; 4_096];
     r.render_into(&mut quiet);
-    assert_eq!(r.engine().position(), held, "a pause keeps the bar");
+    assert_eq!(step(&s), held, "a pause keeps the bar");
     assert_eq!(peak(&quiet[2_048..]), 0.0, "and is silent");
 
     // Resume: still the same step, and a whole step later it has moved on.
@@ -169,11 +175,11 @@ fn a_pause_through_the_seam_keeps_the_bar_and_a_resume_carries_on() {
     let mut again = vec![0.0; half + 64];
     r.render_into(&mut again);
     assert_eq!(
-        r.engine().position(),
+        step(&s),
         held,
         "a resume carries on from the step the pause kept"
     );
     let mut rest = vec![0.0; half * 2];
     r.render_into(&mut rest);
-    assert_ne!(r.engine().position(), held, "and then the bar goes on");
+    assert_ne!(step(&s), held, "and then the bar goes on");
 }

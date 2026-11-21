@@ -29,23 +29,25 @@ Three tables and the files: every gesture, the factory controller map, and the w
 | Key | What it does |
 |---|---|
 | `A W S E D F T G Y H U J K` | play a chromatic scale; with `shift` or `STEP`, write the note to the selected step |
+| `h` | on a drum device, strike the selected voice — `HIT`'s key |
+| `l` / `b` / `p` | on a drum device, the low, band or high side of the selected voice's filter |
 | `Z` / `X` | octave down / up, two either way |
 | `space` | play / pause, same as `PLAY` / `PAUSE` |
 | `,` | step the playhead back a bar (drawn, not wired yet) |
 | `.` | step the playhead on a bar (drawn, not wired yet) |
 | `R` | record (drawn, not wired yet) |
-| `left` / `right` | move the selection one step |
+| `left` / `right` | move the selection one step, on either face |
 | `shift+left` / `shift+right` | previous / next pattern |
-| `shift+up` / `shift+down` | note up / down a step |
-| `up` / `down` | tempo, one BPM (and they repeat while held) |
-| `enter` | note on or off |
+| `up` / `down` | note up / down a step on an acid device; on a drum device, the previous / next voice, repeating while held |
+| `shift+up` / `shift+down` | tempo, one BPM (and they repeat while held) |
+| `enter` | note on or off; on a drum device, write the selected voice into the step (`shift` accents it) |
 | `backspace` | empty the step to a rest, while editing |
 | `F1`, `shift+?`, or the `?` | the help card |
 | `F2`, or the gear | the settings card |
 | `F3`, or the caret on the selected cell | the device card |
 | `Ctrl+1` … `Ctrl+4` | put that device on the panel |
 | `Ctrl+C` / `Ctrl+V` | copy the pattern on the panel / paste one into it |
-| `escape` | close the topmost card — the picker, the device card, settings, help, the bank browser — then give up on a `LEARN` |
+| `escape` | close the topmost card — the picker, the device card, the kit browser, settings, help, the bank browser — then give up on a `LEARN` |
 
 **The panel's own keys:** `REVERSE`, `TRANS -`, the transpose's readout, `TRANS +` and `TBC` twice, then `LEARN`, in the
 bottom row; `OCT -` `OCT +` `CLEAR` `RANDOM` in the performance row's left cluster, with `SHUFFLE`, density and scale at its
@@ -103,11 +105,21 @@ and tempo wells at the right.
 | `CONFIRM?` | `REMOVE` on a device card, after the first click |
 
 **The device card.** `NAME (ENTER)`, `ROLE` (`PLAY + CTRL` / `CTRL ONLY`), `PORTS` (`ALL PORTS`, then a ticked row per port),
-`CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `MUTE
-OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
+`CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `KIT` (a drum
+machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 
-**The picker.** `ADD DEVICE`, a row per kind (`ACID`), `CLOSE`, and the line under the rows:
+**The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), `CLOSE`, and the line under the rows:
 `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.
+
+**The drum machine's face.** `DRUMS` is the device; its seven dials are the selected voice's — `ATTACK`, `DECAY`, `SUSTAIN`,
+`RELEASE`, `CUT OFF`, `RESONANCE`, `TUNE` — with the three-way key `LP | BP | HP` beside them, `HIT` to audition that voice,
+and `SHUFFLE` set apart from the seven because it is the device's swing. That voice's name is printed above the dials. The
+grid's sixteen rows are `KICK`, `SNR`, `RIM`, `CLAP`, `CHH`, `OHH`, `LOT`, `MID`, `HTOM`, `CRS`, `RDE`, `CWB`, `LCO`, `HCO`,
+`CLV`, `SHK`, one per voice top to bottom, and one cell per step: a click strikes, `SHIFT`-click accents, a click on the
+label selects the voice and `SHIFT`-click on the label mutes it. The letter that presses a control is underlined on it — `H`
+on `HIT`, `L`, `B` and `P` under the filter's sides — and each of those nine controls explains itself on hover. `OCT`, `CLEAR`,
+`RANDOM` and the density and scale dials are not on that face, `STEP` lights and writes nothing there, and the machine takes no
+notes this round.
 
 **The clipboard's notices**, in the same corridor as the name: `copied A1`, `pasted A1 into A2`, `the clipboard has no pattern`.
 
@@ -129,6 +141,9 @@ OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 | `failed: <reason>` | the stream is not running, and why |
 | `CLOSE` | put the card away |
 
+**The kit browser:** `KITS`, `FACTORY`, `MY KITS`, `IMPORT`, `CLOSE`, each of the three kits that ship marked `- READ ONLY`,
+and the row being asked about on `<name> - click again to replace`.
+
 **The bank browser:** `BANKS`, `DEMO BANKS`, `MY BANKS`, `SAVE`, `SAVE A COPY`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the
 `x` / `SURE` on each of your own rows.
 
@@ -141,8 +156,9 @@ OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 | `$TAKKA_ACID_DATA_DIR` | the whole data directory, when that variable is set |
 | `$XDG_DATA_HOME/takka-acid` | otherwise, this |
 | `~/.local/share/takka-acid` | or this, when `XDG_DATA_HOME` is unset too |
-| `state.json` | the session: bank, patch, tempo, swing, switches, MIDI choice — **the first device only**; other devices' names, patterns, ports and colours are not saved |
+| `state.json` | the session: bank, patch, tempo, swing, switches, the kit's name, MIDI choice — **the first device only**; other devices' names, patterns, kits, ports and colours are not saved |
 | `songs/<name>.json` | one file per named song; the name is the file name |
+| `kits/<name>/` | a kit: its `kit.json` and one `<VOICE>.wav` per sampled voice. The three that ship are compiled into the app and have no folder here; a kit is written when a session that plays an edited one is saved |
 
 Song names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.
 

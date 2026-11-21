@@ -68,9 +68,17 @@ learned controller instead ([`11-the-bank`](11-the-bank.md)).
 ![The transport](img/transport.png)
 
 **`REVERSE`**, **`TRANS -`** and **`TRANS +`** with the transpose's own readout between them, **`TBC` twice**, and
-**`LEARN`**. `REVERSE` is this device's direction and the transpose pair moves the whole rack; `LEARN` is how a MIDI
+**`LEARN`**. `REVERSE` is this device's direction and the transpose pair moves **the device on the panel** — the readout
+between the two keys is that device's, and a second machine keeps its own; `LEARN` is how a MIDI
 controller gets taught a control ([`14-midi`](14-midi.md)). The deck above is the transport
 ([`09-playing`](09-playing.md)); this row is the performance.
+
+## The second face
+
+Everything above is the 303's face. A `DRUMS` device draws its own middle on the same seven bands: the seven dials become
+the selected voice's and give up the bottom of their band to a sixteen-row grid, which runs down through the performance
+and step bands to the switches row. The strip, the top strip, the switches row and the transport row are the same, and so is
+the theme — a drum machine wears a `COLOUR` like any device. [`22-the-drum-machine`](22-the-drum-machine.md) is that face.
 
 ## The panel is one piece, and it scales
 
@@ -82,5 +90,5 @@ Two consequences worth knowing: a window dragged small does not hide controls, i
 did the `STEP` key go" is never "off the edge"; and a knob's sweep is the same 180-pixel pull at any window size — only the
 knob's size changes — so "a third of the way" means the same thing small and large.
 
-[`05-the-three-cards`](05-the-three-cards.md) covers the cards that open over this face: help, settings, songs and the device
-card.
+[`05-the-three-cards`](05-the-three-cards.md) covers the cards that open over this face: help, settings, songs, a device's card,
+a drum machine's kit browser, and the picker.

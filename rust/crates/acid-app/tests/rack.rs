@@ -3,7 +3,7 @@
 //! Everything here drives the public API the way `main` does, so a change to how the rack is shaped fails here before it
 //! reaches a window or a sound card.
 
-use acid_app::device::{AddError, Device, DeviceKind, MAX_DEVICES, Rack, RemoveError};
+use acid_app::device::{AddError, Device, DeviceKind, MAX_DEVICES, Rack, RemoveError, Transport};
 use acid_app::persist;
 use acid_core::bank::PatternBank;
 
@@ -29,7 +29,34 @@ fn a_new_device_is_numbered_named_and_has_something_to_play() {
     // Its own engine state, not a shared one: muting it cannot mute its neighbour.
     assert!(!device.state.is_muted());
     assert_eq!(MAX_DEVICES, 4);
-    assert_eq!(DeviceKind::ALL, [DeviceKind::Acid]);
+    assert_eq!(DeviceKind::ALL, [DeviceKind::Acid, DeviceKind::Drums]);
+}
+
+/// A drum device is a machine of its own: its own kind, its own name and its own state, on the rack's tempo.
+#[test]
+fn a_new_drum_device_is_named_and_opens_on_an_empty_grid() {
+    let device = Device::new(DeviceKind::Drums, 2);
+    assert_eq!(device.kind(), DeviceKind::Drums);
+    assert_eq!(device.name, "DRUMS 2");
+    assert_eq!(Device::default_name(DeviceKind::Drums, 3), "DRUMS 3");
+    assert_eq!(DeviceKind::Drums.name(), "DRUMS");
+    // The starter phrase is the 303's, and a drum device reads no hits in it: an empty grid until a step is drawn or a
+    // factory bank is loaded (task 9).
+    let pattern = device.bank.current_pattern();
+    for step in &pattern.steps {
+        for drum in acid_core::drums::Drum::ALL {
+            assert!(!step.is_hit(drum), "{drum:?} arrives already struck");
+        }
+    }
+    // The default kit is on the state, with its mutes packed into the live mask.
+    assert_eq!(device.state.kit().name, acid_core::drums::DEFAULT_KIT_NAME);
+    assert_eq!(
+        device
+            .state
+            .drum_mute
+            .load(std::sync::atomic::Ordering::Relaxed),
+        u32::from(device.state.kit().mute_mask())
+    );
 }
 
 #[test]
@@ -532,29 +559,67 @@ fn a_device_carries_its_own_scheme() {
     );
 }
 
-/// The transpose is one number for the rack, clamped to an octave, and it reaches every device — including one that joined later,
-/// because it rides the transport's fan-out.
+/// The transpose is each device's own, clamped to an octave: the rack keeps no number of its own for it.
 #[test]
-fn the_transpose_clamps_to_an_octave_and_reaches_every_device() {
+fn a_device_carries_its_own_transpose() {
     let mut rack = one();
     rack.add(DeviceKind::Acid).expect("a second");
 
-    rack.set_transpose(13);
-    assert_eq!(rack.transpose(), 12, "an octave up is the ceiling");
-    for device in rack.devices() {
-        assert_eq!(
-            device.state.transpose(),
-            12,
-            "every device hears the rack's transpose"
-        );
-    }
+    rack.devices()[0].state.set_transpose(13);
+    assert_eq!(
+        rack.devices()[0].state.transpose(),
+        12,
+        "an octave up is the ceiling"
+    );
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        0,
+        "and a second device is not moved by it"
+    );
 
-    rack.set_transpose(-99);
-    assert_eq!(rack.transpose(), -12, "and an octave down the floor");
-    for device in rack.devices() {
-        assert_eq!(device.state.transpose(), -12);
-    }
+    rack.devices()[1].state.set_transpose(-99);
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -12,
+        "an octave down is the floor"
+    );
+    assert_eq!(
+        rack.devices()[0].state.transpose(),
+        12,
+        "each keeps its own"
+    );
 
-    rack.set_transpose(0);
-    assert_eq!(rack.transpose(), 0);
+    rack.devices()[0].state.set_transpose(0);
+    assert_eq!(rack.devices()[0].state.transpose(), 0);
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -12,
+        "and resetting one leaves the other"
+    );
+}
+
+/// A transport change fans the transport out and carries nothing else: the transpose is each device's own, so a play must not
+/// copy the selected device's onto the rest — the fan-out it used to ride.
+#[test]
+fn a_transport_change_carries_no_transpose() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+    rack.devices()[0].state.set_transpose(4);
+    rack.devices()[1].state.set_transpose(-2);
+
+    rack.set_transport(Transport::Playing);
+    assert_eq!(rack.devices()[0].state.transpose(), 4, "a play moved it");
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -2,
+        "and the other device kept its own"
+    );
+
+    rack.devices()[0].state.set_transpose(7);
+    rack.sync_transport();
+    assert_eq!(
+        rack.devices()[1].state.transpose(),
+        -2,
+        "a fan-out must not copy one device's transpose onto another"
+    );
 }

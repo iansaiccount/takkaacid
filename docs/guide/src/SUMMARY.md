@@ -6,7 +6,7 @@
 - [Installing and running](02-install.md)
 - [Your first sound](03-first-sound.md)
 - [The face](04-the-face.md)
-- [The four cards](05-the-three-cards.md)
+- [The cards](05-the-three-cards.md)
 - [A rack of devices](18-a-rack-of-devices.md)
 - [A device's card](19-a-devices-card.md)
 
@@ -14,6 +14,7 @@
 
 - [The knobs](06-the-knobs.md)
 - [A starting patch](07-a-starting-patch.md)
+- [The drum machine](22-the-drum-machine.md)
 
 # Part III — Writing and playing a line
 

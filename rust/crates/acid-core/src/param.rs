@@ -33,6 +33,13 @@ pub fn accent_amount(k: f32) -> f32 {
     k.clamp(0.0, 1.0)
 }
 
+/// The time constant of the master VOLUME ramp, in milliseconds.
+///
+/// One number for both machines: the 303's engine smooths its gain with it, and a drum device's gain — which has no engine to
+/// sit in — ramps at the same rate, so a knob turn sounds the same on either face. Here rather than in each of them, so the two
+/// cannot drift apart into a click.
+pub const VOLUME_MS: f32 = 10.0;
+
 /// VOLUME: perceptual taper, quiet half of the range.
 pub fn master_volume(k: f32) -> f32 {
     k.clamp(0.0, 1.0).powf(2.0)

@@ -14,6 +14,8 @@ Everything on it is about that one device, and every row acts on it immediately:
   and it ignores that port even though the app has it open. Which ports are *open at all* is the settings card's.
 - **`CHANNEL`** — `CH ANY`, or one channel of sixteen.
 - **`COLOUR`** — the theme this device wears. A click opens the list of them.
+- **`KIT`** — on a drum machine's card only: the name of the kit the device is playing, and a click opens the kit browser
+  ([below](#the-kit)).
 - **`MUTE OFF` / `MUTE ON`** — the same mute as the cell's `M`, said in full.
 - **`REMOVE`** — takes two clicks, like `CLEAR`. The second one is the answer.
 
@@ -47,9 +49,30 @@ bright face has nowhere to go.
 The theme stays with the device, not with the window: put one machine on `ORCHESTRAL ICE` and the next on `AMBIENT MOSS`, and
 the panel wears the selected one while each strip cell wears its own.
 
-The four cards stay black whatever the face does. A card is furniture laid over the instrument, not part of it.
+The cards stay black whatever the face does, the kit browser included. A card is furniture laid over the instrument, not part of it.
 
 The theme is **not saved**. A restart brings every device back to `BLACK`.
+
+## The kit
+
+A drum machine's card carries one row an acid device's does not: `KIT`, with the name of the kit that device plays. A click
+opens the kit browser — the banks card's sibling, with the kits that ship under `FACTORY`, the player's own under `MY KITS`,
+and `IMPORT` and `CLOSE` along the bottom ([`22-the-drum-machine`](22-the-drum-machine.md) is the drum machine itself). A
+click on a row loads that kit into the device; while the kit has edits that are not saved, the first click asks and the
+second one loads, the same two-click rule as loading over an unsaved song.
+The three that ship — `808`, `909` and `Acoustic` — are **read-only**, and every row of them says so. Their samples are
+compiled into the app, so there is no folder to change. Editing a voice of one — a dial or the filter key — copies the whole
+kit under the first free name (`808 (2)`), once, and it is the copy that is edited from then on. The copy is written when the
+session is saved, beside the name the save file keeps, so a restart comes back to the kit you made rather than to the one it
+came from.
+
+`IMPORT` copies a kit folder from anywhere on the disk into the library, under the folder's own name or beside a taken one. A
+kit whose samples will not read still lands: the voices that failed are silent, the status line names the file to replace, and
+putting the right WAV in the folder under that name, then loading the kit again, is the whole repair.
+
+A kit is a folder holding one WAV per sampled voice and a `kit.json` that names them, so it can be copied, edited by hand and handed
+to someone else. `kits/CREDITS.md` in this repository records where every sample in the three that ship came from, and that
+they are all CC0.
 
 ## Removing a device
 

@@ -332,6 +332,26 @@ impl Rig {
         &self.status
     }
 
+    /// The rate the open stream is running at, or `None` while there is no stream.
+    ///
+    /// The one authority for "what rate is a kit decoded at": the state's `AudioStatus` is a mirror of this, and a kit decision
+    /// that read the mirror could be told `Starting` by a device that never hears the update.
+    pub fn sample_rate(&self) -> Option<f32> {
+        self.handle.as_ref().map(AudioHandle::sample_rate_f32)
+    }
+
+    /// The typed status every device's state mirrors: the stream's own device and rate, and the line the player reads.
+    ///
+    /// The mapping lives in [`status::mirror`] so it is testable without opening a device — the fields it used to fill from the
+    /// display line (`device: "48 kHz - PipeWire"`) are what told the settings card to tick no row.
+    pub fn audio_status(&self) -> crate::state::AudioStatus {
+        let running = self
+            .handle
+            .as_ref()
+            .map(|handle| (handle.device(), handle.sample_rate()));
+        status::mirror(running, &self.status)
+    }
+
     fn attempt(&mut self) {
         let opened = match open_device(self.wanted.as_deref()) {
             Ok(o) => o,

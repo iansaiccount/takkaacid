@@ -121,6 +121,62 @@ fn open_card(names: Vec<&str>, name: &str) -> PanelState {
         ..PanelState::default()
     }
 }
+/// A panel showing a drum machine, with the songs card open over it and the session unsaved: the card's demo rows are then
+/// armed by the state that says they would replace that device's grid, not the session.
+fn open_card_on_drums() -> PanelState {
+    use acid_app::device::DeviceKind;
+    use acid_app::ui::strip::{Strip, StripCell};
+
+    let mut panel = open_card(vec![], "");
+    panel.dirty = true;
+    panel.strip = Strip {
+        cells: vec![StripCell {
+            name: "DRUMS 1".to_string(),
+            kind: DeviceKind::Drums,
+            number: 1,
+            scheme: acid_app::device::Scheme::Black,
+            running: false,
+            muted: false,
+        }],
+        selected: 0,
+    };
+    if let Some(card) = panel.songs.card.as_mut() {
+        card.demos = vec!["Slow Acid".to_string()];
+    }
+    panel
+}
+
+#[test]
+fn a_drums_demo_row_is_armed_against_its_grid_not_the_session() {
+    // The two-click guard names what a second click throws away. On a 303 that is the session; on a drum machine it is that
+    // device's eight patterns, and the card said "session" on both faces until the face it was wrong on was fixed.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card_on_drums();
+
+    click(&ctx, &mut panel, &shared, demo_row_centre(0));
+
+    assert_eq!(
+        panel
+            .songs
+            .card
+            .as_ref()
+            .and_then(|card| card.load_armed.clone()),
+        Some("demo:0".to_string()),
+        "the first click arms the row instead of loading"
+    );
+    let message = panel
+        .songs
+        .card
+        .as_ref()
+        .and_then(|card| card.message.clone())
+        .unwrap_or_default();
+    assert!(
+        message.contains("grid") && !message.contains("session"),
+        "the drum face's guard names the wrong thing: {message}"
+    );
+    assert_eq!(panel.songs.request, None, "the first click loads nothing");
+}
 
 #[test]
 fn a_song_row_asks_to_load_that_song() {
@@ -424,6 +480,64 @@ fn the_header_names_the_session_and_its_state() {
     assert_eq!(now_line(None, false), "NOW: untitled - UNSAVED");
     assert_eq!(now_line(Some("New song"), true), "NOW: New song - UNSAVED");
     assert_eq!(now_line(Some("Acid 1"), false), "NOW: Acid 1 - SAVED");
+}
+
+/// A player accumulates songs, and the card has one screen. Past the room above the footer the rows stop being drawn, as the
+/// kit browser's do: the alternative is a list painted over `NEW`/`IMPORT`/`EXPORT`/`CLOSE` and off the bottom of the card.
+#[test]
+fn a_long_song_list_is_capped_above_the_footer_keys() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let names: Vec<String> = (0..60).map(|index| format!("Song {index:02}")).collect();
+    let mut panel = PanelState {
+        songs: SongState {
+            card: Some(Banks {
+                names: names.clone(),
+                ..Banks::default()
+            }),
+            ..SongState::default()
+        },
+        ..PanelState::default()
+    };
+
+    let input = RawInput {
+        screen_rect: Some(screen()),
+        events: Vec::new(),
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(&mut panel, &shared, ui));
+    output.textures_delta.clear();
+
+    // The footer's band: the last `row_height` of the card, which is where NEW/IMPORT/EXPORT/CLOSE are painted.
+    let footer_top = card().bottom() - padding() - row_height();
+    let mut painted = 0;
+    fn walk(shape: &egui::Shape, footer_top: f32, painted: &mut usize) {
+        match shape {
+            egui::Shape::Text(text) if text.galley.text().starts_with("Song ") => {
+                *painted += 1;
+                assert!(
+                    text.pos.y < footer_top,
+                    "a song row is painted over the footer keys: {} at y {} (limit {footer_top})",
+                    text.galley.text(),
+                    text.pos.y
+                );
+            }
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    walk(shape, footer_top, painted);
+                }
+            }
+            _ => {}
+        }
+    }
+    for clipped in &output.shapes {
+        walk(&clipped.shape, footer_top, &mut painted);
+    }
+    assert!(
+        painted > 0 && painted < names.len(),
+        "the list is capped: {painted} of {} rows drawn",
+        names.len()
+    );
 }
 
 /// A session that has never been saved is a first run or a demo: the header must not call it untitled while the name

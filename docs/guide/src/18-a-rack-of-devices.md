@@ -23,8 +23,9 @@ playing, at its own tempo, with its own pattern.
 
 ## Adding one
 
-`+` at the right end of the strip asks what kind of device to add — a picker opens with the kinds there are, and today there
-is one, `ACID` — and a line under them says what a restart costs:
+`+` at the right end of the strip asks what kind of device to add — a picker opens with the kinds there are, `ACID` and
+`DRUMS` — and a line under them says what a restart costs. [`22-the-drum-machine`](22-the-drum-machine.md) is what the
+second kind does; the two share the strip, the transport and the bar, and nothing else about them is the same.
 
 > `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`
 
@@ -66,8 +67,13 @@ one's.
 
 ## What a restart costs
 
-The session file still holds one device — the first one's patterns, patch, swing and learned controllers, plus the first MIDI
-port the app had open. Everything else is in memory: the others' names, patterns, ports and colours, and **two things the whole
-rack forgets together** — each device's `REVERSE` direction and the rack's transpose. Both are performance, not patch: they are
-deliberately outside the file, so a restart brings every device back running forwards and in tune.
-They are gone on restart, and the picker's own line says so.
+The session file still holds one device — the first one's patterns, patch, kit, swing and learned controllers, plus the first
+MIDI port the app had open. Everything else is in memory: the others' names, patterns, ports and colours, and **two things each
+device forgets for itself** — its `REVERSE` direction and its own transpose. Both are performance, not patch: they are
+deliberately outside the file, so a restart brings every device back running forwards and in tune, and one machine playing a
+semitone up never drags the others with it.
+
+A kit is the one sound that outlives the file. A kit that was edited — a copy of a factory kit, or one imported — has a
+*folder* written beside the session when it is saved, so the samples come back even when the second machine's name does not;
+what a restart forgets is which machine was playing which kit. The names, the ports, the colours, the directions and the
+transpose are gone on restart, and the picker's own line says so.

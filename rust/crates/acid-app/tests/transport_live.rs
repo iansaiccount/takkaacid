@@ -167,6 +167,12 @@ fn the_transpose_keys_ask_for_a_semitone_each_way() {
         panel.transport_request,
         Some(transport::Request::Transpose(-1))
     );
+    // A performance control, like `REVERSE`: nothing a song holds, so nothing to save. A row that dirtied the session for it
+    // would write a file for a press the save has no field for.
+    assert!(
+        !panel.dirty,
+        "the transpose is not in the save file, so it must not mark the session unsaved"
+    );
 }
 
 #[test]
@@ -326,6 +332,55 @@ fn each_legend_is_painted_in_the_cell_that_names_it() {
             "a TBC is painted outside the two spare cells"
         );
     }
+}
+
+/// The readout is the displayed device's number, not the rack's: the row prints the value its two keys move.
+///
+/// The drawing takes `shared`, and `shared` is the device on the panel, so the same panel painted over two devices must print
+/// two numbers. A row that read a rack-wide cell would print the same one twice.
+#[test]
+fn the_readout_shows_the_device_on_the_panel() {
+    use eframe::egui::Shape;
+
+    /// The text painted inside the readout's cell.
+    fn readout(ctx: &egui::Context, panel: &mut PanelState, shared: &SharedState) -> Vec<String> {
+        fn walk(shape: &Shape, rect: egui::Rect, said: &mut Vec<String>) {
+            match shape {
+                Shape::Text(text) if rect.contains(text.pos) => {
+                    said.push(text.galley.text().to_string());
+                }
+                Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, rect, said)),
+                _ => {}
+            }
+        }
+
+        let output = frame(ctx, panel, shared, vec![]);
+        let rect = transport::cell(layout::layout(window()).transport, transport::Cell::Readout);
+        let mut said = Vec::new();
+        for clipped in &output.shapes {
+            walk(&clipped.shape, rect, &mut said);
+        }
+        said
+    }
+
+    let ctx = egui::Context::default();
+    let mut panel = PanelState::default();
+    let first = SharedState::new();
+    first.set_transpose(3);
+    assert!(
+        readout(&ctx, &mut panel, &first)
+            .iter()
+            .any(|text| text == "+3"),
+        "the row does not print the device's own transpose"
+    );
+
+    let second = SharedState::new();
+    assert!(
+        readout(&ctx, &mut panel, &second)
+            .iter()
+            .any(|text| text == "+0"),
+        "a device with no transpose must print +0, not its neighbour's +3"
+    );
 }
 
 /// A tempo a learned fader moves marks the session unsaved. The MIDI thread may not touch panel state, so it leaves a flag the
