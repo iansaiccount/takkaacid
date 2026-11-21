@@ -124,9 +124,9 @@ A drum bank is patterns, not a song. The grooves last the session — a save sti
   letter writes a note. MIDI pads and per-voice controllers are a later round.
 - **No step row, no performance row.** The grid's columns are the steps, and `OCT`, `CLEAR`, `RANDOM`, the density and the
   scale are the 303's. `BANK`, `PATTERN`, `COPY`, `PASTE`, `SAVE`, `BANKS` and `STEP` keep their places on the switches row.
-- **One hit per voice at a time.** A second strike on the same voice retriggers it rather than layering, and a hat's
+- **No layering.** A second strike on the same voice retriggers it rather than stacking a second copy; beyond that, a hat's
   choke group — the closed hat cuts the open one — is how the pair sounds like one hi-hat.
 - **`LEARN` has nothing to teach on the drum's own controls.** A drum voice takes no controller this round, so on a drum face
-  `LEARN` can bind the shared controls — `VOLUME`, and the tempo and pattern readouts — and nothing on the voice's dials, the
-  filter key or `HIT`. Those stand still while it is choosing a control, rather than turning the voice under a hand that meant
-  to teach it.
+  `LEARN` can bind the shared controls — `VOLUME`, the tempo and pattern readouts, and the device's `SHUFFLE` — and nothing on
+  the voice's dials, the filter key or `HIT`. Those stand still while it is choosing a control, rather than turning the voice
+  under a hand that meant to teach it.

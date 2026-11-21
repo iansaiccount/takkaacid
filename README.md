@@ -37,22 +37,23 @@ own grid. Add one with the strip's `+` → `DRUMS`. The whole of it is
 
 - **The grid is the editor.** One row per voice — `KICK`, `SNR`, `RIM`, `CLAP`, `CHH`, `OHH`, `LOT`, `MID`, `HTOM`, `CRS`,
   `RDE`, `CWB`, `LCO`, `HCO`, `CLV`, `SHK` — and one cell per step, every fourth column framed so the beat is findable without
-  counting squares. A click strikes that voice on that step, a `SHIFT`-click accents it (louder and brighter), and a click on a
-  struck cell takes it off. Clicking a row's **label** selects the voice — its plate lights, its row carries a faint band and its
-  name is printed over the dials — and `SHIFT`-clicking the label **mutes** the row: dim, with its accents gone, so a muted
-  voice can still be found and unmuted by eye.
+  counting squares. A click strikes that voice on that step, a `SHIFT`-click accents it (louder and brighter), a click on a
+  struck cell takes it off, and a `SHIFT`-click on an accented cell takes the accent off. Clicking a row's **label** selects the
+  voice — its plate lights, its row carries a faint band and its name is printed over the dials — and `SHIFT`-clicking the
+  label **mutes** the row: dim, with its accents gone, so a muted voice can still be found and unmuted by eye.
 - **The dials are the selected voice's**, in the 303's own seven slots: `ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE`, `CUT OFF`,
-  `RESONANCE`, `TUNE`. Beside them sit a three-way **`LP | BP | HP`** filter key, the **device's** `SHUFFLE` (set apart from
-  the seven, because it swings the drums the way the 303's swings a bass line), and **`HIT`**, which plays the selected voice,
-  stopped or running, so a kit can be tuned without writing anything into the bar.
+  `RESONANCE`, `TUNE`. Beside them sit a three-way **`LP | BP | HP`** filter key, the **device's** `SHUFFLE` (not one of the
+  voice's dials: it swings the drums the way the 303's swings a bass line, and it is the one drum-face control `LEARN` can
+  teach), and **`HIT`**, which plays the selected voice, stopped or running, so a kit can be tuned without writing anything into
+  the bar.
 - **The keyboard.** `up` / `down` walk the selected voice; `left` / `right` move the selected step, a lit column across the
   sixteen rows; `enter` writes the selected voice into that step, silently, and a second `enter` takes it off; `shift+enter` is
   the accent gesture. The selection stays where it is after a write, because a step here holds sixteen voices and a hand writes
   several before moving on. `h` is `HIT`'s key, `l` / `b` / `p` pick the filter's sides; the letter that presses a control is
-  underlined on it, and every control on the face explains itself on hover.
+  underlined on it, and every control in the dial row explains itself on hover.
 - **A voice's sound is a kit.** Three ship under `FACTORY` — `808`, `909` and `Acoustic` — each read-only: editing one copies it
   under a free name. `MY KITS` starts empty and holds your own; a kit is a folder of WAVs plus a `kit.json` under
-  `$XDG_DATA_HOME/takka-acid/kits/<name>/`, written when the session is saved or a folder of WAVs is imported, so a kit can be
+  `$XDG_DATA_HOME/takka-acid/kits/<name>/`, written when an edited kit is saved or a folder of WAVs is imported, so a kit can be
   copied, edited by hand and handed on. The face prints `KIT <name>` above the dials and the device card's `KIT` row opens the
   browser. `rust/crates/acid-app/kits/CREDITS.md` records where every sample came from (all CC0).
 - **Drum banks.** On a drum device, `BANKS` loads that demo's **drum bank** instead of a song: eight grooves into `A1`…`A8`, at
@@ -60,13 +61,12 @@ own grid. Add one with the strip's `+` → `DRUMS`. The whole of it is
 - **Its own transpose.** The transport row's `TRANS -` / `TRANS +` move **the device on the panel** — the readout between them is
   that device's and a second machine keeps its own — so one drum machine can be a semitone up while the 303 beside it is not.
 - **What it does not do yet.** No letter plays a note on a drum device and a MIDI note on its channel is silent; MIDI pads and
-  per-voice controllers are a later round, so `LEARN` binds the shared controls (`VOLUME`, the tempo and pattern readouts, the
-  device's `SHUFFLE`) and leaves the voice's dials, the filter key and `HIT` alone. A second strike on the same voice retriggers
-  it rather than layering, and a hat's choke group is how the closed hat cuts the open one.
+  per-voice controllers are a later round, so `LEARN` leaves the voice's dials, the filter key and `HIT` alone. A second strike
+  on the same voice retriggers it rather than layering a second copy.
 
 ## Up to four machines
 
-The window holds up to four devices. Each one is a whole 303 — its own pattern bank, its own shuffle, its own MIDI inputs
+The window holds up to four devices. Each one is a whole machine — its own pattern bank, its own shuffle, its own MIDI inputs
 and its own name — and a strip above the panel is the whole rack: a cell per device with its name and its play lamp, the
 cell the panel is showing outlined, a `M` key at the right end of each — that device's mute — and a `+` at the far right
 that adds one.
@@ -100,7 +100,7 @@ Every one of them can be taught to a MIDI controller.
 
 **The drums.** A second kind of device: sixteen sample voices, a kit behind each, a per-voice envelope and a three-way filter,
 and the same sixteen-step sequencer, transport and themes as the acid device
-([the drum machine](#the-drum-machine), below).
+([the drum machine](#the-drum-machine), above).
 
 **The performance row.** Transpose an octave either way, shuffle the clock, or roll a randomised acid line from a density
 and a scale.
