@@ -40,6 +40,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
+use acid_core::sequencer::sounding_step;
 use acid_core::timing::DEFAULT_BPM;
 
 use crate::midi;
@@ -727,12 +728,17 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // face two editors and the player a step border nothing on the drum face shows.
     if kind == crate::device::DeviceKind::Acid {
         let keys = layout::step_cells(l.steps);
+        // The LED is on the step that **sounds**, not the step the clock is on: under `REVERSE` the line reads the bar from
+        // its other end, so the light walks back along the keys with the notes it is sounding. The direction is the one the
+        // audio thread published, not the one the key asked for — a running line takes a request at the bar line, and a light
+        // on the request would turn a bar ahead of the sound.
+        let sounding = sounding_step(state.position, shared.is_reverse_active());
         for (i, cell) in keys.iter().enumerate() {
             let step = state.pattern.steps[i % STEPS_PER_PATTERN];
             let view = step_key::step_view(
                 &step,
                 i,
-                state.position,
+                sounding,
                 state.playing,
                 i % STEPS_PER_PATTERN == state.selected,
                 state.drag.is_some_and(|(dragged, ..)| dragged == i),

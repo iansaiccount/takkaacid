@@ -200,7 +200,18 @@ turn the playhead off.
       the test never built, and a compile failure or an unreached arm both read as "caught" while proving nothing — widening the
       renderer test to both kinds is what made the drums' arm catchable. Gates: `cargo test --workspace` **907**, clippy
       `-D warnings`, `fmt --check`.
-- [ ] **Task 2 — the 303's playhead follows the sound.**
+- [x] **Task 2 — the 303's playhead follows the sound.** The step row computes
+      `sounding_step(state.position, shared.is_reverse_active())` once, before its loop, and hands that to every key.
+      `step_view`'s third parameter is renamed `sounding` and documented as already-mirrored, so the view does no arithmetic and
+      cannot disagree with the audio; its unit tests are positional and unchanged. The panel therefore lights `15 - position`
+      over the key whose note is sounding, and the light walks right to left with the line.
+      Tests: `playhead_live::the_303_lights_the_step_that_sounds_when_the_bar_runs_backwards` — an **empty** pattern, so the only
+      lit LED in the step band is the transport's (read back from the painted circles, not from a field), and `reversed` is left
+      **false** while `reverse_active` is set, so a face reading the request lights [3] where the test demands [12]. Forward it
+      demands [3]. That split is deliberate: it is Task 1's bug made catchable from the face.
+      **Mutations: 4 of 4 caught** (`.superpowers/mutate_playhead_task2.py`): the row drawing the clock's step unmirrored, the
+      request read instead of the published direction, the mirror always on, and the mirror off by one.
+      Gates: `cargo test --workspace` **908**, clippy `-D warnings`, `fmt --check`.
 - [ ] **Task 3 — the drum grid's column.**
 - [ ] **Task 4 — the book says it.**
 - [ ] **Task 5 — the picture.**
