@@ -22,6 +22,23 @@ the rack round is 12 — and `tests/persist.rs` gains the new pin next to the ol
 one, and the picker card's footnote goes away. `sanitize` learns to repair a `devices` list the way it repairs a bank:
 one device minimum, at most `MAX_DEVICES`, names made distinct.
 
+### Load and save a rack of its own
+
+Decided by the player while phase 5 was being planned: a rack — the machines, their patches, their banks, their kits, their
+ports and their names — becomes a document of its own, written and read without a song around it. It is **not** *Save the whole
+rack* above, which is about a song carrying every device; this is a **preset**: build four machines, save the rack, recall it.
+
+**Why not now.** Phase 5 lands the two documents a player needs first — a bank and a whole song — and a rack file is a third
+shape of the same bytes with questions of its own that the song does not ask: what a recall does to the song that is open
+(replace its rack, or merge into it), and whether the file keeps the song name and transport. Phase 5's job is to make the song
+format right once, and a rack file is that format with fields removed.
+
+**What would have to move.** The song document (`SavedState::devices`, *Save the whole rack*) is the shape a rack file reuses:
+that list, the knobs and the kits, and no transport and no song name — so it lands after the song, never before. `persist` grows
+`save_rack`/`load_rack` beside `save_song`/`load_song`, with the same `sanitize` pass and the same "never overwrite" rule
+`import_song` has, and the dialogs stay in `main`. **Phase 5 draws the buttons and wires nothing:** the place on the face is
+found and labelled once, and the buttons refuse with a notice naming the round that will make them work.
+
 ## The save file
 
 ### A file from a newer build is refused, not relabelled
@@ -111,6 +128,17 @@ provenance kind.
 **What would have to move.** `refresh.py` grows one branch that writes a voice from code instead of fetching it, and the credits
 generator learns to print "synthesized by this script" for that row with the sweep's numbers beside it.
 `every_factory_kick_is_audible_above_the_sub_bass` in `tests/kits.rs` already holds whatever lands.
+
+### A new drum machine arrives on the 808, on purpose
+
+Decided by the player while phase 5 was being planned: a drum device nobody has given a kit to plays the **808**. It already
+does, by an accident of order — `kits::fill_if_silent` hands a silent device `factory_kit(kits::default_name(), rate)`, and
+`default_name()` is `FACTORY[0]`, which happens to be the 808 — so reordering the `FACTORY` table in `kits.rs` would change the
+default and no test would say so.
+
+**What would have to move.** `kits.rs` states the name — `pub const DEFAULT_FACTORY_KIT: &str = "808"`, with `default_name()`
+returning it — and a test asserts that name is in `FACTORY` and is the kit a device added from the picker decodes. A constant
+and a test, not a round: it can ride in phase 5's plan as a task of its own, or in any round that touches kits.
 
 ### The drum machine's gain, and the snap it cannot take
 
@@ -250,19 +278,21 @@ whole phase.
 
 ### Phase 5 — saving and loading banks, patterns and songs
 
-**What it would do.** Write and read those three things as files, not just the session: a bank to a file and back into any
-slot, a single pattern likewise, and a song as today *once* *Save the whole rack* lands — that round is this phase's song work,
-since a song that loses every device past the first is not a song to export.
+**What it would do.** Two documents written and read as files rather than only as the session, plus a third that is already
+text. A **bank** — the sixty-four patterns of `A`..`H`, into any device of either kind and out again. A **song** — the whole
+rack: every machine, its patch, its bank, its kit, its ports and its name — which is *Save the whole rack* above,
+`SAVE_VERSION` 12, and this phase's first task, because a song that keeps one device is not a song to export. A **pattern** —
+the clipboard's own text (`clipboard.rs`) with a name on the file.
 
-**Why not now.** Songs already save, load and export (`persist::save_song`, `import_song`, `export_song`); a bank and a pattern
-have no document of their own, only a place inside one, and the save file's own gap is the entry above.
+**What it does not do.** Both decided by the player while this phase was being planned. A rack of its own is later
+(*Load and save a rack of its own* above): phase 5 draws its buttons and puts nothing behind them. An arrangement is later
+(*The arrangement* below): the song this phase writes is the rack as it stands, not a sequence of sections.
 
-**What would have to move.** A bank file is a `SavedState`-shaped document with its own `SAVE_VERSION` and its own `sanitize`
-pass. The app does not have one version number today — the clipboard has carried its own `VERSION` and magic line
-(`clipboard.rs`) since it was written — but the *save* version is one number for every saved document, and a bank is the second
-kind. Patterns are already text on the clipboard (`Ctrl+C`/`Ctrl+V`), so a pattern file is that format with a name on it; the
-bank is the one that needs a decision about where a loaded bank lands (the current slot, the next free slot, or a slot chosen in
-the dialog). The dialogs stay in `main`, the path functions in `persist`.
+**What would have to move.** The bank: a `SavedState`-shaped document with a `sanitize` pass of its own, sharing `SAVE_VERSION`
+with the song — the clipboard's own `VERSION` and magic line are a private format, not a second save version — plus the
+decision where a loaded bank lands (the current slot, the next free slot, or a slot chosen in the dialog). A pattern: the
+clipboard's format with a name on it, refusing to overwrite like `import_song` does. The song: `SavedState::devices` and the
+rest of the entry above. The dialogs stay in `main`, the path functions in `persist`.
 
 ### Phase 6 — 1/32 and 1/8T patterns
 
@@ -296,3 +326,20 @@ rule for when a half-loaded sample is allowed to sound — not at all, or the pr
 the other half: a bank of samples is the first thing here that can exhaust a machine, so the count and the length need limits
 the way devices do. Decoding is a new dependency in `acid-core`'s clean dependency graph, which is a decision about where the
 sampler lives, not a detail of its implementation.
+
+### The arrangement — a song that says what plays when
+
+Decided by the player while phase 5 was being planned: in future a song carries an **arrangement** — a sequence of sections over
+bars, each naming a bank and a pattern, so the rack plays a tune rather than one pattern repeated. It is the "whole song like a
+normal DAW" the player asked for, and the half of it the song document cannot hold yet: phase 5's song is the rack *saved*, this
+is the rack *composed*.
+
+**Why not now.** Nothing in the engine sequences patterns over time. `pattern_swap::swap_now` advances one device's current
+pattern within its own bank at the bar, and that is the only thing that changes a pattern; there is no section, no timeline, and
+no face with room to show one — the tape deck's row is full and the step row is the editor.
+
+**What would have to move.** An `Arrangement` in `acid-core` — sections of N bars, each a bank and a pattern — and the clock asking
+it which pattern to play at the bar instead of the device's own index; `pattern_swap` is the seam. A face to write and see it,
+which is the expensive part and the player's to decide. And an `arrangement` field on `SavedState`, which is a `SAVE_VERSION`
+bump: that is why it sits after phase 5, because bumping twice for one document is the waste the ordering avoids. Whether it takes
+a phase number, and where it sits in the queue, is the player's to say.
