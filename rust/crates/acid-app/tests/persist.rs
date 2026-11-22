@@ -5,7 +5,7 @@ use acid_app::midi::cc::LEARNABLE;
 use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
 use acid_app::persist::{
     ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
-    rack_to_saved, sanitize, save, saved_to_shared, shared_to_saved,
+    rack_to_saved, sanitize, save, saved_to_shared, shared_to_saved, unopened_ports, wanted_kits,
 };
 use acid_app::persist::{
     SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
@@ -1241,4 +1241,48 @@ fn a_rack_of_two_devices_snapshots_both_and_mirrors_the_first() {
     assert_eq!(saved.swing, first.swing);
     assert_eq!(saved.cc_map, first.cc_map);
     assert_eq!(saved.kit, first.kit);
+}
+
+#[test]
+fn a_sessions_kits_are_one_per_drum_machine() {
+    let mut nameless = a_saved_device(3, "DRUMS 2", "DRUMS");
+    nameless.kit = None;
+    let state = SavedState {
+        devices: vec![
+            a_saved_device(1, "BASS", "ACID"),
+            a_saved_device(2, "DRUMS", "DRUMS"),
+            nameless,
+        ],
+        ..SavedState::default()
+    };
+    assert_eq!(
+        wanted_kits(&state),
+        vec![
+            (1, "808".to_string()),
+            // A drum machine that names no kit plays the default one, which is the 808 by name.
+            (2, acid_app::kits::default_name().to_string()),
+        ],
+        "one entry per drum machine, and none for the acid"
+    );
+}
+
+#[test]
+fn a_song_from_another_machine_names_ports_this_one_has_not_got() {
+    let mut acid = a_saved_device(1, "BASS", "ACID");
+    acid.inputs.ports = Ports::Named(vec!["Launchkey".to_string(), "No Such Port".to_string()]);
+    let mut drums = a_saved_device(2, "DRUMS", "DRUMS");
+    drums.inputs.ports = Ports::Named(vec!["No Such Port".to_string(), "Keystep".to_string()]);
+    let state = SavedState {
+        devices: vec![acid, drums],
+        ..SavedState::default()
+    };
+    assert_eq!(
+        unopened_ports(&state, &["Launchkey".to_string(), "Keystep".to_string()]),
+        vec!["No Such Port".to_string()],
+        "named once, in the order it is first met"
+    );
+    assert!(
+        unopened_ports(&SavedState::default(), &[]).is_empty(),
+        "a session with no devices names no ports, so nothing is missing"
+    );
 }

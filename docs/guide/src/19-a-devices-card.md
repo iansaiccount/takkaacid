@@ -51,7 +51,7 @@ the panel wears the selected one while each strip cell wears its own.
 
 The cards stay black whatever the face does, the kit browser included. A card is furniture laid over the instrument, not part of it.
 
-The theme is **not saved**. A restart brings every device back to `BLACK`.
+The theme is saved with the device: the rack comes back wearing the colours it was saved in, each machine its own.
 
 ## The kit
 
@@ -80,8 +80,8 @@ they are all CC0.
 goes, its cell with it, and the panel moves to a neighbour. The last device cannot go — one machine is the minimum a rack can
 hold.
 
-Nothing on disk changes when a device is removed: the session file still holds the first device only, so removing that one
-changes what the next save will write, and removing any other does not
+Nothing on disk changes when a device is removed: the next save writes the rack as it stands, so removing one cell is a
+change to the file and removing another is a change too
 ([`12-songs-and-demos`](12-songs-and-demos.md)).
 
 ## One card at a time

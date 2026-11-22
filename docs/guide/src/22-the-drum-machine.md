@@ -120,7 +120,7 @@ loads that demo's **drum bank** instead of a song: eight grooves into `A1` to `A
 this machine's kit and the session's name left alone. The acid line and its drums are two halves of one variation, and a
 later round is where one gesture loads both.
 
-A drum bank is patterns, not a song. The grooves last the session — a save still writes the first device only
+A drum bank is patterns, not a song. The grooves last the session — a save writes whichever machines are in the rack
 ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)) — while the tempo it arrives with is the whole rack's, and is saved.
 
 ## What is not here

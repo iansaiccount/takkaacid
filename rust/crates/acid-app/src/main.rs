@@ -36,12 +36,9 @@ fn main() -> eframe::Result {
     // The randomise dials are panel state too, so they travel the same way.
     let saved_density = saved.density.clamp(0.0, 1.0);
     let saved_scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
-    // The kit the session's device plays. Absent means the default factory kit, which is what a session saved before the
-    // drum machine has; the name is not resolved to samples until there is a running device to say what rate to decode at.
-    let saved_kit = saved
-        .kit
-        .clone()
-        .unwrap_or_else(|| acid_app::kits::default_name().to_string());
+    // Every drum machine's kit, by device index: the name is not resolved to samples until there is a running device to say
+    // what rate to decode at. *Which* machines want one is `persist`'s answer, because it is a property of the document.
+    let saved_kits: Vec<(usize, String)> = persist::wanted_kits(&saved);
 
     // One mix bus per stream: rebuilt at the device's rate whenever the stream reopens. Every device's engine lives in it, so
     // the rack can add or remove one without the stream noticing.
@@ -69,6 +66,8 @@ fn main() -> eframe::Result {
                 // The song the last session was working on, if it had a name.
                 songs: panel_ui::SongState {
                     name: song_name.clone(),
+                    // The file it was saved as, so the first SAVE after a restart keeps it instead of writing `Name (2)`.
+                    file: song_name.clone(),
                     ..panel_ui::SongState::default()
                 },
                 // A first run has nothing on disk, so the lamp says "keep me" until the player does.
@@ -96,7 +95,7 @@ fn main() -> eframe::Result {
                 pending_pattern: None,
                 last_position: 0,
                 kit_rate: None,
-                kit_wanted: saved_kit,
+                kit_wanted: saved_kits,
             }))
         }),
     )
@@ -123,9 +122,10 @@ struct TakkaApp {
     /// The rate the kit was decoded at, or `None` before there was a running device to ask. A kit's samples are
     /// resampled to this rate when the kit loads, so it is also the answer to "has the rate changed since the last load?".
     kit_rate: Option<f32>,
-    /// The kit the session says the saved device plays, by name. Read from the file at startup and after a song load, and
-    /// set by the browser; the live kit is what is played, and this is what it is reloaded from when the rate moves.
-    kit_wanted: String,
+    /// The kits the session names, by device index, waiting for a rate to decode them at. A kit is a folder of WAVs and the
+    /// rate is only known once the stream is open, so a load records what each machine wants and the first frame that knows
+    /// the rate decodes it; the browser sets one device's entry when the player picks a kit.
+    kit_wanted: Vec<(usize, String)>,
 }
 
 impl eframe::App for TakkaApp {
@@ -359,7 +359,10 @@ impl eframe::App for TakkaApp {
                         .set_file_name(format!("{suggested}.json"))
                         .save_file();
                     if let Some(path) = picked {
-                        match persist::export_song(&path, &self.session_for_disk(&suggested)) {
+                        // The export carries the name it was suggested under, so the file opens as the song it was.
+                        let mut saved = self.session_for_disk();
+                        saved.song = Some(suggested.clone());
+                        match persist::export_song(&path, &saved) {
                             Ok(()) => self.notice(format!("exported to {}", path.display())),
                             Err(error) => self.notice(format!("could not export: {error}")),
                         }
@@ -497,13 +500,8 @@ impl eframe::App for TakkaApp {
             match self.kit_rate {
                 None => {
                     self.kit_rate = Some(rate);
-                    let wanted = self.kit_wanted.clone();
-                    // Device 1: the save file is one device, and the kit it names is that device's (the spec's rule, and the
-                    // reason `saved_device` exists at all). A first device that is not a drum machine has no kit to load, and
-                    // asking the library for one would report a kit the machine does not play.
-                    if self.rack.saved_device().kind().has_kit() {
-                        self.load_kit_now(0, &wanted, rate);
-                    }
+                    // The first frame that knows the rate decodes every kit the session asked for, one per drum machine.
+                    self.load_wanted_kits(rate);
                 }
                 Some(loaded) if loaded != rate => {
                     // A rate change re-decodes every drum device's kit: a voice decoded at the old rate plays at the wrong
@@ -774,7 +772,7 @@ impl TakkaApp {
                 if loaded {
                     self.forgive_kit_write();
                 }
-                self.kit_wanted = name.clone();
+                self.want_kit(self.rack.selected(), name.clone());
                 self.panel.kits.names = persist::kit_names(&persist::kits_dir());
                 if loaded {
                     self.kit_notice(format!("kit: {name}"));
@@ -808,7 +806,7 @@ impl TakkaApp {
                         if loaded {
                             self.forgive_kit_write();
                         }
-                        self.kit_wanted = name.clone();
+                        self.want_kit(self.rack.selected(), name.clone());
                         // One notice, and it is the *last* one this frame, so it can say what to do: a voice that did not come
                         // with the folder is silent in the copy, and the file the document now names is the repair.
                         if imported.problems.is_empty() && loaded {
@@ -981,16 +979,7 @@ impl TakkaApp {
     }
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
     fn save(&mut self) {
-        let first = self.rack.saved_device();
-        let mut saved = persist::shared_to_saved(&first.state, first.bank.clone());
-        // One name is all the save file holds until the format lands: the first port the player turned on.
-        saved.midi_input = self.midi.enabled().first().cloned();
-        saved.song = self.panel.songs.name.clone();
-        // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
-        saved.tooltips = self.panel.tooltips;
-        saved.autosave = self.panel.autosave;
-        saved.density = self.panel.density;
-        saved.scale = self.panel.scale.index() as u8;
+        let saved = self.session_for_disk();
         let dir = persist::data_dir();
         // The kit's folder, when it was edited: the name is in the document above, the samples are their own files. A folder
         // that would not write leaves the session unsaved, so SAVE is still the player's to press again.
@@ -1017,25 +1006,29 @@ impl TakkaApp {
             return;
         };
         self.save();
-        let device = self.rack.device_mut();
-        persist::apply_saved(&saved, &device.state, &mut device.bank);
-        self.rack.set_tempo_bpm(saved.bpm);
+        self.rack.replace_from_saved(&saved);
+        // The panel pointed into a rack that is gone: an open device card, a held swap and the selection itself all reset
+        // against slot 0, which is the one machine the file puts first.
+        self.panel.close_device_card();
         panel_ui::pattern_swap::adopt(&mut self.panel, self.rack.state(), self.rack.bank());
-        // A held swap belongs to the song that was playing, not to the one just loaded.
         self.pending_pattern = None;
         self.panel.dirty = false;
         self.panel.songs.name = Some(name.to_string());
         self.panel.songs.file = Some(name.to_string());
-        // The kit a song names, decoded at the rate this device runs at. A song written before the drum machine names none,
-        // which is the default factory kit.
-        self.kit_wanted = saved
-            .kit
-            .clone()
-            .unwrap_or_else(|| acid_app::kits::default_name().to_string());
+        // Every drum machine's kit is a folder of WAVs, decoded at the rate the running device plays at. Which machines want
+        // one, and which kit, is `persist`'s to say: it is a property of the document, not of the load.
+        self.kit_wanted = persist::wanted_kits(&saved);
         if let Some(rate) = self.kit_rate {
-            let wanted = self.kit_wanted.clone();
-            // A song's kit lands on the device the song was applied to, which is the selected one.
-            self.load_kit_now(self.rack.selected(), &wanted, rate);
+            self.load_wanted_kits(rate);
+        }
+        // A song from another machine names ports this one has not got. The devices keep the routing the file gave them — it
+        // is worth keeping for the day the port comes back — and one line says which ports are missing.
+        let missing = persist::unopened_ports(&saved, self.midi.enabled());
+        if !missing.is_empty() {
+            self.notice(format!(
+                "ports this song names are not open: {}",
+                missing.join(", ")
+            ));
         }
         self.panel.tooltips = saved.tooltips;
         self.panel.autosave = saved.autosave;
@@ -1055,13 +1048,28 @@ impl TakkaApp {
         self.panel.notify(format!("loaded {name}"));
     }
 
+    /// Record that `index` wants `name` once the rate is known, replacing whatever it wanted before: one entry per machine, so
+    /// a second kit picked on the same device does not leave the first one queued behind it.
+    fn want_kit(&mut self, index: usize, name: String) {
+        self.kit_wanted.retain(|(wanted, _)| *wanted != index);
+        self.kit_wanted.push((index, name));
+    }
+
+    /// Decode every kit the session has asked for, at `rate`. The list is taken before the loads: a load publishes a kit and
+    /// may leave a notice, and neither may run while the list is borrowed.
+    fn load_wanted_kits(&mut self, rate: f32) {
+        for (index, name) in std::mem::take(&mut self.kit_wanted) {
+            self.load_kit_now(index, &name, rate);
+        }
+    }
+
     /// Write the session into the library under `name`, and make that song the session's own. `as_copy` only changes the
     /// words: a copy lands under a name that is free, so saving one never overwrites the song it came from.
     fn write_song(&mut self, dir: &std::path::Path, name: &str, as_copy: bool) {
         // The kit's folder travels with the song's name for it, so a song that names an edited kit brings its samples too. A
         // folder that would not write leaves the session unsaved, so SAVE is still the player's to press again.
         self.write_kit();
-        let saved = self.session_for_disk(name);
+        let saved = self.session_for_disk();
         match persist::save_song(dir, name, &saved) {
             Ok(()) => {
                 self.panel.songs.name = Some(name.to_string());
@@ -1070,7 +1078,7 @@ impl TakkaApp {
                     self.panel.dirty = false;
                 }
                 // The session file remembers which song is open, or the next restart would open nothing.
-                let _ = persist::save(dir, &self.session_for_disk(name));
+                let _ = persist::save(dir, &self.session_for_disk());
                 if let Some(card) = self.panel.songs.card.as_mut() {
                     card.names = persist::list_songs(dir);
                     card.name = name.to_string();
@@ -1086,13 +1094,14 @@ impl TakkaApp {
         }
     }
 
-    /// The session as it should be written to disk, under `name` when the save is landing in a file.
-    fn session_for_disk(&self, name: &str) -> persist::SavedState {
-        let first = self.rack.saved_device();
-        let mut saved = persist::shared_to_saved(&first.state, first.bank.clone());
+    /// The session as it should be written to disk: every machine, and the panel state that travels with the file.
+    fn session_for_disk(&self) -> persist::SavedState {
+        // One builder for the rack's bytes: every machine, with device 1 mirrored in the flat fields an older build reads.
+        let mut saved = persist::rack_to_saved(&self.rack);
+        // One name is all the save file holds: the first port the player turned on.
         saved.midi_input = self.midi.enabled().first().cloned();
-        saved.song = Some(name.to_string());
-        // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
+        saved.song = self.panel.songs.name.clone();
+        // The hover-help switch is panel state, so it is carried here rather than in `rack_to_saved`.
         saved.tooltips = self.panel.tooltips;
         saved.autosave = self.panel.autosave;
         saved.density = self.panel.density;

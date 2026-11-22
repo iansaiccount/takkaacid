@@ -108,8 +108,7 @@ and tempo wells at the right.
 `CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `KIT` (a drum
 machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
 
-**The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), `CLOSE`, and the line under the rows:
-`NAMES AND EXTRA DEVICES ARE NOT SAVED YET`.
+**The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), and `CLOSE`.
 
 **The drum machine's face.** `DRUMS` is the device; its seven dials are the selected voice's — `ATTACK`, `DECAY`, `SUSTAIN`,
 `RELEASE`, `CUT OFF`, `RESONANCE`, `TUNE` — with the three-way key `LP | BP | HP` beside them, `HIT` to audition that voice,
@@ -156,7 +155,7 @@ and the row being asked about on `<name> - click again to replace`.
 | `$TAKKA_ACID_DATA_DIR` | the whole data directory, when that variable is set |
 | `$XDG_DATA_HOME/takka-acid` | otherwise, this |
 | `~/.local/share/takka-acid` | or this, when `XDG_DATA_HOME` is unset too |
-| `state.json` | the session: bank, patch, tempo, swing, switches, the kit's name, MIDI choice — **the first device only**; other devices' names, patterns, kits, ports and colours are not saved |
+| `state.json` | the session: **every device** — its kind, name, colour, ports, channel, patterns, patch, kit, swing and learned controllers — plus the rack's tempo, the panel's switches and the MIDI choice. Device 1 is also written in the old flat fields, so an older build still opens it |
 | `songs/<name>.json` | one file per named song; the name is the file name |
 | `kits/<name>/` | a kit: its `kit.json` and one `<VOICE>.wav` per sampled voice. The three that ship are compiled into the app and have no folder here; a kit is written when a session that plays an edited one is saved |
 

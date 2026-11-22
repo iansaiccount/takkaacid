@@ -485,6 +485,45 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
     }
 }
 
+/// The kits a session names, by device index: one per drum machine, and the default factory kit for a machine that names
+/// none. What `main` queues for the frame that learns the sample rate — a kit is a folder of WAVs and the rate is not known
+/// when the file is read, so the decision of *which* kits to decode belongs here, where it can be tested.
+pub fn wanted_kits(state: &SavedState) -> Vec<(usize, String)> {
+    state
+        .devices
+        .iter()
+        .enumerate()
+        .filter(|(_, device)| DeviceKind::from_name(&device.kind) == Some(DeviceKind::Drums))
+        .map(|(index, device)| {
+            (
+                index,
+                device
+                    .kit
+                    .clone()
+                    .unwrap_or_else(|| crate::kits::default_name().to_string()),
+            )
+        })
+        .collect()
+}
+
+/// The ports a session names that `open` has not got, in the order they are first named and without repeats.
+///
+/// A song from another machine names ports by the system's own names, so a load can leave a device deaf. Nothing is rewritten
+/// — the routing is worth keeping for the day the port comes back — and this is the list the status line says once.
+pub fn unopened_ports(state: &SavedState, open: &[String]) -> Vec<String> {
+    let mut missing: Vec<String> = Vec::new();
+    for device in &state.devices {
+        if let Ports::Named(names) = &device.inputs.ports {
+            for port in names {
+                if !open.iter().any(|have| have == port) && !missing.contains(port) {
+                    missing.push(port.clone());
+                }
+            }
+        }
+    }
+    missing
+}
+
 /// A whole rack, as the file stores it: every machine, and device 1 written down a second time as the flat mirror an older
 /// build reads.
 pub fn rack_to_saved(rack: &Rack) -> SavedState {

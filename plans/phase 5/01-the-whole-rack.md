@@ -289,6 +289,30 @@ Inputs the spec implies and no task's tests otherwise cover, most likely first:
       number the next device gets — so an assertion was added and the mutation split in two. Recorded for the same reason as
       Task 1's miss.
       Gates: `cargo test --workspace` **917**, clippy `-D warnings`, `cargo fmt --check`.
-- [ ] **Task 4 — `main` saves a rack and loads one.**
-- [ ] **Task 5 — the 808 default is stated.**
-- [ ] **Task 6 — the book.**
+- [x] **Task 4 — `main` saves a rack and loads one.** One `session_for_disk(&self)` over `persist::rack_to_saved` serves
+      `save`, `write_song` and `EXPORT` (which overrides `song = Some(suggested)`); `load_song_now` calls
+      `rack.replace_from_saved`, closes an open device card, re-adopts the pattern, and returns the panel's switch fields.
+      `kit_wanted` became `Vec<(usize, String)>` with `want_kit`/`load_wanted_kits`, so every drum machine's kit loads, not just
+      the first; `panel.songs.file` is seeded from `saved.song` on launch, so the first `SAVE` after a restart keeps its file
+      instead of writing `Name (2)`. The picker's `NOT_SAVED` line, its `FOOTNOTE` constant and the 14 px it reserved are gone,
+      and `device_card_live`'s test now asserts its **absence**.
+      **Ruling, and why the planned live tests are not here:** `main` is a binary crate with no test harness, so a test cannot
+      drive `load_song_now`. Rather than leave the round's two new decisions untested, the decisions moved into `persist` —
+      `wanted_kits(&SavedState)` and `unopened_ports(&SavedState, open)` — and are tested there; the card's requests were already
+      covered by `songs_live`/`device_card_live`. What remains untested is the glue itself (which function `main` calls), and the
+      wishlist already records that cost for the rate-change arm. **Mutations: 4 of 4 caught** with Task 5's
+      (`.superpowers/mutate_phase5_task45.py`): kits for acid devices, ports never reported missing, a port named twice.
+- [x] **Task 5 — the 808 default is stated.** `kits::DEFAULT_FACTORY_KIT = "808"` and `default_name()` returns it, so the
+      table's order stops being a decision; `the_default_kit_is_the_808_by_name` also asserts the name ships and decodes.
+      **Mutation:** the constant set to `"909"` — caught.
+- [x] **Task 6 — the book.** Page 18: `Adding one` no longer promises a footnote, and `What a restart keeps, and what it does
+      not` says every machine is saved and names the two things each device still forgets (`REVERSE`, its own transpose).
+      Page 19: the theme is saved with the device; removal no longer claims the file holds one machine. Page 20: the `state.json`
+      row is every device, with device 1's flat mirror noted for older builds, and the picker's paragraph loses the line under
+      the rows. Page 22's drum-bank sentence says a save writes whichever machines are in the rack. `check.sh` gained two
+      negative guards (`NAMES AND EXTRA DEVICES ARE NOT SAVED YET`, `the first device only`) and three pins (`every machine in the
+      rack`, `theme is saved with the device`, and the dropped `NOT SAVED YET` pin removed). **`img/picker.png` was retaken** —
+      the old one showed the sentence the app no longer prints — by the recipe in `AGENTS.md` (display checked at 2000×1400,
+      window `1960x1340`, fresh data dir, pointer outside the window), and `img/README.md`'s row updated. `./docs/guide/check.sh`
+      ok.
+      Gates at the end of `01`: `cargo test --workspace` **920**, clippy `-D warnings`, `cargo fmt --check`, `check.sh` ok.

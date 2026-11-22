@@ -55,6 +55,10 @@ done
 # is pinned below.
 ! grep -rqF 'moves the whole rack' src || { echo "the guide makes the transpose rack-wide again"; exit 1; }
 ! grep -rqF 'the whole rack forgets together' src || { echo "the guide says the rack forgets one transpose"; exit 1; }
+# A song keeps every device now, so the picker's apology and the "first device only" file table are lies the guide may not tell
+# again. Page 18's new sentence is pinned in the list below.
+! grep -rqF 'NAMES AND EXTRA DEVICES ARE NOT SAVED YET' src || { echo "the guide apologises for a format that saves everything"; exit 1; }
+! grep -rqF 'the first device only' src || { echo "the guide says the session file holds one device"; exit 1; }
 # The arrows split at the modifier, and no page may go back to calling the plain pair the tempo's or the shifted pair the
 # note's. The pins below keep the new wording; these keep the old one out.
 ! grep -rqF 'plain up/down' src || { echo "the guide puts the tempo on the plain arrows again"; exit 1; }
@@ -62,7 +66,8 @@ done
 # character before `up` must not be a `+`.
 ! grep -rqE '(^|[^+])up / down: tempo' src || { echo "the guide gives the tempo the plain arrows again"; exit 1; }
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
-            'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
+            'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'four machines' 'VINYL NOIR' \
+            'every machine in the rack' 'theme is saved with the device' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \
             'it makes no sound until the bar the rack is in finishes' 'NOTHING TO PAUSE' \
             'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE' \
