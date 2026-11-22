@@ -6,7 +6,7 @@ use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
 use acid_app::persist::{
     BankDocument, SaveTarget, bank_path, delete_bank, delete_song, document_name, export_song,
     free_bank_name, free_song_name, import_song, list_banks, list_songs, load_bank, load_song,
-    new_song, save_bank, save_song, save_target,
+    new_song, save_bank, save_song, save_target, session_song_file,
 };
 use acid_app::persist::{
     ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
@@ -70,6 +70,51 @@ fn songs_round_trip_and_are_listed() {
     // A name that cannot be a file is refused rather than written somewhere surprising.
     assert!(save_song(dir.path(), "../oops", &saved).is_err());
     assert_eq!(list_songs(dir.path()).len(), 2, "and nothing was written");
+}
+
+/// A song file names the file it is in, not the song it came from: the field is what a restart seeds the session's file from, so
+/// a copy written under a new name must not leave the copy pointing back at the original.
+#[test]
+fn a_saved_song_names_the_file_it_lands_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        song: Some("Acid 1".to_string()),
+        ..SavedState::default()
+    };
+    save_song(dir.path(), "Acid 2", &saved).unwrap();
+    assert_eq!(
+        load_song(dir.path(), "Acid 2").unwrap().song.as_deref(),
+        Some("Acid 2"),
+        "a copy names the file it was written to, not the song it was copied from"
+    );
+}
+
+/// A session's name is not its file. A demo and a `NEW` song are named with nothing written under the name yet, so a launch
+/// that took the name for a file would have the next `SAVE` write `songs/New song.json` — over whatever the player had there.
+#[test]
+fn a_session_claims_a_song_file_only_when_the_file_is_there() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        session_song_file(dir.path(), None),
+        None,
+        "a session with no name came from no file"
+    );
+    assert_eq!(
+        session_song_file(dir.path(), Some("New song")),
+        None,
+        "a demo's name has nothing on disk behind it"
+    );
+    save_song(dir.path(), "Acid 1", &SavedState::default()).unwrap();
+    assert_eq!(
+        session_song_file(dir.path(), Some("Acid 1")),
+        Some("Acid 1".to_string()),
+        "a name with a file behind it is the file the session is on"
+    );
+    assert_eq!(
+        session_song_file(dir.path(), Some("../oops")),
+        None,
+        "and a name that is not a name names no file, whatever is beside the data directory"
+    );
 }
 
 #[test]

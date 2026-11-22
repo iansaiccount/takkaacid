@@ -204,6 +204,26 @@ fn renaming_lands_on_one_device_and_keeps_names_distinct() {
     );
 }
 
+/// The suffix a renamed device lands on is `persist::distinct_name`'s, not a second copy of the rule: a name at the length limit
+/// stays a name the app will hold, the way a song's free name does.
+#[test]
+fn a_renamed_device_is_suffixed_by_the_rule_the_files_use() {
+    let mut rack = one();
+    rack.add(DeviceKind::Acid).expect("a second");
+    let long = "B".repeat(48);
+    rack.rename(0, &long);
+    let landed = rack.rename(1, &long);
+    assert_eq!(
+        landed,
+        persist::distinct_name(&long, |candidate| candidate == long),
+        "one rule for telling two names of a kind apart"
+    );
+    assert!(
+        landed.chars().count() <= 48,
+        "the suffix goes inside the limit, not past it: {landed:?}"
+    );
+}
+
 #[test]
 fn the_transport_is_the_racks_and_the_devices_follow_it() {
     let mut rack = one();

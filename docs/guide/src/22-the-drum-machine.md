@@ -95,7 +95,7 @@ playing** — `KIT 808` in dim silk at the right-hand end of the line above the 
 at the left — and a drum machine's card carries a `KIT` row an acid device's does not, with the same name; a click on the row
 opens the **kit browser**.
 
-A drum machine arrives on `808`, the first kit that ships. `Init` is the name of a kit with sixteen voices and **no samples at
+A drum machine arrives on `808`, the kit the app names as its default. `Init` is the name of a kit with sixteen voices and **no samples at
 all** — the state a machine is in before any kit has been decoded — so `KIT Init` on the face means the machine has no sound
 in it, not that the machine is broken.
 

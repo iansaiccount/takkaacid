@@ -202,6 +202,35 @@ loading a bank into a device other than the selected one; the `DEMO BANKS` behav
       name written anyway, a taken name returned as it is. The first run **skipped** one because its target line also appears in
       `saved_device_from`; the mutation was narrowed until it applied exactly once, because a `SKIP` is never a pass.
       Gates: `cargo test --workspace` **923**, clippy `-D warnings`, `cargo fmt --check`.
+- [x] **The branch review of rounds `01` + `02/task 1`** (a subagent that wrote neither, against `1ad1918..fe4dba3`, as the
+      player asked before task 2). Seven findings, all acted on:
+      1. **Important — page 12 still taught the one-device format** (`A song is the first device … the picker says so`), and the
+         `check.sh` guard for that sentence was defeated by a line wrap: the phrase was printed across two lines, so a
+         line-based `grep` never saw it. Page 12's `One song, one rack` is now `One song, the whole rack` and says every machine
+         is in the file; **every negative guard in `check.sh` now reads the book with its line breaks flattened**, through one
+         `gone`/`gone_re` pair, so a wrapped lie cannot come back green.
+      2. **Important — the launch seeded the session's file from `saved.song`, which is a display name.** A demo or a `NEW` song
+         has a name with nothing on disk behind it, so the first `SAVE` after a restart would have written `songs/<that name>.json`
+         over whatever the player had there. `persist::session_song_file(dir, song)` is now the one answer: the name, when a file
+         of that name is in the library.
+      3. **Important — `Rack::rename` kept its own copy of the `(N)` suffix rule** while `persist::distinct_name`'s doc and plan
+         01's Progress both claimed one. `rename` calls `distinct_name` now.
+      4. **Important — `persist::wanted_kits` asked "does this kind have a kit" by comparing to `Drums`**, the second answer
+         `DeviceKind::has_kit` exists to prevent. It asks `has_kit` now.
+      5. **Minor, fixed — a song saved under a new name recorded the old one**, because `write_song` built the document before
+         setting the name. `save_song` stamps `song` from the name it wrote to, so no caller can get it wrong.
+      6. **Minor, fixed — page 22 called `808` "the first kit that ships"**, the table-order reason the 808 constant removed.
+      7. **Minor, fixed — page 19's removal sentence contradicted itself** ("nothing on disk changes … is a change to the file").
+      Two more the fix uncovered, both the same class as finding 1: `main`'s removal arm still set `dirty` **only for device 1**
+      (true when a save held one machine, false since round 01) and its add arm still said a device is "not in the save format
+      yet"; `state.rs`'s `kind` doc still said a session saves its first device and loads it as a 303. All three are rewritten.
+      **Also recorded:** plan 01 promised `a_restart_then_save_keeps_the_same_file` and it does not exist. `main` has no harness,
+      so the decision moved into `persist` instead, and is tested there (`a_session_claims_a_song_file_only_when_the_file_is_there`,
+      `a_saved_song_names_the_file_it_lands_in`); what stays untested is `main`'s one line that calls it, the same cost round 01
+      already took for `wanted_kits` and `unopened_ports`.
+      **Mutations: 4 of 4 caught, 0 skipped** (`.superpowers/mutate_phase5_review.py`) — `has_kit` answering false for drums, a
+      name with no file claiming one, a song keeping its old name, the suffix limit widened so `rename`'s own rule would return.
+      Gates: `cargo test --workspace` **926**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
 - [ ] **Task 2 — the card's four sections.**
 - [ ] **Task 3 — `main` answers the card.**
 - [ ] **Task 4 — the book, the pins and the pictures.**

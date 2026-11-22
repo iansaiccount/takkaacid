@@ -80,8 +80,8 @@ they are all CC0.
 goes, its cell with it, and the panel moves to a neighbour. The last device cannot go — one machine is the minimum a rack can
 hold.
 
-Nothing on disk changes when a device is removed: the next save writes the rack as it stands, so removing one cell is a
-change to the file and removing another is a change too
+Removing a device writes nothing by itself: the card is a view, the rack is the session, and the next save writes the rack as it
+stands. The session is marked unsaved when you remove one, because a song is the whole rack
 ([`12-songs-and-demos`](12-songs-and-demos.md)).
 
 ## One card at a time

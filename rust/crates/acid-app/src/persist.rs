@@ -493,7 +493,7 @@ pub fn wanted_kits(state: &SavedState) -> Vec<(usize, String)> {
         .devices
         .iter()
         .enumerate()
-        .filter(|(_, device)| DeviceKind::from_name(&device.kind) == Some(DeviceKind::Drums))
+        .filter(|(_, device)| DeviceKind::from_name(&device.kind).is_some_and(DeviceKind::has_kit))
         .map(|(index, device)| {
             (
                 index,
@@ -691,6 +691,16 @@ pub fn song_path(dir: &Path, name: &str) -> PathBuf {
     dir.join(SONGS_DIR).join(format!("{name}.json"))
 }
 
+/// The song file a saved session can honestly claim: the name it was left under, when a file of that name is in the library.
+///
+/// `SavedState::song` is the name the session was last shown under, and a demo or a `NEW` song has a name with nothing on disk
+/// behind it. A launch that took that name for its file would have the next `SAVE` write `songs/<the demo's name>.json` — over
+/// whatever the player had saved under it, which is the one thing `save_target` exists to prevent.
+pub fn session_song_file(dir: &Path, song: Option<&str>) -> Option<String> {
+    let name = document_name(song?)?;
+    song_path(dir, &name).is_file().then_some(name)
+}
+
 /// A name that can be a file name, or `None` when the typed one cannot: blank, too long, or shaped like a path.
 ///
 /// One validator for **every** document a player names — a song, a bank, the files of an imported kit — because they all land as
@@ -724,7 +734,8 @@ pub fn list_songs(dir: &Path) -> Vec<String> {
     names
 }
 
-/// Write a named song. Same format as the session file, so reading one is the same read.
+/// Write a named song. Same format as the session file, so reading one is the same read, and the file names itself: `song` is
+/// what a launch seeds the session's file from, so a copy must not carry the name of the song it was copied from.
 pub fn save_song(dir: &Path, name: &str, state: &SavedState) -> Result<()> {
     let Some(name) = document_name(name) else {
         return Err(anyhow!("a song needs a name"));
@@ -734,7 +745,10 @@ pub fn save_song(dir: &Path, name: &str, state: &SavedState) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    write_atomic(&path, &serde_json::to_vec_pretty(state)?)
+    // Stamped here rather than by the caller, so what a file says its name is cannot drift from the file it is in.
+    let mut state = state.clone();
+    state.song = Some(name);
+    write_atomic(&path, &serde_json::to_vec_pretty(&state)?)
 }
 
 /// Read a named song back, upgrading it like the session file.

@@ -14,9 +14,9 @@ On a drum machine the same five rows load that demo's **drum bank** instead: eig
 demo's tempo and shuffle, with that machine's kit and the session's name left exactly as they were. The tempo is the whole
 rack's, though — one cell, every machine on it — so loading a bank also retunes the 303s beside it, and that tempo, unlike a
 second device's grooves, is what a save keeps. A drum bank is patterns, not a song — nothing is renamed and no sound is loaded with it.
-A save writes the first device alone ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)), so a drum machine's grooves are
-kept when it is that first device and last the session when it is not. [`22-the-drum-machine`](22-the-drum-machine.md) is the
-drum machine's own page, its grid and its kits.
+A save keeps every machine in the rack ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)), so a drum machine's grooves are
+kept whichever cell it sits in. [`22-the-drum-machine`](22-the-drum-machine.md) is the drum machine's own page, its grid and
+its kits.
 
 **`MY BANKS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
 click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
@@ -24,13 +24,16 @@ click only arms the row — it prints `<name> - click again to replace` — and 
 Every row has a small `x` at its right end. One click turns it into `SURE`; the second deletes the song. The demos have no
 `x`.
 
-## One song, one rack
+## One song, the whole rack
 
-A song is the first device: its bank, its patch, its kit's name, its tempo and swing, its learned controllers. The other
-devices in the rack — their names, patterns, kits, ports and colours — are not in the file, and a restart brings back one
-machine. That is the save format's limit this round, and the picker says so on its own line: `NAMES AND EXTRA DEVICES ARE NOT
-SAVED YET` ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)). A kit's *folder* is written beside the file, so an edited kit
-comes back even when the machine that played it does not.
+A song is the rack: every machine's kind, name, colour, ports, channel, role, patterns, patch, kit's name, shuffle and learned
+controllers, with device 1 also written in the older flat shape so a build from before the rack can still read it. A save
+therefore keeps a second, third or fourth machine as it keeps the first, and a restart brings all of them back in the order
+they were in ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)).
+
+Two things each machine still forgets: its `REVERSE` direction and its own transpose. Both are performance, not patch, so a
+restart brings every device back running forwards and in tune. A kit's *folder* is written beside the file, so an edited kit
+comes back with the machine that plays it.
 
 ## What a save does to a name
 

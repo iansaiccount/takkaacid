@@ -21,7 +21,8 @@ fn main() -> eframe::Result {
     }
     // Restore the last session. A first run opens on a demo, under the name a new song starts with, and nothing about it
     // is on disk yet — so the first thing the player sees is a line that plays, and a lamp that says "keep me".
-    let (saved, first_run) = persist::open(&persist::data_dir());
+    let dir = persist::data_dir();
+    let (saved, first_run) = persist::open(&dir);
     let rack = device::Rack::from_saved(&saved);
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
     rack.state().set_pattern_index(rack.bank().current());
@@ -66,8 +67,10 @@ fn main() -> eframe::Result {
                 // The song the last session was working on, if it had a name.
                 songs: panel_ui::SongState {
                     name: song_name.clone(),
-                    // The file it was saved as, so the first SAVE after a restart keeps it instead of writing `Name (2)`.
-                    file: song_name.clone(),
+                    // The file it was saved as, so the first SAVE after a restart keeps it instead of writing `Name (2)`. Only
+                    // when that file is still there: a demo's or a `NEW` song's name is not a file, and claiming one would have
+                    // the next save write over a song the player had under that name.
+                    file: persist::session_song_file(&dir, song_name.as_deref()),
                     ..panel_ui::SongState::default()
                 },
                 // A first run has nothing on disk, so the lamp says "keep me" until the player does.
@@ -901,8 +904,9 @@ impl TakkaApp {
                     // A held swap belonged to the device that was on screen, not to the new one.
                     self.pending_pattern = None;
                     let name = self.rack.device().name.clone();
-                    // Nothing on disk changed: the session saves the first device, and a device added here is not in the
-                    // save format yet.
+                    // The rack is what a save writes, so a device added here is a change to the document: the next save
+                    // carries it, and the lamp says one is due.
+                    self.panel.dirty = true;
                     self.notice(format!("added {name}"));
                 }
                 Err(device::AddError::AtCapacity) => {
@@ -944,11 +948,9 @@ impl TakkaApp {
             // The last device cannot go, and the panel cannot see the rack, so the refusal is said here.
             device::Request::ConfirmRemove(index) => match self.rack.remove(index) {
                 Ok(()) => {
-                    // A save writes the first device, so only losing *that* one changes what the file would hold; a
-                    // survivor keeps its number and its name, and nothing else a save reads has moved.
-                    if index == 0 {
-                        self.panel.dirty = true;
-                    }
+                    // The session file holds every device, so losing any of them changes what a save would write: the
+                    // survivors keep their numbers and their names, and the one that went is the whole difference.
+                    self.panel.dirty = true;
                     // The card was about a device that is gone — and so is its mirror, which has to go with it or the next
                     // frame paints a name, a route and a removal for an index that is not there.
                     self.panel.close_device_card();
