@@ -29,18 +29,24 @@ goes up. Gates at its head: `cargo test --workspace` **920**, `cargo clippy --wo
 - `2860f01` `rack_to_saved` / `saved_device_from` / `saved_device_to_shared`
 - `694a3d9` `Rack::from_saved` for N devices, `replace_from_saved`
 - `0ccc708` `main`'s one session builder, the load path, the missing-port notice, the 808 pin, the book and `img/picker.png`
+- `79d359f` this handover's first version
+- `34bf1f4` **round 02, task 1**: `BankDocument` in `banks/<name>.json`, the bank `persist` functions, `song_name` →
+  `document_name`
 
-**What that changed for you:** `persist::SavedState` now carries `devices: Vec<SavedDevice>`, `SavedInputs`, per-device `swing`
-and `cc_map`, and the flat fields are device 1's mirror. `persist::rack_to_saved(&Rack)` is the one builder `main` saves with.
-`Rack::replace_from_saved` is what a load calls. `persist::document_name` does **not** exist yet — it is round 02's first task
-(`song_name` is still the one validator).
+**What rounds 01 and 02/task 1 changed for you:** `persist::SavedState` now carries `devices: Vec<SavedDevice>`,
+`SavedInputs`, per-device `swing` and `cc_map`, and the flat fields are device 1's mirror. `persist::rack_to_saved(&Rack)` is the
+one builder `main` saves with; `Rack::replace_from_saved` is what a load calls. `persist::document_name` (renamed from
+`song_name`) is the one file-name validator, and `persist::BankDocument`, `bank_path`, `list_banks`, `save_bank`, `load_bank`,
+`delete_bank` and `free_bank_name` exist and are tested — nothing in the face uses them yet.
+
 
 ## What round 02 is
 
 A pattern bank becomes a **document**: `banks/<name>.json`, saved, listed, loaded into the selected device of either kind, and
 deleted — through the `BANKS` card, whose lists are reworded so they are true, with the two `RACKS` keys drawn and refusing.
-`plans/phase 5/02-bank-files.md` has the four tasks, their tests and their mutations. The design's *The bank document* and
-*The face* sections are the shape.
+`plans/phase 5/02-bank-files.md` has the four tasks, their tests and their mutations. **Task 1 is done and committed** (see its
+`## Progress`); tasks 2, 3 and 4 are yours. The design's *The bank document* and *The face* sections are the shape.
+
 
 **Rulings already made, so you do not re-open them:**
 
@@ -67,8 +73,10 @@ deleted — through the `BANKS` card, whose lists are reworded so they are true,
   round 01 and the block had to be repaired by hand. End ranges on a distinctive line.
 - **`cargo test --workspace | head` kills the run with SIGPIPE.** Redirect to a file and sum the `test result` lines.
 - **Never `git checkout <file>` to undo a scratch mutation** — it reverts to HEAD and takes uncommitted work with it.
-- **Mutation scripts are the proof, and a `SKIP` is never a pass** (`.superpowers/mutate_phase5_task*.py`). Two misses were found
-  and fixed in round 01; both are recorded in plan 01's Progress, and both were tests that were not asking.
+- **Mutation scripts are the proof, and a `SKIP` is never a pass** (`.superpowers/mutate_phase5_*.py`). Two misses and one skip
+  were found and fixed across rounds 01–02; all are recorded in the plans' Progress. A skip usually means the target text appears
+  twice — narrow the mutation until it applies exactly once.
+
 - **Screenshots:** check `DISPLAY=:N xdotool getdisplaygeometry` says at least `2000 1400` before launching (something on this
   machine pre-starts `Xvfb` at 1280×800), then `xdotool getwindowgeometry` must say `1960x1340`. Fresh `TAKKA_ACID_DATA_DIR`,
   pointer outside the window or a tooltip lands in the book, and a crop is a second grab. Round 02 retakes the three
