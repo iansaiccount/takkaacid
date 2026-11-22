@@ -20,7 +20,9 @@ use acid_core::voice::{
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
+use crate::device::{Device, DeviceKind, MAX_DEVICES, Scheme};
 use crate::knobs::Knob;
+use crate::midi::route::{Channel, Ports, Role};
 use crate::state::SharedState;
 
 /// Directory name under the data home.
@@ -101,8 +103,81 @@ impl Knobs {
     }
 }
 
+/// One machine of a rack, as the file stores it.
+///
+/// Every field is something the strip, the face or the sound would otherwise forget: a name and a colour live only in
+/// memory, and a bank, a patch, a shuffle, a learned rig, a set of ports and a kit are each their own thing to that machine.
+/// A device's **kind** is a caption rather than an index — `DeviceKind::name()` written down — because a reader of the file
+/// should be able to see which machine it is, and because `from_name` derives the mapping from the catalogue instead of
+/// spelling the variants a second time.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedDevice {
+    /// Stable for the device's life, and never reused; the rack's next number is one above the highest it reads.
+    pub number: usize,
+    pub name: String,
+    pub kind: String,
+    pub scheme: String,
+    pub inputs: SavedInputs,
+    pub bank: PatternBank,
+    pub knobs: Knobs,
+    /// The panel's `SHUFFLE`, which is each machine's own.
+    pub swing: f32,
+    /// The controllers this machine has been taught, in `midi::cc::LEARNABLE` order.
+    pub cc_map: Vec<u8>,
+    /// The kit a drum machine plays, by name. `None` is the default kit, which is what an acid device always holds.
+    pub kit: Option<String>,
+}
+
+/// What a device hears. The route types are written with serde's own names: they are open data — a port name is whatever
+/// the system reports — not a catalogue the face spells.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedInputs {
+    pub ports: Ports,
+    pub channel: Channel,
+    pub role: Role,
+}
+
+impl SavedInputs {
+    /// The factory filter: every port, every channel, notes and controllers. What a device has when the file says nothing,
+    /// which is what a version-11 session does — it never saved one.
+    pub fn everything() -> Self {
+        Self {
+            ports: Ports::All,
+            channel: Channel::All,
+            role: Role::PlayAndControl,
+        }
+    }
+}
+
+impl SavedDevice {
+    /// The one machine a version-11 file describes, repaired from its flat mirror.
+    ///
+    /// Its **kind is inferred**, because a version-11 file records none: `DRUMS` when the file names a kit — only a machine
+    /// with a kit ever writes a kit name — and `ACID` otherwise. A drum device that never left the `Init` kit cannot be
+    /// recovered and opens as an acid; the file does not say, and a different guess would be worse than an honest one.
+    fn from_mirror(state: &SavedState) -> SavedDevice {
+        let kind = if state.kit.is_some() {
+            DeviceKind::Drums
+        } else {
+            DeviceKind::Acid
+        };
+        SavedDevice {
+            number: 1,
+            name: Device::default_name(kind, 1),
+            kind: kind.name().to_string(),
+            scheme: Scheme::default().name().to_string(),
+            inputs: SavedInputs::everything(),
+            bank: state.bank.clone(),
+            knobs: state.knobs,
+            swing: state.swing,
+            cc_map: state.cc_map.clone(),
+            kit: state.kit.clone(),
+        }
+    }
+}
+
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 11;
+pub const SAVE_VERSION: u32 = 12;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -147,6 +222,12 @@ pub struct SavedState {
     /// masks were appended to `Step`, so a version-10 file's prefix still reads.
     #[serde(default)]
     pub kit: Option<String>,
+    /// Every machine in the rack, in rack order, with device 1 also written above as this document's flat fields. A file
+    /// written before this field existed has none, and `sanitize` rebuilds one device from the mirror, so an older song loads
+    /// as a one-device song and a newer file still names the machine an older build can read. Appended last, after `kit`, so
+    /// a version-11 file's prefix is byte for byte what it was.
+    #[serde(default)]
+    pub devices: Vec<SavedDevice>,
 }
 
 /// The factory MIDI mapping, for a file that predates the field.
@@ -180,6 +261,8 @@ impl Default for SavedState {
             scale: 0,
             autosave: false,
             kit: None,
+            // One device is the empty list: the mirror above *is* that device, and `sanitize` builds it back from there.
+            devices: Vec::new(),
         }
     }
 }
@@ -209,6 +292,9 @@ impl SavedState {
             let slot = self.cc_map.len();
             self.cc_map.push(crate::midi::cc::DEFAULT_CC[slot]);
         }
+        // Version 12 is the rack document. A file written before it has no `devices`, which `sanitize` has already rebuilt
+        // from the mirror, and a file written since carries the mirror too. Nothing to rewrite — the bump exists so that a
+        // build which knows 11 does not read a 12 as its own.
         self.version = SAVE_VERSION;
         self
     }
@@ -336,6 +422,8 @@ pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
         // still on the default kit has no name to write.
         kit: Some(shared.kit().name.clone())
             .filter(|name| name != acid_core::drums::DEFAULT_KIT_NAME),
+        // A one-device document: the mirror above is the machine, and a reader turns it into a list.
+        devices: Vec::new(),
     }
 }
 
@@ -382,34 +470,107 @@ pub fn song_exists(dir: &Path, name: &str) -> bool {
 pub fn sanitize(state: &mut SavedState) {
     state.bpm = acid_core::timing::clamp_bpm(state.bpm);
     state.swing = state.swing.clamp(0.0, 1.0);
-    // Four faces, not two: the save file stores the wave catalogue index, so clipping it to 1 would load SINE and TRI as
-    // SQUARE — the bug the two-state switch left behind.
-    state.knobs.waveform = state
-        .knobs
-        .waveform
-        .min((acid_core::oscillator::Waveform::ALL.len() - 1) as u8);
-    state.knobs.tuning = state.knobs.tuning.clamp(0.0, 1.0);
-    state.knobs.cutoff = state.knobs.cutoff.clamp(0.0, 1.0);
-    state.knobs.resonance = state.knobs.resonance.clamp(0.0, 1.0);
-    state.knobs.env_mod = state.knobs.env_mod.clamp(0.0, 1.0);
-    state.knobs.decay = state.knobs.decay.clamp(0.0, 1.0);
-    state.knobs.accent = state.knobs.accent.clamp(0.0, 1.0);
-    state.knobs.volume = state.knobs.volume.clamp(0.0, 1.0);
+    sanitize_knobs(&mut state.knobs);
     state.density = state.density.clamp(0.0, 1.0);
     state.scale = state
         .scale
         .min((crate::ui::scale::Scale::ALL.len() - 1) as u8);
-    // A map written by a build with more learnable knobs than this one cannot be honoured slot for slot, and guessing
-    // which controller belonged to which knob would be worse than the factory pairing.
-    if state.cc_map.len() > crate::midi::cc::LEARNABLE.len() {
-        state.cc_map = crate::midi::cc::DEFAULT_CC.to_vec();
-    }
-    for cc in &mut state.cc_map {
-        *cc = (*cc).min(127);
-    }
+    sanitize_map(&mut state.cc_map);
     // A hand-edited file can hold fewer patterns than the box has. Every accessor assumes the full catalogue, and `get`
     // is on the audio path, so the bank is repaired before anything reads it.
     state.bank.normalise();
+    sanitize_devices(state);
+}
+
+/// Every knob is a `0.0..=1.0` position except the waveform, which is a catalogue index. Four faces, not two: the save file
+/// stores the wave catalogue index, so clipping it to 1 would load SINE and TRI as SQUARE — the bug the two-state switch left
+/// behind.
+fn sanitize_knobs(knobs: &mut Knobs) {
+    knobs.waveform = knobs
+        .waveform
+        .min((acid_core::oscillator::Waveform::ALL.len() - 1) as u8);
+    knobs.tuning = knobs.tuning.clamp(0.0, 1.0);
+    knobs.cutoff = knobs.cutoff.clamp(0.0, 1.0);
+    knobs.resonance = knobs.resonance.clamp(0.0, 1.0);
+    knobs.env_mod = knobs.env_mod.clamp(0.0, 1.0);
+    knobs.decay = knobs.decay.clamp(0.0, 1.0);
+    knobs.accent = knobs.accent.clamp(0.0, 1.0);
+    knobs.volume = knobs.volume.clamp(0.0, 1.0);
+}
+
+/// A map written by a build with more learnable knobs than this one cannot be honoured slot for slot, and guessing which
+/// controller belonged to which knob would be worse than the factory pairing.
+fn sanitize_map(map: &mut Vec<u8>) {
+    if map.len() > crate::midi::cc::LEARNABLE.len() {
+        *map = crate::midi::cc::DEFAULT_CC.to_vec();
+    }
+    for cc in map.iter_mut() {
+        *cc = (*cc).min(127);
+    }
+}
+
+/// The device list and the flat fields are one thing seen twice: the list is the rack, and the flat fields are device 1's
+/// mirror, which is how a build that knows version 11 still opens a version-12 song. Repairing one from the other, in one
+/// function, is what keeps a file this build writes from disagreeing with itself.
+fn sanitize_devices(state: &mut SavedState) {
+    // A version-11 file has no list at all; the mirror is the machine it describes.
+    if state.devices.is_empty() {
+        state.devices.push(SavedDevice::from_mirror(state));
+    }
+    // The strip shows four cells, so the first four are the ones that can be played; a fifth is a file that grew.
+    state.devices.truncate(MAX_DEVICES);
+    for device in &mut state.devices {
+        // A caption this build does not know becomes the default one: a hand-edited word must not cost the player their song.
+        if DeviceKind::from_name(&device.kind).is_none() {
+            device.kind = DeviceKind::Acid.name().to_string();
+        }
+        if Scheme::from_name(&device.scheme).is_none() {
+            device.scheme = Scheme::default().name().to_string();
+        }
+        device.swing = device.swing.clamp(0.0, 1.0);
+        sanitize_knobs(&mut device.knobs);
+        sanitize_map(&mut device.cc_map);
+        device.bank.normalise();
+    }
+    // Numbers before names: the default a blank name falls back to is built from the number, so the number has to be settled
+    // first. A duplicate is moved above the highest number in the file, which is the rule the rack's own counter keeps.
+    let mut numbers: Vec<usize> = Vec::new();
+    let mut next = state
+        .devices
+        .iter()
+        .map(|device| device.number)
+        .max()
+        .unwrap_or(0)
+        + 1;
+    for device in &mut state.devices {
+        while numbers.contains(&device.number) {
+            device.number = next;
+            next += 1;
+        }
+        numbers.push(device.number);
+    }
+    let mut taken: Vec<String> = Vec::new();
+    for device in &mut state.devices {
+        let kind = DeviceKind::from_name(&device.kind).unwrap_or(DeviceKind::Acid);
+        let wanted = match device.name.trim() {
+            "" => Device::default_name(kind, device.number),
+            trimmed => trimmed.to_string(),
+        };
+        let name = distinct_name(&wanted, |candidate| {
+            taken.iter().any(|held| held == candidate)
+        });
+        taken.push(name.clone());
+        device.name = name;
+    }
+    // The mirror last, so one rule owns the equality. A file this build writes carries device 1 twice, identically.
+    let Some(first) = state.devices.first().cloned() else {
+        return;
+    };
+    state.bank = first.bank;
+    state.knobs = first.knobs;
+    state.swing = first.swing;
+    state.cc_map = first.cc_map;
+    state.kit = first.kit;
 }
 
 /// Where named songs live: one file each, under the data directory.
@@ -554,8 +715,21 @@ pub fn free_song_name(dir: &Path, wanted: &str) -> String {
 /// the name rule it starts from, is the hand-kept second list this project has paid for twice.
 pub fn free_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String {
     let wanted = song_name(wanted).unwrap_or_else(|| "Untitled".to_string());
-    if !taken(&wanted) {
-        return wanted;
+    distinct_name(&wanted, taken)
+}
+
+/// `wanted`, or the first `wanted (2)`, `wanted (3)` … that `taken` answers free.
+///
+/// The rule for telling two names of a kind apart, in one place: a device in a rack (`Rack::rename` and `sanitize`), a song
+/// file, a kit folder, and the copy an edit of a factory kit makes. `free_name` puts a file name's validation in front of it
+/// and is the only caller that needs to; a device's name is not a file name, so it comes here directly.
+pub fn distinct_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String {
+    let wanted = match wanted.trim() {
+        "" => "Untitled",
+        trimmed => trimmed,
+    };
+    if !taken(wanted) {
+        return wanted.to_string();
     }
     for copy in 2..1000 {
         let suffix = format!(" ({copy})");

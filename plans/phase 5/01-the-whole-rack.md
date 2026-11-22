@@ -248,7 +248,20 @@ Inputs the spec implies and no task's tests otherwise cover, most likely first:
 
 ## Progress
 
-- [ ] **Task 1 — the device document.**
+- [x] **Task 1 — the device document.** `SavedDevice`, `SavedInputs`, serde on `Ports` / `Channel` / `Role` (`midi::route`),
+      `DeviceKind::from_name` and `Scheme::from_name` (each scanning its own `ALL`), `SAVE_VERSION` **12**, `devices` appended
+      after `kit`, and `sanitize` split into `sanitize_knobs`, `sanitize_map` and `sanitize_devices` so the flat mirror and the
+      list are repaired by the same code. The duplicate-name rule moved out of `Rack::rename` into `persist::distinct_name`,
+      which `free_name` and `sanitize` now share: this task was about to write the third copy of it.
+      **Tests:** `the_save_version_is_pinned_at_twelve` (renamed; its byte pin now proves `devices` follows `kit`),
+      `a_three_device_song_round_trips_every_field` (the mirror is deliberately **stale**, so every rewrite line is
+      load-bearing), `a_version_eleven_file_is_one_device_and_its_kit_names_the_kind`, `sanitize_repairs_a_devices_list`.
+      **Mutations: 4 of 4 caught, 0 skipped** (`.superpowers/mutate_phase5_task1.py`) — the mirror not rewritten, the kind
+      always inferred as an acid, no truncation, no distinct names. The first run **missed** the mirror mutation because that
+      test's mirror happened to agree with device 1 already; the fixture was made stale on purpose and the mutation then bit.
+      Recorded because a mutation that passes is a test that was not asking.
+      Gates: `cargo test --workspace` **914**, clippy `-D warnings`, `cargo fmt --check`. No book change in this task: nothing
+      a player sees moved, and the picker's footnote goes in Task 4 with the load path that makes it true.
 - [ ] **Task 2 — one builder for the rack's bytes.**
 - [ ] **Task 3 — a rack builds from a saved session, and is replaced by one.**
 - [ ] **Task 4 — `main` saves a rack and loads one.**

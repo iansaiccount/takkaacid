@@ -1,8 +1,11 @@
 //! The save file: round-trip, atomicity, and the two conversions between disk and running state.
 
+use acid_app::device::MAX_DEVICES;
+use acid_app::midi::cc::LEARNABLE;
+use acid_app::midi::route::{Channel, Ports, Role};
 use acid_app::persist::{
-    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedState, data_dir, load, open, save, saved_to_shared,
-    shared_to_saved,
+    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
+    sanitize, save, saved_to_shared, shared_to_saved,
 };
 use acid_app::persist::{
     SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
@@ -452,19 +455,24 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 /// an accidental bump fail the suite instead of passing every test that compares a file against `SAVE_VERSION` itself.
 /// (Nothing in this build yet refuses a *newer* version — see the wishlist — so the number is a promise, not a guard.)
 #[test]
-fn the_save_version_is_pinned_at_eleven() {
-    assert_eq!(SAVE_VERSION, 11, "a bump is a migration, not an edit");
+fn the_save_version_is_pinned_at_twelve() {
+    assert_eq!(SAVE_VERSION, 12, "a bump is a migration, not an edit");
 
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
     let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
     assert!(
-        text.contains("\"version\": 11"),
+        text.contains("\"version\": 12"),
         "the document names the version it was written in"
     );
+    // `devices` is appended after every field a version-11 build knows, so its prefix — `kit` included — still reads.
     assert!(
-        text.contains("\"kit\": null"),
-        "the kit is the last field, and a session with no kit names one"
+        text.find("\"kit\"").unwrap() < text.find("\"devices\"").unwrap(),
+        "the device list is the last field, and a session with no kit still names one"
+    );
+    assert!(
+        text.contains("\"devices\": []"),
+        "one device is the empty list: the mirror above is the machine, and `sanitize` builds it back from there"
     );
 }
 
@@ -1052,4 +1060,139 @@ fn a_rack_built_from_a_session_carries_the_session_into_the_mixer() {
     let held = rack.hold();
     assert_eq!(held.slots.len(), 1);
     assert_eq!(held.slots[0].tempo_bpm.get(), saved.bpm);
+}
+
+/// One device for the file tests, with every field set to something a default would not produce, so a field dropped on the way
+/// through the file is a failure rather than a coincidence.
+fn a_saved_device(number: usize, name: &str, kind: &str) -> SavedDevice {
+    SavedDevice {
+        number,
+        name: name.to_string(),
+        kind: kind.to_string(),
+        scheme: "VINYL NOIR".to_string(),
+        inputs: SavedInputs {
+            ports: Ports::Named(vec![format!("Port {number}")]),
+            channel: Channel::One(number as u8),
+            role: Role::ControlOnly,
+        },
+        bank: if number == 1 {
+            PatternBank::factory()
+        } else {
+            PatternBank::new_empty()
+        },
+        knobs: Knobs {
+            cutoff: 0.1 * number as f32,
+            ..Knobs::default()
+        },
+        swing: 0.1 * number as f32,
+        cc_map: vec![number as u8 + 10; LEARNABLE.len()],
+        kit: (kind == "DRUMS").then(|| "808".to_string()),
+    }
+}
+
+#[test]
+fn a_three_device_song_round_trips_every_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = SavedState {
+        devices: vec![
+            a_saved_device(1, "BASS", "ACID"),
+            a_saved_device(2, "DRUMS", "DRUMS"),
+            a_saved_device(3, "LEAD", "ACID"),
+        ],
+        ..SavedState::default()
+    };
+    // The mirror is deliberately **stale**: every flat field disagrees with device 1, so a rewrite that skips one is caught
+    // rather than passing because it happened to be right already.
+    state.bank = PatternBank::new_empty();
+    state.knobs.cutoff = 0.9;
+    state.swing = 0.9;
+    state.cc_map = vec![1u8; LEARNABLE.len()];
+    state.kit = Some("909".to_string());
+    save(dir.path(), &state).unwrap();
+    let mut loaded = load(dir.path()).unwrap().unwrap();
+    sanitize(&mut loaded);
+    let loaded = loaded.upgraded();
+
+    assert_eq!(loaded.devices, state.devices, "every field of every device");
+    // The flat fields are device 1's mirror, which is the machine a version-11 build can read.
+    let first = &loaded.devices[0];
+    assert_eq!(loaded.bank, first.bank, "the mirror's bank");
+    assert_eq!(loaded.knobs, first.knobs, "the mirror's patch");
+    assert_eq!(loaded.swing, first.swing, "the mirror's shuffle");
+    assert_eq!(loaded.cc_map, first.cc_map, "the mirror's learned rig");
+    assert_eq!(loaded.kit, first.kit, "the mirror's kit");
+}
+
+/// Write the file a version-11 build would have written, with `devices` absent and `kit` set to whatever the caller says.
+fn write_a_version_eleven_file(dir: &std::path::Path, kit: serde_json::Value) {
+    let mut value = serde_json::to_value(SavedState::default()).unwrap();
+    let object = value.as_object_mut().unwrap();
+    object.remove("devices");
+    object.insert("version".to_string(), serde_json::json!(11));
+    object.insert("kit".to_string(), kit);
+    std::fs::write(dir.join("state.json"), serde_json::to_vec(&value).unwrap()).unwrap();
+}
+
+#[test]
+fn a_version_eleven_file_is_one_device_and_its_kit_names_the_kind() {
+    // A version-11 file records no kind at all, so the kit it names is the only evidence there is: only a machine that has a
+    // kit ever writes one.
+    let drums = tempfile::tempdir().unwrap();
+    write_a_version_eleven_file(drums.path(), serde_json::json!("808"));
+    let (loaded, first_run) = open(drums.path());
+    assert!(
+        !first_run,
+        "the file is readable, so this is not a first run"
+    );
+    assert_eq!(loaded.devices.len(), 1);
+    assert_eq!(loaded.devices[0].kind, "DRUMS");
+    assert_eq!(loaded.devices[0].kit.as_deref(), Some("808"));
+
+    let acid = tempfile::tempdir().unwrap();
+    write_a_version_eleven_file(acid.path(), serde_json::Value::Null);
+    let (loaded, _) = open(acid.path());
+    assert_eq!(loaded.devices.len(), 1);
+    assert_eq!(loaded.devices[0].kind, "ACID");
+}
+
+#[test]
+fn sanitize_repairs_a_devices_list() {
+    let mut state = SavedState {
+        devices: vec![
+            a_saved_device(1, "BASS", "ACID"),
+            a_saved_device(2, "BASS", "ACID"),
+            // A duplicate number, a blank name and a kind this build does not have, all on one machine.
+            a_saved_device(2, "", "SAMPLER"),
+            a_saved_device(3, "LEAD", "DRUMS"),
+            // One more than the strip can show.
+            a_saved_device(4, "PAD", "ACID"),
+        ],
+        ..SavedState::default()
+    };
+    state.devices[0].scheme = "CHROME".to_string();
+    state.devices[0].swing = 3.0;
+    state.devices[0].cc_map = vec![0u8; 99];
+    sanitize(&mut state);
+
+    assert_eq!(state.devices.len(), MAX_DEVICES, "the fifth is dropped");
+    let names: Vec<&str> = state.devices.iter().map(|one| one.name.as_str()).collect();
+    assert_eq!(names[0], "BASS");
+    assert_eq!(names[1], "BASS (2)", "a duplicate name is suffixed");
+    assert_eq!(
+        names[2], "ACID 4",
+        "a blank name falls back to the repaired machine's default, built from the repaired number"
+    );
+    assert_eq!(names[3], "LEAD");
+    assert_eq!(state.devices[2].kind, "ACID", "an unknown kind is an acid");
+    assert_eq!(
+        state.devices[0].scheme, "BLACK",
+        "an unknown theme is BLACK"
+    );
+    assert_eq!(state.devices[0].swing, 1.0, "swing is a 0..=1 position");
+    assert_eq!(state.devices[0].cc_map.len(), LEARNABLE.len());
+    let numbers: Vec<usize> = state.devices.iter().map(|one| one.number).collect();
+    let mut distinct = numbers.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert_eq!(distinct.len(), numbers.len(), "a duplicate number is moved");
 }

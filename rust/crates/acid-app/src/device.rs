@@ -37,6 +37,15 @@ impl DeviceKind {
     /// Every kind the picker offers, in the order it offers them.
     pub const ALL: [DeviceKind; 2] = [DeviceKind::Acid, DeviceKind::Drums];
 
+    /// The kind `name` names, by the caption `name()` spells — the one mapping between a catalogue entry and the word a file
+    /// stores. Derived from `ALL`, so a variant added or renamed needs no second list here.
+    pub fn from_name(name: &str) -> Option<DeviceKind> {
+        DeviceKind::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.name() == name)
+    }
+
     /// The caption on a picker row, and the stem of a default name: `ACID 3`, `DRUMS 2`.
     pub fn name(self) -> &'static str {
         match self {
@@ -124,6 +133,16 @@ pub enum Scheme {
 }
 
 impl Scheme {
+    /// The theme `name` names, by the caption `name()` spells — the mapping a saved device needs and nothing else does.
+    /// Derived from `ALL` for the same reason `DeviceKind::from_name` is: a second list of twenty-two spellings would be the
+    /// bug this repo has paid for twice.
+    pub fn from_name(name: &str) -> Option<Scheme> {
+        Scheme::ALL
+            .iter()
+            .copied()
+            .find(|scheme| scheme.name() == name)
+    }
+
     /// Every theme there is, in the order the card's list offers them.
     pub const ALL: [Scheme; 22] = [
         Scheme::Black,
