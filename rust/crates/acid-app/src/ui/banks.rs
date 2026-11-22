@@ -122,7 +122,7 @@ pub fn paint(
         egui::Pos2::new(save_rect.right() + padding, y),
         egui::vec2(width * 0.22 - padding, row_height),
     );
-    let typed = crate::persist::song_name(&songs.name);
+    let typed = crate::persist::document_name(&songs.name);
     // A blank field still saves the song the session is on. With nothing open there is nothing to save and nothing to copy:
     // SAVE puts the cursor in the field rather than dying quietly, which is what a player would expect of a save button.
     let can_save = typed.is_some() || songs.open.is_some();
@@ -391,7 +391,7 @@ const NEW_KEY: &str = "new";
 
 /// The name a SAVE should use: what the player typed, or the song the session is already on when the field is blank.
 fn save_name(songs: &Banks) -> Option<String> {
-    crate::persist::song_name(&songs.name).or_else(|| songs.open.clone())
+    crate::persist::document_name(&songs.name).or_else(|| songs.open.clone())
 }
 
 /// The card's header: the session's name and whether it is on disk. A first run and a freshly loaded demo have a name and

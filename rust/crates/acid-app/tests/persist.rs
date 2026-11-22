@@ -4,12 +4,13 @@ use acid_app::device::{DeviceKind, MAX_DEVICES, Rack, Scheme};
 use acid_app::midi::cc::LEARNABLE;
 use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
 use acid_app::persist::{
-    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
-    rack_to_saved, sanitize, save, saved_to_shared, shared_to_saved, unopened_ports, wanted_kits,
+    BankDocument, SaveTarget, bank_path, delete_bank, delete_song, document_name, export_song,
+    free_bank_name, free_song_name, import_song, list_banks, list_songs, load_bank, load_song,
+    new_song, save_bank, save_song, save_target,
 };
 use acid_app::persist::{
-    SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
-    new_song, save_song, save_target, song_name,
+    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
+    rack_to_saved, sanitize, save, saved_to_shared, shared_to_saved, unopened_ports, wanted_kits,
 };
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
@@ -17,11 +18,11 @@ use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
 
 #[test]
-fn a_song_name_has_to_be_a_name_and_not_a_path() {
-    assert_eq!(song_name("Acid 1").as_deref(), Some("Acid 1"));
-    assert_eq!(song_name("  Acid 1  ").as_deref(), Some("Acid 1"));
+fn a_document_name_has_to_be_a_name_and_not_a_path() {
+    assert_eq!(document_name("Acid 1").as_deref(), Some("Acid 1"));
+    assert_eq!(document_name("  Acid 1  ").as_deref(), Some("Acid 1"));
     assert_eq!(
-        song_name(&"x".repeat(48)).as_deref(),
+        document_name(&"x".repeat(48)).as_deref(),
         Some("x".repeat(48).as_str())
     );
     for bad in [
@@ -35,7 +36,7 @@ fn a_song_name_has_to_be_a_name_and_not_a_path() {
         "a?b",
         &"x".repeat(49),
     ] {
-        assert_eq!(song_name(bad), None, "{bad:?} should be refused");
+        assert_eq!(document_name(bad), None, "{bad:?} should be refused");
     }
 }
 
@@ -125,7 +126,7 @@ fn a_free_name_is_the_wanted_one_or_a_numbered_neighbour() {
     let beside = free_song_name(dir.path(), &long);
     assert_ne!(beside, long);
     assert!(
-        song_name(&beside).is_some(),
+        document_name(&beside).is_some(),
         "a free name is a saveable name: {beside:?}"
     );
     save_song(dir.path(), &beside, &saved).unwrap();
@@ -1284,5 +1285,50 @@ fn a_song_from_another_machine_names_ports_this_one_has_not_got() {
     assert!(
         unopened_ports(&SavedState::default(), &[]).is_empty(),
         "a session with no devices names no ports, so nothing is missing"
+    );
+}
+
+#[test]
+fn a_bank_document_round_trips() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Drums);
+    save_bank(dir.path(), "Easy", &document).unwrap();
+
+    assert_eq!(list_banks(dir.path()), vec!["Easy".to_string()]);
+    assert!(
+        bank_path(dir.path(), "Easy").is_file(),
+        "a bank is one file, named after itself"
+    );
+    let loaded = load_bank(dir.path(), "Easy").unwrap();
+    assert_eq!(loaded, document, "every field comes back");
+    assert_eq!(loaded.kind, "DRUMS");
+    assert_eq!(loaded.version, SAVE_VERSION);
+}
+
+#[test]
+fn a_bank_without_a_usable_name_is_refused_and_a_taken_one_lands_beside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Acid);
+    for bad in ["", "../escape", "a/b", "   "] {
+        assert!(
+            save_bank(dir.path(), bad, &document).is_err(),
+            "{bad:?} is not a file name"
+        );
+    }
+    save_bank(dir.path(), "Easy", &document).unwrap();
+    assert_eq!(free_bank_name(dir.path(), "Easy"), "Easy (2)");
+    assert_eq!(free_bank_name(dir.path(), "Hard"), "Hard");
+}
+
+#[test]
+fn deleting_a_bank_removes_its_file_and_refuses_a_bad_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Acid);
+    save_bank(dir.path(), "Easy", &document).unwrap();
+    delete_bank(dir.path(), "Easy").unwrap();
+    assert!(list_banks(dir.path()).is_empty());
+    assert!(
+        delete_bank(dir.path(), "../escape").is_err(),
+        "a stray name can never point out of the banks folder"
     );
 }

@@ -692,8 +692,10 @@ pub fn song_path(dir: &Path, name: &str) -> PathBuf {
 }
 
 /// A name that can be a file name, or `None` when the typed one cannot: blank, too long, or shaped like a path.
-/// The rules are deliberately conservative — a song name is typed into a panel, not a shell.
-pub fn song_name(typed: &str) -> Option<String> {
+///
+/// One validator for **every** document a player names — a song, a bank, the files of an imported kit — because they all land as
+/// files in the same data directory. The rules are deliberately conservative: a name is typed into a panel, not a shell.
+pub fn document_name(typed: &str) -> Option<String> {
     let name = typed.trim();
     if name.is_empty() || name.chars().count() > 48 {
         return None;
@@ -724,7 +726,7 @@ pub fn list_songs(dir: &Path) -> Vec<String> {
 
 /// Write a named song. Same format as the session file, so reading one is the same read.
 pub fn save_song(dir: &Path, name: &str, state: &SavedState) -> Result<()> {
-    let Some(name) = song_name(name) else {
+    let Some(name) = document_name(name) else {
         return Err(anyhow!("a song needs a name"));
     };
     let path = song_path(dir, &name);
@@ -748,7 +750,7 @@ pub fn load_song(dir: &Path, name: &str) -> Result<SavedState> {
 
 /// Remove a saved song. The name is validated first, so a stray one can never point out of the songs directory.
 pub fn delete_song(dir: &Path, name: &str) -> Result<()> {
-    let Some(name) = song_name(name) else {
+    let Some(name) = document_name(name) else {
         return Err(anyhow!("that is not a song name"));
     };
     let path = song_path(dir, &name);
@@ -769,7 +771,7 @@ pub enum SaveTarget {
 /// Decide where a save goes. A typed name equal to the session's song means "keep it current"; anything else is a new
 /// file, so a save never silently moves a song. A blank name keeps the current one; blank with nothing open saves nothing.
 pub fn save_target(current: Option<&str>, typed: &str) -> Option<SaveTarget> {
-    let typed = song_name(typed);
+    let typed = document_name(typed);
     match (current, typed) {
         (Some(current), Some(typed)) if current == typed => Some(SaveTarget::InPlace(typed)),
         (_, Some(typed)) => Some(SaveTarget::NewFile(typed)),
@@ -806,10 +808,105 @@ pub fn import_song(from: &Path, dir: &Path) -> Result<String> {
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let wanted = song_name(&stem).unwrap_or_else(|| "Imported song".to_string());
+    let wanted = document_name(&stem).unwrap_or_else(|| "Imported song".to_string());
     let name = free_song_name(dir, &wanted);
     save_song(dir, &name, &state)?;
     Ok(name)
+}
+
+/// Where a player's pattern banks live: one file each, under the data directory, beside `songs/` and `kits/`.
+pub const BANKS_DIR: &str = "banks";
+
+/// A pattern bank as a document of its own: its sixty-four patterns, the machine it was written from, and the version this
+/// build writes.
+///
+/// `kind` is the caption (`DeviceKind::name()`) rather than an index, for the same reason a saved device's is: a reader of the
+/// file can see which machine it belongs to. A step carries **both** machines' fields, so a bank is never *wrong* on the other
+/// face — it is silent, which is worse than wrong because nothing would say why — and that is why a mismatch is a warning and
+/// not a refusal.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BankDocument {
+    /// The format this file was written in: `SAVE_VERSION`, because a bank is a second **kind** of saved document and not a
+    /// second version.
+    #[serde(default)]
+    pub version: u32,
+    pub kind: String,
+    pub bank: PatternBank,
+}
+
+impl BankDocument {
+    /// The bank a device is playing now, stamped with the caption of the machine it is played on. The one place a bank document
+    /// is built, so `kind` cannot be forgotten at one call site and written at another.
+    pub fn of(bank: &PatternBank, kind: DeviceKind) -> Self {
+        Self {
+            version: SAVE_VERSION,
+            kind: kind.name().to_string(),
+            bank: bank.clone(),
+        }
+    }
+}
+
+/// The file a named bank lives in.
+pub fn bank_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(BANKS_DIR).join(format!("{name}.json"))
+}
+
+/// Every bank already saved, sorted so the card's list does not jump about.
+pub fn list_banks(dir: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir.join(BANKS_DIR)) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.strip_suffix(".json").map(str::to_string)
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Write a named bank, through the same `.tmp` and rename every other document goes through.
+pub fn save_bank(dir: &Path, name: &str, document: &BankDocument) -> Result<()> {
+    let Some(name) = document_name(name) else {
+        return Err(anyhow!("a bank needs a name"));
+    };
+    let path = bank_path(dir, &name);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    write_atomic(&path, &serde_json::to_vec_pretty(document)?)
+}
+
+/// Read a named bank back. The patterns are repaired the way a song's bank is — a hand-edited file can hold fewer than the box
+/// has, and every accessor assumes the full catalogue.
+pub fn load_bank(dir: &Path, name: &str) -> Result<BankDocument> {
+    let path = bank_path(dir, name);
+    let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+    let mut document: BankDocument =
+        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+    document.bank.normalise();
+    // A bank has nothing to migrate yet, and the number is still stamped: a bump with nothing to rewrite still bumps, so a
+    // build that knows 11 does not read a 12 as its own.
+    document.version = SAVE_VERSION;
+    Ok(document)
+}
+
+/// Remove a saved bank. The name is validated first, so a stray one can never point out of the banks directory.
+pub fn delete_bank(dir: &Path, name: &str) -> Result<()> {
+    let Some(name) = document_name(name) else {
+        return Err(anyhow!("that is not a bank name"));
+    };
+    let path = bank_path(dir, &name);
+    std::fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))
+}
+
+/// The name, or the first `X (2)`, `X (3)`, and so on that is free: a bank save never destroys another bank by being given its
+/// name, which is the rule `import_song` has and the reason both go through `free_name`.
+pub fn free_bank_name(dir: &Path, wanted: &str) -> String {
+    free_name(wanted, |name| bank_path(dir, name).exists())
 }
 
 /// The name, or the first `X (2)`, `X (3)`, and so on that is free: a save or an import never overwrites a song nobody
@@ -824,7 +921,7 @@ pub fn free_song_name(dir: &Path, wanted: &str) -> String {
 /// kit makes, which is a name the panel holds in memory before anything is written. A second implementation of this, or of
 /// the name rule it starts from, is the hand-kept second list this project has paid for twice.
 pub fn free_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String {
-    let wanted = song_name(wanted).unwrap_or_else(|| "Untitled".to_string());
+    let wanted = document_name(wanted).unwrap_or_else(|| "Untitled".to_string());
     distinct_name(&wanted, taken)
 }
 
@@ -872,7 +969,7 @@ pub fn kits_dir() -> PathBuf {
 /// function rather than a second rule with its own list of forbidden characters: the two would drift, and the drift would be
 /// a way out of `kits/`.
 pub fn kit_name(typed: &str) -> Option<String> {
-    song_name(typed)
+    document_name(typed)
 }
 
 /// The folder a kit of this name lives in.
@@ -1112,7 +1209,7 @@ fn read_kit(folder: &Path, name: &str, rate: f32) -> Result<LoadedKit, KitError>
         if entry.file.is_empty() {
             continue;
         }
-        let Some(file) = song_name(&entry.file) else {
+        let Some(file) = document_name(&entry.file) else {
             problems.push(KitError::NotAName {
                 voice: drum,
                 file: entry.file.clone(),
@@ -1181,7 +1278,7 @@ pub fn save_kit(kit: &Kit, dir: &Path, rate: f32) -> Result<PathBuf, KitError> {
             return None;
         }
         let document = before.as_ref()?;
-        let file = song_name(&document.voices[slot].file)?;
+        let file = document_name(&document.voices[slot].file)?;
         // The name is kept for every file this build cannot **play back**: gone, unreadable, or not a WAV. That is the hole a
         // notice tells the player to fill — `KICK: KICK.wav is missing` or `KICK: KICK.wav - not a RIFF file` — and keeping the
         // name (and the bytes) is what lets them fill it. Only a sample this build *can* decode is one the player deleted from
@@ -1244,7 +1341,7 @@ pub fn import_kit(from: &Path, name: &str, dir: &Path, rate: f32) -> Result<Impo
         if !source.kit.voices[slot].sample.is_empty() {
             return None;
         }
-        song_name(&document.voices[slot].file)
+        document_name(&document.voices[slot].file)
     });
     let folder = kit_folder(dir, &landed);
     write_folder(&folder, &landed, &source.kit, carried, named, rate)?;

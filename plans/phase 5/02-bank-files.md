@@ -190,7 +190,18 @@ loading a bank into a device other than the selected one; the `DEMO BANKS` behav
 
 ## Progress
 
-- [ ] **Task 1 — the bank document.**
+- [x] **Task 1 — the bank document.** `BankDocument { version, kind, bank }` with `BankDocument::of(&PatternBank, DeviceKind)`
+      as the one place one is built; `BANKS_DIR`, `bank_path`, `list_banks`, `save_bank` (through `write_atomic`, establishing
+      `banks/` first), `load_bank` (normalises the patterns, stamps `SAVE_VERSION`), `delete_bank` and `free_bank_name` (through
+      `free_name`, so a bank cannot destroy another by being given its name). `persist::song_name` became
+      `persist::document_name` — it already validated kit file names as well as songs — with every call site updated
+      (`save_song`, `delete_song`, `save_target`, `free_name`, `ui::banks` twice), and the test for it renamed.
+      **Tests:** `a_bank_document_round_trips`, `a_bank_without_a_usable_name_is_refused_and_a_taken_one_lands_beside_it`,
+      `deleting_a_bank_removes_its_file_and_refuses_a_bad_name`, and `a_document_name_has_to_be_a_name_and_not_a_path`.
+      **Mutations: 3 of 3 caught, 0 skipped** (`.superpowers/mutate_phase5_02_task1.py`) — the kind always an acid, an unusable
+      name written anyway, a taken name returned as it is. The first run **skipped** one because its target line also appears in
+      `saved_device_from`; the mutation was narrowed until it applied exactly once, because a `SKIP` is never a pass.
+      Gates: `cargo test --workspace` **923**, clippy `-D warnings`, `cargo fmt --check`.
 - [ ] **Task 2 — the card's four sections.**
 - [ ] **Task 3 — `main` answers the card.**
 - [ ] **Task 4 — the book, the pins and the pictures.**
