@@ -288,6 +288,25 @@ impl eframe::App for TakkaApp {
             let dir = persist::data_dir();
             match request {
                 panel_ui::banks::Request::Close => {}
+                // The bank document's three doors, wired in the next task of this round: the card is drawn and the request
+                // exists so the catalogue is complete, and until `save_bank_now`/`load_bank_now` land they say so plainly
+                // rather than doing nothing.
+                panel_ui::banks::Request::SaveBank(_) => {
+                    self.notice("a bank is not saved yet".to_string())
+                }
+                panel_ui::banks::Request::LoadBank(_) => {
+                    self.notice("a bank is not loaded yet".to_string())
+                }
+                panel_ui::banks::Request::DeleteBank(_) => {
+                    self.notice("a bank is not deleted yet".to_string())
+                }
+                // A rack document is a later round: the keys are drawn and refuse, so the place on the face is found once.
+                panel_ui::banks::Request::SaveRack => {
+                    self.notice("a rack file is not saved yet".to_string())
+                }
+                panel_ui::banks::Request::LoadRack => {
+                    self.notice("a rack file does not load yet".to_string())
+                }
                 panel_ui::banks::Request::Save(typed) => {
                     // One button: an unchanged name keeps the song, a new name writes a new file and leaves the old one
                     // where it is, so a save can never move a song out from under its own name.

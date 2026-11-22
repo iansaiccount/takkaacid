@@ -92,12 +92,24 @@ fn export_centre() -> Pos2 {
     )
 }
 
-/// Song rows start one row plus a gap below the field, past the two section headings (DEMO SONGS, MY SONGS).
+fn heading() -> f32 {
+    15.0 * scale(screen())
+}
+
+fn row_step() -> f32 {
+    row_height() + 2.0 * scale(screen())
+}
+
+/// Song rows start under the third heading. `DEMO BANKS` heads the first list, then `PATTERN BANKS` — whose own name-and-
+/// `SAVE BANK` row is drawn whether or not there is a bank file yet — and then `SONGS`, which is what `MY BANKS` became.
+fn songs_top() -> f32 {
+    field_y() + row_height() + padding() + heading() + heading() + row_step() + heading()
+}
+
 fn song_row_centre(index: usize) -> Pos2 {
-    let y = field_y() + row_height() + padding() + 30.0 * scale(screen());
     Pos2::new(
         card().left() + padding() + 20.0,
-        y + (row_height() + 2.0 * scale(screen())) * index as f32 + row_height() * 0.5,
+        songs_top() + row_step() * index as f32 + row_height() * 0.5,
     )
 }
 

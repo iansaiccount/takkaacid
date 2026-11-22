@@ -192,6 +192,10 @@ pub struct SongState {
     /// The song file this session is saved as, if it is one. A demo arrives with `None`: it is a new song under a name, and
     /// nothing of it is on disk until the player saves it.
     pub file: Option<String>,
+    /// The bank file the **selected** device's bank came from, if it came from one. `SAVE BANK` compares against this the way
+    /// `file` is compared against the song's name, so the two documents follow one rule. It is about one device's bank, so it
+    /// cannot outlive that: `NEW`, a song load and a change of selection clear it.
+    pub bank_file: Option<String>,
 }
 /// What the player chose on the panel, consumed by `main` on the next frame. The output list lives in the settings card,
 /// which asks for a choice the same way the old status-line picker did, so the stream handling is unchanged. The inputs
@@ -1018,8 +1022,21 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // Which machine the panel is showing, so the card's armed rows warn about the right thing: a 303's demo row replaces
         // the session, a drum machine's replaces that device's grid.
         let kind = state.showing_kind();
+        // The bank the selected device's bank came from, copied out before the card borrows the same `SongState` mutably.
+        let bank_file = state.songs.bank_file.clone();
         if let Some(card) = state.songs.card.as_mut() {
-            request = banks::paint(ui, l.panel, s, card, session.as_deref(), state.dirty, kind);
+            request = banks::paint(
+                ui,
+                l.panel,
+                s,
+                card,
+                banks::Session {
+                    name: session.as_deref(),
+                    dirty: state.dirty,
+                    bank_file: bank_file.as_deref(),
+                },
+                kind,
+            );
         }
         if shield.clicked() {
             request = Some(banks::Request::Close);

@@ -232,5 +232,36 @@ loading a bank into a device other than the selected one; the `DEMO BANKS` behav
       name with no file claiming one, a song keeping its old name, the suffix limit widened so `rename`'s own rule would return.
       Gates: `cargo test --workspace` **926**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
 - [ ] **Task 2 — the card's four sections.**
+- [x] **Task 2 — the card's four sections.** `Banks` gained `bank_names` and `bank_name`; `SongState` gained `bank_file`; `Request`
+      gained `SaveBank`, `LoadBank`, `DeleteBank`, `SaveRack` and `LoadRack`. The card is now `DEMO BANKS`, `PATTERN BANKS` (a row
+      per bank file with its `x`/`SURE` cross in the shared `delete_armed` under `bank:<name>`, then a name field and `SAVE BANK`
+      under the rows), `SONGS` (the old `MY BANKS`), and `RACKS` with `SAVE RACK` / `LOAD RACK`. `MY BANKS` is gone. Every new key
+      has its stable id — `bank-{index}`, `bank-delete-{index}`, `bank-save`, `rack-save`, `rack-load` — and the bank load shares
+      `load_armed` under the same `bank:<name>` key, so one click at a time is still the rule. A section that does not fit is not
+      drawn, heading included; the bank's save row is drawn whether or not a bank file exists, because it is how the selected
+      device's bank gets its first file.
+      **Tests (new `tests/banks_live.rs`):** `the_card_lists_the_four_sections_and_asks_for_a_bank_load` (clicks a row of all
+      three lists — each click lands only if the sections above it were drawn), `a_dirty_session_arms_a_bank_load_first`,
+      `the_rack_keys_ask_and_write_nothing`, `saving_a_bank_asks_with_the_typed_name`,
+      `a_blank_bank_field_saves_the_bank_the_device_came_from`. Every existing `songs_live` test passes untouched in behaviour —
+      which is the proof the ids did not move — with its hand-computed geometry moved: the helpers now measure from `songs_top()`
+      past three headings and the bank's save row, as the handover said they would have to.
+      **Rulings, and what each costs if wrong:**
+      1. `paint` takes one `banks::Session { name, dirty, bank_file }` rather than an eighth argument. Clippy's
+         `too_many_arguments` is a real signal here, and the three are three readings of one thing. Cost: a caller that wants one
+         field writes three lines instead of one.
+      2. The five new `Request` variants get their arms in `main` **in this task**, because the drain matches the enum in full and
+         nothing compiles without them. The bank arms say `a bank is not saved yet` and its two siblings until task 3 replaces
+         them with the real work; the two rack arms already say what they will always say.
+      3. **A test click needs a hover frame before it presses.** egui only reports a click on a widget it saw hovered, so a click
+         sent as press-then-release alone is silently lost whenever the row was not under the pointer in the previous frame. That
+         is what made this task's first run flaky — a row hit at one x and missed 20 px along — and `click()` in
+         `banks_live.rs` now moves the pointer for a frame first. `songs_live`'s helper still works because its clicks happen to
+         follow one another over the same rows; it is left alone rather than churned in a card task.
+      4. **The book is task 4's, as planned.** Page 12 still says `MY BANKS` where the card now says `SONGS`, and says nothing
+         about `PATTERN BANKS` or `RACKS`; it is rewritten in task 4 with the three documents, and this branch is one push, so no
+         push carries the contradiction. Cost if the round were pushed between these two commits: a page naming a section the
+         card no longer prints.
+      Gates: `cargo test --workspace` **931**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
 - [ ] **Task 3 — `main` answers the card.**
 - [ ] **Task 4 — the book, the pins and the pictures.**
