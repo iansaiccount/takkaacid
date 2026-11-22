@@ -569,6 +569,12 @@ impl Drums {
         self.sequencer.position()
     }
 
+    /// The direction this machine is actually playing: `set_reverse` takes a request at once when the line is stopped and
+    /// at the bar line when it is running, so this is the one a playhead may draw from.
+    pub fn is_reverse(&self) -> bool {
+        self.sequencer.is_reverse()
+    }
+
     pub fn bar_line(&self) -> Option<usize> {
         self.sequencer.bar_line()
     }

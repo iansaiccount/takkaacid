@@ -183,3 +183,50 @@ fn a_pause_through_the_seam_keeps_the_bar_and_a_resume_carries_on() {
     r.render_into(&mut rest);
     assert_ne!(step(&s), held, "and then the bar goes on");
 }
+
+/// The panel draws its playhead on the step that *sounds*, so it needs the direction the line is **playing**, not the one the
+/// player asked for. `reversed` flips the moment `REVERSE` is pressed and a running sequencer takes it at the bar line, so a
+/// marker reading the request would jump a bar ahead of the audio — the same class of bug as one that ignores the direction.
+///
+/// Both machines, because the answer is the *machine's*: `Machine::is_reverse` has an arm per kind, and a face on the drums has
+/// as much need of it as one on the 303.
+#[test]
+fn the_published_direction_waits_for_the_bar_line() {
+    use acid_app::device::{DeviceKind, Transport};
+    use acid_core::pattern::STEPS_PER_PATTERN;
+    use acid_core::timing;
+
+    for kind in [DeviceKind::Acid, DeviceKind::Drums] {
+        let s = SharedState::for_kind(kind);
+        s.tempo_bpm.set(120.0);
+        let mut r = AudioRenderer::new(48_000.0, 1, s.clone(), 4_096);
+
+        // Under way, so the request lands mid-bar and the sequencer defers it.
+        s.set_transport(Transport::Playing);
+        let mut block = vec![0.0; 2_048];
+        r.render_into(&mut block);
+        s.set_reversed(true);
+        r.render_into(&mut block);
+        assert!(
+            s.is_reversed(),
+            "{kind:?}: the cell says what was asked for"
+        );
+        assert!(
+            !s.is_reverse_active(),
+            "{kind:?}: and the line is still running forward"
+        );
+
+        // One bar and a step, so the wrap is behind us: the next bar begins in the new direction.
+        let step = timing::step_duration_samples(0, 120.0, 48_000.0, 0.0) as usize;
+        let mut bar_and_a_bit = vec![0.0; step * (STEPS_PER_PATTERN + 1)];
+        r.render_into(&mut bar_and_a_bit);
+        assert!(
+            s.is_reverse_active(),
+            "{kind:?}: the bar line takes it, and only then may the marker turn"
+        );
+        assert!(
+            s.is_reversed(),
+            "{kind:?}: the request is unchanged by the bar it waited for"
+        );
+    }
+}

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use acid_core::engine::Engine;
 use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
 use acid_core::pitch::Pitch;
+use acid_core::sequencer::sounding_step;
 use acid_core::timing;
 
 const SR: f32 = 48_000.0;
@@ -204,4 +205,26 @@ fn a_direction_asked_for_mid_bar_waits_out_a_pause() {
     let mut bar_and_a_bit = vec![0.0; step * (STEPS_PER_PATTERN + 1)];
     engine.render(&mut bar_and_a_bit);
     assert!(engine.is_reverse(), "the next bar line takes it");
+}
+
+/// The arithmetic a playhead needs, and the reason it is here rather than in the panel: the sound and the marker must be one
+/// answer. `deliver` plays through this, so a panel drawing it cannot point at a step that is not the one sounding.
+#[test]
+fn sounding_step_is_the_mirror_of_the_clock() {
+    assert_eq!(sounding_step(0, false), 0);
+    assert_eq!(
+        sounding_step(3, true),
+        12,
+        "a reversed bar reads from its other end"
+    );
+    assert_eq!(
+        sounding_step(0, true),
+        15,
+        "and the two ends do not swap by one"
+    );
+    assert_eq!(sounding_step(15, true), 0);
+    // A position past the bar wraps rather than panicking: the panel reads the clock out of a cell a block behind the audio,
+    // and `start_at` already takes a wrapping count.
+    assert_eq!(sounding_step(STEPS_PER_PATTERN, false), 0);
+    assert_eq!(sounding_step(STEPS_PER_PATTERN + 1, true), 14);
 }

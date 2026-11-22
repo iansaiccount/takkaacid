@@ -212,6 +212,15 @@ impl Machine {
             Machine::Drums { drums, .. } => drums.bar_line(),
         }
     }
+
+    /// The direction the machine is actually playing. `AudioRenderer::reversed` is what was last *told* to it, and a
+    /// running sequencer defers that to the bar line, so only the machine knows which way the bar is going.
+    fn is_reverse(&self) -> bool {
+        match self {
+            Machine::Acid(engine) => engine.is_reverse(),
+            Machine::Drums { drums, .. } => drums.is_reverse(),
+        }
+    }
 }
 
 /// Owns a device's machine for the audio thread's lifetime and keeps it in step with the UI.
@@ -349,6 +358,11 @@ impl AudioRenderer {
         self.state
             .position
             .store(self.machine.position(), Ordering::Relaxed);
+        // And the direction, with it. The panel draws its playhead on the step that *sounds*, and `reversed` is only what the
+        // player asked for: a running line takes it at the bar line, so this is the answer the machine has actually given.
+        self.state
+            .reverse_active
+            .store(self.machine.is_reverse(), Ordering::Relaxed);
     }
 
     /// Render one interleaved block, duplicating each mono frame to every channel.
