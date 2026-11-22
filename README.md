@@ -26,10 +26,47 @@ sample voices against the same sixteen steps, with its own kit
   a drive stage; 40–300 BPM with swing.
 - **Panel** (`rust/crates/acid-app`, egui/eframe): painted to look like a 303 — silkscreen legends, lit keys, a chasing
   step row — with the seven tone knobs, a performance row, and a transport row.
+- **Drums** (`rust/crates/acid-core::drums`, with the kits in `acid-app`): sixteen sample voices per machine, each with its own
+  envelope and a three-way filter; a kit is a folder of WAVs, and three ship in the binary.
+
+## The drum machine
+
+The second kind of device is a **drum machine**: sixteen sample voices against the same sixteen steps, with its own kit and its
+own grid. Add one with the strip's `+` → `DRUMS`. The whole of it is
+[`docs/guide/src/22-the-drum-machine.md`](docs/guide/src/22-the-drum-machine.md); this is the summary.
+
+- **The grid is the editor.** One row per voice — `KICK`, `SNR`, `RIM`, `CLAP`, `CHH`, `OHH`, `LOT`, `MID`, `HTOM`, `CRS`,
+  `RDE`, `CWB`, `LCO`, `HCO`, `CLV`, `SHK` — and one cell per step, every fourth column framed so the beat is findable without
+  counting squares. A click strikes that voice on that step, a `SHIFT`-click accents it (louder and brighter), a click on a
+  struck cell takes it off, and a `SHIFT`-click on an accented cell takes the accent off. Clicking a row's **label** selects the
+  voice — its plate lights, its row carries a faint band and its name is printed over the dials — and `SHIFT`-clicking the
+  label **mutes** the row: dim, with its accents gone, so a muted voice can still be found and unmuted by eye.
+- **The dials are the selected voice's**, in the 303's own seven slots: `ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE`, `CUT OFF`,
+  `RESONANCE`, `TUNE`. Beside them sit a three-way **`LP | BP | HP`** filter key, the **device's** `SHUFFLE` (not one of the
+  voice's dials: it swings the drums the way the 303's swings a bass line, and it is the one drum-face control `LEARN` can
+  teach), and **`HIT`**, which plays the selected voice, stopped or running, so a kit can be tuned without writing anything into
+  the bar.
+- **The keyboard.** `up` / `down` walk the selected voice; `left` / `right` move the selected step, a lit column across the
+  sixteen rows; `enter` writes the selected voice into that step, silently, and a second `enter` takes it off; `shift+enter` is
+  the accent gesture. The selection stays where it is after a write, because a step here holds sixteen voices and a hand writes
+  several before moving on. `h` is `HIT`'s key, `l` / `b` / `p` pick the filter's sides; the letter that presses a control is
+  underlined on it, and every control in the dial row explains itself on hover.
+- **A voice's sound is a kit.** Three ship under `FACTORY` — `808`, `909` and `Acoustic` — each read-only: editing one copies it
+  under a free name. `MY KITS` starts empty and holds your own; a kit is a folder of WAVs plus a `kit.json` under
+  `$XDG_DATA_HOME/takka-acid/kits/<name>/`, written when an edited kit is saved or a folder of WAVs is imported, so a kit can be
+  copied, edited by hand and handed on. The face prints `KIT <name>` above the dials and the device card's `KIT` row opens the
+  browser. `rust/crates/acid-app/kits/CREDITS.md` records where every sample came from (all CC0).
+- **Drum banks.** On a drum device, `BANKS` loads that demo's **drum bank** instead of a song: eight grooves into `A1`…`A8`, at
+  the demo's tempo and shuffle, with this machine's kit and the session's name left alone. A drum bank is patterns, not a song.
+- **Its own transpose.** The transport row's `TRANS -` / `TRANS +` move **the device on the panel** — the readout between them is
+  that device's and a second machine keeps its own — so one drum machine can be a semitone up while the 303 beside it is not.
+- **What it does not do yet.** No letter plays a note on a drum device and a MIDI note on its channel is silent; MIDI pads and
+  per-voice controllers are a later round, so `LEARN` leaves the voice's dials, the filter key and `HIT` alone. A second strike
+  on the same voice retriggers it rather than layering a second copy.
 
 ## Up to four machines
 
-The window holds up to four devices. Each one is a whole 303 — its own pattern bank, its own shuffle, its own MIDI inputs
+The window holds up to four devices. Each one is a whole machine — its own pattern bank, its own shuffle, its own MIDI inputs
 and its own name — and a strip above the panel is the whole rack: a cell per device with its name and its play lamp, the
 cell the panel is showing outlined, a `M` key at the right end of each — that device's mute — and a `+` at the far right
 that adds one.
@@ -44,7 +81,8 @@ that adds one.
   it wears — one of twenty-two, from the list its `COLOUR` row opens.
 - **One transport, one clock.** The deck's `PLAY` / `PAUSE` / `STOP` and the tempo belong to the rack and every device follows
   them; a device added
-  while the transport is running joins on the step the others are on, not at the top of the bar. Swing and the performance
+  while the transport is running waits for the bar line and comes in with everyone at the top of it, rather than starting on
+  whatever step the rack happens to be on. Swing and the performance
   row are per device.
 - **MIDI learn is per device**, so the same controller number can drive a knob on two devices at once, and each device has
   its own ports and channel.
@@ -60,6 +98,10 @@ slot, another device's pattern, or another window of the app, because the clipbo
 
 **The sound.** Seven tone knobs — waveform, tuning, cutoff, resonance, envelope mod, decay, accent — plus a volume knob.
 Every one of them can be taught to a MIDI controller.
+
+**The drums.** A second kind of device: sixteen sample voices, a kit behind each, a per-voice envelope and a three-way filter,
+and the same sixteen-step sequencer, transport and themes as the acid device
+([the drum machine](#the-drum-machine), above).
 
 **The performance row.** Transpose an octave either way, shuffle the clock, or roll a randomised acid line from a density
 and a scale.
@@ -144,7 +186,8 @@ that one prompt.
 
 `plans/` is not documentation written after the fact: it is the record of how the instrument was built. Each round of work
 has a numbered plan, from `00-main-plan.md` (the original breakdown) through the engine, the panel, the sequencer, MIDI,
-persistence, and the polish rounds, up to `32-learn-polish-and-pattern-controller.md`.
+persistence and the polish rounds, to the drum machine and the rounds after it (`plans/phase 1/` to `plans/phase 4/`, where
+the numbering restarts with each phase).
 
 Every plan has the same shape, and reading two or three of them in order shows the product changing:
 
@@ -170,7 +213,7 @@ plans/                 one plan per round, numbered, with their progress section
 Prompt.txt             the original brief
 EAR_TESTING.md         how to judge the sound by ear, and render WAVs to compare
 rust/
-  crates/acid-core/    the engine: oscillator, filter, envelope, sequencer, patterns, bank
+  crates/acid-core/    the engine: oscillator, filter, envelope, sequencer, patterns, bank, drums
   crates/acid-app/     the panel, shared state, MIDI, persistence, the binary
   crates/acid-app/tests/   the live tests: they drive real egui frames
 AGENTS.md              the conventions the codebase is held to

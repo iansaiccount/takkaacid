@@ -36,6 +36,22 @@ pub trait Performer: Sized {
     fn arm(&mut self);
 }
 
+/// Which step of the pattern sounds at clock `position`.
+///
+/// **The one place this arithmetic exists.** [`Sequencer::deliver`] plays through it and a panel draws its playhead with it, so
+/// a marker cannot point at a step that is not the one sounding: `REVERSE` reads the bar from its other end while the clock keeps
+/// walking forward, and a playhead left on the clock would be on the one step that is silent.
+///
+/// `position` wraps, so a caller may hand a long-running count or a value read from a cell a block behind the audio.
+pub fn sounding_step(position: usize, reversed: bool) -> usize {
+    let position = position % STEPS_PER_PATTERN;
+    if reversed {
+        STEPS_PER_PATTERN - 1 - position
+    } else {
+        position
+    }
+}
+
 /// Plays a `Pattern` through a [`Performer`], one step at a time.
 pub struct Sequencer {
     clock: Clock,
@@ -249,11 +265,7 @@ impl Sequencer {
     /// step count all still mean what they meant, and only the step that sounds is mirrored. What makes a step sound is the
     /// performer's: a rest, and a drum step striking no voice, are both silence there — the clock does not decide it.
     fn deliver<P: Performer>(&mut self, performer: &mut P, position: usize) {
-        let step = self.pattern.steps[if self.reverse {
-            STEPS_PER_PATTERN - 1 - position
-        } else {
-            position
-        }];
+        let step = self.pattern.steps[sounding_step(position, self.reverse)];
         performer.step(&step);
     }
 

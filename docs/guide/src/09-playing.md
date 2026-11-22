@@ -40,6 +40,12 @@ light is then a frame behind, but it never runs ahead of what you hear. And beca
 lit whether or not the transport is on it, the *moving* light is easiest to follow across the rests — which is exactly
 where you want to know where the bar is.
 
+It asks for the engine's **direction** as well as its position, because a line can run backwards. `REVERSE` reads the pattern
+from its other end while the clock keeps counting up, so the light is on the step that sounds, not the step the clock is on: on a
+reversed line it walks back along the keys, right to left, while the notes stay where you wrote them. `REVERSE` pressed under a
+running line waits for the bar, and the light waits with it — the bar that is playing finishes the way it began, and the light
+turns over at the bar line with the sound, never a bar early.
+
 A stopped line lights no position: the row shows which steps carry notes and nothing else.
 
 ## Starting and stopping

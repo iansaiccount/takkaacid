@@ -29,6 +29,10 @@ same bar, banks, transport and themes. Rounds live here as `NN-topic.md`, one pe
   the drums), with the card, the tips and the guide rewritten to match.
 - [`09-the-transpose-is-the-devices`](09-the-transpose-is-the-devices.md) — `TRANS -` / `TRANS +` move the device on the panel
   and leave the rest of the rack where it was, and the rack keeps no transpose of its own to fan out.
+- [`10-the-playhead-column`](10-the-playhead-column.md) — the drum grid gains a playhead, and **both** faces learn to follow
+  `REVERSE`: the marker is on the step that sounds, which needs the direction the machine is playing rather than the one the
+  key asked for, so `sequencer::sounding_step` becomes the one mapping `deliver` and the panels share and the renderer publishes
+  `reverse_active` beside the position.
 
 **Spec:** [`docs/superpowers/specs/2026-11-18-drum-machine-design.md`](../../docs/superpowers/specs/2026-11-18-drum-machine-design.md)
 — approved in conversation on 2026-11-18. The plan argues from it; where they disagree, the spec wins and this plan is wrong.

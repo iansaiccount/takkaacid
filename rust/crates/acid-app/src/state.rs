@@ -132,6 +132,10 @@ pub struct SharedState {
     pub transport: AtomicU8,
     /// A direction asked for: the engine's sequencer takes it at the bar line, so this is a request the audio thread reads.
     pub reversed: AtomicBool,
+    /// The direction the sequencer is **playing**, published by the renderer each block. `reversed` is what the player asked
+    /// for and a running line takes it at the bar line; this is what came of it. The panel draws its playhead from this one,
+    /// because a marker on the request would jump a bar ahead of the sound. Never saved.
+    pub reverse_active: AtomicBool,
     /// This device's performance transpose. Its own, never fanned out from another device, and never saved.
     pub transpose: std::sync::atomic::AtomicI32,
     /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
@@ -239,6 +243,7 @@ impl SharedState {
             kind,
             transport: AtomicU8::new(crate::device::Transport::Stopped.byte()),
             reversed: AtomicBool::new(false),
+            reverse_active: AtomicBool::new(false),
             transpose: std::sync::atomic::AtomicI32::new(0),
             mute: AtomicBool::new(false),
             position: AtomicUsize::new(0),
@@ -295,6 +300,13 @@ impl SharedState {
     /// The direction this device has been asked for: the sequencer applies it at the bar line, never mid-bar.
     pub fn is_reversed(&self) -> bool {
         self.reversed.load(Ordering::Relaxed)
+    }
+
+    /// Whether the line is actually playing backwards — the direction the renderer published, not the one asked for. A
+    /// playhead drawn from [`SharedState::is_reversed`] would turn at the key press and leave the bar sounding the old way
+    /// behind it.
+    pub fn is_reverse_active(&self) -> bool {
+        self.reverse_active.load(Ordering::Relaxed)
     }
 
     pub fn set_reversed(&self, reversed: bool) {

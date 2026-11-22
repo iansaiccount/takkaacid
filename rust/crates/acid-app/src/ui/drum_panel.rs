@@ -11,6 +11,7 @@ use std::sync::atomic::Ordering;
 
 use acid_core::drums::{Drum, FilterKind, KitVoice};
 use acid_core::pattern::{STEPS_PER_PATTERN, Step};
+use acid_core::sequencer::sounding_step;
 use eframe::egui::{self, Align2, Pos2, Rect};
 
 use crate::knobs::Knob;
@@ -30,6 +31,11 @@ const LABEL: f32 = 0.09;
 
 /// How much of a row's pitch the band keeps, so sixteen rows read as rows and not as one slab.
 const ROW_INSET: f32 = 0.10;
+
+/// How much of a lamp's opacity the playhead's wash carries. Enough to catch at a glance as the line moves, faint enough that an
+/// accent struck inside the column still reads as an accent: the wash is laid *over* the cells, so this is the one number that
+/// decides whether the playhead hides the pattern or sits on it. The selected row's band is `led_accent` at 36.
+pub const PLAYHEAD_ALPHA: u8 = 44;
 
 /// The dials' ranges. A `KitVoice` holds the engine's units — milliseconds and semitones — and a knob is a position, so these
 /// are the one place the two meet. Task 6's listening pass sets the defaults; this sets what a hand can reach.
@@ -377,6 +383,14 @@ fn faint(colour: egui::Color32, alpha: u8) -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(colour.r(), colour.g(), colour.b(), alpha)
 }
 
+/// The playhead's wash: the palette's lit lamp at [`PLAYHEAD_ALPHA`].
+///
+/// Public, and the only place the colour is decided, so the face and the test that reads it back cannot drift apart over a
+/// number — the reason the selected row's band is a `36` written twice is not one worth repeating.
+pub fn playhead_fill(p: &theme::Palette) -> egui::Color32 {
+    faint(p.led_on, PLAYHEAD_ALPHA)
+}
+
 /// Draw the whole drum face into the bands it owns.
 pub fn draw(
     state: &mut PanelState,
@@ -491,9 +505,23 @@ fn draw_grid(
         }
     }
 
-    // The step selection: one column, the mark the 303 draws round its step key. Drawn after the cells so it reads over
-    // their edges, and it is the only mark a step has on this face — the playhead belongs to the 303's step row, which a
-    // drum face does not draw.
+    // The playhead: the column the line is on, washed in the lamp. The step that is **sounding**, not the one the clock is on —
+    // under `REVERSE` the sequencer reads the bar from its other end, so the wash has to follow it — and the direction is the
+    // one the audio thread published, never the key's request, which a running line takes at the bar line.
+    //
+    // One rect over the cells rather than a recolour of them, and drawn after them on purpose: a wash that replaced each cell's
+    // fill would vanish on a column struck on all sixteen rows, which is exactly when the player wants to know where the line
+    // is. This way the strikes show through it and the column is always visible. A stopped or paused machine has no playhead,
+    // as the 303's LEDs go out; `column_rect` clamps, so a position a block behind cannot land outside the grid.
+    if state.playing {
+        let sounding = sounding_step(state.position, shared.is_reverse_active());
+        ui.painter()
+            .rect_filled(column_rect(l, sounding), 2.0 * s, playhead_fill(p));
+    }
+
+    // The step selection: one column, the mark the 303 draws round its step key. Drawn after both the cells and the playhead
+    // so it reads over their edges. Two marks now share this rectangle, which is why they are drawn differently: the playhead
+    // is a wash *in* the column and the selection is a border *round* it, so a step that is both still reads as both.
     let column = column_rect(l, state.selected);
     ui.painter().rect_stroke(
         column,

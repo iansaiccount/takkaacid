@@ -49,6 +49,18 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
   `XGetInputFocus returned the focused window of 1` and delivered nothing, so the first grab came out as the face again. The
   pointer was then parked outside the window and the card grabbed with no tip and no notice in it. The picture is over the
   first-run acid face, which is what a fresh session shows; the card is the same over either face.
+- **`drum-playing.png` is the playhead round's own picture**, taken 2026-11-22 and the only one in this book that is *cropped at
+  the grab*. `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-10`, emptied first, on the `Xvfb` that was already up on `:95` —
+  `DISPLAY=:95 xdotool getdisplaygeometry` said `2000 1400` and `getwindowgeometry` said `1960x1340` before anything was clicked.
+  `+` at the strip's right wall (the `strip_add_rect` centre, 1898,62 in grab pixels) → `DRUMS`, and `space` (`xdotool key
+  --window <id> space`, which is what makes the deck run under Xvfb) started the line. The pattern is not a demo's: it was written
+  by hand so the picture would show a strike *inside* the lit column — `enter` on `KICK` with `shift+enter` for the accent, then
+  clicks on the twelve empty `CHH` cells (their rects from `layout`'s `grid_area` and `knob_cells`, doubled) for a hat on every
+  step, because a full row means the moving column always covers one. The pointer was parked **outside** the window, at 1985,1395
+  on the 2000 × 1400 screen, so no tip and no notice is in the picture. The grab is the grid band only:
+  `import -window <id> -crop 1896x574+32+466`, the grid's own rect (`grid_area` at 2×) with no pixel of the dial row above it —
+  the first attempt at `+456` caught the bottom edges of `LP | BP | HP` and `HIT`, and was thrown away rather than trimmed. The
+  face's other picture, `drum-face.png`, is a first run with an empty grid and is still stopped, so it still shows no playhead.
 
 ## The images
 
@@ -63,6 +75,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/picker.png` | the picker: the `ACID` and `DRUMS` rows and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
 | `img/drum-face.png` | the drum machine's face: `DRUMS 2` selected, `KICK` the selected voice, the grid empty with **the first step's column lit** — the step a key writes to — the seven voice dials, `LP | BP | HP` with `L`, `B` and `P` underlined on it, `SHUFFLE`, and `HIT` with its `H` underlined, and `KIT 808` at the right-hand end of the caption line above the dials | from the picker: click `+`, click `DRUMS`, wait for the notice to clear, and park the pointer outside the window (a hover tooltip would land in the picture). Retaken in the keys-and-tooltips round, so the picture says its own keys by eye; the pattern is left empty on purpose, as a first run's drum machine is |
+| `img/drum-playing.png` | the grid alone, the line running: a `CHH` hat on all sixteen steps, `KICK` accented on the downbeat and struck on 5, 9 and 13, **the playing column washed in the lamp** with a hat showing through it, and the selected step's border on the last column reading apart from it | from the drum face: `space` to run, `enter` / `shift+enter` for the kick, then a click on each of `CHH`'s twelve empty cells; the pointer parked outside the window. `-crop 1896x574+32+466` — a second grab in the same state, at the grid's own rect |
 | `img/kit-browser.png` | the kit browser: `FACTORY` with `808`, `909` and `Acoustic`, each `- READ ONLY`, `MY KITS` under them and empty, `NOW: 808 - READ ONLY` — the kit a drum machine arrives on | `F3` on the drum device; click the card's `KIT` row |
 | `img/two-devices.png` | two devices, `ACID 1` black and selected, `ACID 2` on `FESTIVAL CITRUS` | from the picker, click `ACID`; `ctrl+2`; `F3`; click `COLOUR`; click the `FESTIVAL CITRUS` row; `Escape`; `ctrl+1` |
 | `img/strip.png` | the same strip, cropped: a black cell, a teal one, and `+` | `-crop 1960x76+0+24` in the state above |

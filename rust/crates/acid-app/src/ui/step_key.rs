@@ -25,10 +25,15 @@ pub struct StepView {
 }
 
 /// Reduce a `Step` plus the transport state — and whether the next step sounds — to the inputs the keycap paints.
+///
+/// `sounding` is the step that is **sounding**, already mirrored by the caller through
+/// [`acid_core::sequencer::sounding_step`]: under `REVERSE` the line reads the bar from its other end, so the light belongs on
+/// `15 - position` while the notes stay where they are written. This view does no arithmetic of its own, so it cannot disagree
+/// with the audio about which step that is.
 pub fn step_view(
     step: &Step,
     index: usize,
-    position: usize,
+    sounding: usize,
     playing: bool,
     selected: bool,
     dragging: bool,
@@ -40,7 +45,7 @@ pub fn step_view(
         slide: step.slide,
         // A rest cannot glide either — and a rest keeps its flags, so it can carry `slide`.
         slide_glides: step.on && next_on,
-        current: playing && index == position,
+        current: playing && index == sounding,
         beat: index.is_multiple_of(4),
         selected,
         dragging,

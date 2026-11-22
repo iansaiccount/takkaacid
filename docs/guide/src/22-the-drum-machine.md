@@ -25,6 +25,14 @@ A click on a cell strikes that voice on that step; a click on a struck cell take
 the 303's own accent gesture, louder and brighter — and an accent is printed brighter than a plain strike, so the pattern
 reads at a glance. Every fourth column is framed in the silk, which is where the beats are.
 
+**The playing column.** While the line runs, the column it is on is washed in the lamp — the 303's playhead, and a whole column
+of it, because a column here *is* a step. The wash is laid over the cells rather than in place of them, so a column struck on all
+sixteen rows still shows the line and the strikes still read through it, and the step you have selected keeps its border on top of
+it. It is the step that sounds, so `REVERSE` runs the column right to left with the pattern; a stopped or paused machine shows no
+playhead at all, the same rule as the 303's LEDs.
+
+![The playing column](img/drum-playing.png)
+
 Clicking a row's **label** selects that voice: its label becomes a lit plate in the accent, its row carries a faint band behind
 the cells, and the name is printed above the dials. Neither a selection nor a mute makes a sound — `HIT` is how a voice is heard.
 `SHIFT`-clicking the label **mutes** that voice: the label prints dim and the row's cells lose their accent, but they stay
@@ -124,9 +132,9 @@ A drum bank is patterns, not a song. The grooves last the session — a save sti
   letter writes a note. MIDI pads and per-voice controllers are a later round.
 - **No step row, no performance row.** The grid's columns are the steps, and `OCT`, `CLEAR`, `RANDOM`, the density and the
   scale are the 303's. `BANK`, `PATTERN`, `COPY`, `PASTE`, `SAVE`, `BANKS` and `STEP` keep their places on the switches row.
-- **One hit per voice at a time.** A second strike on the same voice retriggers it rather than layering, and a hat's
+- **No layering.** A second strike on the same voice retriggers it rather than stacking a second copy; beyond that, a hat's
   choke group — the closed hat cuts the open one — is how the pair sounds like one hi-hat.
 - **`LEARN` has nothing to teach on the drum's own controls.** A drum voice takes no controller this round, so on a drum face
-  `LEARN` can bind the shared controls — `VOLUME`, and the tempo and pattern readouts — and nothing on the voice's dials, the
-  filter key or `HIT`. Those stand still while it is choosing a control, rather than turning the voice under a hand that meant
-  to teach it.
+  `LEARN` can bind the shared controls — `VOLUME`, the tempo and pattern readouts, and the device's `SHUFFLE` — and nothing on
+  the voice's dials, the filter key or `HIT`. Those stand still while it is choosing a control, rather than turning the voice
+  under a hand that meant to teach it.

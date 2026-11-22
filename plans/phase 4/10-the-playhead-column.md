@@ -1,0 +1,292 @@
+# Plan 10 — the playhead is on the sound
+
+**Goal:** the marker shows the step that **sounds**. The drum grid gains a playhead — the 303 has an LED over the step key, the
+drum face's columns *are* the steps, so it lights the whole column — and both faces learn to follow the direction, because
+`REVERSE` plays the pattern from its other end while the clock keeps walking forward, and today both markers are on the clock.
+
+**Spec:** none. The player's words, twice:
+
+> *"We need a visual indicator of where the pattern is playing on the drum machine. We have one on the 303 above the note markers.
+> Can we highlight the current point in the pattern by setting the matching column on the grid to an appropriate theme colour?
+> We can include this in the same current branch."*
+>
+> *"Reverse should also reverse the visual indicator. This should happen on the 303 too. It currently has a bug."*
+
+## What is wrong today
+
+- **The drum face has no playhead at all.** `draw_grid` (`rust/crates/acid-app/src/ui/drum_panel.rs`) paints each cell from its
+  mask bit, frames every fourth column and draws the step **selection** as a border, and nothing moves while the transport runs. A
+  comment there ends *"the playhead belongs to the 303's step row, which a drum face does not draw"* — this round deletes it.
+- **The 303's playhead is on the clock, not on the sound.** `ui/mod.rs:735` passes `state.position` to `step_key::step_view`,
+  which lights the LED where `index == position`. But `Sequencer::deliver` (`acid-core/src/sequencer.rs:251`) plays
+  `pattern.steps[15 - position]` when the line runs backwards, so on `REVERSE` the LED walks forward across keys whose notes are
+  **not** the ones sounding. The player's bug.
+- **The book already promises it does not do that.** `docs/guide/src/09-playing.md` has a section headed *"Why the step LED
+  follows the sound"*: *"Every frame it asks the audio engine where it is in the pattern and lights the LED over that step, so the
+  light is where the sound is rather than where a timer in the panel thinks it should be."* That is true except on `REVERSE`,
+  where the book is wrong about the app. Fixing the app makes the book true; the paragraph gains the direction it left out.
+- **The panel cannot see the direction that is playing.** `SharedState::reversed` is the **request**: a running sequencer defers
+  it to the bar line (`Sequencer::set_reverse`, applied at `:306`). So a naive `15 - position` in the panel would jump the marker
+  a whole bar early — a second bug in place of the first.
+- **The arithmetic is buried in the audio path.** `15 - position` exists in exactly one place, `deliver`, private to the
+  sequencer. The panel drawing the same thing must not write it a second time.
+
+## The design
+
+- **One mapping, in core.** `Sequencer::deliver`'s mirroring becomes
+  `pub fn acid_core::sequencer::sounding_step(position: usize, reversed: bool) -> usize` — `15 - position` when the line runs
+  backwards, `position` when it does not, `position` wrapped into `0..16` first, as `start_at` already does. `deliver` calls it,
+  and so do both faces, so the playhead cannot disagree with the step it is drawn on: there is one definition and the audio is
+  on it.
+- **The effective direction is published, not assumed.** The renderer publishes `SharedState::reverse_active` beside the
+  position it already publishes each block (`render_mono`, after the machine renders): the direction the sequencer is
+  **actually** playing, which is `Sequencer::is_reverse()` and changes only at the bar line. `Machine` gains `is_reverse()`
+  (two arms, written out, no `_`), `Drums` gains one that delegates to its sequencer, and `Engine::is_reverse()` already exists.
+  `SharedState::reversed` keeps its meaning — what the player asked for, which is what the `REVERSE` key shows — and the two are
+  now honestly different things.
+- **Both faces draw the sounding step.** `ui/mod.rs`'s step row and `drum_panel::draw_grid` each read
+  `sounding_step(state.position, shared.is_reverse_active())` and draw there. `step_view`'s third parameter is renamed
+  `sounding` and documented; no view computes the arithmetic itself. So under `REVERSE` the 303's LED and the drum column walk
+  **right to left** over the keys, landing on the note that is sounding.
+- **The drum grid's mark is a wash over the column.** `draw_grid` fills `column_rect(l, sounding)` with
+  `faint(p.led_on, PLAYHEAD_ALPHA)` — the lamp the 303's playhead already uses, at a fraction of its opacity, the same idea as
+  the selected row's band (`faint(p.led_accent, 36)`). Painted **after** the sixteen rows and **before** the selection border.
+- **Why a wash and not a per-cell recolour.** The three ways were laid out and the player picked this one: recolouring only the
+  *rest* cells would vanish on a column struck on all sixteen rows, exactly when the player most wants to know where the line is.
+  A wash lights rests, plain strikes, accents and muted strikes together, so the playhead is never hidden, and it is one shape a
+  frame rather than a branch per cell.
+- **While the line runs, and only then.** `state.playing`, the same gate the 303's LED uses; a stopped or paused machine shows
+  no playhead. `column_rect` already clamps its step, so a stale position cannot land outside the grid.
+- **The selection does not mirror.** It is the edit cursor on the pattern as stored, and a player edits what they see. Under
+  `REVERSE` the playhead and the selection therefore sit on different columns at the same instant — which is right, and another
+  reason the two marks must read apart.
+- **Nothing else moves.** `position` stays the clock's: `mixer` uses it to place a joining device, `pattern_swap` uses it for the
+  bar line, and both need the clock, not the sound. No `SavedState` field, no `SAVE_VERSION` bump (still 11), no allocation and
+  no lock on the audio path — one atomic store per block, which the renderer already does for the position.
+
+## Tests that make it safe
+
+- `acid-core/tests/reverse_and_transpose.rs::sounding_step_is_the_mirror_of_the_clock` — the pure rule: `(0, false) == 0`,
+  `(0, true) == 15`, `(3, true) == 12`, `(15, true) == 0`, and a position past the bar wraps rather than panicking.
+- `acid-app/tests/renderer.rs::the_published_direction_waits_for_the_bar_line` — the reason `reverse_active` exists: playing, set
+  `reversed` true, render one block and the request reads true while `is_reverse_active()` is still false and the audio is still
+  the forward step; render past the bar line and it is true. A panel reading the request would fail this.
+- `acid-app/tests/playhead_live.rs` (new — the round's point is that the two faces agree, so their playhead tests sit together),
+  driven through `draw_panel` and read back from the painted shapes, which is how these faces are tested:
+  - `the_303_lights_the_step_that_sounds_when_the_bar_runs_backwards` — an empty pattern (so only the playhead lights an LED),
+    playing, `position` 3, `reversed` **false** and `reverse_active` **true**: the only `led_on` fill in the step band is over
+    cell 12. With `reverse_active` false it is over cell 3. The `reversed`/`reverse_active` split is deliberate, so a panel that
+    reads the request fails here too.
+  - `the_wash_is_on_the_column_that_sounds` — the drum face in the same state: a fill exactly on `column_rect(&l, 12)` equal to
+    `drum_panel::playhead_fill(palette(scheme))`, none on `column_rect(&l, 3)`, none on any column when stopped, and the same
+    frame under two schemes painting two different inks, each its own palette.
+  - `the_wash_reads_over_a_column_of_strikes` — the reason the wash was chosen: strike all sixteen voices on the sounding step
+    and assert (a) the wash is still painted on the column, (b) each struck cell still reports its own strike colour, and (c) the
+    wash's index in the paint order comes **after** every cell fill in that column. (c) is the one that matters: a wash drawn
+    before the cells is present in the shape list and invisible on screen, so a test that only asks "is there a fill at that
+    rect" would pass a face with no playhead on it.
+
+Mutations to run and record, each of which must fail a named test: `sounding_step` returning `position` in both directions; the
+panel reading `is_reversed()` instead of `is_reverse_active()`; the wash at `state.selected`; the `state.playing` gate dropped;
+the wash drawn before the cells; a single `cell_rect` instead of the column; and the 303's caller passing `state.position`
+unmirrored.
+
+## Tasks
+
+### Task 1 — one mapping, and the direction the panel can see
+
+**Files:** `rust/crates/acid-core/src/sequencer.rs` (the `pub fn`, `deliver` calling it), `rust/crates/acid-core/src/drums.rs`
+(`is_reverse`), `rust/crates/acid-app/src/state.rs` (`reverse_active` and its getter, beside `reversed`'s doc),
+`rust/crates/acid-app/src/audio/renderer.rs` (`Machine::is_reverse`, the publish in `render_mono`),
+`rust/crates/acid-core/tests/reverse_and_transpose.rs`, `rust/crates/acid-app/tests/renderer.rs`.
+
+**Interfaces:** produces `pub fn acid_core::sequencer::sounding_step(position: usize, reversed: bool) -> usize`,
+`pub fn acid_core::drums::Drums::is_reverse(&self) -> bool`, `Machine::is_reverse`, and
+`SharedState::reverse_active` with `pub fn is_reverse_active(&self) -> bool`. Nothing existing changes shape; `position` keeps
+its meaning.
+
+1. Write the two failing tests. Run — expected FAIL (neither compiles).
+2. Add the function, point `deliver` at it, add the direction publishing. Run — expected PASS, and
+   `acid-core/tests/reverse_and_transpose.rs`'s existing reverse tests still pass, which is `deliver`'s proof.
+3. Mutation check, recorded in Progress.
+4. Gates, then commit.
+
+### Task 2 — the 303's playhead follows the sound
+
+**Files:** `rust/crates/acid-app/src/ui/mod.rs` (the sounding step, once, before the loop), `rust/crates/acid-app/src/ui/step_key.rs`
+(the parameter's name and doc), `rust/crates/acid-app/tests/playhead_live.rs` (the 303 test).
+
+1. Write the failing live test. Run — expected FAIL (the LED is on cell 3).
+2. Mirror the step the row is handed. Run — expected PASS.
+3. Mutation check, recorded in Progress.
+4. Gates, then commit.
+
+### Task 3 — the drum grid's column
+
+**Files:** `rust/crates/acid-app/src/ui/drum_panel.rs` (`PLAYHEAD_ALPHA`, `playhead_fill`, the wash, the sounding step, the
+rewritten comment), `rust/crates/acid-app/tests/playhead_live.rs` (the two drum tests).
+
+**Interfaces:** produces `pub const PLAYHEAD_ALPHA: u8` and `pub fn playhead_fill(p: &theme::Palette) -> egui::Color32` in
+`drum_panel`, beside the geometry its tests already reach for.
+
+1. Write the two failing live tests. Run — expected FAIL (nothing is painted on a column).
+2. Add the const, the helper and the wash; rewrite the selection comment for the two marks that are now there. Run — expected
+   PASS.
+3. Mutation check, recorded in Progress.
+4. Gates, then commit.
+
+### Task 4 — the book says it
+
+**Files:** `docs/guide/src/09-playing.md` (the LED section), `docs/guide/src/22-the-drum-machine.md` (`## The grid`),
+`docs/guide/check.sh`, `plans/phase 4/00-phase-4.md`.
+
+1. Page 9: the LED section learns the direction — the panel reads the engine's position **and its direction**, so a reversed line
+   walks the light back along the keys, still on the sound; a `REVERSE` pressed mid-bar turns the light at the bar line with the
+   sound, not before it.
+2. Page 22: the playing column is washed in the lamp while the line runs, the wash reads over the cells so a column struck on
+   every row still shows the line, the selected step's border stays on top, a stopped or paused machine has no playhead, and
+   `REVERSE` runs the column right to left with the pattern.
+3. `check.sh` pins for both claims; the round's line in `00-phase-4.md`. Run `./docs/guide/check.sh`.
+4. Commit.
+
+### Task 5 — the picture
+
+**Files:** `docs/guide/src/img/drum-playing.png`, `docs/guide/src/22-the-drum-machine.md`, `docs/guide/src/img/README.md`.
+
+1. Grab the drum face with the transport running: `space` from the picker's drum state, then a grab once the playhead is away
+   from step 1 so it and the selection border read as two marks. Follow `AGENTS.md`: `getdisplaygeometry` before launching,
+   `getwindowgeometry` at `1960x1340`, a fresh `TAKKA_ACID_DATA_DIR`, the pointer parked outside the window.
+2. A row in `img/README.md` recording the state and the command; the picture named from `## The grid`, beside the sentence it
+   shows. Run `./docs/guide/check.sh`.
+3. Commit.
+
+## Non-goals
+
+A playhead on the strip, the device card or the song list; a chase light, a trail, a beat blink, or a colour per voice; mirroring
+the **selection**; moving the direction's bar-line rule itself (`Sequencer` already does that and this round only reads it);
+changing what `position` means for the mixer's join or the pattern swap; anything in `SavedState`, the MIDI map, or a setting to
+turn the playhead off.
+
+## Rulings, and what they cost if wrong
+
+| Ruling | Cost if wrong |
+|---|---|
+| The playhead is on the **sound**, so it mirrors under `REVERSE` — and the panel reads a newly published `reverse_active`, not the `reversed` request | The panel and the audio share one more atomic, and `Machine` grows a method for it. Reading the request instead would be one line and would put the marker a bar ahead of the sound: the same class of bug being fixed, and `renderer.rs`'s test exists to catch it. |
+| The mirroring lives in `acid_core::sequencer::sounding_step`, called by `deliver` and by both faces | `acid-core` grows a function that only a panel uses. The alternative is the face writing `15 - position` a second time — the hand-kept second copy of a mapping this repo has paid for twice. |
+| The wash is one translucent rect over the cells, not a per-cell recolour | Accents inside the playing column are seen through a tint, so their hue shifts for the one step the column is on. The alternative disappears behind a fully struck column, which is why it was rejected. |
+| The column lights while `is_playing()`, so a pause shows nothing | A paused machine keeps its position but loses its mark, matching the 303's LEDs. If a paused playhead is wanted, the gate is one word. |
+| `playhead_fill` is `pub`, for the test | One more public item in a module that already exposes `cell_rect`, `row_band` and `column_rect` to its tests. The alternative is the test keeping its own `from_rgba_unmultiplied(…, N)`, as `the_selected_row_is_plated` does with its `36`. |
+| The round rides `chore/readme-drum-machine`, at the player's instruction, so that branch's name stops describing its contents | The branch's review reads a feature round against a README chore. This plan is on the branch, so the work is claimed rather than smuggled. |
+
+## Progress
+
+- [x] **Task 1 — one mapping, and the direction the panel can see.** `acid_core::sequencer::sounding_step(position,
+      reversed)` is the one place the mirroring lives: `Sequencer::deliver` plays through it, so the audio and a panel cannot
+      answer differently, and a position past the bar wraps rather than panicking (the panel reads it from a cell a block
+      behind). `SharedState::reverse_active` — one `AtomicBool`, never saved — carries the direction the machine is **playing**:
+      `render_mono` publishes `Machine::is_reverse()` in the same place it publishes the position, `Machine` gained that method
+      (two arms, written out), `Drums` gained one that delegates to its sequencer, and `Engine::is_reverse()` already existed.
+      `SharedState::reversed` keeps its meaning — the request, which is what the `REVERSE` key shows — and `is_reverse_active()`
+      is the answer, with the reason it is not the request written on both. `position` still means the clock's, because the
+      mixer's join and the pattern swap need that one.
+      Tests: `reverse_and_transpose::sounding_step_is_the_mirror_of_the_clock` (the two ends, a mid-bar pair, the wrap, and both
+      directions) and `renderer::the_published_direction_waits_for_the_bar_line` — **both machines**, a loop over `Acid` and
+      `Drums`: the request reads true on the block it is set while the published direction is still forward, and the bar line
+      turns it. The existing reverse-delivery tests in `reverse_and_transpose` and `drums` still pass unchanged, which is
+      `deliver`'s proof.
+      **Mutations: 6 of 6 caught** (`.superpowers/mutate_playhead_task1.py`): the direction ignored, the mirror reversed,
+      `deliver` reading the raw position, the renderer publishing `params.reversed`, and each machine's arm answering for the
+      wrong direction. The last two were rewritten after the first draft: one would not have compiled and one targeted a machine
+      the test never built, and a compile failure or an unreached arm both read as "caught" while proving nothing — widening the
+      renderer test to both kinds is what made the drums' arm catchable. Gates: `cargo test --workspace` **907**, clippy
+      `-D warnings`, `fmt --check`.
+- [x] **Task 2 — the 303's playhead follows the sound.** The step row computes
+      `sounding_step(state.position, shared.is_reverse_active())` once, before its loop, and hands that to every key.
+      `step_view`'s third parameter is renamed `sounding` and documented as already-mirrored, so the view does no arithmetic and
+      cannot disagree with the audio; its unit tests are positional and unchanged. The panel therefore lights `15 - position`
+      over the key whose note is sounding, and the light walks right to left with the line.
+      Tests: `playhead_live::the_303_lights_the_step_that_sounds_when_the_bar_runs_backwards` — an **empty** pattern, so the only
+      lit LED in the step band is the transport's (read back from the painted circles, not from a field), and `reversed` is left
+      **false** while `reverse_active` is set, so a face reading the request lights [3] where the test demands [12]. Forward it
+      demands [3]. That split is deliberate: it is Task 1's bug made catchable from the face.
+      **Mutations: 4 of 4 caught** (`.superpowers/mutate_playhead_task2.py`): the row drawing the clock's step unmirrored, the
+      request read instead of the published direction, the mirror always on, and the mirror off by one.
+      Gates: `cargo test --workspace` **908**, clippy `-D warnings`, `fmt --check`.
+- [x] **Task 3 — the drum grid's column.** `draw_grid` washes `column_rect(l, sounding_step(...))` with
+      `playhead_fill(p)` — the palette's `led_on` at `PLAYHEAD_ALPHA` (44) — after the sixteen rows and before the selection
+      border, gated on `state.playing`. The comment that said *"the playhead belongs to the 303's step row, which a drum face does
+      not draw"* is gone; the selection's says what two marks on one rectangle now do (the playhead washes *in* the column, the
+      selection borders *round* it). `playhead_fill` is `pub` **for the test**, so it reads the colour the face paints rather than
+      keeping a second copy of the number, the way `the_selected_row_is_plated` keeps its own `36`. `PLAYHEAD_ALPHA` is `pub`
+      because the Interfaces block above named it so; nothing outside the module reads it, and the function exists to carry it.
+      Tests: `playhead_live::the_wash_is_on_the_column_that_sounds` (forwards on the clock's step, backwards on `15 - position`,
+      no other column, and two schemes washing in two different lamps — which is what a hard-coded colour would fail),
+      `a_stopped_or_paused_machine_has_no_playhead` (no column washed in **either** silence — see the review, below) and
+      `the_wash_reads_over_a_column_of_strikes`
+      (all sixteen voices struck on the sounding step: the wash is still painted, every cell keeps its own `silkscreen_dim`, and
+      the wash's index in the paint order is **after** every cell's). The reds were taken in two steps — the first was the missing
+      `playhead_fill`, so the second was behavioural: `left: None, right: Some(#2C_27_12_2C)` where the column should have been
+      washed.
+      **Mutations: 8 of 8 caught** (`.superpowers/mutate_playhead_task3.py`): the clock read unmirrored, the request read instead
+      of the published direction, the wash on the selection, the `state.playing` gate dropped, **the gate keeping a pause** (added
+      on the review's first finding), a single `cell_rect` for the column, a hard-coded colour, and the wash moved *under* the
+      cells — the one no colour assertion can see, because the shape is still in the list while an opaque square covers it. That
+      last one is why the strike test reads the paint order.
+      The script needed two repairs before this run, and both matter: `cargo fmt` had collapsed the `rect_filled` call, so the
+      hard-coded-colour mutation's search string no longer existed and it *silently changed nothing* and reported "SURVIVED" —
+      a mutation that does not apply reads exactly like a test that does not catch. Every pattern in every script in this round is
+      now checked for presence before it is trusted, which these three already did by SKIPping.
+      Gates: `cargo test --workspace` **911**, clippy `-D warnings`, `fmt --check`. The alpha is the one thing not settled by a
+      test: it is judged by eye in Task 5 and moved there if it does not hold up.
+- [x] **Task 4 — the book says it.** Page 9's *"Why the step LED follows the sound"* gains the direction it had left out: the
+      panel asks for the engine's **direction** as well as its position, `REVERSE` reads the pattern from its other end, the light
+      is on the step that sounds rather than the step the clock is on, and a `REVERSE` pressed mid-bar turns the light at the bar
+      line with the sound. Page 22's `## The grid` gains **the playing column**: washed in the lamp while the line runs, laid over
+      the cells so a fully struck column still shows the line, the selection's border still on top, right to left under
+      `REVERSE`, and nothing at all when stopped or paused. `check.sh` pins both claims and its section-4 header names the
+      playhead; `00-phase-4.md` lists the round.
+      **Mutations: 4 of 4 caught** (`.superpowers/mutate_playhead_task4.py`): page 9 going back to the clock's step, page 9 losing
+      the direction paragraph, page 22 running the column the other way, and page 22 losing the playing-column paragraph.
+      `./docs/guide/check.sh` ok.
+- [x] **Task 5 — the picture, and the alpha judged by eye.** `docs/guide/src/img/drum-playing.png` is a **second grab with
+      `-crop 1896x574+32+466`**, the grid's own rect at 2× — never a cut of a finished grab. The first attempt started at `+456` and
+      caught the bottom edges of `LP | BP | HP` and `HIT`; it was thrown away and retaken rather than trimmed. Session:
+      `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-10` (emptied first), the `Xvfb` already up on `:95` — `getdisplaygeometry` said
+      `2000 1400` and `getwindowgeometry` `1960x1340` before anything was clicked — `+` → `DRUMS`, `space` to run, then a pattern
+      written by hand so a strike would be **inside** the lit column: `enter` + `shift+enter` for `KICK` (accented on the downbeat,
+      struck on 5, 9 and 13) and a click on each of `CHH`'s twelve empty cells, because a hat on every step means the moving column
+      always covers one. Cell rects came from `layout`'s `grid_area` and `knob_cells`, doubled — not from reading a grab. The pointer
+      was parked **outside** the window (1985,1395 on a 2000 × 1400 screen), so no tip and no notice is in the picture.
+      `PLAYHEAD_ALPHA = 44` **stands**: on the grab the wash reads at a glance as the line moves, and the hat under it is still
+      visible as a distinct block, which is the trade this number buys. `drum-face.png` is untouched — a first run with an empty grid,
+      still stopped, so it is still true.
+      The 303's half was **not** photographed, and the reason is worth the line: its demo step row has a note on nearly every step, so
+      every lamp is already `led_on` and a still grab cannot tell the playhead from them. That is what the live test's shape reading is
+      for, and why Task 2 is proved by `painted circles at cell 12`, not by a screenshot.
+      `./docs/guide/check.sh` ok; no code changed in this task.
+
+**The branch review — 2026-11-22.** A subagent that did not write this round read the plan against the tree at the branch's head.
+Three findings, all acted on:
+
+1. **The guide's "paused" claim was untested** (P2, and the sharpest of the three). Page 22 says *"a stopped or paused machine
+   shows no playhead"*; `a_stopped_machine_has_no_playhead` only ever set `Transport::Stopped`, so a gate of
+   `transport != Stopped` would have kept every test green and left the page lying. The test is now
+   `a_stopped_or_paused_machine_has_no_playhead` and loops over both, and the paused-gate mutation above is the proof it bites — the
+   mutation pass is **8 of 8**, not the 7 recorded when the task was committed.
+2. **A Progress sentence the code contradicted** (P2). "`playhead_fill` and `PLAYHEAD_ALPHA` are `pub` so the test reads the colour"
+   — no test reads `PLAYHEAD_ALPHA`. The code conforms to the plan's Interfaces block, so the code stands and the sentence is
+   corrected above: the function is `pub` for the test, the const because the plan named it.
+3. **The README contradicted the guide and the code on joining** (P2, on this branch but not from this plan — it came in with the
+   README commits). README said a device added while the transport runs "joins on the step the others are on, not at the top of the
+   bar"; `mixer.rs:164` and `renderer.rs:329` make it wait for the bar line and come in at the top of it, page 18 says so, and
+   `check.sh` guards the guide against almost exactly that wording. Fixed in the README. Worth noting where the guard was missing:
+   the negative grep watches `src/` and the claim was living in `README.md`, outside the book the check protects.
+
+The reviewer had no shell, so it could not read `origin/main...HEAD` and answered "does it do what the plan said" by comparing the
+tree at HEAD against the plan's Files blocks rather than by reading hunks. Its content checks are independent evidence and it found
+no scope creep, but that half of its answer is weaker than the plan's gate asks for, and the diffs are the executor's to have read:
+`git diff origin/main...HEAD` is eighteen files, and every one of them is accounted for: sixteen are named in this plan's Task
+**Files** blocks, one is the plan itself, and one is `README.md` — which belongs to the two README commits below the round, and is
+where finding 3 lived.
+
+Gates after the fixes: `cargo test --workspace` **911**, clippy `-D warnings`, `fmt --check`, `./docs/guide/check.sh` ok.
