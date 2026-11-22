@@ -908,6 +908,25 @@ pub fn load_bank(dir: &Path, name: &str) -> Result<BankDocument> {
     Ok(document)
 }
 
+/// What the status line says when a bank was written on a machine other than the one on the panel, or `None` when they agree.
+///
+/// A mismatch is a **warning, never a refusal**: a step carries both machines' fields, so a drum bank loads on a 303 and plays
+/// nothing — worse than wrong, because nothing would say why. An unknown caption gets a line too, naming the caption it read,
+/// because a file from a machine this build does not have is exactly what the caption is for.
+pub fn bank_kind_notice(written: &str, playing: DeviceKind) -> Option<String> {
+    match DeviceKind::from_name(written) {
+        Some(kind) if kind == playing => None,
+        Some(kind) => Some(format!(
+            "a {} bank on a {} device: its patterns are there and may play nothing",
+            kind.name(),
+            playing.name()
+        )),
+        None => Some(format!(
+            "a bank written on {written}, which this build does not know: its patterns are there and may play nothing"
+        )),
+    }
+}
+
 /// Remove a saved bank. The name is validated first, so a stray one can never point out of the banks directory.
 pub fn delete_bank(dir: &Path, name: &str) -> Result<()> {
     let Some(name) = document_name(name) else {

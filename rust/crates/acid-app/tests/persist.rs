@@ -4,9 +4,9 @@ use acid_app::device::{DeviceKind, MAX_DEVICES, Rack, Scheme};
 use acid_app::midi::cc::LEARNABLE;
 use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
 use acid_app::persist::{
-    BankDocument, SaveTarget, bank_path, delete_bank, delete_song, document_name, export_song,
-    free_bank_name, free_song_name, import_song, list_banks, list_songs, load_bank, load_song,
-    new_song, save_bank, save_song, save_target, session_song_file,
+    BankDocument, SaveTarget, bank_kind_notice, bank_path, delete_bank, delete_song, document_name,
+    export_song, free_bank_name, free_song_name, import_song, list_banks, list_songs, load_bank,
+    load_song, new_song, save_bank, save_song, save_target, session_song_file,
 };
 use acid_app::persist::{
     ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
@@ -1375,5 +1375,87 @@ fn deleting_a_bank_removes_its_file_and_refuses_a_bad_name() {
     assert!(
         delete_bank(dir.path(), "../escape").is_err(),
         "a stray name can never point out of the banks folder"
+    );
+}
+
+/// A bank saved under its own name rewrites that one file: the in-place rule, and no `Easy (2)` beside it.
+#[test]
+fn saving_a_bank_twice_under_its_own_name_rewrites_one_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = BankDocument::of(&PatternBank::factory(), DeviceKind::Acid);
+    save_bank(dir.path(), "Easy", &first).unwrap();
+
+    let mut second = first.clone();
+    second.bank.select(3);
+    let name = match save_target(Some("Easy"), "Easy") {
+        Some(SaveTarget::InPlace(name)) => name,
+        other => panic!("a bank on its own name writes in place, not {other:?}"),
+    };
+    save_bank(dir.path(), &name, &second).unwrap();
+
+    assert_eq!(
+        list_banks(dir.path()),
+        vec!["Easy".to_string()],
+        "one file, not a copy beside it"
+    );
+    assert_eq!(
+        load_bank(dir.path(), "Easy").unwrap().bank.current(),
+        3,
+        "and the file is the second save"
+    );
+}
+
+/// A bank written on another machine says so once, and names the caption it read — the file travels with the fact, and a
+/// mismatch is a warning rather than a refusal because the patterns are all there and simply play nothing.
+#[test]
+fn a_bank_from_another_kind_is_a_notice_naming_it() {
+    assert_eq!(
+        bank_kind_notice("ACID", DeviceKind::Acid),
+        None,
+        "the same machine says nothing"
+    );
+    let said = bank_kind_notice("DRUMS", DeviceKind::Acid)
+        .expect("a drum bank on an acid face is worth a line");
+    assert!(
+        said.contains("DRUMS") && said.contains("ACID"),
+        "the line names both machines: {said}"
+    );
+    let unknown = bank_kind_notice("GRANDPIANO", DeviceKind::Drums)
+        .expect("a caption this build does not know is a notice too");
+    assert!(
+        unknown.contains("GRANDPIANO"),
+        "an unknown caption is kept as read and named: {unknown}"
+    );
+}
+
+/// A hand-edited bank is repaired on the way in: `load_bank` normalises, so a file holding two patterns still opens with all
+/// sixty-four slots and on a pattern that exists. Written after a mutation of `load_bank`'s `normalise` call found nothing that
+/// bit — the round trip writes an already-normal bank, so it never asked.
+#[test]
+fn a_bank_file_with_fewer_patterns_opens_as_sixty_four() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Drums);
+    save_bank(dir.path(), "Easy", &document).unwrap();
+
+    let text = std::fs::read_to_string(bank_path(dir.path(), "Easy")).unwrap();
+    let mut hand: serde_json::Value = serde_json::from_str(&text).unwrap();
+    hand["bank"]["patterns"].as_array_mut().unwrap().truncate(2);
+    hand["bank"]["current"] = serde_json::json!(5);
+    std::fs::write(
+        bank_path(dir.path(), "Easy"),
+        serde_json::to_vec(&hand).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = load_bank(dir.path(), "Easy").unwrap();
+    assert_eq!(
+        loaded.bank.pattern_count(),
+        64,
+        "a bank always holds sixty-four slots"
+    );
+    assert_eq!(
+        loaded.bank.current(),
+        1,
+        "and it opens on one of the patterns the file actually had"
     );
 }

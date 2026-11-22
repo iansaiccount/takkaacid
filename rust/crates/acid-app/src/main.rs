@@ -288,17 +288,30 @@ impl eframe::App for TakkaApp {
             let dir = persist::data_dir();
             match request {
                 panel_ui::banks::Request::Close => {}
-                // The bank document's three doors, wired in the next task of this round: the card is drawn and the request
-                // exists so the catalogue is complete, and until `save_bank_now`/`load_bank_now` land they say so plainly
-                // rather than doing nothing.
-                panel_ui::banks::Request::SaveBank(_) => {
-                    self.notice("a bank is not saved yet".to_string())
-                }
-                panel_ui::banks::Request::LoadBank(_) => {
-                    self.notice("a bank is not loaded yet".to_string())
-                }
-                panel_ui::banks::Request::DeleteBank(_) => {
-                    self.notice("a bank is not deleted yet".to_string())
+                // The bank document's three doors. Saving and loading are the card's requests answered by the two methods
+                // below; deleting is only the file, and the session's memory of it must go with it.
+                panel_ui::banks::Request::SaveBank(typed) => self.save_bank_now(&dir, &typed),
+                panel_ui::banks::Request::LoadBank(name) => self.load_bank_now(&dir, &name),
+                panel_ui::banks::Request::DeleteBank(name) => {
+                    match persist::delete_bank(&dir, &name) {
+                        Ok(()) => {
+                            // The next SAVE BANK must not write the deleted file back in place, so the session forgets the
+                            // name as the file goes.
+                            if self.panel.songs.bank_file.as_deref() == Some(name.as_str()) {
+                                self.panel.songs.bank_file = None;
+                            }
+                            if let Some(card) = self.panel.songs.card.as_mut() {
+                                card.bank_names = persist::list_banks(&dir);
+                                card.delete_armed = None;
+                                card.load_armed = None;
+                                if card.bank_name == name {
+                                    card.bank_name.clear();
+                                }
+                            }
+                            self.notice(format!("deleted bank {name}"));
+                        }
+                        Err(error) => self.notice(format!("could not delete the bank: {error}")),
+                    }
                 }
                 // A rack document is a later round: the keys are drawn and refuse, so the place on the face is found once.
                 panel_ui::banks::Request::SaveRack => {
@@ -340,10 +353,15 @@ impl eframe::App for TakkaApp {
                     self.panel.dirty = true;
                     if let Some(card) = self.panel.songs.card.as_mut() {
                         card.name.clear();
+                        card.bank_name.clear();
                         card.open = None;
                         self.panel.songs.file = None;
+                        // The selected device's bank is the starter phrase now, not any file the session came from.
+                        self.panel.songs.bank_file = None;
                         card.names = persist::list_songs(&dir);
+                        card.bank_names = persist::list_banks(&dir);
                         card.delete_armed = None;
+                        card.load_armed = None;
                     }
                     self.panel.notify("new song");
                 }
@@ -440,6 +458,8 @@ impl eframe::App for TakkaApp {
                                 // disk until the player renames and saves it.
                                 self.panel.songs.name = Some(demo::NEW_SONG.to_string());
                                 self.panel.songs.file = None;
+                                // A demo is a bank too: the device's patterns are no longer a file of the player's.
+                                self.panel.songs.bank_file = None;
                                 self.panel.songs.card = None;
                                 self.panel.dirty = true;
                                 self.panel.tooltips = demo.state.tooltips;
@@ -890,6 +910,8 @@ impl TakkaApp {
         match request {
             device::Request::Select(index) => {
                 if self.rack.select(index) {
+                    // `bank_file` is about one device's bank, so it cannot outlive the selection it was about.
+                    self.panel.songs.bank_file = None;
                     // The display follows the device's own bank, but not its pattern's first step: the step the hand was
                     // on comes back from this panel's edit slots in `draw_panel` on the next frame, so resetting it here
                     // would save the *leaving* device at step 1.
@@ -1036,6 +1058,8 @@ impl TakkaApp {
         self.panel.dirty = false;
         self.panel.songs.name = Some(name.to_string());
         self.panel.songs.file = Some(name.to_string());
+        // A song's load replaces the rack, so the selected device's bank is the file's, not any bank file the session had.
+        self.panel.songs.bank_file = None;
         // Every drum machine's kit is a folder of WAVs, decoded at the rate the running device plays at. Which machines want
         // one, and which kit, is `persist`'s to say: it is a property of the document, not of the load.
         self.kit_wanted = persist::wanted_kits(&saved);
@@ -1067,6 +1091,61 @@ impl TakkaApp {
             card.open = Some(name.to_string());
         }
         self.panel.notify(format!("loaded {name}"));
+    }
+
+    /// Save the selected device's bank under `typed`, or over the file it came from when the field was left blank.
+    ///
+    /// Where the file lands is `save_target`'s question — the same one the song's SAVE asks — and a new name that is taken lands
+    /// beside its namesake, so one bank can never destroy another by being given its name.
+    fn save_bank_now(&mut self, dir: &std::path::Path, typed: &str) {
+        let name = match persist::save_target(self.panel.songs.bank_file.as_deref(), typed) {
+            Some(persist::SaveTarget::InPlace(name)) => name,
+            Some(persist::SaveTarget::NewFile(name)) => persist::free_bank_name(dir, &name),
+            None => return,
+        };
+        let document = persist::BankDocument::of(self.rack.bank(), self.rack.device().kind());
+        match persist::save_bank(dir, &name, &document) {
+            Ok(()) => {
+                self.panel.songs.bank_file = Some(name.clone());
+                if let Some(card) = self.panel.songs.card.as_mut() {
+                    card.bank_names = persist::list_banks(dir);
+                    card.bank_name = name.clone();
+                    card.load_armed = None;
+                }
+                self.notice(format!("saved bank {name}"));
+            }
+            Err(error) => self.notice(format!("could not save the bank: {error}")),
+        }
+    }
+
+    /// Load a bank file over the selected device's whole bank — all sixty-four patterns, opening on the first — and say so once
+    /// if it was written on another machine. Unsaved work is written first, as a song load does, so a click never throws away a
+    /// session that only lived in memory.
+    fn load_bank_now(&mut self, dir: &std::path::Path, name: &str) {
+        let document = match persist::load_bank(dir, name) {
+            Ok(document) => document,
+            Err(error) => {
+                self.notice(format!("could not load the bank: {error}"));
+                return;
+            }
+        };
+        self.save();
+        self.rack.device_mut().load_bank(document.bank);
+        // The panel was pointing into the bank that has just been replaced, so it re-reads the device's: a held swap belongs to
+        // the patterns that are gone.
+        panel_ui::pattern_swap::adopt(&mut self.panel, self.rack.state(), self.rack.bank());
+        self.pending_pattern = None;
+        self.panel.dirty = true;
+        self.panel.songs.bank_file = Some(name.to_string());
+        if let Some(card) = self.panel.songs.card.as_mut() {
+            card.bank_names = persist::list_banks(dir);
+            card.load_armed = None;
+            card.bank_name = name.to_string();
+        }
+        match persist::bank_kind_notice(&document.kind, self.rack.device().kind()) {
+            Some(said) => self.notice(said),
+            None => self.notice(format!("loaded bank {name}")),
+        }
     }
 
     /// Record that `index` wants `name` once the rate is known, replacing whatever it wanted before: one entry per machine, so

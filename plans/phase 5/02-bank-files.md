@@ -264,4 +264,27 @@ loading a bank into a device other than the selected one; the `DEMO BANKS` behav
          card no longer prints.
       Gates: `cargo test --workspace` **931**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
 - [ ] **Task 3 — `main` answers the card.**
+- [x] **Task 3 — `main` answers the card.** `save_bank_now` asks `save_target` where the file lands (in place on the bank's own
+      name, `free_bank_name` otherwise) and writes `BankDocument::of(rack.bank(), rack.device().kind())`; `load_bank_now` writes
+      the session first, gives the selected device the whole bank (`Device::load_bank`, then `pattern_swap::adopt` against the new
+      bank, `pending_pattern` dropped, `dirty` set) and says one line naming the file — or the mismatch. The delete arm removes the
+      file, refreshes the card's list, and **clears `SongState::bank_file` when it was that bank**, so the next `SAVE BANK` cannot
+      write the deleted file back in place (plan 02's review focus). `bank_file` is cleared wherever the selected device's bank
+      stops being that file: `NEW`, a demo (either face), a song load, and a change of selection. The two rack keys keep their
+      notices — they are stubs this phase.
+      **The one new decision, and where it lives:** the mismatch notice is `persist::bank_kind_notice(written, playing)`, tested
+      there because `main` has no harness. It returns `None` when the captions agree, names both machines when they do not, and
+      names the caption **as read** when this build does not know it.
+      **Tests:** `a_bank_from_another_kind_is_a_notice_naming_it` and `saving_a_bank_twice_under_its_own_name_rewrites_one_file`
+      (`tests/persist.rs`); `deleting_a_bank_takes_two_clicks`, `a_saved_bank_is_a_row_the_card_lists_and_loads` and
+      `loading_a_bank_gives_the_device_all_sixty_four_patterns` (`tests/banks_live.rs`). The last three went green on their first
+      run, because task 1 built the file and task 2 the card — they are integration coverage of what already existed, not new
+      behaviour, and the only thing that failed first was the notice above. Recorded rather than dressed up as RED.
+      **Mutations: 5 of 5 caught, 0 skipped** (`.superpowers/mutate_phase5_02_task3.py`) — a save that always makes a new file,
+      `load_bank` not normalising, the mismatch never said, an unknown caption dropped instead of named, the delete cross firing
+      on one click. **The first run missed one and it was the script's fault:** the "caption dropped" mutation still built the
+      same sentence, so nothing could fail; rewritten to actually drop the caption, it bit. The `normalise` mutation also had
+      nothing to bite, because no test had ever loaded a hand-edited bank — `a_bank_file_with_fewer_patterns_opens_as_sixty_four`
+      was added for it, and is flagged in its own doc comment as written after the gap was found.
+      Gates: `cargo test --workspace` **937**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
 - [ ] **Task 4 — the book, the pins and the pictures.**

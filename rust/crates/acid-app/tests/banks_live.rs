@@ -3,10 +3,13 @@
 //! The card is a painter: every test here drives `draw_panel` through real egui frames and asserts on the request the card
 //! left behind, because what a click writes is `main`'s to do and not the card's.
 
+use acid_app::device::{DeviceKind, Rack};
+use acid_app::persist::{BankDocument, SavedState, list_banks, load_bank, save_bank};
 use acid_app::state::SharedState;
 use acid_app::ui::banks::{Banks, Request};
 use acid_app::ui::layout::{layout, scale};
 use acid_app::ui::{PanelState, SongState, draw_panel, theme};
+use acid_core::bank::PatternBank;
 use eframe::egui::{Context, Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
 fn screen() -> Rect {
@@ -266,5 +269,95 @@ fn a_blank_bank_field_saves_the_bank_the_device_came_from() {
         panel.songs.request,
         Some(Request::SaveBank("Easy".to_string())),
         "a blank field rewrites the bank the device is on rather than making a new one"
+    );
+}
+
+/// The delete cross sits to the right of bank row `index`, where the song rows' crosses sit.
+fn bank_delete_centre(index: usize) -> Pos2 {
+    let row_right = left() + width() * 0.66;
+    Pos2::new(
+        row_right + padding() + width() * 0.14 * 0.5,
+        row_centre(banks_top() + heading(), index),
+    )
+}
+
+#[test]
+fn deleting_a_bank_takes_two_clicks() {
+    // Deleting a file has no undo, so the cross arms first and says so, exactly as a song's does.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+
+    click(&ctx, &mut panel, &shared, bank_delete_centre(0));
+    assert_eq!(panel.songs.request, None, "the first click deletes nothing");
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
+        Some("bank:Easy"),
+        "the cross says SURE and waits"
+    );
+
+    click(&ctx, &mut panel, &shared, bank_delete_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::DeleteBank("Easy".to_string()))
+    );
+}
+
+#[test]
+fn a_saved_bank_is_a_row_the_card_lists_and_loads() {
+    // The card lists what `main` puts in `bank_names`, and `main` fills that from `list_banks`. So a bank saved through one
+    // door is a row at the other, and a click on it asks for that bank by name.
+    let dir = tempfile::tempdir().unwrap();
+    let written = BankDocument::of(&PatternBank::factory(), DeviceKind::Acid);
+    save_bank(dir.path(), "Easy", &written).unwrap();
+
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    panel.songs.card.as_mut().unwrap().bank_names = list_banks(dir.path());
+
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().bank_names,
+        vec!["Easy".to_string()],
+        "the file is in the library the card reads"
+    );
+    click(&ctx, &mut panel, &shared, bank_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::LoadBank("Easy".to_string()))
+    );
+}
+
+#[test]
+fn loading_a_bank_gives_the_device_all_sixty_four_patterns() {
+    // What `main`'s load arm does once the card has asked: the document's bank becomes the selected device's whole bank, and
+    // the device opens on its first pattern. The dirty flag and the notice are `main`'s to set, and are its own lines.
+    let dir = tempfile::tempdir().unwrap();
+    let mut written = PatternBank::factory();
+    for index in 1..64 {
+        let mut pattern = *written.get(0);
+        pattern.steps[index % 16].on = index % 2 == 0;
+        written.replace(index, pattern);
+    }
+    save_bank(
+        dir.path(),
+        "Easy",
+        &BankDocument::of(&written, DeviceKind::Acid),
+    )
+    .unwrap();
+
+    let loaded = load_bank(dir.path(), "Easy").unwrap();
+    let mut rack = Rack::from_saved(&SavedState::default());
+    rack.device_mut().load_bank(loaded.bank);
+
+    assert_eq!(
+        rack.bank(),
+        &written,
+        "every one of the sixty-four patterns lands in the device"
+    );
+    assert_eq!(
+        rack.bank().current(),
+        0,
+        "and the device opens on the first"
     );
 }
