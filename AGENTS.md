@@ -11,6 +11,11 @@ A TB-303-style acid bass synth: a Rust audio engine and an egui/eframe panel. Tw
 opens with a `00-` overview that says what the phase is and which plan to take next. `EAR_TESTING.md` is how to judge the
 sound by ear.
 
+## Agent extensions
+Always use graphify query for questions about the codebase where possible. Update the graph after.
+
+We should be automatically using the git hook to update the graph.! 
+
 ## Gates
 
 Every change ends here, all three green, and the book's own check with them when the change touches it:

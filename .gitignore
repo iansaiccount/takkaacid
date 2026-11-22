@@ -3,3 +3,6 @@
 
 # mdBook's built site — never committed
 docs/guide/book/
+
+# graphify's generated graph — local analysis, never committed
+graphify-out/
