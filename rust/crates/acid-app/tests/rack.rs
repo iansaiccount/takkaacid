@@ -305,20 +305,6 @@ fn a_tempo_written_straight_into_the_cell_reaches_every_device() {
     }
 }
 
-/// The save file is one device: the first, never the selected one. `+` and `Ctrl+2` made the selection movable, so this is
-/// the rule that keeps SAVE from rewriting the open song with a device the format cannot hold.
-#[test]
-fn a_session_saves_the_first_device_whatever_is_selected() {
-    let mut rack = one();
-    rack.add(DeviceKind::Acid).expect("a second");
-    assert!(rack.select(1));
-    assert_eq!(
-        rack.saved_device().number,
-        1,
-        "the first device is the one on disk, not the one on the panel"
-    );
-}
-
 /// The bug this pins, joined the way `main` joins the parts: a fader learned to the tempo wrote one device's `tempo_bpm`,
 /// and the next `sync_transport` put the rack's value back — so factory CC 72 did nothing at all. One router, the rack's
 /// own bus and tempo cell, and the tempo has to arrive in the cell the fan-out reads.

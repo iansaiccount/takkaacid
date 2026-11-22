@@ -1201,6 +1201,34 @@ fn a_version_eleven_file_is_one_device_and_its_kit_names_the_kind() {
     assert_eq!(loaded.devices[0].kind, "ACID");
 }
 
+/// A save writes the pattern the engine is playing, not the copy the bank last stashed. A step typed into the editor lives in
+/// `SharedState` — the audio thread reads it there — and the bank only learns of it on a move, a paste or a load, so a save that
+/// read the bank alone would silently drop the player's last edit.
+#[test]
+fn a_save_carries_the_pattern_being_edited() {
+    let mut rack = Rack::from_saved(&SavedState::default());
+    // A step the pattern is not playing, so turning it on is an edit the bank cannot already have.
+    let index = (0..16)
+        .find(|index| !rack.state().pattern().steps[*index].on)
+        .expect("a pattern with a resting step");
+    let mut step = rack.state().pattern().steps[index];
+    step.on = true;
+    rack.device_mut().state.set_step(index, step);
+    assert!(
+        !rack.bank().get(0).steps[index].on,
+        "the bank has not been told about the edit, which is why the merge is needed"
+    );
+
+    let saved = rack_to_saved(&rack);
+    assert!(
+        saved.bank.get(0).steps[index].on,
+        "the mirror carries the edit"
+    );
+    assert!(
+        saved.devices[0].bank.get(0).steps[index].on,
+        "and every device in the list does too"
+    );
+}
 #[test]
 fn sanitize_repairs_a_devices_list() {
     let mut state = SavedState {

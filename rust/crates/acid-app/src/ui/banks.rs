@@ -218,12 +218,15 @@ pub fn paint(
 
     // Then the player's own bank files: a bank row replaces the selected device's whole bank — all sixty-four patterns —
     // armed while the session is unsaved like every other load; the cross deletes the file; the field under the rows saves
-    // that bank under a name, which is its own door rather than a fifth footer key.
+    // that bank under a name, which is its own door rather than a fifth footer key. The rows stop a row short of the limit so
+    // the save row always gets its place: a player with a full list must still be able to save a new bank, and there is no
+    // scrolling to reach a door drawn under the rows.
     if (y + CARD_HEADING * scale) < list_limit {
         section(ui, scale, "PATTERN BANKS", left, &mut y);
     }
+    let bank_rows_limit = list_limit - row_height - CARD_GAP * scale;
     for index in 0..songs.bank_names.len() {
-        if (y + row_height) > list_limit {
+        if (y + row_height) > bank_rows_limit {
             break;
         }
         let name = songs.bank_names[index].clone();

@@ -103,12 +103,29 @@ fn bank_row_centre(index: usize) -> Pos2 {
     Pos2::new(left() + 20.0, row_centre(banks_top() + heading(), index))
 }
 
+/// The room a list may take: everything above the footer keys less one row, as `banks::paint` measures it.
+fn list_limit() -> f32 {
+    card().bottom() - padding() - row_height() - gap()
+}
+
+/// How many bank rows the card draws before its save row. The painter stops the rows one row short of the limit so the save
+/// row always has a place, and this mirrors that rule.
+fn bank_rows_drawn(count: usize) -> usize {
+    let rows_limit = list_limit() - row_height() - gap();
+    let top = banks_top() + heading();
+    (0..count)
+        .take_while(|index| {
+            top + (row_height() + gap()) * *index as f32 + row_height() <= rows_limit
+        })
+        .count()
+}
+
 /// `SAVE BANK` sits under the bank rows, in the pattern `PATTERN BANKS` heads.
-fn bank_save_centre() -> Pos2 {
+fn bank_save_centre(rows: usize) -> Pos2 {
     let save_left = left() + width() * 0.40 + padding();
     Pos2::new(
         save_left + (width() * 0.30 - padding()) * 0.5,
-        row_centre(banks_top() + heading(), 1),
+        row_centre(banks_top() + heading(), rows),
     )
 }
 
@@ -248,7 +265,7 @@ fn saving_a_bank_asks_with_the_typed_name() {
     let mut panel = open_card(false);
     panel.songs.card.as_mut().unwrap().bank_name = "Easy 2".to_string();
 
-    click(&ctx, &mut panel, &shared, bank_save_centre());
+    click(&ctx, &mut panel, &shared, bank_save_centre(1));
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveBank("Easy 2".to_string()))
@@ -264,11 +281,35 @@ fn a_blank_bank_field_saves_the_bank_the_device_came_from() {
     let mut panel = open_card(false);
     panel.songs.bank_file = Some("Easy".to_string());
 
-    click(&ctx, &mut panel, &shared, bank_save_centre());
+    click(&ctx, &mut panel, &shared, bank_save_centre(1));
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveBank("Easy".to_string())),
         "a blank field rewrites the bank the device is on rather than making a new one"
+    );
+}
+
+#[test]
+fn a_full_bank_list_still_leaves_save_bank_on_the_card() {
+    // The save row is the section's door, and the card has no scrolling: a list long enough to reach the limit must therefore
+    // stop a row short of it, or a player who has filled the list cannot save another bank at all.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    let names: Vec<String> = (0..30).map(|index| format!("Bank {index:02}")).collect();
+    let drawn = bank_rows_drawn(names.len());
+    assert!(drawn < names.len(), "the list is long enough to be cut");
+    {
+        let card = panel.songs.card.as_mut().unwrap();
+        card.bank_names = names;
+        card.bank_name = "Thirty One".to_string();
+    }
+
+    click(&ctx, &mut panel, &shared, bank_save_centre(drawn));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveBank("Thirty One".to_string())),
+        "the save row is still on the card, one row under the last bank it drew"
     );
 }
 

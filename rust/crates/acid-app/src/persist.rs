@@ -441,7 +441,8 @@ pub fn saved_device_from(device: &Device) -> SavedDevice {
             channel: device.inputs.channel,
             role: device.inputs.role,
         },
-        bank: device.bank.clone(),
+        // The pattern the engine is playing, merged into the slot the bank is on: see `bank_with_live_pattern`.
+        bank: bank_with_live_pattern(&device.bank, &device.state),
         knobs,
         swing,
         cc_map,
@@ -451,15 +452,25 @@ pub fn saved_device_from(device: &Device) -> SavedDevice {
     }
 }
 
+/// The bank with the pattern the engine is actually playing written into the slot the bank is on.
+///
+/// A pattern is edited **into `SharedState`** — that is where the audio thread reads it — and the bank only learns about an edit
+/// when the pattern moves, when one is pasted, or when one is loaded. A save therefore has to merge, or it writes the copy from
+/// before the player's last keystroke. One function, because a one-device document and a rack must not answer this differently.
+fn bank_with_live_pattern(bank: &PatternBank, shared: &SharedState) -> PatternBank {
+    let mut bank = bank.clone();
+    let current = bank.current();
+    bank.replace(current, *shared.pattern());
+    bank
+}
+
 /// Capture the running state for saving. The bank comes from `bank`, so callers keep the other 63 patterns.
 ///
 /// A **one-device** document: the flat fields are the machine and `devices` is empty, which `sanitize` turns back into a
 /// list. A whole rack comes from [`rack_to_saved`], and that is what `main` saves.
 pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
     let (knobs, swing, cc_map) = saved_fields(shared);
-    let mut bank = bank;
-    let current = bank.current();
-    bank.replace(current, *shared.pattern());
+    let bank = bank_with_live_pattern(&bank, shared);
     SavedState {
         version: SAVE_VERSION,
         bank,
@@ -950,9 +961,9 @@ pub fn free_song_name(dir: &Path, wanted: &str) -> String {
 
 /// The name, or the first `X (2)`, `X (3)` and so on that `taken` answers free.
 ///
-/// One rule with three callers: a song (a file in `songs/`), a kit (a folder in `kits/`), and the copy an edit of a factory
-/// kit makes, which is a name the panel holds in memory before anything is written. A second implementation of this, or of
-/// the name rule it starts from, is the hand-kept second list this project has paid for twice.
+/// One rule with four callers: a song (a file in `songs/`), a bank (a file in `banks/`), a kit (a folder in `kits/`), and the
+/// copy an edit of a factory kit makes, which is a name the panel holds in memory before anything is written. A second
+/// implementation of this, or of the name rule it starts from, is the hand-kept second list this project has paid for twice.
 pub fn free_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String {
     let wanted = document_name(wanted).unwrap_or_else(|| "Untitled".to_string());
     distinct_name(&wanted, taken)

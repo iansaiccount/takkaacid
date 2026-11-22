@@ -313,13 +313,16 @@ impl eframe::App for TakkaApp {
                         Err(error) => self.notice(format!("could not delete the bank: {error}")),
                     }
                 }
-                // A rack document is a later round: the keys are drawn and refuse, so the place on the face is found once.
-                panel_ui::banks::Request::SaveRack => {
-                    self.notice("a rack file is not saved yet".to_string())
-                }
-                panel_ui::banks::Request::LoadRack => {
-                    self.notice("a rack file does not load yet".to_string())
-                }
+                // A rack document is a later round: the keys are drawn and refuse, so the place on the face is found once and
+                // a wiring round cannot rename their ids. Both notices say which round, because a player who pressed one is
+                // owed that much.
+                panel_ui::banks::Request::SaveRack => self.notice(
+                    "a rack file is not saved yet: the rack round comes after this one".to_string(),
+                ),
+                panel_ui::banks::Request::LoadRack => self.notice(
+                    "a rack file does not load yet: the rack round comes after this one"
+                        .to_string(),
+                ),
                 panel_ui::banks::Request::Save(typed) => {
                     // One button: an unchanged name keeps the song, a new name writes a new file and leaves the old one
                     // where it is, so a save can never move a song out from under its own name.
@@ -483,6 +486,9 @@ impl eframe::App for TakkaApp {
                                 self.pending_pattern = None;
                                 self.panel.songs.card = None;
                                 self.panel.dirty = true;
+                                // The demo replaced this machine's whole bank, so the session is no longer on any bank file: a
+                                // stale name would have the next SAVE BANK write the demo's grid over the player's file.
+                                self.panel.songs.bank_file = None;
                                 self.notice(format!("loaded the {name} drum bank"));
                             }
                         }
@@ -995,6 +1001,10 @@ impl TakkaApp {
                     // The card was about a device that is gone — and so is its mirror, which has to go with it or the next
                     // frame paints a name, a route and a removal for an index that is not there.
                     self.panel.close_device_card();
+                    // Removing a device at or before the selection silently puts another machine on the panel, and that is a
+                    // change of selection that never goes through `Request::Select` — so `bank_file`, which is about one
+                    // device's bank, is cleared here too.
+                    self.panel.songs.bank_file = None;
                 }
                 Err(device::RemoveError::LastDevice) => {
                     self.notice("the last device cannot go".to_string())

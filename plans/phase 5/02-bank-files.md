@@ -307,3 +307,35 @@ loading a bank into a device other than the selected one; the `DEMO BANKS` behav
       are: the fill reads `persist::data_dir()` and sandboxing that in a parallel test suite is not worth its cost; the picture is
       its evidence, and the row it shows is a bank file, not a hard-coded name.
       Gates: `cargo test --workspace` **937**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
+- [x] **The branch review at the pull request** (a second subagent, again one that wrote none of it, against `1ad1918..a1fbd25` with
+      the whole of rounds 01 and 02 in front of it). Six findings, all acted on:
+      1. **Critical — a save had stopped including the pattern being edited.** Round 01 moved `save`/`write_song`/`EXPORT` onto
+         `rack_to_saved`, and `saved_device_from` read `device.bank` straight off — but a pattern is edited *into `SharedState`*
+         (where the audio thread reads it), and the bank only learns of an edit when the pattern moves, is pasted, or is loaded.
+         `shared_to_saved` had always merged the live pattern; the rack path did not. So a step typed and then saved wrote the copy
+         from before the keystroke, into the session file **and** into `SAVE A COPY`, `EXPORT`, the `save()` before every load, and
+         `SAVE BANK`. One function now answers it for both shapes — `bank_with_live_pattern(&device.bank, &device.state)` — and
+         `a_save_carries_the_pattern_being_edited` pins it (a resting step switched on, asserted in the mirror and in the list).
+      2. **Important — a drum demo left `bank_file` pointing at the bank it replaced.** The acid arm cleared it, the drums arm did
+         not, though this round's own Progress claimed "a demo (either face)". One line, and now true of both faces.
+      3. **Important — removing a device left `bank_file` about a machine that was no longer selected**, because `Rack::remove`
+         keeps the selection and so the panel's device can change without going through `Request::Select`, the one place the field
+         was cleared. `ConfirmRemove` clears it too.
+      4. **Minor, fixed — the bank rows could push `SAVE BANK` off the card.** The rows gathered up to `list_limit` and the save row
+         was drawn under them at the same limit, so a long enough list left the section with no door and no scrolling to reach one.
+         The rows now stop a row short (`bank_rows_limit`), and `a_full_bank_list_still_leaves_save_bank_on_the_card` clicks where a
+         thirty-bank card draws the key.
+      5. **Minor, fixed — the `RACKS` refusal named no round**, which the spec's Goals ask for ("say which round will make them
+         work") even though the plan's task 3 spelled the shorter string. Both notices now say the rack round comes after this one.
+      6. **Minor, fixed — two docs described a build that is gone.** `Rack::saved_device` and its test still claimed "the save file
+         is one device, the first, never the selected one" (dead code with a false doc, both deleted), and `free_name` counted three
+         callers where a bank makes four.
+      **A correction to what this plan kept saying about `main`:** `main.rs` does carry a `#[cfg(test)] mod tests` (for `Midi` and
+      `still_wanted`), so a *free function* in the binary crate can be unit-tested. What cannot be reached is a `TakkaApp` method —
+      `save_bank_now`/`load_bank_now` need the app, a rig and an audio device. That is the real reason the decisions moved into
+      `persist`, and it is the reason the four untested `main`-only changes above (findings 2 and 3, and the two notices of 5) are
+      one-line wirings rather than decisions.
+      **Mutations: 2 of 2 caught, 0 skipped** (`.superpowers/mutate_phase5_review2.py`) — the live pattern not merged into the bank,
+      the bank rows taking the save row's space. The four `main`-only wirings have no mutation because they have no test, which is
+      the cost recorded above, not a gap in the run.
+      Gates: `cargo test --workspace` **938**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
