@@ -212,6 +212,24 @@ turn the playhead off.
       **Mutations: 4 of 4 caught** (`.superpowers/mutate_playhead_task2.py`): the row drawing the clock's step unmirrored, the
       request read instead of the published direction, the mirror always on, and the mirror off by one.
       Gates: `cargo test --workspace` **908**, clippy `-D warnings`, `fmt --check`.
-- [ ] **Task 3 — the drum grid's column.**
+- [x] **Task 3 — the drum grid's column.** `draw_grid` washes `column_rect(l, sounding_step(...))` with
+      `playhead_fill(p)` — the palette's `led_on` at `PLAYHEAD_ALPHA` (44) — after the sixteen rows and before the selection
+      border, gated on `state.playing`. The comment that said *"the playhead belongs to the 303's step row, which a drum face does
+      not draw"* is gone; the selection's says what two marks on one rectangle now do (the playhead washes *in* the column, the
+      selection borders *round* it). `playhead_fill` and `PLAYHEAD_ALPHA` are `pub` so the test reads the colour the face paints,
+      rather than a second copy of the number like the row band's `36`.
+      Tests: `playhead_live::the_wash_is_on_the_column_that_sounds` (forwards on the clock's step, backwards on `15 - position`,
+      no other column, and two schemes washing in two different lamps — which is what a hard-coded colour would fail),
+      `a_stopped_machine_has_no_playhead` (no column washed with the transport stopped) and `the_wash_reads_over_a_column_of_strikes`
+      (all sixteen voices struck on the sounding step: the wash is still painted, every cell keeps its own `silkscreen_dim`, and
+      the wash's index in the paint order is **after** every cell's). The reds were taken in two steps — the first was the missing
+      `playhead_fill`, so the second was behavioural: `left: None, right: Some(#2C_27_12_2C)` where the column should have been
+      washed.
+      **Mutations: 7 of 7 caught** (`.superpowers/mutate_playhead_task3.py`): the clock read unmirrored, the request read instead
+      of the published direction, the wash on the selection, the `state.playing` gate dropped, a single `cell_rect` for the
+      column, a hard-coded colour, and the wash moved *under* the cells — the one no colour assertion can see, because the shape
+      is still in the list while an opaque square covers it. That last one is why the strike test reads the paint order.
+      Gates: `cargo test --workspace` **911**, clippy `-D warnings`, `fmt --check`. The alpha is the one thing not settled by a
+      test: it is judged by eye in Task 5 and moved there if it does not hold up.
 - [ ] **Task 4 — the book says it.**
 - [ ] **Task 5 — the picture.**
