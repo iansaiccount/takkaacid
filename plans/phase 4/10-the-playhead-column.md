@@ -216,19 +216,26 @@ turn the playhead off.
       `playhead_fill(p)` — the palette's `led_on` at `PLAYHEAD_ALPHA` (44) — after the sixteen rows and before the selection
       border, gated on `state.playing`. The comment that said *"the playhead belongs to the 303's step row, which a drum face does
       not draw"* is gone; the selection's says what two marks on one rectangle now do (the playhead washes *in* the column, the
-      selection borders *round* it). `playhead_fill` and `PLAYHEAD_ALPHA` are `pub` so the test reads the colour the face paints,
-      rather than a second copy of the number like the row band's `36`.
+      selection borders *round* it). `playhead_fill` is `pub` **for the test**, so it reads the colour the face paints rather than
+      keeping a second copy of the number, the way `the_selected_row_is_plated` keeps its own `36`. `PLAYHEAD_ALPHA` is `pub`
+      because the Interfaces block above named it so; nothing outside the module reads it, and the function exists to carry it.
       Tests: `playhead_live::the_wash_is_on_the_column_that_sounds` (forwards on the clock's step, backwards on `15 - position`,
       no other column, and two schemes washing in two different lamps — which is what a hard-coded colour would fail),
-      `a_stopped_machine_has_no_playhead` (no column washed with the transport stopped) and `the_wash_reads_over_a_column_of_strikes`
+      `a_stopped_or_paused_machine_has_no_playhead` (no column washed in **either** silence — see the review, below) and
+      `the_wash_reads_over_a_column_of_strikes`
       (all sixteen voices struck on the sounding step: the wash is still painted, every cell keeps its own `silkscreen_dim`, and
       the wash's index in the paint order is **after** every cell's). The reds were taken in two steps — the first was the missing
       `playhead_fill`, so the second was behavioural: `left: None, right: Some(#2C_27_12_2C)` where the column should have been
       washed.
-      **Mutations: 7 of 7 caught** (`.superpowers/mutate_playhead_task3.py`): the clock read unmirrored, the request read instead
-      of the published direction, the wash on the selection, the `state.playing` gate dropped, a single `cell_rect` for the
-      column, a hard-coded colour, and the wash moved *under* the cells — the one no colour assertion can see, because the shape
-      is still in the list while an opaque square covers it. That last one is why the strike test reads the paint order.
+      **Mutations: 8 of 8 caught** (`.superpowers/mutate_playhead_task3.py`): the clock read unmirrored, the request read instead
+      of the published direction, the wash on the selection, the `state.playing` gate dropped, **the gate keeping a pause** (added
+      on the review's first finding), a single `cell_rect` for the column, a hard-coded colour, and the wash moved *under* the
+      cells — the one no colour assertion can see, because the shape is still in the list while an opaque square covers it. That
+      last one is why the strike test reads the paint order.
+      The script needed two repairs before this run, and both matter: `cargo fmt` had collapsed the `rect_filled` call, so the
+      hard-coded-colour mutation's search string no longer existed and it *silently changed nothing* and reported "SURVIVED" —
+      a mutation that does not apply reads exactly like a test that does not catch. Every pattern in every script in this round is
+      now checked for presence before it is trusted, which these three already did by SKIPping.
       Gates: `cargo test --workspace` **911**, clippy `-D warnings`, `fmt --check`. The alpha is the one thing not settled by a
       test: it is judged by eye in Task 5 and moved there if it does not hold up.
 - [x] **Task 4 — the book says it.** Page 9's *"Why the step LED follows the sound"* gains the direction it had left out: the
@@ -257,3 +264,29 @@ turn the playhead off.
       every lamp is already `led_on` and a still grab cannot tell the playhead from them. That is what the live test's shape reading is
       for, and why Task 2 is proved by `painted circles at cell 12`, not by a screenshot.
       `./docs/guide/check.sh` ok; no code changed in this task.
+
+**The branch review — 2026-11-22.** A subagent that did not write this round read the plan against the tree at the branch's head.
+Three findings, all acted on:
+
+1. **The guide's "paused" claim was untested** (P2, and the sharpest of the three). Page 22 says *"a stopped or paused machine
+   shows no playhead"*; `a_stopped_machine_has_no_playhead` only ever set `Transport::Stopped`, so a gate of
+   `transport != Stopped` would have kept every test green and left the page lying. The test is now
+   `a_stopped_or_paused_machine_has_no_playhead` and loops over both, and the paused-gate mutation above is the proof it bites — the
+   mutation pass is **8 of 8**, not the 7 recorded when the task was committed.
+2. **A Progress sentence the code contradicted** (P2). "`playhead_fill` and `PLAYHEAD_ALPHA` are `pub` so the test reads the colour"
+   — no test reads `PLAYHEAD_ALPHA`. The code conforms to the plan's Interfaces block, so the code stands and the sentence is
+   corrected above: the function is `pub` for the test, the const because the plan named it.
+3. **The README contradicted the guide and the code on joining** (P2, on this branch but not from this plan — it came in with the
+   README commits). README said a device added while the transport runs "joins on the step the others are on, not at the top of the
+   bar"; `mixer.rs:164` and `renderer.rs:329` make it wait for the bar line and come in at the top of it, page 18 says so, and
+   `check.sh` guards the guide against almost exactly that wording. Fixed in the README. Worth noting where the guard was missing:
+   the negative grep watches `src/` and the claim was living in `README.md`, outside the book the check protects.
+
+The reviewer had no shell, so it could not read `origin/main...HEAD` and answered "does it do what the plan said" by comparing the
+tree at HEAD against the plan's Files blocks rather than by reading hunks. Its content checks are independent evidence and it found
+no scope creep, but that half of its answer is weaker than the plan's gate asks for, and the diffs are the executor's to have read:
+`git diff origin/main...HEAD` is eighteen files, and every one of them is accounted for: sixteen are named in this plan's Task
+**Files** blocks, one is the plan itself, and one is `README.md` — which belongs to the two README commits below the round, and is
+where finding 3 lived.
+
+Gates after the fixes: `cargo test --workspace` **911**, clippy `-D warnings`, `fmt --check`, `./docs/guide/check.sh` ok.

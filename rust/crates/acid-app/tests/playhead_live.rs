@@ -185,22 +185,26 @@ fn the_wash_is_on_the_column_that_sounds() {
     );
 }
 
-/// A stop silences the line, so it has no playhead: the 303's LEDs go out and the grid's column goes dark.
+/// A silence has no playhead: the 303's LEDs go out and the grid's column goes dark. **Both** silences — the guide says
+/// "stopped or paused", and a gate of `transport != Stopped` would leave the page lying while a stop-only test stayed green.
 #[test]
-fn a_stopped_machine_has_no_playhead() {
+fn a_stopped_or_paused_machine_has_no_playhead() {
     let l = layout(screen());
     let ctx = Context::default();
-    let shared = SharedState::new();
-    running_at(&shared, 3, false);
-    shared.set_transport(Transport::Stopped);
-    let mut panel = panel_showing(DeviceKind::Drums);
-    let filled = fills(&paint(&ctx, &mut panel, &shared));
 
-    for step in 0..STEPS_PER_PATTERN {
-        assert!(
-            fill_index_at(&filled, drum_panel::column_rect(&l, step)).is_none(),
-            "column {step} is washed on a stopped machine"
-        );
+    for transport in [Transport::Stopped, Transport::Paused] {
+        let shared = SharedState::new();
+        running_at(&shared, 3, false);
+        shared.set_transport(transport);
+        let mut panel = panel_showing(DeviceKind::Drums);
+        let filled = fills(&paint(&ctx, &mut panel, &shared));
+
+        for step in 0..STEPS_PER_PATTERN {
+            assert!(
+                fill_index_at(&filled, drum_panel::column_rect(&l, step)).is_none(),
+                "column {step} is washed on a {transport:?} machine"
+            );
+        }
     }
 }
 

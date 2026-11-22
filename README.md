@@ -81,7 +81,8 @@ that adds one.
   it wears — one of twenty-two, from the list its `COLOUR` row opens.
 - **One transport, one clock.** The deck's `PLAY` / `PAUSE` / `STOP` and the tempo belong to the rack and every device follows
   them; a device added
-  while the transport is running joins on the step the others are on, not at the top of the bar. Swing and the performance
+  while the transport is running waits for the bar line and comes in with everyone at the top of it, rather than starting on
+  whatever step the rack happens to be on. Swing and the performance
   row are per device.
 - **MIDI learn is per device**, so the same controller number can drive a knob on two devices at once, and each device has
   its own ports and channel.
