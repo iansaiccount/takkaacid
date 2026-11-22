@@ -31,7 +31,8 @@ done
   done
 
 # 4. the facts that must not drift (phase 2's rack, card, colour and clipboard; the themes' source and its credit; phase 3's
-#    deck, pause, transpose row, banks and copy/paste; phase 4's drum machine and the drum banks its demos carry)
+#    deck, pause, transpose row, banks and copy/paste; phase 4's drum machine, the playhead on both faces, and
+#    the drum banks its demos carry)
 ! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
 # The phase replaced the saved word and moved the name out of the middle; both are claims a rewrite can put back, and neither is
 # a positive fact, so each needs its own guard.
@@ -73,6 +74,8 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'move the selected step' 'writes the selected voice into it' \
             '`l`, `b` and `p`' 'control is underlined on it' 'stopped or running' \
             'moves **the device on the panel**' \
+            'the step that sounds, not the step the clock is on' \
+            'runs the column right to left with the pattern' \
             '| `shift+up` / `shift+down` | tempo' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }

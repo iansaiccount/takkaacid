@@ -231,5 +231,14 @@ turn the playhead off.
       is still in the list while an opaque square covers it. That last one is why the strike test reads the paint order.
       Gates: `cargo test --workspace` **911**, clippy `-D warnings`, `fmt --check`. The alpha is the one thing not settled by a
       test: it is judged by eye in Task 5 and moved there if it does not hold up.
-- [ ] **Task 4 — the book says it.**
+- [x] **Task 4 — the book says it.** Page 9's *"Why the step LED follows the sound"* gains the direction it had left out: the
+      panel asks for the engine's **direction** as well as its position, `REVERSE` reads the pattern from its other end, the light
+      is on the step that sounds rather than the step the clock is on, and a `REVERSE` pressed mid-bar turns the light at the bar
+      line with the sound. Page 22's `## The grid` gains **the playing column**: washed in the lamp while the line runs, laid over
+      the cells so a fully struck column still shows the line, the selection's border still on top, right to left under
+      `REVERSE`, and nothing at all when stopped or paused. `check.sh` pins both claims and its section-4 header names the
+      playhead; `00-phase-4.md` lists the round.
+      **Mutations: 4 of 4 caught** (`.superpowers/mutate_playhead_task4.py`): page 9 going back to the clock's step, page 9 losing
+      the direction paragraph, page 22 running the column the other way, and page 22 losing the playing-column paragraph.
+      `./docs/guide/check.sh` ok.
 - [ ] **Task 5 — the picture.**

@@ -25,6 +25,12 @@ A click on a cell strikes that voice on that step; a click on a struck cell take
 the 303's own accent gesture, louder and brighter — and an accent is printed brighter than a plain strike, so the pattern
 reads at a glance. Every fourth column is framed in the silk, which is where the beats are.
 
+**The playing column.** While the line runs, the column it is on is washed in the lamp — the 303's playhead, and a whole column
+of it, because a column here *is* a step. The wash is laid over the cells rather than in place of them, so a column struck on all
+sixteen rows still shows the line and the strikes still read through it, and the step you have selected keeps its border on top of
+it. It is the step that sounds, so `REVERSE` runs the column right to left with the pattern; a stopped or paused machine shows no
+playhead at all, the same rule as the 303's LEDs.
+
 Clicking a row's **label** selects that voice: its label becomes a lit plate in the accent, its row carries a faint band behind
 the cells, and the name is printed above the dials. Neither a selection nor a mute makes a sound — `HIT` is how a voice is heard.
 `SHIFT`-clicking the label **mutes** that voice: the label prints dim and the row's cells lose their accent, but they stay
