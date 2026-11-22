@@ -274,7 +274,21 @@ Inputs the spec implies and no task's tests otherwise cover, most likely first:
       on a bare brace can resolve to the wrong one — it happened here and the block was repaired by hand. Target ranges by a
       distinctive line, not by `}`.
       Gates: `cargo test --workspace` **915**, clippy `-D warnings`, `cargo fmt --check`.
-- [ ] **Task 3 — a rack builds from a saved session, and is replaced by one.**
+- [x] **Task 3 — a rack builds from a saved session, and is replaced by one.** `Rack::from_saved` builds every device the
+      document carries; `Rack::replace_from_saved` rebuilds the list on **this** rack's tempo cell, transport and bus, selects
+      slot 0 and republishes. `with_device` is gone; `devices_for` is the one place a device is built from a `SavedDevice`
+      (with `SavedDevice::from_mirror` for a document `sanitize` has not seen, which is what `SavedState::default()` is), and
+      `persist::saved_device_to_shared` now takes the tempo cell so N engines share one clock.
+      **Tests:** `a_saved_rack_of_three_devices_opens_as_three` (names, kinds, colours, numbers, one tempo cell by `Arc::ptr_eq`,
+      the bus published for three, the next number above the file's highest) and
+      `replacing_the_rack_publishes_in_order_selects_zero_and_keeps_the_tempo_cell`.
+      **Mutations: 6 of 6 caught, 0 skipped** (`.superpowers/mutate_phase5_task3.py`) — a clock per machine, the next number
+      not taken from the file (twice: a load and a replace), the old selection kept, no publish, a replace on a new cell.
+      **The first run missed one**, and it was the script's fault, not the test's: the counter mutation was paired with the
+      *load* test while the line it changed lives in *replace*. The gap it exposed was real — the replace test never asked what
+      number the next device gets — so an assertion was added and the mutation split in two. Recorded for the same reason as
+      Task 1's miss.
+      Gates: `cargo test --workspace` **917**, clippy `-D warnings`, `cargo fmt --check`.
 - [ ] **Task 4 — `main` saves a rack and loads one.**
 - [ ] **Task 5 — the 808 default is stated.**
 - [ ] **Task 6 — the book.**

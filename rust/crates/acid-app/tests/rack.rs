@@ -3,7 +3,9 @@
 //! Everything here drives the public API the way `main` does, so a change to how the rack is shaped fails here before it
 //! reaches a window or a sound card.
 
-use acid_app::device::{AddError, Device, DeviceKind, MAX_DEVICES, Rack, RemoveError, Transport};
+use acid_app::device::{
+    AddError, Device, DeviceKind, MAX_DEVICES, Rack, RemoveError, Scheme, Transport,
+};
 use acid_app::persist;
 use acid_core::bank::PatternBank;
 
@@ -622,4 +624,88 @@ fn a_transport_change_carries_no_transpose() {
         -2,
         "a fan-out must not copy one device's transpose onto another"
     );
+}
+
+/// A three-machine session, written by the builder the app itself saves with, so the fixture is a document and not a sketch of
+/// one.
+fn three_devices() -> persist::SavedState {
+    let mut rack = one();
+    rack.rename(0, "FIRST");
+    rack.set_scheme(0, Scheme::VinylNoir);
+    rack.add(DeviceKind::Drums).expect("a second");
+    rack.rename(1, "SECOND");
+    rack.add(DeviceKind::Acid).expect("a third");
+    rack.rename(2, "THIRD");
+    rack.set_tempo_bpm(140.0);
+    persist::rack_to_saved(&rack)
+}
+
+#[test]
+fn a_saved_rack_of_three_devices_opens_as_three() {
+    let saved = three_devices();
+    let mut rack = Rack::from_saved(&saved);
+    assert_eq!(rack.devices().len(), 3);
+    assert_eq!(rack.selected(), 0);
+    let names: Vec<&str> = rack.devices().iter().map(|one| one.name.as_str()).collect();
+    assert_eq!(names, ["FIRST", "SECOND", "THIRD"]);
+    assert_eq!(rack.devices()[1].kind(), DeviceKind::Drums);
+    assert_eq!(rack.devices()[0].scheme, Scheme::VinylNoir);
+    assert_eq!(rack.devices()[2].number, 3);
+    assert_eq!(rack.tempo_bpm(), 140.0);
+    // Every engine holds the rack's one tempo cell: a load must not give each machine a clock of its own.
+    let cell = rack.tempo_cell();
+    for device in rack.devices() {
+        assert!(
+            std::sync::Arc::ptr_eq(&device.state.tempo_bpm, &cell),
+            "one clock for the rack"
+        );
+    }
+    assert_eq!(
+        rack.hold().slots.len(),
+        3,
+        "the bus was published for three"
+    );
+    // The next device is numbered above the highest the file carried.
+    let index = rack.add(DeviceKind::Acid).expect("room");
+    assert_eq!(rack.devices()[index].number, 4);
+}
+
+#[test]
+fn replacing_the_rack_publishes_in_order_selects_zero_and_keeps_the_tempo_cell() {
+    let mut rack = one();
+    rack.set_tempo_bpm(100.0);
+    let cell = rack.tempo_cell();
+    rack.add(DeviceKind::Drums).expect("a second");
+    rack.select(1);
+
+    rack.replace_from_saved(&three_devices());
+    assert_eq!(rack.devices().len(), 3);
+    assert_eq!(
+        rack.selected(),
+        0,
+        "the panel shows the file's first machine"
+    );
+    assert!(
+        std::sync::Arc::ptr_eq(&rack.tempo_cell(), &cell),
+        "the cell every engine holds survives the load"
+    );
+    assert_eq!(rack.tempo_bpm(), 140.0);
+    for device in rack.devices() {
+        assert!(
+            std::sync::Arc::ptr_eq(&device.state.tempo_bpm, &cell),
+            "the machines loaded on the rack's own cell, not on one they brought"
+        );
+    }
+    let held = rack.hold();
+    assert_eq!(held.slots.len(), 3);
+    assert_eq!(held.routes.len(), 3);
+    for (slot, device) in held.slots.iter().zip(rack.devices()) {
+        assert!(
+            std::sync::Arc::ptr_eq(slot, &device.state),
+            "the bus lists the new machines in rack order"
+        );
+    }
+    // The file's numbers are the high-water mark, so the next machine does not reuse one.
+    let index = rack.add(DeviceKind::Acid).expect("room after a load");
+    assert_eq!(rack.devices()[index].number, 4);
 }

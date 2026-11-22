@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::device::{Device, DeviceKind, MAX_DEVICES, Rack, Scheme};
 use crate::knobs::Knob;
 use crate::midi::route::{Channel, Ports, Role};
-use crate::state::SharedState;
+use crate::state::{AtomicF32, SharedState};
 
 /// Directory name under the data home.
 pub const APP_DIR: &str = "takka-acid";
@@ -155,7 +155,7 @@ impl SavedDevice {
     /// Its **kind is inferred**, because a version-11 file records none: `DRUMS` when the file names a kit — only a machine
     /// with a kit ever writes a kit name — and `ACID` otherwise. A drum device that never left the `Init` kit cannot be
     /// recovered and opens as an acid; the file does not say, and a different guess would be worse than an honest one.
-    fn from_mirror(state: &SavedState) -> SavedDevice {
+    pub fn from_mirror(state: &SavedState) -> SavedDevice {
         let kind = if state.kit.is_some() {
             DeviceKind::Drums
         } else {
@@ -356,9 +356,10 @@ pub fn saved_to_shared(state: &SavedState) -> Arc<SharedState> {
 }
 
 /// One device's machine, built from its saved half.
-pub fn saved_device_to_shared(saved: &SavedDevice) -> Arc<SharedState> {
+pub fn saved_device_to_shared(saved: &SavedDevice, tempo: Arc<AtomicF32>) -> Arc<SharedState> {
     let kind = DeviceKind::from_name(&saved.kind).unwrap_or(DeviceKind::Acid);
-    let shared = SharedState::for_kind(kind);
+    // The tempo cell is the rack's, so a machine loaded from a file follows the same clock every other one does.
+    let shared = SharedState::with_tempo_for(kind, tempo);
     apply_device(saved, &shared);
     publish_pattern(&saved.bank, &shared);
     shared
