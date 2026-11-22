@@ -241,4 +241,19 @@ turn the playhead off.
       **Mutations: 4 of 4 caught** (`.superpowers/mutate_playhead_task4.py`): page 9 going back to the clock's step, page 9 losing
       the direction paragraph, page 22 running the column the other way, and page 22 losing the playing-column paragraph.
       `./docs/guide/check.sh` ok.
-- [ ] **Task 5 — the picture.**
+- [x] **Task 5 — the picture, and the alpha judged by eye.** `docs/guide/src/img/drum-playing.png` is a **second grab with
+      `-crop 1896x574+32+466`**, the grid's own rect at 2× — never a cut of a finished grab. The first attempt started at `+456` and
+      caught the bottom edges of `LP | BP | HP` and `HIT`; it was thrown away and retaken rather than trimmed. Session:
+      `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-10` (emptied first), the `Xvfb` already up on `:95` — `getdisplaygeometry` said
+      `2000 1400` and `getwindowgeometry` `1960x1340` before anything was clicked — `+` → `DRUMS`, `space` to run, then a pattern
+      written by hand so a strike would be **inside** the lit column: `enter` + `shift+enter` for `KICK` (accented on the downbeat,
+      struck on 5, 9 and 13) and a click on each of `CHH`'s twelve empty cells, because a hat on every step means the moving column
+      always covers one. Cell rects came from `layout`'s `grid_area` and `knob_cells`, doubled — not from reading a grab. The pointer
+      was parked **outside** the window (1985,1395 on a 2000 × 1400 screen), so no tip and no notice is in the picture.
+      `PLAYHEAD_ALPHA = 44` **stands**: on the grab the wash reads at a glance as the line moves, and the hat under it is still
+      visible as a distinct block, which is the trade this number buys. `drum-face.png` is untouched — a first run with an empty grid,
+      still stopped, so it is still true.
+      The 303's half was **not** photographed, and the reason is worth the line: its demo step row has a note on nearly every step, so
+      every lamp is already `led_on` and a still grab cannot tell the playhead from them. That is what the live test's shape reading is
+      for, and why Task 2 is proved by `painted circles at cell 12`, not by a screenshot.
+      `./docs/guide/check.sh` ok; no code changed in this task.

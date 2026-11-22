@@ -31,6 +31,8 @@ sixteen rows still shows the line and the strikes still read through it, and the
 it. It is the step that sounds, so `REVERSE` runs the column right to left with the pattern; a stopped or paused machine shows no
 playhead at all, the same rule as the 303's LEDs.
 
+![The playing column](img/drum-playing.png)
+
 Clicking a row's **label** selects that voice: its label becomes a lit plate in the accent, its row carries a faint band behind
 the cells, and the name is printed above the dials. Neither a selection nor a mute makes a sound — `HIT` is how a voice is heard.
 `SHIFT`-clicking the label **mutes** that voice: the label prints dim and the row's cells lose their accent, but they stay
