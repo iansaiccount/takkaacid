@@ -1,11 +1,11 @@
 //! The save file: round-trip, atomicity, and the two conversions between disk and running state.
 
-use acid_app::device::MAX_DEVICES;
+use acid_app::device::{DeviceKind, MAX_DEVICES, Rack, Scheme};
 use acid_app::midi::cc::LEARNABLE;
-use acid_app::midi::route::{Channel, Ports, Role};
+use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
 use acid_app::persist::{
     ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
-    sanitize, save, saved_to_shared, shared_to_saved,
+    rack_to_saved, sanitize, save, saved_to_shared, shared_to_saved,
 };
 use acid_app::persist::{
     SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
@@ -1195,4 +1195,50 @@ fn sanitize_repairs_a_devices_list() {
     distinct.sort_unstable();
     distinct.dedup();
     assert_eq!(distinct.len(), numbers.len(), "a duplicate number is moved");
+}
+
+#[test]
+fn a_rack_of_two_devices_snapshots_both_and_mirrors_the_first() {
+    let mut rack = Rack::from_saved(&SavedState::default());
+    rack.rename(0, "BASS");
+    rack.set_scheme(0, Scheme::VinylNoir);
+    // A shuffle and a learned controller of its own, so a field dropped on the way out is caught rather than defaulted.
+    rack.device_mut().state.swing.set(0.4);
+    rack.device_mut().state.cc_map[0].store(74, std::sync::atomic::Ordering::Relaxed);
+    let kit = rack.add(DeviceKind::Drums).unwrap();
+    rack.rename(kit, "KIT");
+    rack.set_scheme(kit, Scheme::FestivalCitrus);
+    rack.set_inputs(kit, InputFilter::silent());
+    rack.set_tempo_bpm(133.0);
+
+    let saved = rack_to_saved(&rack);
+    assert_eq!(saved.devices.len(), 2);
+    assert_eq!(saved.devices[0].name, "BASS");
+    assert_eq!(saved.devices[0].scheme, "VINYL NOIR");
+    assert_eq!(saved.devices[0].number, 1);
+    assert_eq!(
+        saved.devices[0].swing, 0.4,
+        "a machine's shuffle is its own"
+    );
+    assert_eq!(
+        saved.devices[0].cc_map[0], 74,
+        "a machine's learned rig is its own"
+    );
+    assert_eq!(saved.devices[1].name, "KIT");
+    assert_eq!(saved.devices[1].kind, "DRUMS");
+    assert_eq!(saved.devices[1].scheme, "FESTIVAL CITRUS");
+    assert_eq!(saved.devices[1].number, 2);
+    assert_eq!(
+        saved.devices[1].inputs.ports,
+        Ports::Named(Vec::new()),
+        "a device that hears nothing says so"
+    );
+    assert_eq!(saved.bpm, 133.0);
+    // The mirror is device 1, so a build that knows version 11 reads the machine this one calls BASS.
+    let first = &saved.devices[0];
+    assert_eq!(saved.bank, first.bank);
+    assert_eq!(saved.knobs, first.knobs);
+    assert_eq!(saved.swing, first.swing);
+    assert_eq!(saved.cc_map, first.cc_map);
+    assert_eq!(saved.kit, first.kit);
 }

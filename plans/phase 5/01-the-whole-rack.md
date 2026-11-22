@@ -262,7 +262,18 @@ Inputs the spec implies and no task's tests otherwise cover, most likely first:
       Recorded because a mutation that passes is a test that was not asking.
       Gates: `cargo test --workspace` **914**, clippy `-D warnings`, `cargo fmt --check`. No book change in this task: nothing
       a player sees moved, and the picker's footnote goes in Task 4 with the load path that makes it true.
-- [ ] **Task 2 — one builder for the rack's bytes.**
+- [x] **Task 2 — one builder for the rack's bytes.** `saved_device_from`, `saved_device_to_shared` and `rack_to_saved` join
+      `shared_to_saved`, which stays as the one-device document; `apply_saved` splits into the rack half (tempo, bank) and
+      `apply_device` (patch, shuffle, rig), with `publish_pattern` and `saved_fields` as the two rules both halves share. A
+      document with no list is poured from its mirror, so every existing caller is unchanged.
+      **Tests:** `a_rack_of_two_devices_snapshots_both_and_mirrors_the_first` — two devices, a shuffle and a learned
+      controller set on device 1 so a dropped field is caught rather than defaulted.
+      **Mutations: 6 of 6 caught, 0 skipped** (`.superpowers/mutate_phase5_task2.py`) — the list never written, the outgoing
+      document not repaired, the kind always an acid, the shuffle dropped, the rig dropped, the colour dropped.
+      **One harness fact worth keeping:** two lines with identical text (`}` alone) share one hashline anchor, so a range ending
+      on a bare brace can resolve to the wrong one — it happened here and the block was repaired by hand. Target ranges by a
+      distinctive line, not by `}`.
+      Gates: `cargo test --workspace` **915**, clippy `-D warnings`, `cargo fmt --check`.
 - [ ] **Task 3 — a rack builds from a saved session, and is replaced by one.**
 - [ ] **Task 4 — `main` saves a rack and loads one.**
 - [ ] **Task 5 — the 808 default is stated.**

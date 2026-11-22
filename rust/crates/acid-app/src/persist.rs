@@ -20,7 +20,7 @@ use acid_core::voice::{
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
-use crate::device::{Device, DeviceKind, MAX_DEVICES, Scheme};
+use crate::device::{Device, DeviceKind, MAX_DEVICES, Rack, Scheme};
 use crate::knobs::Knob;
 use crate::midi::route::{Channel, Ports, Role};
 use crate::state::SharedState;
@@ -347,7 +347,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     write_through(path, bytes).with_context(|| format!("writing {}", path.display()))
 }
 
-/// Build the shared state the app runs on from a saved document.
+/// Build the shared state the app runs on from a saved document: device 1's machine.
 pub fn saved_to_shared(state: &SavedState) -> Arc<SharedState> {
     let shared = SharedState::new();
     let mut bank = state.bank.clone();
@@ -355,76 +355,146 @@ pub fn saved_to_shared(state: &SavedState) -> Arc<SharedState> {
     shared
 }
 
+/// One device's machine, built from its saved half.
+pub fn saved_device_to_shared(saved: &SavedDevice) -> Arc<SharedState> {
+    let kind = DeviceKind::from_name(&saved.kind).unwrap_or(DeviceKind::Acid);
+    let shared = SharedState::for_kind(kind);
+    apply_device(saved, &shared);
+    publish_pattern(&saved.bank, &shared);
+    shared
+}
+
 /// Pour a saved document into a running app: the shared state the audio thread reads, and the bank the panel
 /// navigates. Loading a song uses this, so a load and a restart cannot disagree about what a field means.
+///
+/// Device 1's half only — a document with a list is poured one device at a time by `Rack::replace_from_saved`, which owns the
+/// rack. A document with no list is the document itself: the mirror is the machine.
 pub fn apply_saved(state: &SavedState, shared: &SharedState, bank: &mut PatternBank) {
     *bank = state.bank.clone();
     shared.tempo_bpm.set(state.bpm);
-    shared.swing.set(state.swing);
+    let device = state
+        .devices
+        .first()
+        .cloned()
+        .unwrap_or_else(|| SavedDevice::from_mirror(state));
+    apply_device(&device, shared);
+    publish_pattern(bank, shared);
+}
+
+/// One device's own half of a pour: its patch, its shuffle and its learned rig.
+fn apply_device(saved: &SavedDevice, shared: &SharedState) {
     // The tone knobs load through the catalogue, so the file's field order cannot disagree with the panel's.
-    for (knob, position) in Knob::ALL.iter().zip(state.knobs.positions()) {
+    for (knob, position) in Knob::ALL.iter().zip(saved.knobs.positions()) {
         knob.publish(shared, position);
     }
-    shared.volume.set(state.knobs.volume);
-    // The learned MIDI mapping travels with the song, so a rig saved in one song comes back with it.
-    for (slot, cc) in state.cc_map.iter().enumerate().take(shared.cc_map.len()) {
+    shared.volume.set(saved.knobs.volume);
+    shared.swing.set(saved.swing.clamp(0.0, 1.0));
+    // The learned mapping travels with the machine, so a rig saved in a song comes back with it.
+    for (slot, cc) in saved.cc_map.iter().enumerate().take(shared.cc_map.len()) {
         shared.cc_map[slot].store(i32::from(*cc), std::sync::atomic::Ordering::Relaxed);
     }
-    // A song written by an older build may have fewer slots than this one: fill the rest from the factory pairing, so a
-    // control the song never knew about cannot inherit whatever the last session taught it.
-    for slot in state.cc_map.len()..shared.cc_map.len() {
+    // A file written by an older build may have fewer slots than this one: fill the rest from the factory pairing, so a
+    // control the file never knew about cannot inherit whatever the last session taught it.
+    for slot in saved.cc_map.len()..shared.cc_map.len() {
         shared.cc_map[slot].store(
             i32::from(crate::midi::cc::DEFAULT_CC[slot]),
             std::sync::atomic::Ordering::Relaxed,
         );
     }
+}
+
+/// The pattern a bank is sitting on, and which one that is: a pattern controller reads the index to know where it points.
+fn publish_pattern(bank: &PatternBank, shared: &SharedState) {
     shared.set_pattern(Arc::new(*bank.current_pattern()));
-    // A pattern controller reads this to know which bank it is pointing into, and a loaded song moves the bank.
     shared.set_pattern_index(bank.current());
 }
 
+/// The parts of a document a machine owns: its patch, its shuffle and its learned rig.
+fn saved_fields(shared: &SharedState) -> (Knobs, f32, Vec<u8>) {
+    let knobs = Knobs {
+        volume: shared.volume.get(),
+        ..Knobs::from_positions(&Knob::ALL.map(|knob| knob.read(shared)))
+    };
+    let cc_map = shared
+        .cc_map
+        .iter()
+        .map(|mapped| {
+            mapped
+                .load(std::sync::atomic::Ordering::Relaxed)
+                .clamp(0, 127) as u8
+        })
+        .collect();
+    (knobs, shared.swing.get(), cc_map)
+}
+
+/// One machine, as the file stores it.
+pub fn saved_device_from(device: &Device) -> SavedDevice {
+    let (knobs, swing, cc_map) = saved_fields(&device.state);
+    SavedDevice {
+        number: device.number,
+        name: device.name.clone(),
+        kind: device.kind().name().to_string(),
+        scheme: device.scheme.name().to_string(),
+        inputs: SavedInputs {
+            ports: device.inputs.ports.clone(),
+            channel: device.inputs.channel,
+            role: device.inputs.role,
+        },
+        bank: device.bank.clone(),
+        knobs,
+        swing,
+        cc_map,
+        // A device still on the default kit has no name to write, and an absent field is what "the default kit" means.
+        kit: Some(device.state.kit().name.clone())
+            .filter(|name| name != acid_core::drums::DEFAULT_KIT_NAME),
+    }
+}
+
 /// Capture the running state for saving. The bank comes from `bank`, so callers keep the other 63 patterns.
+///
+/// A **one-device** document: the flat fields are the machine and `devices` is empty, which `sanitize` turns back into a
+/// list. A whole rack comes from [`rack_to_saved`], and that is what `main` saves.
 pub fn shared_to_saved(shared: &SharedState, bank: PatternBank) -> SavedState {
-    let snapshot = shared.snapshot();
+    let (knobs, swing, cc_map) = saved_fields(shared);
     let mut bank = bank;
     let current = bank.current();
     bank.replace(current, *shared.pattern());
     SavedState {
         version: SAVE_VERSION,
         bank,
-        knobs: Knobs {
-            volume: snapshot.volume,
-            ..Knobs::from_positions(&Knob::ALL.map(|knob| knob.read(shared)))
-        },
-        bpm: snapshot.tempo_bpm,
-        swing: snapshot.swing,
+        knobs,
+        bpm: shared.tempo_bpm.get(),
+        swing,
         // The MIDI choice lives with the app, not with the shared state; `main` fills it in before saving.
         midi_input: None,
         // Which named song is loaded; `main` fills it in, like the MIDI choice.
         song: None,
-        // The learned MIDI mapping is shared state, so it is read straight from it.
-        cc_map: shared
-            .cc_map
-            .iter()
-            .map(|mapped| {
-                mapped
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                    .clamp(0, 127) as u8
-            })
-            .collect(),
+        cc_map,
         // The hover-help switch and the randomise dials live with the panel, not the shared state; `main` fills them in
         // like the MIDI choice.
         tooltips: true,
         density: crate::ui::randomise::DEFAULT_DENSITY,
         scale: 0,
         autosave: false,
-        // The kit the drawn device plays. Read from the kit itself, so a session names the kit it was saved with; a device
-        // still on the default kit has no name to write.
+        // The kit the drawn device plays. Read from the kit itself, so a session names the kit it was saved with.
         kit: Some(shared.kit().name.clone())
             .filter(|name| name != acid_core::drums::DEFAULT_KIT_NAME),
-        // A one-device document: the mirror above is the machine, and a reader turns it into a list.
+        // One device is the empty list: the mirror above is the machine, and a reader turns it into a list.
         devices: Vec::new(),
     }
+}
+
+/// A whole rack, as the file stores it: every machine, and device 1 written down a second time as the flat mirror an older
+/// build reads.
+pub fn rack_to_saved(rack: &Rack) -> SavedState {
+    let mut saved = SavedState {
+        devices: rack.devices().iter().map(saved_device_from).collect(),
+        ..SavedState::default()
+    };
+    // One rule for the mirror: a document leaving this build is repaired by the same function as one arriving.
+    sanitize(&mut saved);
+    saved.bpm = rack.tempo_bpm();
+    saved
 }
 
 /// Never fails: a wrong save file means "start again", so the app always opens.
