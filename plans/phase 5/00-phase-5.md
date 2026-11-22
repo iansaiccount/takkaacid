@@ -16,9 +16,10 @@ Rounds live here as `NN-topic.md`, one per round, in the shape the earlier phase
 review of the branch at the pull request (`AGENTS.md`). Commits are made with the gates green and the Progress lines current;
 the review is of the branch, not of each commit.
 
-**State: opened 2026-11-22; no task committed yet.** `cargo test --workspace` **905**, clippy `-D warnings`, `fmt --check` and
-`./docs/guide/check.sh` were green at `1ad1918` (the merge of phase 4). `SAVE_VERSION` is **11**; round `01` takes **12**, and
-round `02` shares that number because a bank is a second kind of saved document, not a second save version.
+**State: opened 2026-11-22; both rounds committed on `phase-5`, nothing pushed.** `cargo test --workspace` **937**, clippy
+`-D warnings`, `fmt --check` and `./docs/guide/check.sh` were green at the head of round `02`. Round `01` took `SAVE_VERSION`
+**12** and round `02` shares that number because a bank is a second kind of saved document, not a second save version. What is
+left for the player: the pull-request review of both rounds together, and the push.
 
 **What phase 5 does not do**, and where each is recorded: an **arrangement** (what plays when) is a later round with its own
 `SAVE_VERSION` bump — `plans/future/wishlist.md`, *The arrangement*; a **rack document** that loads is later — *Load and save a

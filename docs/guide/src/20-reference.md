@@ -143,8 +143,8 @@ notes this round.
 **The kit browser:** `KITS`, `FACTORY`, `MY KITS`, `IMPORT`, `CLOSE`, each of the three kits that ship marked `- READ ONLY`,
 and the row being asked about on `<name> - click again to replace`.
 
-**The bank browser:** `BANKS`, `DEMO BANKS`, `MY BANKS`, `SAVE`, `SAVE A COPY`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the
-`x` / `SURE` on each of your own rows.
+**The bank browser:** `BANKS`, `DEMO BANKS`, `PATTERN BANKS`, `SONGS`, `RACKS`, `SAVE`, `SAVE A COPY`, `SAVE BANK`, `SAVE RACK`,
+`LOAD RACK`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the `x` / `SURE` on each of your own rows, of a song and of a bank.
 
 **The help card** has four sections — `STEPS`, `KEYBOARD`, `MIDI`, `NOTES`.
 
@@ -157,9 +157,10 @@ and the row being asked about on `<name> - click again to replace`.
 | `~/.local/share/takka-acid` | or this, when `XDG_DATA_HOME` is unset too |
 | `state.json` | the session: **every device** — its kind, name, colour, ports, channel, patterns, patch, kit, swing and learned controllers — plus the rack's tempo, the panel's switches and the MIDI choice. Device 1 is also written in the old flat fields, so an older build still opens it |
 | `songs/<name>.json` | one file per named song; the name is the file name |
+| `banks/<name>.json` | one file per saved pattern bank: its sixty-four patterns and the machine it was written from. That kind is a warning, not a check — a bank from another machine loads and plays nothing, and the status line says so |
 | `kits/<name>/` | a kit: its `kit.json` and one `<VOICE>.wav` per sampled voice. The three that ship are compiled into the app and have no folder here; a kit is written when a session that plays an edited one is saved |
 
-Song names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.
+Song and bank names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.
 
 ## The one flag
 

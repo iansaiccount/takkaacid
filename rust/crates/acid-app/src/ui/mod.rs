@@ -1265,12 +1265,16 @@ fn open_banks(state: &mut PanelState) {
     state.put_cards_away();
     state.songs.card = Some(banks::Banks {
         names: crate::persist::list_songs(&crate::persist::data_dir()),
+        // Both libraries, read the frame the card opens: a bank saved before this session started is a row without a refresh.
+        bank_names: crate::persist::list_banks(&crate::persist::data_dir()),
         // The demos are built into the binary, so the card only needs their names to list them.
         demos: crate::demo::songs()
             .iter()
             .map(|demo| demo.name.to_string())
             .collect(),
         name: state.songs.name.clone().unwrap_or_default(),
+        // The bank field opens on the file the selected device's bank is in, so `SAVE BANK` writes in place without retyping.
+        bank_name: state.songs.bank_file.clone().unwrap_or_default(),
         open: state.songs.file.clone(),
         ..banks::Banks::default()
     });

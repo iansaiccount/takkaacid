@@ -72,6 +72,9 @@ gone 'the first device only' "the guide says the session file holds one device"
 # The arrows split at the modifier, and no page may go back to calling the plain pair the tempo's or the shifted pair the
 # note's. The pins below keep the new wording; these keep the old one out.
 gone 'plain up/down' "the guide puts the tempo on the plain arrows again"
+# Phase 5's second round renamed one heading and added two sections, and the words are the point of that round: the card says
+# SONGS, PATTERN BANKS and RACKS, and no page may go back to the name a song list had while it was the only list.
+gone 'MY BANKS' "the guide names a section the card no longer prints"
 # Anchored so the *correct* card line (`shift+up / down: tempo by 1 BPM`, which a page may quote) cannot trip it: the
 # character before `up` must not be a `+`.
 gone_re '(^|[^+])up / down: tempo' "the guide gives the tempo the plain arrows again"
@@ -92,6 +95,7 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'the step that sounds, not the step the clock is on' \
             'runs the column right to left with the pattern' \
             '| `shift+up` / `shift+down` | tempo' \
+            'PATTERN BANKS' 'SAVE BANK' 'SAVE RACK' 'LOAD RACK' 'banks/<name>.json' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done

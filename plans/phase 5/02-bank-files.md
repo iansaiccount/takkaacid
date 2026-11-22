@@ -288,3 +288,22 @@ loading a bank into a device other than the selected one; the `DEMO BANKS` behav
       was added for it, and is flagged in its own doc comment as written after the gap was found.
       Gates: `cargo test --workspace` **937**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
 - [ ] **Task 4 — the book, the pins and the pictures.**
+- [x] **Task 4 — the book, the pins and the pictures.** Page 12 is rewritten for the three documents: the intro says a song is the
+      whole rack, a bank is sixty-four patterns and the machine they came from, and a rack is a document this build only has keys
+      for; `## The two lists` became `## The four lists`, `MY BANKS` became `SONGS`, and `PATTERN BANKS` and `RACKS` got their own
+      paragraphs — what a bank row replaces (all sixty-four patterns of the selected device, the thing a demo row has always done),
+      the two-click arm, the `kind` mismatch that loads and plays nothing, `SAVE BANK`'s in-place/new-file rule and its blank field,
+      and that the `RACKS` keys say so and open nothing. Page 20's bank-browser line names all four sections, the files table gains
+      `banks/<name>.json`, and the names paragraph says "Song and bank names". `check.sh` pins `PATTERN BANKS`, `SAVE BANK`,
+      `SAVE RACK`, `LOAD RACK` and `banks/<name>.json`, and `gone 'MY BANKS'` keeps the old heading out. **`img/banks-card.png` was
+      retaken** (display checked at 2000 × 1400, window `1960x1340`, fresh data dir, pointer parked at 1990,1390) and its row
+      rewritten; `img/README.md` records the run, including the fact that the card's text fields **cannot be typed into under
+      Xvfb** (`xdotool type` and `xdotool key --window` both print `XGetInputFocus returned the focused window of 1` and deliver
+      nothing), so the picture's `SONGS` row comes from `SAVE` with the field as it arrived and its `PATTERN BANKS` row from a bank
+      file written into `banks/` by a throwaway test before the relaunch.
+      **A bug the picture found, and its width:** `ui::mod`'s `open_banks` builds the card and read only `list_songs` — so a bank
+      saved in a previous session was invisible until something wrote the list. It now reads `list_banks` too, and opens the bank
+      field on `bank_file`, so `SAVE BANK` writes in place without retyping. **This one-line wiring is untested**, as `main`'s calls
+      are: the fill reads `persist::data_dir()` and sandboxing that in a parallel test suite is not worth its cost; the picture is
+      its evidence, and the row it shows is a bank file, not a hard-coded name.
+      Gates: `cargo test --workspace` **937**, clippy `-D warnings`, `cargo fmt --check`, `./docs/guide/check.sh` ok.
