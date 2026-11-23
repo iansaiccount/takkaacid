@@ -33,36 +33,54 @@ done
 # 4. the facts that must not drift (phase 2's rack, card, colour and clipboard; the themes' source and its credit; phase 3's
 #    deck, pause, transpose row, banks and copy/paste; phase 4's drum machine, the playhead on both faces, and
 #    the drum banks its demos carry)
-! grep -rqF 'saved on exit and 2 s after a change' src || { echo "the guide repeats the stale save line"; exit 1; }
+# Every negative guard reads the book with its line breaks flattened to spaces, because a sentence a page wraps is still the
+# sentence it was: page 12 once printed `NAMES AND EXTRA DEVICES ARE NOT` and then `SAVED YET`, and a line-based guard for that
+# phrase stayed green while the app had stopped printing it. `gone` is the one negative guard; `gone_re` is the same for a
+# pattern.
+flat="$(mktemp)"
+trap 'rm -f "$flat"' EXIT
+cat src/*.md | tr '\n' ' ' >"$flat"
+gone() { ! grep -qF -- "$1" "$flat" || { echo "$2"; exit 1; }; }
+gone_re() { ! grep -qE -- "$1" "$flat" || { echo "$2"; exit 1; }; }
+
+gone 'saved on exit and 2 s after a change' "the guide repeats the stale save line"
 # The phase replaced the saved word and moved the name out of the middle; both are claims a rewrite can put back, and neither is
 # a positive fact, so each needs its own guard.
-! grep -rqE 'on (its )?lit plate' src || { echo "the guide promises a plate the face does not paint"; exit 1; }
-! grep -rqF 'in the middle of the top strip' src || { echo "the guide puts the name back in the middle"; exit 1; }
-! grep -rqE '`(RUN|STOP)` (is|stays) lit|`SAVED` / `UNSAVED`' src || { echo "the guide describes the retired transport keys"; exit 1; }
+gone_re 'on (its )?lit plate' "the guide promises a plate the face does not paint"
+gone 'in the middle of the top strip' "the guide puts the name back in the middle"
+gone_re '`(RUN|STOP)` (is|stays) lit|`SAVED` / `UNSAVED`' "the guide describes the retired transport keys"
 # A device no longer comes in on the step the rack happens to be on: it waits for the bar (plan 04).
-! grep -rqF 'comes in on the step the others are on' src || { echo "the guide has a device joining mid-bar again"; exit 1; }
+gone 'comes in on the step the others are on' "the guide has a device joining mid-bar again"
 # The same kind of miss, three more ways: a retired word printed as the face spells it on a page whose subject was the saved
 # state, the bank browser under its old name, and the stop's rule told as the pause's. Each is narrowed to the sentence that
 # was the lie — `UNSAVED` is still engraved on the browser's header, and a stop really does return to the top of the bar.
-! grep -rqF 'not yet on disk, `UNSAVED`' src || { echo "the guide spells a word the face no longer prints"; exit 1; }
-! grep -rqF 'MY SONGS' src || { echo "the guide names the bank browser as it was, not as it is"; exit 1; }
-! grep -rqF 'the next start begins from the top of the bar' src || { echo "the guide gives the pause the stop's rule"; exit 1; }
-! grep -rqE 'hears it|walked by ear|identify by ear' src || { echo "the guide sells a selection by ear"; exit 1; }
+gone 'not yet on disk, `UNSAVED`' "the guide spells a word the face no longer prints"
+gone 'MY SONGS' "the guide names the bank browser as it was, not as it is"
+gone 'the next start begins from the top of the bar' "the guide gives the pause the stop's rule"
+gone_re 'hears it|walked by ear|identify by ear' "the guide sells a selection by ear"
 # The drum machine's nine controls did print their captions and nothing more, and this round gave every one of them a tip: the
 # bullet that said so is deleted from page 22, and this guard is why a rewrite cannot put the claim back.
-! grep -rqF 'No per-voice hover help yet' src || { echo "the guide says the drum controls have no hover help"; exit 1; }
+gone 'No per-voice hover help yet' "the guide says the drum controls have no hover help"
 # The transpose was one number for the rack; it is the device on the panel's now. The old claim cannot come back, and the new one
 # is pinned below.
-! grep -rqF 'moves the whole rack' src || { echo "the guide makes the transpose rack-wide again"; exit 1; }
-! grep -rqF 'the whole rack forgets together' src || { echo "the guide says the rack forgets one transpose"; exit 1; }
+gone 'moves the whole rack' "the guide makes the transpose rack-wide again"
+gone 'the whole rack forgets together' "the guide says the rack forgets one transpose"
+# A song keeps every device now, so the picker's apology and the "first device only" file table are lies the guide may not tell
+# again. The new sentences are pinned in the list below.
+gone 'NAMES AND EXTRA DEVICES ARE NOT SAVED YET' "the guide apologises for a format that saves everything"
+gone 'the first device only' "the guide says the session file holds one device"
 # The arrows split at the modifier, and no page may go back to calling the plain pair the tempo's or the shifted pair the
 # note's. The pins below keep the new wording; these keep the old one out.
-! grep -rqF 'plain up/down' src || { echo "the guide puts the tempo on the plain arrows again"; exit 1; }
+gone 'plain up/down' "the guide puts the tempo on the plain arrows again"
+# Phase 5's second round renamed one heading and added two sections, and the words are the point of that round: the card says
+# SONGS, PATTERN BANKS and RACKS, and no page may go back to the name a song list had while it was the only list.
+gone 'MY BANKS' "the guide names a section the card no longer prints"
 # Anchored so the *correct* card line (`shift+up / down: tempo by 1 BPM`, which a page may quote) cannot trip it: the
 # character before `up` must not be a `+`.
-! grep -rqE '(^|[^+])up / down: tempo' src || { echo "the guide gives the tempo the plain arrows again"; exit 1; }
+gone_re '(^|[^+])up / down: tempo' "the guide gives the tempo the plain arrows again"
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
-            'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'NOT SAVED YET' 'four machines' 'VINYL NOIR' \
+            'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'four machines' 'VINYL NOIR' \
+            'every machine in the rack' 'theme is saved with the device' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \
             'it makes no sound until the bar the rack is in finishes' 'NOTHING TO PAUSE' \
             'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE' \
@@ -77,6 +95,7 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'the step that sounds, not the step the clock is on' \
             'runs the column right to left with the pattern' \
             '| `shift+up` / `shift+down` | tempo' \
+            'PATTERN BANKS' 'SAVE BANK' 'SAVE RACK' 'LOAD RACK' 'banks/<name>.json' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done

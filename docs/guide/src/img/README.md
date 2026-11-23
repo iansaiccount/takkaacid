@@ -61,6 +61,18 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
   `import -window <id> -crop 1896x574+32+466`, the grid's own rect (`grid_area` at 2×) with no pixel of the dial row above it —
   the first attempt at `+456` caught the bottom edges of `LP | BP | HP` and `HIT`, and was thrown away rather than trimmed. The
   face's other picture, `drum-face.png`, is a first run with an empty grid and is still stopped, so it still shows no playhead.
+- **`banks-card.png` is the bank-files round's own picture**, retaken on 2026-11-22 on a fresh `Xvfb :93 -screen 0 2000x1400x24`
+  — `DISPLAY=:93 xdotool getdisplaygeometry` said `2000 1400` before the app was launched and `getwindowgeometry` then said
+  `1960x1340` — with `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-banks`, emptied first. The card's other rows are driven by clicks, but
+  its **text fields cannot be typed into under Xvfb**: `xdotool type` and `xdotool key --window <id>` both printed
+  `XGetInputFocus returned the focused window of 1` and delivered nothing, though the click that focused the field did take (the
+  cursor and the brighter border are visible in the grab that proved it). So the picture's two rows come from the two ways a row
+  can appear: `SAVE` was pressed with the field as it arrived — `New song`, which is why `SONGS` has a row and the header reads
+  `SAVED` — and `Easy` was written into `banks/` by a throwaway test before the relaunch, because a first run has no bank and the
+  card reads `banks/` the frame it opens. `BANKS` opened the card at `switches::cell(layout(980 × 670).switches, Switch::Banks)`
+  doubled, 1525,1122, and the pointer was parked at 1990,1390 on the 2000 × 1400 screen before the grab, so no tip and no notice
+  is in it. The `bank name` field shows its hint rather than `Easy` because nothing was loaded: no bank is the selected device's
+  until one is.
 
 ## The images
 
@@ -70,9 +82,9 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/running.png` | the transport running: `PLAY` lit in the tape deck, `PAUSE` dark | `space` from the first-sound state |
 | `img/help-card.png` | the help card over the panel: the arrows as two pairs (`shift+left` / `right` the pattern, `shift+up` / `down` the tempo, then the plain `left` / `right` and `up` / `down` for the face), the drum face's keys folded into those lines, and its two own lines — `h` and `l` / `b` / `p` | `F1` on the arrows round's session (below), pointer parked outside the window |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
-| `img/banks-card.png` | the bank browser: `New song`, the five demo banks, an empty `MY BANKS` | click `BANKS` |
+| `img/banks-card.png` | the bank browser, retaken this round: `NOW: New song - SAVED`, the five demo banks, `PATTERN BANKS` with one saved bank (`Easy`) and its `x`, the `bank name` field with `SAVE BANK`, `SONGS` with one saved song and its `x`, and `RACKS`' `SAVE RACK` / `LOAD RACK` | click `BANKS`; the bank row is a file seeded before the launch, because a first run has none |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
-| `img/picker.png` | the picker: the `ACID` and `DRUMS` rows and `NAMES AND EXTRA DEVICES ARE NOT SAVED YET` | click `+` at the strip's right end |
+| `img/picker.png` | the picker: `ADD DEVICE` with the `ACID` and `DRUMS` rows and `CLOSE`, and nothing under them — retaken in the whole-rack round, when the line that said names and extra devices were not saved went away | click `+` at the strip's right end; park the pointer outside the window before grabbing |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
 | `img/drum-face.png` | the drum machine's face: `DRUMS 2` selected, `KICK` the selected voice, the grid empty with **the first step's column lit** — the step a key writes to — the seven voice dials, `LP | BP | HP` with `L`, `B` and `P` underlined on it, `SHUFFLE`, and `HIT` with its `H` underlined, and `KIT 808` at the right-hand end of the caption line above the dials | from the picker: click `+`, click `DRUMS`, wait for the notice to clear, and park the pointer outside the window (a hover tooltip would land in the picture). Retaken in the keys-and-tooltips round, so the picture says its own keys by eye; the pattern is left empty on purpose, as a first run's drum machine is |
 | `img/drum-playing.png` | the grid alone, the line running: a `CHH` hat on all sixteen steps, `KICK` accented on the downbeat and struck on 5, 9 and 13, **the playing column washed in the lamp** with a hat showing through it, and the selected step's border on the last column reading apart from it | from the drum face: `space` to run, `enter` / `shift+enter` for the kick, then a click on each of `CHH`'s twelve empty cells; the pointer parked outside the window. `-crop 1896x574+32+466` — a second grab in the same state, at the grid's own rect |

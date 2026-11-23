@@ -120,9 +120,9 @@ pub struct Parameters {
 #[derive(Debug)]
 pub struct SharedState {
     /// Which machine this state drives. Chosen when the device is made and never changed, so the audio thread can build the
-    /// right machine from the state alone — which is all an [`crate::audio::renderer::AudioRenderer`] is given. **Not saved:**
-    /// `persist::SavedState` has no field for a kind, so a session saves its first device whatever it is and loads it as a 303.
-    /// That is the format this phase inherits; the rack document that carries a kind is the next round's.
+    /// right machine from the state alone — which is all an [`crate::audio::renderer::AudioRenderer`] is given. **The state
+    /// does not carry it:** the kind is the device's, written per machine as `SavedDevice::kind` and read back by
+    /// `DeviceKind::from_name`, so one state never has to say what it is to be loaded as.
     ///
     /// **The one answer to "what kind is this device".** `Device` keeps no field of its own beside this one — `Device::kind`
     /// reads it — so a device's face and its sound cannot disagree about which machine it is.

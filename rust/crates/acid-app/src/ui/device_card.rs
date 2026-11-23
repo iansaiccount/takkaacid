@@ -179,18 +179,14 @@ pub struct Picker {
 }
 
 /// How wide the picker is, as a fraction of the panel's width, and the narrowest it may get. Narrower than the device card:
-/// a kind's name is three or four letters and the footnote is one line.
+/// a kind's name is three or four letters and nothing sits under the rows but the key.
 const PICKER_WIDTH: f32 = 0.32;
 const PICKER_MIN_WIDTH: f32 = 280.0;
-/// The blank line the footnote sits on, and the type it is set in.
-const FOOTNOTE: f32 = 14.0;
-/// The sentence the round keeps: what a restart costs. It disappears in the round that adds `SavedState::devices`.
-const NOT_SAVED: &str = "NAMES AND EXTRA DEVICES ARE NOT SAVED YET";
 
-/// The picker's rect inside `panel`: centred, and as tall as its rows, its footnote and its one key need.
+/// The picker's rect inside `panel`: centred, and as tall as its rows and its one key need.
 pub fn picker_rect(panel: Rect, s: f32) -> Rect {
     let kinds = crate::device::DeviceKind::ALL.len();
-    let height = PADDING + TITLE + kinds as f32 * (ROW + GAP) + FOOTNOTE + ROW + PADDING;
+    let height = PADDING + TITLE + kinds as f32 * (ROW + GAP) + ROW + PADDING;
     Rect::from_center_size(
         panel.center(),
         egui::vec2(
@@ -280,18 +276,6 @@ pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f
             asked = Some(Request::Add(*kind));
         }
     }
-
-    // The footnote is the promise this round keeps, so it is a line on the card and not a notice that clears itself.
-    ui.painter().text(
-        Pos2::new(
-            area.left() + PADDING * s,
-            rows.kinds.last().map_or(area.top(), |last| last.bottom()) + FOOTNOTE * 0.5 * s,
-        ),
-        Align2::LEFT_CENTER,
-        NOT_SAVED,
-        theme::legend(10.0 * s),
-        theme::BLACK.silkscreen_dim,
-    );
 
     if transport::card_button(ui, "device-picker-close", rows.close, "CLOSE", false).clicked()
         || shield.clicked()

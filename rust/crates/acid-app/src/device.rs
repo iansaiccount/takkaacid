@@ -37,6 +37,15 @@ impl DeviceKind {
     /// Every kind the picker offers, in the order it offers them.
     pub const ALL: [DeviceKind; 2] = [DeviceKind::Acid, DeviceKind::Drums];
 
+    /// The kind `name` names, by the caption `name()` spells — the one mapping between a catalogue entry and the word a file
+    /// stores. Derived from `ALL`, so a variant added or renamed needs no second list here.
+    pub fn from_name(name: &str) -> Option<DeviceKind> {
+        DeviceKind::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.name() == name)
+    }
+
     /// The caption on a picker row, and the stem of a default name: `ACID 3`, `DRUMS 2`.
     pub fn name(self) -> &'static str {
         match self {
@@ -124,6 +133,16 @@ pub enum Scheme {
 }
 
 impl Scheme {
+    /// The theme `name` names, by the caption `name()` spells — the mapping a saved device needs and nothing else does.
+    /// Derived from `ALL` for the same reason `DeviceKind::from_name` is: a second list of twenty-two spellings would be the
+    /// bug this repo has paid for twice.
+    pub fn from_name(name: &str) -> Option<Scheme> {
+        Scheme::ALL
+            .iter()
+            .copied()
+            .find(|scheme| scheme.name() == name)
+    }
+
     /// Every theme there is, in the order the card's list offers them.
     pub const ALL: [Scheme; 22] = [
         Scheme::Black,
@@ -413,24 +432,20 @@ pub struct Rack {
 }
 
 impl Rack {
-    /// The session's rack: one device holding the bank and the state the save file carried, at the tempo it was saved at.
+    /// The session's rack: every machine the file carries, at the tempo it was saved at. A document that has not been through
+    /// `sanitize` — a default one, or a test's — describes its single machine in the flat fields, which is the one device
+    /// `SavedDevice::from_mirror` builds.
     pub fn from_saved(saved: &crate::persist::SavedState) -> Self {
-        let device = Device::adopted(
-            1,
-            crate::persist::saved_to_shared(saved),
-            saved.bank.clone(),
-        );
-        Self::with_device(device, saved.bpm)
-    }
-
-    fn with_device(device: Device, tempo_bpm: f32) -> Self {
-        // The rack's tempo is the first device's own cell: one atomic, which every device that joins is built holding, so a
-        // tempo written by the panel or the MIDI thread is heard by every engine at its next block without a fan-out.
-        device.state.tempo_bpm.set(clamp_bpm(tempo_bpm));
-        let tempo_bpm = Arc::clone(&device.state.tempo_bpm);
-        let next_number = device.number + 1;
+        let tempo_bpm = Arc::new(AtomicF32::new(clamp_bpm(saved.bpm)));
+        let devices = Self::devices_for(saved, &tempo_bpm);
+        let next_number = devices
+            .iter()
+            .map(|device| device.number)
+            .max()
+            .unwrap_or(0)
+            + 1;
         let rack = Self {
-            devices: vec![device],
+            devices,
             selected: 0,
             next_number,
             transport: AtomicU8::new(Transport::Stopped.byte()),
@@ -443,6 +458,54 @@ impl Rack {
         rack.sync_transport();
         rack.publish();
         rack
+    }
+
+    /// Replace every machine with the ones `saved` carries, keeping this rack's **tempo cell**, transport and bus: the audio
+    /// thread holds the bus and every engine holds the cell, so a load may not swap either of them out. The panel shows slot 0
+    /// afterwards — the file records no selection, and "where I was" means nothing once the rack it pointed into is gone.
+    pub fn replace_from_saved(&mut self, saved: &crate::persist::SavedState) {
+        self.devices = Self::devices_for(saved, &self.tempo_bpm);
+        self.selected = 0;
+        self.next_number = self
+            .devices
+            .iter()
+            .map(|device| device.number)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        self.set_tempo_bpm(saved.bpm);
+        self.sync_transport();
+        self.publish();
+    }
+
+    /// Every machine a document describes, each holding `tempo` — the rack's one cell, so a tempo written by the panel or the
+    /// MIDI thread is heard by every engine without a fan-out.
+    fn devices_for(saved: &crate::persist::SavedState, tempo: &Arc<AtomicF32>) -> Vec<Device> {
+        let mirror;
+        let described: &[crate::persist::SavedDevice] = if saved.devices.is_empty() {
+            mirror = crate::persist::SavedDevice::from_mirror(saved);
+            std::slice::from_ref(&mirror)
+        } else {
+            &saved.devices
+        };
+        described
+            .iter()
+            .map(|one| {
+                let mut device = Device::adopted(
+                    one.number,
+                    crate::persist::saved_device_to_shared(one, Arc::clone(tempo)),
+                    one.bank.clone(),
+                );
+                device.name = one.name.clone();
+                device.scheme = Scheme::from_name(&one.scheme).unwrap_or_default();
+                device.inputs = crate::midi::route::InputFilter {
+                    ports: one.inputs.ports.clone(),
+                    channel: one.inputs.channel,
+                    role: one.inputs.role,
+                };
+                device
+            })
+            .collect()
     }
 
     /// The bus, for the audio thread and the MIDI handlers to hold a clone of.
@@ -497,15 +560,6 @@ impl Rack {
     pub fn device_mut(&mut self) -> &mut Device {
         let index = self.selected;
         &mut self.devices[index]
-    }
-
-    /// The device a session saves: the first one, always.
-    ///
-    /// The save file is one device (the spec's rule, and the frozen format), and devices beyond the first live in memory
-    /// until the save-the-rack round. A save must not follow the selection, or adding a device and saving would rewrite the
-    /// open song with the new device's single starter pattern.
-    pub fn saved_device(&self) -> &Device {
-        &self.devices[0]
     }
 
     pub fn state(&self) -> &SharedState {
@@ -563,7 +617,7 @@ impl Rack {
     /// Give a device a name of its own, and answer the name it landed on.
     ///
     /// It never fails: a blank falls back to the device's default name, and a name another device already holds is suffixed
-    /// `(2)` — the rule `persist::free_song_name` uses for songs — because two `BASS` cells would make "which one is muted"
+    /// `(2)` — the rule `persist::distinct_name` gives every named thing, songs and kits included — because two `BASS` cells would make "which one is muted"
     /// unanswerable. Truncation is the strip's business (`ui::text::fit`), not the store's. An index that is not there
     /// answers with the empty string and changes nothing.
     pub fn rename(&mut self, index: usize, typed: &str) -> String {
@@ -574,19 +628,14 @@ impl Rack {
             "" => Device::default_name(self.devices[index].kind(), self.devices[index].number),
             trimmed => trimmed.to_string(),
         };
-        let mut candidate = wanted.clone();
-        let mut copy = 2;
-        while self
-            .devices
-            .iter()
-            .enumerate()
-            .any(|(other, device)| other != index && device.name == candidate)
-        {
-            candidate = format!("{wanted} ({copy})");
-            copy += 1;
-        }
-        self.devices[index].name.clone_from(&candidate);
-        candidate
+        let name = crate::persist::distinct_name(&wanted, |candidate| {
+            self.devices
+                .iter()
+                .enumerate()
+                .any(|(other, device)| other != index && device.name == candidate)
+        });
+        self.devices[index].name.clone_from(&name);
+        name
     }
 
     /// The rack's transport. No device may disagree: their copies are mirrors of this one.

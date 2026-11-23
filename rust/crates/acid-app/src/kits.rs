@@ -205,13 +205,19 @@ pub fn factory_kit(name: &str, rate: f32) -> Option<Kit> {
     factory_kits(rate).into_iter().find(|kit| kit.name == name)
 }
 
+/// The kit a drum device with no kit of its own plays, **by name**: the decision the default is, stated once.
+///
+/// It used to be `FACTORY[0]`, which was the 808 by an accident of that table's order — reordering the table would have
+/// changed what a new machine sounds like with no test to say so. The player's ruling is the 808, so the 808 is written down.
+pub const DEFAULT_FACTORY_KIT: &str = "808";
+
 /// The name of the kit a drum device with no kit of its own plays, and the answer to "which kit does `None` mean?".
 ///
 /// A name, not a `Kit`: the kits cannot be decoded until a device says what rate it runs at, so what a session's `None`
 /// resolves to is a *name* everywhere it is read — `main` loads `factory_kits(rate)` under it, the browser lists it, and the
 /// file writes it. One spelling, so the three cannot disagree about which kit a fresh session sounds like.
 pub fn default_name() -> &'static str {
-    FACTORY[0].name
+    DEFAULT_FACTORY_KIT
 }
 
 /// What the cache holds, keyed by the rate its samples were resampled to: the kits are decoded once per rate, never per

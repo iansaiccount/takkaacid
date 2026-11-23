@@ -21,7 +21,8 @@ fn main() -> eframe::Result {
     }
     // Restore the last session. A first run opens on a demo, under the name a new song starts with, and nothing about it
     // is on disk yet — so the first thing the player sees is a line that plays, and a lamp that says "keep me".
-    let (saved, first_run) = persist::open(&persist::data_dir());
+    let dir = persist::data_dir();
+    let (saved, first_run) = persist::open(&dir);
     let rack = device::Rack::from_saved(&saved);
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
     rack.state().set_pattern_index(rack.bank().current());
@@ -36,12 +37,9 @@ fn main() -> eframe::Result {
     // The randomise dials are panel state too, so they travel the same way.
     let saved_density = saved.density.clamp(0.0, 1.0);
     let saved_scale = panel_ui::scale::Scale::from_index(saved.scale as usize);
-    // The kit the session's device plays. Absent means the default factory kit, which is what a session saved before the
-    // drum machine has; the name is not resolved to samples until there is a running device to say what rate to decode at.
-    let saved_kit = saved
-        .kit
-        .clone()
-        .unwrap_or_else(|| acid_app::kits::default_name().to_string());
+    // Every drum machine's kit, by device index: the name is not resolved to samples until there is a running device to say
+    // what rate to decode at. *Which* machines want one is `persist`'s answer, because it is a property of the document.
+    let saved_kits: Vec<(usize, String)> = persist::wanted_kits(&saved);
 
     // One mix bus per stream: rebuilt at the device's rate whenever the stream reopens. Every device's engine lives in it, so
     // the rack can add or remove one without the stream noticing.
@@ -69,6 +67,10 @@ fn main() -> eframe::Result {
                 // The song the last session was working on, if it had a name.
                 songs: panel_ui::SongState {
                     name: song_name.clone(),
+                    // The file it was saved as, so the first SAVE after a restart keeps it instead of writing `Name (2)`. Only
+                    // when that file is still there: a demo's or a `NEW` song's name is not a file, and claiming one would have
+                    // the next save write over a song the player had under that name.
+                    file: persist::session_song_file(&dir, song_name.as_deref()),
                     ..panel_ui::SongState::default()
                 },
                 // A first run has nothing on disk, so the lamp says "keep me" until the player does.
@@ -96,7 +98,7 @@ fn main() -> eframe::Result {
                 pending_pattern: None,
                 last_position: 0,
                 kit_rate: None,
-                kit_wanted: saved_kit,
+                kit_wanted: saved_kits,
             }))
         }),
     )
@@ -123,9 +125,10 @@ struct TakkaApp {
     /// The rate the kit was decoded at, or `None` before there was a running device to ask. A kit's samples are
     /// resampled to this rate when the kit loads, so it is also the answer to "has the rate changed since the last load?".
     kit_rate: Option<f32>,
-    /// The kit the session says the saved device plays, by name. Read from the file at startup and after a song load, and
-    /// set by the browser; the live kit is what is played, and this is what it is reloaded from when the rate moves.
-    kit_wanted: String,
+    /// The kits the session names, by device index, waiting for a rate to decode them at. A kit is a folder of WAVs and the
+    /// rate is only known once the stream is open, so a load records what each machine wants and the first frame that knows
+    /// the rate decodes it; the browser sets one device's entry when the player picks a kit.
+    kit_wanted: Vec<(usize, String)>,
 }
 
 impl eframe::App for TakkaApp {
@@ -285,6 +288,41 @@ impl eframe::App for TakkaApp {
             let dir = persist::data_dir();
             match request {
                 panel_ui::banks::Request::Close => {}
+                // The bank document's three doors. Saving and loading are the card's requests answered by the two methods
+                // below; deleting is only the file, and the session's memory of it must go with it.
+                panel_ui::banks::Request::SaveBank(typed) => self.save_bank_now(&dir, &typed),
+                panel_ui::banks::Request::LoadBank(name) => self.load_bank_now(&dir, &name),
+                panel_ui::banks::Request::DeleteBank(name) => {
+                    match persist::delete_bank(&dir, &name) {
+                        Ok(()) => {
+                            // The next SAVE BANK must not write the deleted file back in place, so the session forgets the
+                            // name as the file goes.
+                            if self.panel.songs.bank_file.as_deref() == Some(name.as_str()) {
+                                self.panel.songs.bank_file = None;
+                            }
+                            if let Some(card) = self.panel.songs.card.as_mut() {
+                                card.bank_names = persist::list_banks(&dir);
+                                card.delete_armed = None;
+                                card.load_armed = None;
+                                if card.bank_name == name {
+                                    card.bank_name.clear();
+                                }
+                            }
+                            self.notice(format!("deleted bank {name}"));
+                        }
+                        Err(error) => self.notice(format!("could not delete the bank: {error}")),
+                    }
+                }
+                // A rack document is a later round: the keys are drawn and refuse, so the place on the face is found once and
+                // a wiring round cannot rename their ids. Both notices say which round, because a player who pressed one is
+                // owed that much.
+                panel_ui::banks::Request::SaveRack => self.notice(
+                    "a rack file is not saved yet: the rack round comes after this one".to_string(),
+                ),
+                panel_ui::banks::Request::LoadRack => self.notice(
+                    "a rack file does not load yet: the rack round comes after this one"
+                        .to_string(),
+                ),
                 panel_ui::banks::Request::Save(typed) => {
                     // One button: an unchanged name keeps the song, a new name writes a new file and leaves the old one
                     // where it is, so a save can never move a song out from under its own name.
@@ -318,10 +356,15 @@ impl eframe::App for TakkaApp {
                     self.panel.dirty = true;
                     if let Some(card) = self.panel.songs.card.as_mut() {
                         card.name.clear();
+                        card.bank_name.clear();
                         card.open = None;
                         self.panel.songs.file = None;
+                        // The selected device's bank is the starter phrase now, not any file the session came from.
+                        self.panel.songs.bank_file = None;
                         card.names = persist::list_songs(&dir);
+                        card.bank_names = persist::list_banks(&dir);
                         card.delete_armed = None;
+                        card.load_armed = None;
                     }
                     self.panel.notify("new song");
                 }
@@ -359,7 +402,10 @@ impl eframe::App for TakkaApp {
                         .set_file_name(format!("{suggested}.json"))
                         .save_file();
                     if let Some(path) = picked {
-                        match persist::export_song(&path, &self.session_for_disk(&suggested)) {
+                        // The export carries the name it was suggested under, so the file opens as the song it was.
+                        let mut saved = self.session_for_disk();
+                        saved.song = Some(suggested.clone());
+                        match persist::export_song(&path, &saved) {
                             Ok(()) => self.notice(format!("exported to {}", path.display())),
                             Err(error) => self.notice(format!("could not export: {error}")),
                         }
@@ -415,6 +461,8 @@ impl eframe::App for TakkaApp {
                                 // disk until the player renames and saves it.
                                 self.panel.songs.name = Some(demo::NEW_SONG.to_string());
                                 self.panel.songs.file = None;
+                                // A demo is a bank too: the device's patterns are no longer a file of the player's.
+                                self.panel.songs.bank_file = None;
                                 self.panel.songs.card = None;
                                 self.panel.dirty = true;
                                 self.panel.tooltips = demo.state.tooltips;
@@ -438,6 +486,9 @@ impl eframe::App for TakkaApp {
                                 self.pending_pattern = None;
                                 self.panel.songs.card = None;
                                 self.panel.dirty = true;
+                                // The demo replaced this machine's whole bank, so the session is no longer on any bank file: a
+                                // stale name would have the next SAVE BANK write the demo's grid over the player's file.
+                                self.panel.songs.bank_file = None;
                                 self.notice(format!("loaded the {name} drum bank"));
                             }
                         }
@@ -497,13 +548,8 @@ impl eframe::App for TakkaApp {
             match self.kit_rate {
                 None => {
                     self.kit_rate = Some(rate);
-                    let wanted = self.kit_wanted.clone();
-                    // Device 1: the save file is one device, and the kit it names is that device's (the spec's rule, and the
-                    // reason `saved_device` exists at all). A first device that is not a drum machine has no kit to load, and
-                    // asking the library for one would report a kit the machine does not play.
-                    if self.rack.saved_device().kind().has_kit() {
-                        self.load_kit_now(0, &wanted, rate);
-                    }
+                    // The first frame that knows the rate decodes every kit the session asked for, one per drum machine.
+                    self.load_wanted_kits(rate);
                 }
                 Some(loaded) if loaded != rate => {
                     // A rate change re-decodes every drum device's kit: a voice decoded at the old rate plays at the wrong
@@ -774,7 +820,7 @@ impl TakkaApp {
                 if loaded {
                     self.forgive_kit_write();
                 }
-                self.kit_wanted = name.clone();
+                self.want_kit(self.rack.selected(), name.clone());
                 self.panel.kits.names = persist::kit_names(&persist::kits_dir());
                 if loaded {
                     self.kit_notice(format!("kit: {name}"));
@@ -808,7 +854,7 @@ impl TakkaApp {
                         if loaded {
                             self.forgive_kit_write();
                         }
-                        self.kit_wanted = name.clone();
+                        self.want_kit(self.rack.selected(), name.clone());
                         // One notice, and it is the *last* one this frame, so it can say what to do: a voice that did not come
                         // with the folder is silent in the copy, and the file the document now names is the repair.
                         if imported.problems.is_empty() && loaded {
@@ -870,6 +916,8 @@ impl TakkaApp {
         match request {
             device::Request::Select(index) => {
                 if self.rack.select(index) {
+                    // `bank_file` is about one device's bank, so it cannot outlive the selection it was about.
+                    self.panel.songs.bank_file = None;
                     // The display follows the device's own bank, but not its pattern's first step: the step the hand was
                     // on comes back from this panel's edit slots in `draw_panel` on the next frame, so resetting it here
                     // would save the *leaving* device at step 1.
@@ -903,8 +951,9 @@ impl TakkaApp {
                     // A held swap belonged to the device that was on screen, not to the new one.
                     self.pending_pattern = None;
                     let name = self.rack.device().name.clone();
-                    // Nothing on disk changed: the session saves the first device, and a device added here is not in the
-                    // save format yet.
+                    // The rack is what a save writes, so a device added here is a change to the document: the next save
+                    // carries it, and the lamp says one is due.
+                    self.panel.dirty = true;
                     self.notice(format!("added {name}"));
                 }
                 Err(device::AddError::AtCapacity) => {
@@ -946,14 +995,16 @@ impl TakkaApp {
             // The last device cannot go, and the panel cannot see the rack, so the refusal is said here.
             device::Request::ConfirmRemove(index) => match self.rack.remove(index) {
                 Ok(()) => {
-                    // A save writes the first device, so only losing *that* one changes what the file would hold; a
-                    // survivor keeps its number and its name, and nothing else a save reads has moved.
-                    if index == 0 {
-                        self.panel.dirty = true;
-                    }
+                    // The session file holds every device, so losing any of them changes what a save would write: the
+                    // survivors keep their numbers and their names, and the one that went is the whole difference.
+                    self.panel.dirty = true;
                     // The card was about a device that is gone — and so is its mirror, which has to go with it or the next
                     // frame paints a name, a route and a removal for an index that is not there.
                     self.panel.close_device_card();
+                    // Removing a device at or before the selection silently puts another machine on the panel, and that is a
+                    // change of selection that never goes through `Request::Select` — so `bank_file`, which is about one
+                    // device's bank, is cleared here too.
+                    self.panel.songs.bank_file = None;
                 }
                 Err(device::RemoveError::LastDevice) => {
                     self.notice("the last device cannot go".to_string())
@@ -981,16 +1032,7 @@ impl TakkaApp {
     }
     /// Write the session, keeping the other 63 patterns from the bank as loaded.
     fn save(&mut self) {
-        let first = self.rack.saved_device();
-        let mut saved = persist::shared_to_saved(&first.state, first.bank.clone());
-        // One name is all the save file holds until the format lands: the first port the player turned on.
-        saved.midi_input = self.midi.enabled().first().cloned();
-        saved.song = self.panel.songs.name.clone();
-        // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
-        saved.tooltips = self.panel.tooltips;
-        saved.autosave = self.panel.autosave;
-        saved.density = self.panel.density;
-        saved.scale = self.panel.scale.index() as u8;
+        let saved = self.session_for_disk();
         let dir = persist::data_dir();
         // The kit's folder, when it was edited: the name is in the document above, the samples are their own files. A folder
         // that would not write leaves the session unsaved, so SAVE is still the player's to press again.
@@ -1017,25 +1059,31 @@ impl TakkaApp {
             return;
         };
         self.save();
-        let device = self.rack.device_mut();
-        persist::apply_saved(&saved, &device.state, &mut device.bank);
-        self.rack.set_tempo_bpm(saved.bpm);
+        self.rack.replace_from_saved(&saved);
+        // The panel pointed into a rack that is gone: an open device card, a held swap and the selection itself all reset
+        // against slot 0, which is the one machine the file puts first.
+        self.panel.close_device_card();
         panel_ui::pattern_swap::adopt(&mut self.panel, self.rack.state(), self.rack.bank());
-        // A held swap belongs to the song that was playing, not to the one just loaded.
         self.pending_pattern = None;
         self.panel.dirty = false;
         self.panel.songs.name = Some(name.to_string());
         self.panel.songs.file = Some(name.to_string());
-        // The kit a song names, decoded at the rate this device runs at. A song written before the drum machine names none,
-        // which is the default factory kit.
-        self.kit_wanted = saved
-            .kit
-            .clone()
-            .unwrap_or_else(|| acid_app::kits::default_name().to_string());
+        // A song's load replaces the rack, so the selected device's bank is the file's, not any bank file the session had.
+        self.panel.songs.bank_file = None;
+        // Every drum machine's kit is a folder of WAVs, decoded at the rate the running device plays at. Which machines want
+        // one, and which kit, is `persist`'s to say: it is a property of the document, not of the load.
+        self.kit_wanted = persist::wanted_kits(&saved);
         if let Some(rate) = self.kit_rate {
-            let wanted = self.kit_wanted.clone();
-            // A song's kit lands on the device the song was applied to, which is the selected one.
-            self.load_kit_now(self.rack.selected(), &wanted, rate);
+            self.load_wanted_kits(rate);
+        }
+        // A song from another machine names ports this one has not got. The devices keep the routing the file gave them — it
+        // is worth keeping for the day the port comes back — and one line says which ports are missing.
+        let missing = persist::unopened_ports(&saved, self.midi.enabled());
+        if !missing.is_empty() {
+            self.notice(format!(
+                "ports this song names are not open: {}",
+                missing.join(", ")
+            ));
         }
         self.panel.tooltips = saved.tooltips;
         self.panel.autosave = saved.autosave;
@@ -1055,13 +1103,83 @@ impl TakkaApp {
         self.panel.notify(format!("loaded {name}"));
     }
 
+    /// Save the selected device's bank under `typed`, or over the file it came from when the field was left blank.
+    ///
+    /// Where the file lands is `save_target`'s question — the same one the song's SAVE asks — and a new name that is taken lands
+    /// beside its namesake, so one bank can never destroy another by being given its name.
+    fn save_bank_now(&mut self, dir: &std::path::Path, typed: &str) {
+        let name = match persist::save_target(self.panel.songs.bank_file.as_deref(), typed) {
+            Some(persist::SaveTarget::InPlace(name)) => name,
+            Some(persist::SaveTarget::NewFile(name)) => persist::free_bank_name(dir, &name),
+            None => return,
+        };
+        let document = persist::BankDocument::of(self.rack.bank(), self.rack.device().kind());
+        match persist::save_bank(dir, &name, &document) {
+            Ok(()) => {
+                self.panel.songs.bank_file = Some(name.clone());
+                if let Some(card) = self.panel.songs.card.as_mut() {
+                    card.bank_names = persist::list_banks(dir);
+                    card.bank_name = name.clone();
+                    card.load_armed = None;
+                }
+                self.notice(format!("saved bank {name}"));
+            }
+            Err(error) => self.notice(format!("could not save the bank: {error}")),
+        }
+    }
+
+    /// Load a bank file over the selected device's whole bank — all sixty-four patterns, opening on the first — and say so once
+    /// if it was written on another machine. Unsaved work is written first, as a song load does, so a click never throws away a
+    /// session that only lived in memory.
+    fn load_bank_now(&mut self, dir: &std::path::Path, name: &str) {
+        let document = match persist::load_bank(dir, name) {
+            Ok(document) => document,
+            Err(error) => {
+                self.notice(format!("could not load the bank: {error}"));
+                return;
+            }
+        };
+        self.save();
+        self.rack.device_mut().load_bank(document.bank);
+        // The panel was pointing into the bank that has just been replaced, so it re-reads the device's: a held swap belongs to
+        // the patterns that are gone.
+        panel_ui::pattern_swap::adopt(&mut self.panel, self.rack.state(), self.rack.bank());
+        self.pending_pattern = None;
+        self.panel.dirty = true;
+        self.panel.songs.bank_file = Some(name.to_string());
+        if let Some(card) = self.panel.songs.card.as_mut() {
+            card.bank_names = persist::list_banks(dir);
+            card.load_armed = None;
+            card.bank_name = name.to_string();
+        }
+        match persist::bank_kind_notice(&document.kind, self.rack.device().kind()) {
+            Some(said) => self.notice(said),
+            None => self.notice(format!("loaded bank {name}")),
+        }
+    }
+
+    /// Record that `index` wants `name` once the rate is known, replacing whatever it wanted before: one entry per machine, so
+    /// a second kit picked on the same device does not leave the first one queued behind it.
+    fn want_kit(&mut self, index: usize, name: String) {
+        self.kit_wanted.retain(|(wanted, _)| *wanted != index);
+        self.kit_wanted.push((index, name));
+    }
+
+    /// Decode every kit the session has asked for, at `rate`. The list is taken before the loads: a load publishes a kit and
+    /// may leave a notice, and neither may run while the list is borrowed.
+    fn load_wanted_kits(&mut self, rate: f32) {
+        for (index, name) in std::mem::take(&mut self.kit_wanted) {
+            self.load_kit_now(index, &name, rate);
+        }
+    }
+
     /// Write the session into the library under `name`, and make that song the session's own. `as_copy` only changes the
     /// words: a copy lands under a name that is free, so saving one never overwrites the song it came from.
     fn write_song(&mut self, dir: &std::path::Path, name: &str, as_copy: bool) {
         // The kit's folder travels with the song's name for it, so a song that names an edited kit brings its samples too. A
         // folder that would not write leaves the session unsaved, so SAVE is still the player's to press again.
         self.write_kit();
-        let saved = self.session_for_disk(name);
+        let saved = self.session_for_disk();
         match persist::save_song(dir, name, &saved) {
             Ok(()) => {
                 self.panel.songs.name = Some(name.to_string());
@@ -1070,7 +1188,7 @@ impl TakkaApp {
                     self.panel.dirty = false;
                 }
                 // The session file remembers which song is open, or the next restart would open nothing.
-                let _ = persist::save(dir, &self.session_for_disk(name));
+                let _ = persist::save(dir, &self.session_for_disk());
                 if let Some(card) = self.panel.songs.card.as_mut() {
                     card.names = persist::list_songs(dir);
                     card.name = name.to_string();
@@ -1086,13 +1204,14 @@ impl TakkaApp {
         }
     }
 
-    /// The session as it should be written to disk, under `name` when the save is landing in a file.
-    fn session_for_disk(&self, name: &str) -> persist::SavedState {
-        let first = self.rack.saved_device();
-        let mut saved = persist::shared_to_saved(&first.state, first.bank.clone());
+    /// The session as it should be written to disk: every machine, and the panel state that travels with the file.
+    fn session_for_disk(&self) -> persist::SavedState {
+        // One builder for the rack's bytes: every machine, with device 1 mirrored in the flat fields an older build reads.
+        let mut saved = persist::rack_to_saved(&self.rack);
+        // One name is all the save file holds: the first port the player turned on.
         saved.midi_input = self.midi.enabled().first().cloned();
-        saved.song = Some(name.to_string());
-        // The hover-help switch is panel state, so it is carried here rather than in `shared_to_saved`.
+        saved.song = self.panel.songs.name.clone();
+        // The hover-help switch is panel state, so it is carried here rather than in `rack_to_saved`.
         saved.tooltips = self.panel.tooltips;
         saved.autosave = self.panel.autosave;
         saved.density = self.panel.density;

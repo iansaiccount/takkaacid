@@ -1,12 +1,16 @@
 //! The save file: round-trip, atomicity, and the two conversions between disk and running state.
 
+use acid_app::device::{DeviceKind, MAX_DEVICES, Rack, Scheme};
+use acid_app::midi::cc::LEARNABLE;
+use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
 use acid_app::persist::{
-    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedState, data_dir, load, open, save, saved_to_shared,
-    shared_to_saved,
+    BankDocument, SaveTarget, bank_kind_notice, bank_path, delete_bank, delete_song, document_name,
+    export_song, free_bank_name, free_song_name, import_song, list_banks, list_songs, load_bank,
+    load_song, new_song, save_bank, save_song, save_target, session_song_file,
 };
 use acid_app::persist::{
-    SaveTarget, delete_song, export_song, free_song_name, import_song, list_songs, load_song,
-    new_song, save_song, save_target, song_name,
+    ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
+    rack_to_saved, sanitize, save, saved_to_shared, shared_to_saved, unopened_ports, wanted_kits,
 };
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
@@ -14,11 +18,11 @@ use acid_core::pattern::{Pattern, Step};
 use acid_core::pitch::Pitch;
 
 #[test]
-fn a_song_name_has_to_be_a_name_and_not_a_path() {
-    assert_eq!(song_name("Acid 1").as_deref(), Some("Acid 1"));
-    assert_eq!(song_name("  Acid 1  ").as_deref(), Some("Acid 1"));
+fn a_document_name_has_to_be_a_name_and_not_a_path() {
+    assert_eq!(document_name("Acid 1").as_deref(), Some("Acid 1"));
+    assert_eq!(document_name("  Acid 1  ").as_deref(), Some("Acid 1"));
     assert_eq!(
-        song_name(&"x".repeat(48)).as_deref(),
+        document_name(&"x".repeat(48)).as_deref(),
         Some("x".repeat(48).as_str())
     );
     for bad in [
@@ -32,7 +36,7 @@ fn a_song_name_has_to_be_a_name_and_not_a_path() {
         "a?b",
         &"x".repeat(49),
     ] {
-        assert_eq!(song_name(bad), None, "{bad:?} should be refused");
+        assert_eq!(document_name(bad), None, "{bad:?} should be refused");
     }
 }
 
@@ -66,6 +70,51 @@ fn songs_round_trip_and_are_listed() {
     // A name that cannot be a file is refused rather than written somewhere surprising.
     assert!(save_song(dir.path(), "../oops", &saved).is_err());
     assert_eq!(list_songs(dir.path()).len(), 2, "and nothing was written");
+}
+
+/// A song file names the file it is in, not the song it came from: the field is what a restart seeds the session's file from, so
+/// a copy written under a new name must not leave the copy pointing back at the original.
+#[test]
+fn a_saved_song_names_the_file_it_lands_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let saved = SavedState {
+        song: Some("Acid 1".to_string()),
+        ..SavedState::default()
+    };
+    save_song(dir.path(), "Acid 2", &saved).unwrap();
+    assert_eq!(
+        load_song(dir.path(), "Acid 2").unwrap().song.as_deref(),
+        Some("Acid 2"),
+        "a copy names the file it was written to, not the song it was copied from"
+    );
+}
+
+/// A session's name is not its file. A demo and a `NEW` song are named with nothing written under the name yet, so a launch
+/// that took the name for a file would have the next `SAVE` write `songs/New song.json` — over whatever the player had there.
+#[test]
+fn a_session_claims_a_song_file_only_when_the_file_is_there() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        session_song_file(dir.path(), None),
+        None,
+        "a session with no name came from no file"
+    );
+    assert_eq!(
+        session_song_file(dir.path(), Some("New song")),
+        None,
+        "a demo's name has nothing on disk behind it"
+    );
+    save_song(dir.path(), "Acid 1", &SavedState::default()).unwrap();
+    assert_eq!(
+        session_song_file(dir.path(), Some("Acid 1")),
+        Some("Acid 1".to_string()),
+        "a name with a file behind it is the file the session is on"
+    );
+    assert_eq!(
+        session_song_file(dir.path(), Some("../oops")),
+        None,
+        "and a name that is not a name names no file, whatever is beside the data directory"
+    );
 }
 
 #[test]
@@ -122,7 +171,7 @@ fn a_free_name_is_the_wanted_one_or_a_numbered_neighbour() {
     let beside = free_song_name(dir.path(), &long);
     assert_ne!(beside, long);
     assert!(
-        song_name(&beside).is_some(),
+        document_name(&beside).is_some(),
         "a free name is a saveable name: {beside:?}"
     );
     save_song(dir.path(), &beside, &saved).unwrap();
@@ -452,19 +501,24 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 /// an accidental bump fail the suite instead of passing every test that compares a file against `SAVE_VERSION` itself.
 /// (Nothing in this build yet refuses a *newer* version — see the wishlist — so the number is a promise, not a guard.)
 #[test]
-fn the_save_version_is_pinned_at_eleven() {
-    assert_eq!(SAVE_VERSION, 11, "a bump is a migration, not an edit");
+fn the_save_version_is_pinned_at_twelve() {
+    assert_eq!(SAVE_VERSION, 12, "a bump is a migration, not an edit");
 
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
     let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
     assert!(
-        text.contains("\"version\": 11"),
+        text.contains("\"version\": 12"),
         "the document names the version it was written in"
     );
+    // `devices` is appended after every field a version-11 build knows, so its prefix — `kit` included — still reads.
     assert!(
-        text.contains("\"kit\": null"),
-        "the kit is the last field, and a session with no kit names one"
+        text.find("\"kit\"").unwrap() < text.find("\"devices\"").unwrap(),
+        "the device list is the last field, and a session with no kit still names one"
+    );
+    assert!(
+        text.contains("\"devices\": []"),
+        "one device is the empty list: the mirror above is the machine, and `sanitize` builds it back from there"
     );
 }
 
@@ -1052,4 +1106,384 @@ fn a_rack_built_from_a_session_carries_the_session_into_the_mixer() {
     let held = rack.hold();
     assert_eq!(held.slots.len(), 1);
     assert_eq!(held.slots[0].tempo_bpm.get(), saved.bpm);
+}
+
+/// One device for the file tests, with every field set to something a default would not produce, so a field dropped on the way
+/// through the file is a failure rather than a coincidence.
+fn a_saved_device(number: usize, name: &str, kind: &str) -> SavedDevice {
+    SavedDevice {
+        number,
+        name: name.to_string(),
+        kind: kind.to_string(),
+        scheme: "VINYL NOIR".to_string(),
+        inputs: SavedInputs {
+            ports: Ports::Named(vec![format!("Port {number}")]),
+            channel: Channel::One(number as u8),
+            role: Role::ControlOnly,
+        },
+        bank: if number == 1 {
+            PatternBank::factory()
+        } else {
+            PatternBank::new_empty()
+        },
+        knobs: Knobs {
+            cutoff: 0.1 * number as f32,
+            ..Knobs::default()
+        },
+        swing: 0.1 * number as f32,
+        cc_map: vec![number as u8 + 10; LEARNABLE.len()],
+        kit: (kind == "DRUMS").then(|| "808".to_string()),
+    }
+}
+
+#[test]
+fn a_three_device_song_round_trips_every_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = SavedState {
+        devices: vec![
+            a_saved_device(1, "BASS", "ACID"),
+            a_saved_device(2, "DRUMS", "DRUMS"),
+            a_saved_device(3, "LEAD", "ACID"),
+        ],
+        ..SavedState::default()
+    };
+    // The mirror is deliberately **stale**: every flat field disagrees with device 1, so a rewrite that skips one is caught
+    // rather than passing because it happened to be right already.
+    state.bank = PatternBank::new_empty();
+    state.knobs.cutoff = 0.9;
+    state.swing = 0.9;
+    state.cc_map = vec![1u8; LEARNABLE.len()];
+    state.kit = Some("909".to_string());
+    save(dir.path(), &state).unwrap();
+    let mut loaded = load(dir.path()).unwrap().unwrap();
+    sanitize(&mut loaded);
+    let loaded = loaded.upgraded();
+
+    assert_eq!(loaded.devices, state.devices, "every field of every device");
+    // The flat fields are device 1's mirror, which is the machine a version-11 build can read.
+    let first = &loaded.devices[0];
+    assert_eq!(loaded.bank, first.bank, "the mirror's bank");
+    assert_eq!(loaded.knobs, first.knobs, "the mirror's patch");
+    assert_eq!(loaded.swing, first.swing, "the mirror's shuffle");
+    assert_eq!(loaded.cc_map, first.cc_map, "the mirror's learned rig");
+    assert_eq!(loaded.kit, first.kit, "the mirror's kit");
+}
+
+/// Write the file a version-11 build would have written, with `devices` absent and `kit` set to whatever the caller says.
+fn write_a_version_eleven_file(dir: &std::path::Path, kit: serde_json::Value) {
+    let mut value = serde_json::to_value(SavedState::default()).unwrap();
+    let object = value.as_object_mut().unwrap();
+    object.remove("devices");
+    object.insert("version".to_string(), serde_json::json!(11));
+    object.insert("kit".to_string(), kit);
+    std::fs::write(dir.join("state.json"), serde_json::to_vec(&value).unwrap()).unwrap();
+}
+
+#[test]
+fn a_version_eleven_file_is_one_device_and_its_kit_names_the_kind() {
+    // A version-11 file records no kind at all, so the kit it names is the only evidence there is: only a machine that has a
+    // kit ever writes one.
+    let drums = tempfile::tempdir().unwrap();
+    write_a_version_eleven_file(drums.path(), serde_json::json!("808"));
+    let (loaded, first_run) = open(drums.path());
+    assert!(
+        !first_run,
+        "the file is readable, so this is not a first run"
+    );
+    assert_eq!(loaded.devices.len(), 1);
+    assert_eq!(loaded.devices[0].kind, "DRUMS");
+    assert_eq!(loaded.devices[0].kit.as_deref(), Some("808"));
+
+    let acid = tempfile::tempdir().unwrap();
+    write_a_version_eleven_file(acid.path(), serde_json::Value::Null);
+    let (loaded, _) = open(acid.path());
+    assert_eq!(loaded.devices.len(), 1);
+    assert_eq!(loaded.devices[0].kind, "ACID");
+}
+
+/// A save writes the pattern the engine is playing, not the copy the bank last stashed. A step typed into the editor lives in
+/// `SharedState` — the audio thread reads it there — and the bank only learns of it on a move, a paste or a load, so a save that
+/// read the bank alone would silently drop the player's last edit.
+#[test]
+fn a_save_carries_the_pattern_being_edited() {
+    let mut rack = Rack::from_saved(&SavedState::default());
+    // A step the pattern is not playing, so turning it on is an edit the bank cannot already have.
+    let index = (0..16)
+        .find(|index| !rack.state().pattern().steps[*index].on)
+        .expect("a pattern with a resting step");
+    let mut step = rack.state().pattern().steps[index];
+    step.on = true;
+    rack.device_mut().state.set_step(index, step);
+    assert!(
+        !rack.bank().get(0).steps[index].on,
+        "the bank has not been told about the edit, which is why the merge is needed"
+    );
+
+    let saved = rack_to_saved(&rack);
+    assert!(
+        saved.bank.get(0).steps[index].on,
+        "the mirror carries the edit"
+    );
+    assert!(
+        saved.devices[0].bank.get(0).steps[index].on,
+        "and every device in the list does too"
+    );
+}
+#[test]
+fn sanitize_repairs_a_devices_list() {
+    let mut state = SavedState {
+        devices: vec![
+            a_saved_device(1, "BASS", "ACID"),
+            a_saved_device(2, "BASS", "ACID"),
+            // A duplicate number, a blank name and a kind this build does not have, all on one machine.
+            a_saved_device(2, "", "SAMPLER"),
+            a_saved_device(3, "LEAD", "DRUMS"),
+            // One more than the strip can show.
+            a_saved_device(4, "PAD", "ACID"),
+        ],
+        ..SavedState::default()
+    };
+    state.devices[0].scheme = "CHROME".to_string();
+    state.devices[0].swing = 3.0;
+    state.devices[0].cc_map = vec![0u8; 99];
+    sanitize(&mut state);
+
+    assert_eq!(state.devices.len(), MAX_DEVICES, "the fifth is dropped");
+    let names: Vec<&str> = state.devices.iter().map(|one| one.name.as_str()).collect();
+    assert_eq!(names[0], "BASS");
+    assert_eq!(names[1], "BASS (2)", "a duplicate name is suffixed");
+    assert_eq!(
+        names[2], "ACID 4",
+        "a blank name falls back to the repaired machine's default, built from the repaired number"
+    );
+    assert_eq!(names[3], "LEAD");
+    assert_eq!(state.devices[2].kind, "ACID", "an unknown kind is an acid");
+    assert_eq!(
+        state.devices[0].scheme, "BLACK",
+        "an unknown theme is BLACK"
+    );
+    assert_eq!(state.devices[0].swing, 1.0, "swing is a 0..=1 position");
+    assert_eq!(state.devices[0].cc_map.len(), LEARNABLE.len());
+    let numbers: Vec<usize> = state.devices.iter().map(|one| one.number).collect();
+    let mut distinct = numbers.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert_eq!(distinct.len(), numbers.len(), "a duplicate number is moved");
+}
+
+#[test]
+fn a_rack_of_two_devices_snapshots_both_and_mirrors_the_first() {
+    let mut rack = Rack::from_saved(&SavedState::default());
+    rack.rename(0, "BASS");
+    rack.set_scheme(0, Scheme::VinylNoir);
+    // A shuffle and a learned controller of its own, so a field dropped on the way out is caught rather than defaulted.
+    rack.device_mut().state.swing.set(0.4);
+    rack.device_mut().state.cc_map[0].store(74, std::sync::atomic::Ordering::Relaxed);
+    let kit = rack.add(DeviceKind::Drums).unwrap();
+    rack.rename(kit, "KIT");
+    rack.set_scheme(kit, Scheme::FestivalCitrus);
+    rack.set_inputs(kit, InputFilter::silent());
+    rack.set_tempo_bpm(133.0);
+
+    let saved = rack_to_saved(&rack);
+    assert_eq!(saved.devices.len(), 2);
+    assert_eq!(saved.devices[0].name, "BASS");
+    assert_eq!(saved.devices[0].scheme, "VINYL NOIR");
+    assert_eq!(saved.devices[0].number, 1);
+    assert_eq!(
+        saved.devices[0].swing, 0.4,
+        "a machine's shuffle is its own"
+    );
+    assert_eq!(
+        saved.devices[0].cc_map[0], 74,
+        "a machine's learned rig is its own"
+    );
+    assert_eq!(saved.devices[1].name, "KIT");
+    assert_eq!(saved.devices[1].kind, "DRUMS");
+    assert_eq!(saved.devices[1].scheme, "FESTIVAL CITRUS");
+    assert_eq!(saved.devices[1].number, 2);
+    assert_eq!(
+        saved.devices[1].inputs.ports,
+        Ports::Named(Vec::new()),
+        "a device that hears nothing says so"
+    );
+    assert_eq!(saved.bpm, 133.0);
+    // The mirror is device 1, so a build that knows version 11 reads the machine this one calls BASS.
+    let first = &saved.devices[0];
+    assert_eq!(saved.bank, first.bank);
+    assert_eq!(saved.knobs, first.knobs);
+    assert_eq!(saved.swing, first.swing);
+    assert_eq!(saved.cc_map, first.cc_map);
+    assert_eq!(saved.kit, first.kit);
+}
+
+#[test]
+fn a_sessions_kits_are_one_per_drum_machine() {
+    let mut nameless = a_saved_device(3, "DRUMS 2", "DRUMS");
+    nameless.kit = None;
+    let state = SavedState {
+        devices: vec![
+            a_saved_device(1, "BASS", "ACID"),
+            a_saved_device(2, "DRUMS", "DRUMS"),
+            nameless,
+        ],
+        ..SavedState::default()
+    };
+    assert_eq!(
+        wanted_kits(&state),
+        vec![
+            (1, "808".to_string()),
+            // A drum machine that names no kit plays the default one, which is the 808 by name.
+            (2, acid_app::kits::default_name().to_string()),
+        ],
+        "one entry per drum machine, and none for the acid"
+    );
+}
+
+#[test]
+fn a_song_from_another_machine_names_ports_this_one_has_not_got() {
+    let mut acid = a_saved_device(1, "BASS", "ACID");
+    acid.inputs.ports = Ports::Named(vec!["Launchkey".to_string(), "No Such Port".to_string()]);
+    let mut drums = a_saved_device(2, "DRUMS", "DRUMS");
+    drums.inputs.ports = Ports::Named(vec!["No Such Port".to_string(), "Keystep".to_string()]);
+    let state = SavedState {
+        devices: vec![acid, drums],
+        ..SavedState::default()
+    };
+    assert_eq!(
+        unopened_ports(&state, &["Launchkey".to_string(), "Keystep".to_string()]),
+        vec!["No Such Port".to_string()],
+        "named once, in the order it is first met"
+    );
+    assert!(
+        unopened_ports(&SavedState::default(), &[]).is_empty(),
+        "a session with no devices names no ports, so nothing is missing"
+    );
+}
+
+#[test]
+fn a_bank_document_round_trips() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Drums);
+    save_bank(dir.path(), "Easy", &document).unwrap();
+
+    assert_eq!(list_banks(dir.path()), vec!["Easy".to_string()]);
+    assert!(
+        bank_path(dir.path(), "Easy").is_file(),
+        "a bank is one file, named after itself"
+    );
+    let loaded = load_bank(dir.path(), "Easy").unwrap();
+    assert_eq!(loaded, document, "every field comes back");
+    assert_eq!(loaded.kind, "DRUMS");
+    assert_eq!(loaded.version, SAVE_VERSION);
+}
+
+#[test]
+fn a_bank_without_a_usable_name_is_refused_and_a_taken_one_lands_beside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Acid);
+    for bad in ["", "../escape", "a/b", "   "] {
+        assert!(
+            save_bank(dir.path(), bad, &document).is_err(),
+            "{bad:?} is not a file name"
+        );
+    }
+    save_bank(dir.path(), "Easy", &document).unwrap();
+    assert_eq!(free_bank_name(dir.path(), "Easy"), "Easy (2)");
+    assert_eq!(free_bank_name(dir.path(), "Hard"), "Hard");
+}
+
+#[test]
+fn deleting_a_bank_removes_its_file_and_refuses_a_bad_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Acid);
+    save_bank(dir.path(), "Easy", &document).unwrap();
+    delete_bank(dir.path(), "Easy").unwrap();
+    assert!(list_banks(dir.path()).is_empty());
+    assert!(
+        delete_bank(dir.path(), "../escape").is_err(),
+        "a stray name can never point out of the banks folder"
+    );
+}
+
+/// A bank saved under its own name rewrites that one file: the in-place rule, and no `Easy (2)` beside it.
+#[test]
+fn saving_a_bank_twice_under_its_own_name_rewrites_one_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = BankDocument::of(&PatternBank::factory(), DeviceKind::Acid);
+    save_bank(dir.path(), "Easy", &first).unwrap();
+
+    let mut second = first.clone();
+    second.bank.select(3);
+    let name = match save_target(Some("Easy"), "Easy") {
+        Some(SaveTarget::InPlace(name)) => name,
+        other => panic!("a bank on its own name writes in place, not {other:?}"),
+    };
+    save_bank(dir.path(), &name, &second).unwrap();
+
+    assert_eq!(
+        list_banks(dir.path()),
+        vec!["Easy".to_string()],
+        "one file, not a copy beside it"
+    );
+    assert_eq!(
+        load_bank(dir.path(), "Easy").unwrap().bank.current(),
+        3,
+        "and the file is the second save"
+    );
+}
+
+/// A bank written on another machine says so once, and names the caption it read — the file travels with the fact, and a
+/// mismatch is a warning rather than a refusal because the patterns are all there and simply play nothing.
+#[test]
+fn a_bank_from_another_kind_is_a_notice_naming_it() {
+    assert_eq!(
+        bank_kind_notice("ACID", DeviceKind::Acid),
+        None,
+        "the same machine says nothing"
+    );
+    let said = bank_kind_notice("DRUMS", DeviceKind::Acid)
+        .expect("a drum bank on an acid face is worth a line");
+    assert!(
+        said.contains("DRUMS") && said.contains("ACID"),
+        "the line names both machines: {said}"
+    );
+    let unknown = bank_kind_notice("GRANDPIANO", DeviceKind::Drums)
+        .expect("a caption this build does not know is a notice too");
+    assert!(
+        unknown.contains("GRANDPIANO"),
+        "an unknown caption is kept as read and named: {unknown}"
+    );
+}
+
+/// A hand-edited bank is repaired on the way in: `load_bank` normalises, so a file holding two patterns still opens with all
+/// sixty-four slots and on a pattern that exists. Written after a mutation of `load_bank`'s `normalise` call found nothing that
+/// bit — the round trip writes an already-normal bank, so it never asked.
+#[test]
+fn a_bank_file_with_fewer_patterns_opens_as_sixty_four() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = BankDocument::of(&PatternBank::factory(), DeviceKind::Drums);
+    save_bank(dir.path(), "Easy", &document).unwrap();
+
+    let text = std::fs::read_to_string(bank_path(dir.path(), "Easy")).unwrap();
+    let mut hand: serde_json::Value = serde_json::from_str(&text).unwrap();
+    hand["bank"]["patterns"].as_array_mut().unwrap().truncate(2);
+    hand["bank"]["current"] = serde_json::json!(5);
+    std::fs::write(
+        bank_path(dir.path(), "Easy"),
+        serde_json::to_vec(&hand).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = load_bank(dir.path(), "Easy").unwrap();
+    assert_eq!(
+        loaded.bank.pattern_count(),
+        64,
+        "a bank always holds sixty-four slots"
+    );
+    assert_eq!(
+        loaded.bank.current(),
+        1,
+        "and it opens on one of the patterns the file actually had"
+    );
 }

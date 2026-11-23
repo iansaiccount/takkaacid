@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use acid_app::device::DeviceKind;
 use acid_app::kits::{
-    default_name, factory_kits, factory_names, factory_sample_bytes, fill_if_silent, is_factory,
-    needs_a_kit,
+    DEFAULT_FACTORY_KIT, default_name, factory_kit, factory_kits, factory_names,
+    factory_sample_bytes, fill_if_silent, is_factory, needs_a_kit,
 };
 use acid_app::persist::{
     KitError, free_kit_name, import_kit, kit_name, kit_names, load_kit, save_kit,
@@ -961,5 +961,21 @@ fn a_rate_that_is_not_a_rate_is_refused_and_not_a_panic() {
     assert!(
         dir.path().join("Test Kit").join("KICK.wav").is_file(),
         "a refused decode must not touch the file on disk"
+    );
+}
+
+/// The player's ruling, pinned: a drum machine that has never been given a kit plays the **808**. The default used to be
+/// `FACTORY[0]`, true by an accident of that table's order; this is the test that would have caught a reorder.
+#[test]
+fn the_default_kit_is_the_808_by_name() {
+    assert_eq!(DEFAULT_FACTORY_KIT, "808");
+    assert_eq!(default_name(), DEFAULT_FACTORY_KIT);
+    assert!(
+        is_factory(default_name()),
+        "the default must be a kit that ships, or a new machine would arrive silent"
+    );
+    assert!(
+        factory_kit(default_name(), 44_100.0).is_some(),
+        "and it must decode at the rate a device reports"
     );
 }

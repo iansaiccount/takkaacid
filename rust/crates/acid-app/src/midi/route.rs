@@ -13,7 +13,7 @@ use crate::midi::tempo::TempoFollower;
 use crate::state::AtomicF32;
 
 /// Which of the opened ports may address a device.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Ports {
     /// Every port the app has open.
     All,
@@ -36,14 +36,14 @@ impl Ports {
 /// Which channel on those ports.
 ///
 /// The store is `0..=15`; the device card shows `1..=16`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Channel {
     All,
     One(u8),
 }
 
 /// Whether a device plays what it hears.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     /// Notes and controllers both.
     PlayAndControl,

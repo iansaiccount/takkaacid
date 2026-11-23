@@ -1,10 +1,10 @@
 # Songs and demos
 
-`BANKS` opens the browser that keeps your work: a name field with `SAVE` and `SAVE A COPY` beside it, two lists, and four
-keys along the bottom.
+`BANKS` opens the browser that keeps your work: a name field with `SAVE` and `SAVE A COPY` beside it, four lists, and four
+keys along the bottom. It keeps three different amounts of work: a **song** is the whole rack, a **pattern bank** is sixty-four
+patterns and the machine they were written on, and a **rack** is a document of its own that this build only has keys for.
 
-## The two lists
-
+## The four lists
 **`DEMO BANKS`** are the five that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and
 **Funk**. They are read-only — there is no way to overwrite one — and each is a patch plus eight patterns in `A1` to `A8`
 ([`11-the-bank`](11-the-bank.md)). Clicking one loads it as a **new** song: named `New song`, not yet on disk — its name
@@ -14,23 +14,41 @@ On a drum machine the same five rows load that demo's **drum bank** instead: eig
 demo's tempo and shuffle, with that machine's kit and the session's name left exactly as they were. The tempo is the whole
 rack's, though — one cell, every machine on it — so loading a bank also retunes the 303s beside it, and that tempo, unlike a
 second device's grooves, is what a save keeps. A drum bank is patterns, not a song — nothing is renamed and no sound is loaded with it.
-A save writes the first device alone ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)), so a drum machine's grooves are
-kept when it is that first device and last the session when it is not. [`22-the-drum-machine`](22-the-drum-machine.md) is the
-drum machine's own page, its grid and its kits.
+A save keeps every machine in the rack ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)), so a drum machine's grooves are
+kept whichever cell it sits in. [`22-the-drum-machine`](22-the-drum-machine.md) is the drum machine's own page, its grid and
+its kits.
 
-**`MY BANKS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
+**`PATTERN BANKS`** are the banks you have saved: sixty-four patterns each, `A1` to `H8`, and the machine the bank was written
+on. A row loads that bank into the **selected device**, replacing all sixty-four of its patterns — what a demo row has always done
+to a drum machine's grid, now with a file of your own. If what is on screen has unsaved changes, the first click only arms the row
+— it prints `<name> - click again to replace the bank` — and the second loads it. A bank written on the other machine loads and
+plays nothing; the status line says so and names the machine the file names.
+
+`SAVE BANK`, under those rows, keeps the selected device's bank under a name, and its field behaves as the song's does: the
+bank's own name rewrites that file, a different name writes a new one — beside a taken one, `Easy (2)`, so a bank never destroys
+another by being given its name — and a blank field saves the bank the device came from. A bank's door is on its own heading
+rather than in the footer, and there is no `IMPORT` or `EXPORT` for one: `banks/` is the folder, and a file dropped into it loads.
+
+**`SONGS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
 click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
 
-Every row has a small `x` at its right end. One click turns it into `SURE`; the second deletes the song. The demos have no
-`x`.
+Every row of `PATTERN BANKS` and `SONGS` has a small `x` at its right end. One click turns it into `SURE`; the second deletes
+that file. The demos have no `x`.
 
-## One song, one rack
+**`RACKS`** holds `SAVE RACK` and `LOAD RACK`, and it is the one place on the card that does nothing yet: a rack of its own —
+the machines, their patches and their banks as one document — is a later round. On this build both keys say so on the status
+line and open nothing.
 
-A song is the first device: its bank, its patch, its kit's name, its tempo and swing, its learned controllers. The other
-devices in the rack — their names, patterns, kits, ports and colours — are not in the file, and a restart brings back one
-machine. That is the save format's limit this round, and the picker says so on its own line: `NAMES AND EXTRA DEVICES ARE NOT
-SAVED YET` ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)). A kit's *folder* is written beside the file, so an edited kit
-comes back even when the machine that played it does not.
+## One song, the whole rack
+
+A song is the rack: every machine's kind, name, colour, ports, channel, role, patterns, patch, kit's name, shuffle and learned
+controllers, with device 1 also written in the older flat shape so a build from before the rack can still read it. A save
+therefore keeps a second, third or fourth machine as it keeps the first, and a restart brings all of them back in the order
+they were in ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)).
+
+Two things each machine still forgets: its `REVERSE` direction and its own transpose. Both are performance, not patch, so a
+restart brings every device back running forwards and in tune. A kit's *folder* is written beside the file, so an edited kit
+comes back with the machine that plays it.
 
 ## What a save does to a name
 
@@ -47,7 +65,7 @@ name stays amber until you do it — and what a save writes depends entirely on 
 branch: load a demo, hit `SAVE A COPY`, and rename the copy.
 
 Names are trimmed, may be up to 48 characters, and may not contain `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, or start
-with a dot — they become file names in `songs/`.
+with a dot — they become file names in `songs/` or `banks/`.
 
 ## The buttons
 

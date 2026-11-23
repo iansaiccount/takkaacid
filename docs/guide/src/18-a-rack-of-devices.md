@@ -24,10 +24,9 @@ playing, at its own tempo, with its own pattern.
 ## Adding one
 
 `+` at the right end of the strip asks what kind of device to add — a picker opens with the kinds there are, `ACID` and
-`DRUMS` — and a line under them says what a restart costs. [`22-the-drum-machine`](22-the-drum-machine.md) is what the
-second kind does; the two share the strip, the transport and the bar, and nothing else about them is the same.
-
-> `NAMES AND EXTRA DEVICES ARE NOT SAVED YET`
+`DRUMS` — and a click puts the new machine last in the strip and on the panel.
+[`22-the-drum-machine`](22-the-drum-machine.md) is what the second kind does; the two share the strip, the transport and the
+bar, and nothing else about them is the same.
 
 Click the row and the device is there, last in the strip and on the panel. At four devices the row greys out; the key still
 answers, so a click says the rack is full rather than doing nothing.
@@ -65,15 +64,16 @@ the music colour palette page the themes were taken from — and the card's `COL
 tells them apart before you click: the cell above each device wears that device's colours, while the panel wears the selected
 one's.
 
-## What a restart costs
+## What a restart keeps, and what it does not
 
-The session file still holds one device — the first one's patterns, patch, kit, swing and learned controllers, plus the first
-MIDI port the app had open. Everything else is in memory: the others' names, patterns, ports and colours, and **two things each
-device forgets for itself** — its `REVERSE` direction and its own transpose. Both are performance, not patch: they are
-deliberately outside the file, so a restart brings every device back running forwards and in tune, and one machine playing a
-semitone up never drags the others with it.
+The session file holds **every machine in the rack**: each one's patterns, patch, kit, swing, learned controllers, ports,
+channel, name and colour, plus the first MIDI port the app had open. Four devices saved are four devices after a restart, in
+the same order and with the same names.
 
-A kit is the one sound that outlives the file. A kit that was edited — a copy of a factory kit, or one imported — has a
-*folder* written beside the session when it is saved, so the samples come back even when the second machine's name does not;
-what a restart forgets is which machine was playing which kit. The names, the ports, the colours, the directions and the
-transpose are gone on restart, and the picker's own line says so.
+Two things each device forgets for itself — its `REVERSE` direction and its own transpose. Both are performance, not patch:
+they are deliberately outside the file, so a restart brings every device back running forwards and in tune, and one machine
+playing a semitone up never drags the others with it.
+
+A kit is sounds as well as a name. A kit that was edited — a copy of a factory kit, or one imported — has a *folder* written
+beside the session when it is saved, so the samples come back with the name. A folder that has been moved or deleted is said
+on the status line when the machine tries to load it, and the machine keeps the silence rather than a substitute.

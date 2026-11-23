@@ -891,10 +891,11 @@ fn switching_device_from_the_keyboard_closes_the_card() {
     );
 }
 
-/// The picker offers every kind there is, and its footnote is the promise the round keeps: names and extra devices are not
-/// saved yet. The line is part of what the card says, so it is read back from the paint.
+/// The picker offers every kind there is. It used to carry a footnote promising that names and extra devices would be saved
+/// one day; the round that saves them took the sentence away, so what this asserts now is its absence — a card that still
+/// apologised for the format would be describing a build that no longer exists.
 #[test]
-fn the_picker_offers_every_kind_and_says_what_is_not_saved() {
+fn the_picker_offers_every_kind_and_no_longer_apologises() {
     let state = SharedState::new();
     let mut panel = two_device_panel();
     // The strip's cells are named without a kind's name, so the only place the word can come from is a picker row.
@@ -917,8 +918,8 @@ fn the_picker_offers_every_kind_and_says_what_is_not_saved() {
     let said = strings(&output).join(" ");
     assert!(said.contains("ACID"), "every kind is named: {said}");
     assert!(
-        said.contains("NOT SAVED"),
-        "the card must say that extra devices and names do not survive a restart: {said}"
+        !said.contains("NOT SAVED"),
+        "a song keeps every device and its name now, so the card must not claim otherwise: {said}"
     );
 }
 
