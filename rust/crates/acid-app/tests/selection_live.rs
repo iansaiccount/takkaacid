@@ -73,7 +73,7 @@ fn click_with(
 
 fn lit_shared() -> std::sync::Arc<SharedState> {
     let shared = SharedState::new();
-    for i in 0..16 {
+    for i in 0..Grid::Sixteenth.steps_per_bar() {
         shared.set_step(i, Step::note(Pitch::C, 0));
     }
     shared

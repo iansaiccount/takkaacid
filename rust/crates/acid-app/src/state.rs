@@ -141,7 +141,7 @@ pub struct SharedState {
     /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
     /// sequencer keeps running underneath, so unmuting rejoins on the beat instead of restarting the pattern.
     pub mute: AtomicBool,
-    /// Step the transport is on, `0..16`, published by the audio thread for the LEDs.
+    /// Step the transport is on, `0..pattern.len()`, published by the audio thread for the LEDs.
     pub position: AtomicUsize,
     /// Whether a tempo was written by something other than the panel since the panel last looked. The learned tempo fader
     /// writes the cell from the MIDI thread and cannot touch panel state, and the tempo is in the save file: the panel takes

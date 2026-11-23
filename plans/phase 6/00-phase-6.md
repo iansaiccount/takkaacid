@@ -29,8 +29,9 @@ wrong.
 Progress lines current; the review is of the branch at the pull request, by a subagent that wrote none of it
 (`AGENTS.md`).
 
-**State: round 01 not started.** Round 01 changes no pixels, so the book does not move in it; the plan's `## Progress`
-says so rather than leaving the absence unexplained. Round 02 is where the face, the demos and the book change.
+**State: round 01 complete and reviewed; round 02 not started.** Round 01 changed no pixels, so the book did not move
+in it; the plan's `## Progress` says so rather than leaving the absence unexplained, and records the branch review
+and what was done about each finding. Round 02 is where the face, the demos and the book change.
 
 **What phase 6 does not do**, and where each is recorded: a pattern shorter than its bar (*Pattern length per device*
 in the wishlist — the same seam, the next change); a grid per device (the grid is the pattern's); a controller for the

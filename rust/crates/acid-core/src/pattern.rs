@@ -1,4 +1,4 @@
-//! The 16-step pattern — the model the step keys, the sequencer and the file format all share.
+//! The pattern — a bar of steps at a grid, the model the step keys, the sequencer and the file format all share.
 //!
 //! This is `acid-core`'s only serde type. Its shape is deliberately flat and `Copy` so the audio thread
 //! can hold a snapshot and the UI can edit a clone without coordination.
@@ -68,21 +68,13 @@ impl Grid {
         }
     }
 
-    /// Whether `index` falls on a beat: every fourth step, every eighth, every third.
+    /// Whether `index` falls on a beat: every fourth step at `1/16`, every eighth at `1/32`, every third at `1/8T`.
     ///
-    /// Not `const`: the count comes from `beats_every`, and the modulo is `is_multiple_of` so the workspace's clippy
-    /// gate does not read `% n == 0` as a hand-rolled spelling of it.
-    pub fn is_beat(self, index: usize) -> bool {
-        index.is_multiple_of(self.beats_every())
-    }
-
-    /// Steps to a beat: a quarter note, which every grid divides evenly.
-    const fn beats_every(self) -> usize {
-        match self {
-            Grid::Sixteenth => 4,
-            Grid::ThirtySecond => 8,
-            Grid::EighthTriplet => 3,
-        }
+    /// A beat is a quarter note and every grid divides the bar into four of them, so the interval *is*
+    /// `steps_per_bar() / 4` — derived from the one catalogue rather than a second table of counts. `is_multiple_of`
+    /// rather than `% n == 0`, which the workspace's clippy gate reads as a hand-rolled spelling of it.
+    pub const fn is_beat(self, index: usize) -> bool {
+        index.is_multiple_of(self.steps_per_bar() / 4)
     }
 }
 

@@ -4,7 +4,7 @@ use acid_app::state::SharedState;
 use acid_app::ui::layout::layout;
 use acid_app::ui::perform;
 use acid_app::ui::{PanelState, draw_panel};
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
@@ -128,7 +128,7 @@ fn randomise_rerolls_the_whole_pattern() {
         "a randomise must not write a silent step"
     );
     // The player's touch survives: accents and slides are not the randomiser's to move.
-    for index in 0..16 {
+    for index in 0..Grid::Sixteenth.steps_per_bar() {
         assert_eq!(after.steps[index].accent, before.steps[index].accent);
         assert_eq!(after.steps[index].slide, before.steps[index].slide);
     }

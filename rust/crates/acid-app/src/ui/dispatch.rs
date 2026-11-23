@@ -436,6 +436,9 @@ pub fn clipboard(
                     Some(crate::clipboard::Clip::Pattern { pattern, from }) => {
                         bank.replace(bank.current(), pattern);
                         shared.set_pattern(std::sync::Arc::new(pattern));
+                        // The border is clamped into the bar that just arrived: a twelve-step pattern pasted while the
+                        // border sat on step 21 of a thirty-second one would leave no key outlined at all.
+                        panel.selected = panel.selected.min(pattern.len() - 1);
                         // The arming was against the pattern that just went.
                         super::clear::disarm(panel);
                         panel.dirty = true;
@@ -493,7 +496,7 @@ fn not_wired(shortcut: shortcuts::Shortcut) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use acid_core::pattern::Step;
+    use acid_core::pattern::{Grid, Step};
     use acid_core::pitch::Pitch;
     use eframe::egui::Modifiers;
 
@@ -512,7 +515,7 @@ mod tests {
 
     fn lit_shared() -> std::sync::Arc<SharedState> {
         let shared = SharedState::new();
-        for index in 0..16 {
+        for index in 0..Grid::Sixteenth.steps_per_bar() {
             shared.set_step(index, Step::note(Pitch::C, 0));
         }
         shared

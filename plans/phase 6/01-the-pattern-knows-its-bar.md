@@ -658,3 +658,46 @@ The failure modes the spec implies and no task's own test names, each pinned in 
   `sparser`, `without` and `also` over `pattern.iter_mut()` and makes them grid-aware with the two new demos that
   need it. Cost if wrong: a latent grid-dropping call site for one round, reachable only by a build that ships a
   grid before round 02.
+
+**Branch review (round 01, before the pull request).** A subagent that wrote none of the branch read it against
+these plans and the spec. It found one blocking gap and five lesser ones; the fix pass is below and the suite is
+**965/965**, clippy `-D warnings`, `fmt --check`, `guide: ok`.
+
+- **Blocking: the `swap_now` thirty-two-step test was never written.** Task 4's Progress claimed "the swap's own
+  unit test" as proof, but that test was the pre-existing one with its argument list widened from three to four — it
+  cannot tell the new count from a hard-coded 16, so the phase's headline ruling and `main`'s playing-bar call site
+  had no test at all. **Fixed:** `a_request_waits_for_the_playing_bars_own_last_step` in `ui/pattern_swap.rs`, with
+  the plan's two thirty-two-step assertions and a twelve-step pair. **Verified by mutation:** with
+  `position + 1 >= 16` in place of `steps.max(1)` it fails and `the_swap_waits_for_the_bar` still passes — the gap
+  the reviewer named, now closed.
+- **Fixed: a paste left the border outside a shorter bar.** The spec's "The face → Elsewhere" asks for a paste to
+  clamp `selected` into the arriving pattern's bar, and no task claimed it. `dispatch::clipboard`'s paste arm now
+  clamps after `set_pattern`, proved by `a_paste_clamps_the_border_into_the_arriving_bar` (watched fail first: the
+  border stayed on step 21 of a twelve-step row, so no key was outlined at all). A song load and a pattern change
+  already clamp — they go through `pattern_swap::adopt`, which starts at step 0.
+- **Fixed: eight doc comments still said the bar is sixteen** (`pattern.rs:1`, `engine.rs:213`, `drums.rs:567`,
+  `state.rs:144`, `ui/mod.rs:70` and `:86`, `pattern_swap.rs:16`'s `0..16`, `step_key.rs:31`'s `15 - position`,
+  and `layout.rs:4`'s "sixteen step keys"). Prose only, no behaviour. `ui/mod.rs:86` also said `selected` is
+  "always in `0..16`", which the paste clamp now makes true of the bar rather than the table.
+- **Fixed: seven test loops still spelled 16** (`randomise` ×2, `dispatch`'s `lit_shared`, `selection_live`,
+  `clear_live`, `perform_live`, `step_mode_live`). The spec's anti-goal is "nothing else may spell 12, 16 or 32", so
+  they now ask `Grid::Sixteenth.steps_per_bar()`. Production code was already clean.
+- **Fixed, and it retires Task 1's ruling: `Grid::is_beat` is a `const fn` after all, and `beats_every` is gone.**
+  The reviewer pointed out that the beat interval is just `steps_per_bar() / 4` — every grid divides a bar into four
+  quarter notes — and that `is_multiple_of` may be const-stable on this toolchain. It is:
+  `const fn is_beat(self, index) -> bool { index.is_multiple_of(self.steps_per_bar() / 4) }` compiles and the
+  catalogue test still passes, so the module no longer holds a second per-grid table of counts and Task 1's
+  "not a `const fn`" ruling is superseded rather than standing. Cost if wrong: none — the counts are unchanged and
+  the same test asserts the beats of all three grids.
+- **Not fixed, for the player: `Sequencer::set_pattern`'s wrap is asymmetric.** Long → short lands the arriving bar
+  on its first step (`31 % 16 = 15`); short → long does not (`15 % 32 = 15`, so a sixteen-step request released at
+  step 15 begins the new bar at step 16 and its bar line lands half a bar late — for good, not for one bar). The
+  spec only claims the long→short direction, so the branch does what it was told and the reviewer flagged the
+  asymmetry rather than a deviation. It cannot be reached in round 01 (no face can make a non-`1/16` pattern) and it
+  is two keystrokes away once round 02's `GRID` key lands. The fix the reviewer offers is to remember whether the
+  position was at the bar's end before the swap and start the arriving bar at `len() - 1` when it was; cost if
+  wrong: a swap into a longer bar is heard from that bar's first step immediately instead of from the position the
+  old bar had reached. That changes what the player hears, so it is their call and it waits for one.
+- **Left alone: `plans/phase 6/handover-01-round-01-partway.md`** is committed. `AGENTS.md` describes the directory
+  as one plan per round plus a `00-` overview, and that file reads as session scratch. Whether the round keeps it is
+  the player's to say.

@@ -68,7 +68,7 @@ fn step_centre() -> Pos2 {
 
 fn lit_shared() -> std::sync::Arc<SharedState> {
     let shared = SharedState::new();
-    for index in 0..16 {
+    for index in 0..Grid::Sixteenth.steps_per_bar() {
         shared.set_step(index, Step::note(Pitch::C, 0));
     }
     shared

@@ -13,7 +13,7 @@ use super::PanelState;
 
 /// Whether a held pattern request may be applied this frame.
 ///
-/// `position` and `last_position` are the transport's step, `0..16`, as published for the panel's LEDs. The swap has to
+/// `position` and `last_position` are the transport's step, `0..pattern.len()`, as published for the panel's LEDs. The swap has to
 /// land *before* the next bar's first note, and the panel only sees a step after the audio thread has already triggered
 /// it: step 0 is published after the old pattern played it. So the last step is the due one — swapping there means the
 /// trigger that follows is the new pattern's first. A step that went backwards also counts, because a fast bar can be
@@ -65,5 +65,25 @@ mod tests {
         // Mid-bar: the request is held.
         assert!(!swap_now(true, 5, 4, 16));
         assert!(!swap_now(true, 6, 5, 16));
+    }
+
+    /// The count is the **playing** bar's, not sixteen: the two step values are that bar's published position, so a
+    /// request held through a thirty-two-step bar must not be released at its sixteenth — which is halfway through.
+    /// `main` passes `self.rack.state().pattern().len()`, and this is the test that fails if that ever becomes 16.
+    #[test]
+    fn a_request_waits_for_the_playing_bars_own_last_step() {
+        assert!(
+            !swap_now(true, 15, 14, 32),
+            "step sixteen of a thirty-two-step bar is its middle"
+        );
+        assert!(
+            swap_now(true, 31, 30, 32),
+            "the last step of the playing bar is where the swap is due"
+        );
+        assert!(
+            !swap_now(true, 10, 9, 12),
+            "a twelve-step bar is not due at its eleventh step either"
+        );
+        assert!(swap_now(true, 11, 10, 12), "and its twelfth is its last");
     }
 }

@@ -126,7 +126,8 @@ mod tests {
 
         assert_ne!(after, before, "nothing was randomised");
         assert!(
-            (0..16).any(|index| after.steps[index].on != before.steps[index].on),
+            (0..Grid::Sixteenth.steps_per_bar())
+                .any(|index| after.steps[index].on != before.steps[index].on),
             "the gates should move too: it is a jump start, not a variation"
         );
         assert!(
@@ -140,7 +141,7 @@ mod tests {
         // Accent, slide and velocity are the player's touch; only the gate and the note are rerolled.
         let before = pattern();
         let after = roll(9);
-        for index in 0..16 {
+        for index in 0..Grid::Sixteenth.steps_per_bar() {
             assert_eq!(after.steps[index].accent, before.steps[index].accent);
             assert_eq!(after.steps[index].slide, before.steps[index].slide);
             assert_eq!(after.steps[index].velocity, before.steps[index].velocity);

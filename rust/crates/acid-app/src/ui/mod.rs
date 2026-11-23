@@ -67,7 +67,7 @@ pub struct PanelState {
     pub tempo: f32,
     /// Transport state: drives the position LED.
     pub playing: bool,
-    /// Step the transport is on, `0..16`.
+    /// Step the transport is on, `0..pattern.len()`.
     pub position: usize,
     /// Pitch a step takes when a gesture turns a rest into a note.
     pub last_pitch: Pitch,
@@ -83,7 +83,7 @@ pub struct PanelState {
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
-    /// The step the face edits — the 303's border, the drum grid's lit column; always in `0..16`, never saved.
+    /// The step the face edits — the 303's border, the drum grid's lit column; clamped into the pattern's bar, never saved.
     pub selected: usize,
     /// The drum face's editor: which voice its dials are on. Panel-wide, not per device — plan 01, task 4's ruling. Not
     /// saved: the kit it edits is in memory only this phase.
