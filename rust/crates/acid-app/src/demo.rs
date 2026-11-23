@@ -10,7 +10,7 @@
 
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{PATTERN_SLOTS, Pattern, Step};
 use acid_core::pitch::Pitch;
 
 use crate::persist::{Knobs, SAVE_VERSION, SavedState};
@@ -88,7 +88,7 @@ type Hit = (usize, Pitch, i8, &'static str);
 
 /// A phrase from a table of hits; every step not named is a rest.
 fn line(hits: &[Hit]) -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     for &(at, pitch, octave, flags) in hits {
         let mut step = Step::note(pitch, octave);
         step.accent = flags.contains('a');
@@ -163,7 +163,7 @@ type Strike = (Drum, &'static [usize], &'static [usize]);
 /// Every strike goes through [`Step::hit`], the only writer of the two masks and of `on`, so a groove cannot draw a cell
 /// the machine does not sound — a table written with `Step::note` would be a bar of rests with a grid that looked full.
 fn bar(strikes: &[Strike]) -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     for &(drum, hits, accents) in strikes {
         for &at in hits {
             steps[at].hit(drum, accents.contains(&at));

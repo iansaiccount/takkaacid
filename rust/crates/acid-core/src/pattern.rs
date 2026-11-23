@@ -9,14 +9,11 @@ use serde::{Deserialize, Serialize};
 use crate::drums::Drum;
 use crate::pitch::{Pitch, step_hz};
 
-/// Steps in one pattern.
 /// The most slots a pattern can hold: the longest bar any grid needs ([`Grid::ThirtySecond`]'s thirty-two).
 ///
 /// A pattern is a fixed table of these with a `len()` from its grid, because `Pattern` is `Copy` on purpose — the audio
 /// thread holds an `Arc` snapshot and every step edit copies the whole pattern.
 pub const PATTERN_SLOTS: usize = 32;
-
-pub const STEPS_PER_PATTERN: usize = Grid::Sixteenth.steps_per_bar();
 
 /// The grid a pattern's bar is divided into.
 ///

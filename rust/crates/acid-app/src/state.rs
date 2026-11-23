@@ -11,7 +11,7 @@ use crate::notes::NoteQueue;
 use acid_core::drums::{Drum, Kit, default_kit};
 use acid_core::engine::DEFAULT_TUNING_KNOB;
 use acid_core::oscillator::Waveform;
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Pattern, Step};
 use acid_core::voice::{
     DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
     DEFAULT_RESONANCE_KNOB,
@@ -461,7 +461,7 @@ impl SharedState {
 
     /// Clone-on-write one step. Stray indices are ignored: this is reachable from the UI.
     pub fn set_step(&self, index: usize, step: Step) {
-        if index >= STEPS_PER_PATTERN {
+        if index >= self.pattern().len() {
             return;
         }
         self.pattern.rcu(|current| {

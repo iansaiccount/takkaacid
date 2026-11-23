@@ -14,7 +14,7 @@ use acid_app::device::{DeviceKind, Rack};
 use acid_app::persist;
 use acid_app::state::SharedState;
 use acid_core::drums::{Drum, Kit, default_kit};
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{PATTERN_SLOTS, Pattern, Step};
 use acid_core::pitch::Pitch;
 
 /// The rate the renderers are built at, so a kit's samples are the rate the machine reads them at.
@@ -38,8 +38,8 @@ fn stub_kit(amplitude: f32) -> Kit {
 }
 
 /// A bar with all sixteen voices struck on the downbeat and on the backbeat, so the window is not spent on silence.
-fn busy_bar() -> [Step; STEPS_PER_PATTERN] {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+fn busy_bar() -> [Step; PATTERN_SLOTS] {
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     for step in [0, 8] {
         for drum in Drum::ALL {
             steps[step].hit(drum, false);

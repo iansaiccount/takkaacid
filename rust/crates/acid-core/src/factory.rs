@@ -6,12 +6,12 @@
 //! are that phrase displaced within the bar, so they share its pitch material (C, E♭, G, B♭) exactly; they are
 //! starting points to edit, not finished variations.
 
-use crate::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use crate::pattern::{PATTERN_SLOTS, Pattern, Step};
 use crate::pitch::Pitch;
 
 /// The launcher phrase, note for note.
 pub fn launcher() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0] = Step {
         accent: true,
         ..Step::note(Pitch::A, 1)
@@ -47,7 +47,7 @@ pub fn launcher() -> Pattern {
 /// an off beat, one octave hop, and three slides that land on a note. Every slide here leads into a step that
 /// sounds; a slide before a rest would be inert.
 pub fn starter() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0] = Step {
         accent: true,
         ..Step::note(Pitch::A, 1)
@@ -88,7 +88,7 @@ pub fn starter() -> Pattern {
 
 /// A phrase moved `by` sixteenths later within the bar.
 fn displaced(base: &Pattern, by: usize) -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     for (index, slot) in steps.iter_mut().enumerate() {
         *slot = base.steps[(index + by) % base.len()];
     }

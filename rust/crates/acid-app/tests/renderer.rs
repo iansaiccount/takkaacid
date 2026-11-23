@@ -197,7 +197,7 @@ fn a_pause_through_the_seam_keeps_the_bar_and_a_resume_carries_on() {
 #[test]
 fn the_published_direction_waits_for_the_bar_line() {
     use acid_app::device::{DeviceKind, Transport};
-    use acid_core::pattern::STEPS_PER_PATTERN;
+    use acid_core::pattern::Grid;
     use acid_core::timing;
 
     for kind in [DeviceKind::Acid, DeviceKind::Drums] {
@@ -224,7 +224,7 @@ fn the_published_direction_waits_for_the_bar_line() {
         let step =
             timing::step_duration_samples(0, 120.0, 48_000.0, 0.0, Grid::Sixteenth.steps_per_bar())
                 as usize;
-        let mut bar_and_a_bit = vec![0.0; step * (STEPS_PER_PATTERN + 1)];
+        let mut bar_and_a_bit = vec![0.0; step * (Grid::Sixteenth.steps_per_bar() + 1)];
         r.render_into(&mut bar_and_a_bit);
         assert!(
             s.is_reverse_active(),

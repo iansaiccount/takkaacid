@@ -8,13 +8,13 @@ use acid_app::clipboard::{self, Clip};
 use acid_app::state::SharedState;
 use acid_app::ui::{PanelState, dispatch};
 use acid_core::bank::PatternBank;
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{PATTERN_SLOTS, Pattern, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{Color32, ColorImage, Event, Key, Modifiers, Pos2};
 
 /// Two patterns, neither empty: the one in the slot and the one on the clipboard, so a test can tell them apart by content.
 fn left() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0] = Step::note(Pitch::C, -1);
     steps[4] = Step {
         accent: true,
@@ -24,7 +24,7 @@ fn left() -> Pattern {
 }
 
 fn right() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[2] = Step {
         slide: true,
         velocity: 40,
@@ -49,7 +49,7 @@ fn edited() -> Pattern {
 /// A third pattern, so "the neighbour was not touched" means something: the paste, the slot it lands in and the slot beside
 /// it are three different things.
 fn neighbour() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0] = Step {
         accent: true,
         slide: true,

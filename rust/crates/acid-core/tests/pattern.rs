@@ -1,4 +1,4 @@
-use acid_core::pattern::{Grid, PATTERN_SLOTS, Pattern, PatternId, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, PATTERN_SLOTS, Pattern, PatternId, Step};
 use acid_core::pitch::Pitch;
 
 #[test]
@@ -6,7 +6,7 @@ fn a_new_pattern_is_sixteen_rests() {
     let p = Pattern::empty();
     assert_eq!(
         p.len(),
-        STEPS_PER_PATTERN,
+        Grid::Sixteenth.steps_per_bar(),
         "a fresh pattern is one sixteenth bar"
     );
     // Every slot, the ones above the bar included: the invariant is that they are rests.

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use acid_core::engine::Engine;
 use acid_core::factory::starter;
-use acid_core::pattern::STEPS_PER_PATTERN;
+use acid_core::pattern::Grid;
 
 /// 48 kHz, so a sixteenth at the launch tempo is 5_538 samples.
 const SR: f32 = 48_000.0;
@@ -29,7 +29,7 @@ fn start_at_puts_the_sequencer_on_the_step_it_was_given() {
     e.start_at(9);
     assert_eq!(e.position(), 9);
     // A step index past the pattern wraps; the rack may hand it a long count, not an index.
-    e.start_at(STEPS_PER_PATTERN + 3);
+    e.start_at(Grid::Sixteenth.steps_per_bar() + 3);
     assert_eq!(e.position(), 3);
 }
 
@@ -111,7 +111,7 @@ fn a_bar_line_is_reported_at_the_sample_it_fell_on() {
         Some(0),
         "a start on step 0 is a bar line at the block's head"
     );
-    for _ in 1..STEPS_PER_PATTERN {
+    for _ in 1..Grid::Sixteenth.steps_per_bar() {
         e.render(&mut block);
         assert_eq!(
             e.bar_line(),

@@ -11,7 +11,7 @@ use acid_app::midi::route::InputFilter;
 use acid_app::persist;
 use acid_app::state::SharedState;
 use acid_core::drums::{DEFAULT_KIT_NAME, Drum, Drums, Kit, default_kit};
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{PATTERN_SLOTS, Pattern, Step};
 
 /// The rate every renderer here is built at, so a drum machine's samples and the bare `Drums` beside it are the same rate.
 const RATE: f32 = 48_000.0;
@@ -54,16 +54,16 @@ fn sustained(mut kit: Kit) -> Kit {
 }
 
 /// One kick on the downbeat and one on the backbeat.
-fn kick_bar() -> [Step; STEPS_PER_PATTERN] {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+fn kick_bar() -> [Step; PATTERN_SLOTS] {
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0].hit(Drum::Kick, false);
     steps[8].hit(Drum::Kick, false);
     steps
 }
 
 /// All sixteen voices struck on one step.
-fn every_voice_bar() -> [Step; STEPS_PER_PATTERN] {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+fn every_voice_bar() -> [Step; PATTERN_SLOTS] {
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     for drum in Drum::ALL {
         steps[0].hit(drum, false);
     }
@@ -72,14 +72,14 @@ fn every_voice_bar() -> [Step; STEPS_PER_PATTERN] {
 
 /// Give the drum device at `index` a kit and a bar: what a test does after `Rack::add`, which opens a drum machine on the
 /// default kit and the 303's starter pattern — silence, because a drum step sounds from its masks.
-fn dress_drums(rack: &Rack, index: usize, kit: Kit, steps: [Step; STEPS_PER_PATTERN]) {
+fn dress_drums(rack: &Rack, index: usize, kit: Kit, steps: [Step; PATTERN_SLOTS]) {
     let state = &rack.devices()[index].state;
     state.adopt_kit(kit);
     state.set_pattern(Arc::new(Pattern::from_steps(steps)));
 }
 
 /// A rack of one 303 and one drum machine, both playing, the drum machine holding `kit` and `steps`.
-fn rack_with_drums(kit: Kit, steps: [Step; STEPS_PER_PATTERN]) -> Rack {
+fn rack_with_drums(kit: Kit, steps: [Step; PATTERN_SLOTS]) -> Rack {
     let mut rack = Rack::from_saved(&persist::SavedState::default());
     let index = rack.add(DeviceKind::Drums).expect("a drum machine fits");
     dress_drums(&rack, index, kit, steps);
@@ -538,7 +538,7 @@ fn a_release_that_arrives_while_the_device_is_stopped_keeps_it_waiting() {
 fn a_drum_device_sounds_through_the_mixer() {
     // A strike on every step, so the shuffle's longer first step moves step 1's onset: one block of step 0 alone would be
     // the same samples with the swing and without it.
-    let mut every_step = [Step::rest(); STEPS_PER_PATTERN];
+    let mut every_step = [Step::rest(); PATTERN_SLOTS];
     for step in &mut every_step {
         step.hit(Drum::Kick, false);
     }
@@ -900,7 +900,7 @@ fn a_303_joining_a_drum_machine_finds_its_bar_line() {
 /// the one a hand on the grid uses — and without it a drum device could draw a bar it never plays.
 #[test]
 fn a_pattern_published_to_a_playing_drum_device_is_heard() {
-    let mut rack = rack_with_drums(stub_kit(0.4, 0.6), [Step::rest(); STEPS_PER_PATTERN]);
+    let mut rack = rack_with_drums(stub_kit(0.4, 0.6), [Step::rest(); PATTERN_SLOTS]);
     rack.remove(0).expect("a rack of two may give one up");
     rack.set_tempo_bpm(300.0); // a sixteenth every 2_400 samples, so a boundary falls inside six blocks of 512
     let state = Arc::clone(&rack.devices()[0].state);
@@ -916,7 +916,7 @@ fn a_pattern_published_to_a_playing_drum_device_is_heard() {
     assert_eq!(empty, 0.0, "a bar with no hits on it is silence");
 
     // A bar struck on every step: within a step of the publish, the next boundary strikes one.
-    let mut struck = [Step::rest(); STEPS_PER_PATTERN];
+    let mut struck = [Step::rest(); PATTERN_SLOTS];
     for step in &mut struck {
         step.hit(Drum::Kick, false);
     }
@@ -1007,7 +1007,7 @@ fn the_volume_knob_sets_a_drum_devices_level() {
 /// so the silence is the drum machine's decision and not a message that went missing.
 #[test]
 fn a_note_on_a_drum_device_is_silent_and_on_a_303_is_not() {
-    let mut drums = rack_with_drums(stub_kit(0.4, 0.6), [Step::rest(); STEPS_PER_PATTERN]);
+    let mut drums = rack_with_drums(stub_kit(0.4, 0.6), [Step::rest(); PATTERN_SLOTS]);
     drums.remove(0).expect("a rack of two may give one up");
     // Both transports stopped, so the only sound either machine can make in this test is the key.
     drums.set_transport(Transport::Stopped);
@@ -1124,7 +1124,7 @@ fn a_paused_drum_device_keeps_its_step_and_a_stopped_one_plays_the_bar_again() {
 /// last step of the bar, which is why this is a sound and not a position.
 #[test]
 fn a_drum_device_plays_the_bar_backwards_when_the_rack_asks() {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[15].hit(Drum::Kick, false);
     let mut rack = rack_with_drums(stub_kit(0.4, 0.6), steps);
     rack.remove(0).expect("a rack of two may give one up");

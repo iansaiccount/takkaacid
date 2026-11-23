@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use acid_core::engine::Engine;
-use acid_core::pattern::{Grid, Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 use acid_core::sequencer::sounding_step;
 use acid_core::timing;
@@ -86,7 +86,7 @@ fn first_step_only() -> Arc<Pattern> {
 fn bar_and_a_step(engine: &Engine) -> usize {
     let step =
         timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar());
-    (step * (STEPS_PER_PATTERN + 1) as f64).round() as usize
+    (step * (Grid::Sixteenth.steps_per_bar() + 1) as f64).round() as usize
 }
 
 /// The player's requirement: a direction asked for mid-bar waits for the bar line, so the bar it was asked in plays in the
@@ -139,7 +139,8 @@ fn the_same_bar_forwards_opens_on_its_note() {
     // would be asserting silence for the wrong reason.
     let step_len =
         timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar());
-    let to_downbeat = (step_len * (STEPS_PER_PATTERN as f64 - 2.0)).round() as usize + 64;
+    let to_downbeat =
+        (step_len * (Grid::Sixteenth.steps_per_bar() as f64 - 2.0)).round() as usize + 64;
     let mut out = vec![0.0; to_downbeat];
     engine.render(&mut out);
     assert_eq!(engine.position(), 0, "the next downbeat");
@@ -210,7 +211,7 @@ fn a_direction_asked_for_mid_bar_waits_out_a_pause() {
     let step =
         timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar())
             as usize;
-    let mut bar_and_a_bit = vec![0.0; step * (STEPS_PER_PATTERN + 1)];
+    let mut bar_and_a_bit = vec![0.0; step * (Grid::Sixteenth.steps_per_bar() + 1)];
     engine.render(&mut bar_and_a_bit);
     assert!(engine.is_reverse(), "the next bar line takes it");
 }
@@ -233,6 +234,9 @@ fn sounding_step_is_the_mirror_of_the_clock() {
     assert_eq!(sounding_step(15, true, 16), 0);
     // A position past the bar wraps rather than panicking: the panel reads the clock out of a cell a block behind the audio,
     // and `start_at` already takes a wrapping count.
-    assert_eq!(sounding_step(STEPS_PER_PATTERN, false, 16), 0);
-    assert_eq!(sounding_step(STEPS_PER_PATTERN + 1, true, 16), 14);
+    assert_eq!(sounding_step(Grid::Sixteenth.steps_per_bar(), false, 16), 0);
+    assert_eq!(
+        sounding_step(Grid::Sixteenth.steps_per_bar() + 1, true, 16),
+        14
+    );
 }

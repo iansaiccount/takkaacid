@@ -632,3 +632,29 @@ The failure modes the spec implies and no task's own test names, each pinned in 
   argument and the gate is `-D warnings`; a struct holding the seven facts would exist only to be unpacked in the
   function. Cost if wrong: an `expect` that fails the gate the day the signature shrinks below eight — which the
   gate would tell us loudly.
+
+- **Task 6 — the rest of the app, and the file.** `SAVE_VERSION` **13** and the clipboard envelope **2**;
+  `SharedState::set_step` refuses `index >= self.pattern().len()`; the randomiser rolls only the bar and answers
+  `Pattern::from_steps_in(pattern.grid, …)`; `demo::line` / `demo::bar` build a `[Step; PATTERN_SLOTS]` (still
+  `1/16` until round 02); and `pattern::STEPS_PER_PATTERN` is **deleted**, with all thirty-odd of its remaining
+  uses gone (arrays became `[Step; PATTERN_SLOTS]`, counts became `Grid::Sixteenth.steps_per_bar()` in the tests
+  that build a sixteenth bar, and `factory`'s slide test asks `pattern.len()`). Proved by
+  `the_save_version_is_pinned_at_thirteen`, `a_thirty_second_pattern_writes_thirty_two_steps`,
+  `a_version_twelve_pattern_shape_still_reads`, `a_thirty_second_bar_round_trips_with_its_grid` (clipboard),
+  `a_reroll_keeps_the_grid_and_rolls_only_the_bar`, and `a_step_edit_lands_inside_the_bar_and_nowhere_past_it`
+  for the review focus's index-20 edit. Workspace suite **963/963**, clippy `-D warnings`, `fmt --check`,
+  `./docs/guide/check.sh` → `guide: ok` (the book is untouched: round 01 changes no pixels, and nothing it says
+  described the old constant).
+  **Ruling: the two persist shape tests were written and watched pass, not fail.** `Pattern`'s hand-written serde
+  landed in Task 3, so the writer already emitted `{ grid, steps }` on the grid's own length; what this task
+  actually moved was the version number and the clipboard. They are kept where the plan put them because they are
+  the pins for the risk the file section names — a `1/32` pattern writing thirty-two steps, and a version-12 shape
+  (sixteen steps, no `grid`) still loading. Cost if wrong: none; the shape is pinned by a test either way.
+  **Ruling: the state bound's test was written after the bound changed, so it was mutation-checked.** With
+  `if index >= 16` in place of `self.pattern().len()` it fails on the index-20 edit; the file was restored. Cost if
+  wrong: none — the ledger says which order it happened in rather than claiming a RED it did not have.
+  **Ruling: `demo::sparser` still answers `Pattern::from_steps`, so it would drop a grid.** No demo is on anything
+  but `1/16` in this round and no face can reach another grid, so it is unreachable here; round 02's Task 3 walks
+  `sparser`, `without` and `also` over `pattern.iter_mut()` and makes them grid-aware with the two new demos that
+  need it. Cost if wrong: a latent grid-dropping call site for one round, reachable only by a build that ships a
+  grid before round 02.
