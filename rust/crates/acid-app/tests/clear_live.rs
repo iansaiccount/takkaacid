@@ -158,7 +158,7 @@ fn a_click_on_the_panel_elsewhere_leaves_the_pattern_alone() {
         Modifiers::default(),
     );
     assert!(panel.clear_armed_at.is_none(), "selecting is not clearing");
-    assert!(shared.pattern().steps.iter().all(|step| step.on));
+    assert!(shared.pattern().iter().all(|step| step.on));
 }
 
 #[test]

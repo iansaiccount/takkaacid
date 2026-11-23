@@ -48,7 +48,7 @@ fn a_thousand_edits_from_another_thread_never_break_the_pattern() {
     let mut out = vec![0.0f32; 2_048];
     while !writer.is_finished() {
         r.render_into(&mut out);
-        assert_eq!(s.pattern().steps.len(), 16);
+        assert_eq!(s.pattern().len(), 16);
     }
     writer.join().unwrap();
     assert!(s.pattern().steps.iter().filter(|st| st.on).count() >= 1);

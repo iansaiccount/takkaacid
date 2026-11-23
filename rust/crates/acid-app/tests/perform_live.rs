@@ -201,7 +201,7 @@ fn the_density_knob_sets_how_full_a_roll_is() {
     // Dense enough to fill the pattern: every step sounds.
     panel.density = 1.0;
     click(&ctx, &mut panel, &shared, cell(perform::Perform::Randomise));
-    assert!(shared.pattern().steps.iter().all(|step| step.on));
+    assert!(shared.pattern().iter().all(|step| step.on));
 }
 
 #[test]

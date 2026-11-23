@@ -90,7 +90,7 @@ pub fn starter() -> Pattern {
 fn displaced(base: &Pattern, by: usize) -> Pattern {
     let mut steps = [Step::rest(); STEPS_PER_PATTERN];
     for (index, slot) in steps.iter_mut().enumerate() {
-        *slot = base.steps[(index + by) % STEPS_PER_PATTERN];
+        *slot = base.steps[(index + by) % base.len()];
     }
     Pattern::from_steps(steps)
 }

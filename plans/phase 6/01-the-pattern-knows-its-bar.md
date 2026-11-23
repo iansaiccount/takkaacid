@@ -577,3 +577,22 @@ The failure modes the spec implies and no task's own test names, each pinned in 
   **Ruling: `samples_per_bar` is `sr · 60 / bpm · 4`, not the sixteenth's `sr · 60 / (bpm · 4)`.** The first cut kept the
   sixteenth's parentheses, so a bar came out as a sixteenth and every clock test fell over —
   `eight_steps_fit_in_one_second_at_120_bpm` is what caught it.
+
+- **Task 3 — the pattern's own slots and its own grid.** `PATTERN_SLOTS` (32), `Pattern { grid, steps }` with `len()`,
+  `empty_in`, `from_steps` / `from_steps_in`, `with_grid`, `iter` / `iter_mut`, and hand-written serde through a
+  `PatternFile` shadow that writes `{ grid, steps }` with exactly `len()` steps — so a sixteenth pattern's step list is still
+  sixteen entries. `STEPS_PER_PATTERN` becomes `Grid::Sixteenth.steps_per_bar()`, derived rather than hand-kept, and lives
+  until Task 6. Proved by six new tests in `acid-core/tests/pattern.rs`
+  (`a_pattern_is_as_long_as_its_grid`, `a_narrower_grid_rests_the_steps_that_fall_outside`, `every_slot_above_len_is_a_rest`,
+  `the_file_writes_the_steps_that_play`, `a_version_twelve_pattern_reads_as_sixteenths`,
+  `a_short_list_pads_and_a_long_one_truncates`), all watched fail first — as `no field grid` and `no method len`.
+  Workspace suite **951/951**, clippy `-D warnings`, `fmt --check` green.
+  **Ruling: `from_steps` / `from_steps_in` take `impl AsRef<[Step]>`, not `&[Step]`.** Fifty-one call sites, most handing an
+  array they own; the generic keeps every one compiling unchanged and reads as "however you have the steps", where `&[Step]`
+  was fifty-one blind edits. Cost if wrong: a generic parameter in a module that is otherwise concrete, and
+  `clippy::needless_borrow` now fires on any stray `&` — it did, three times, and was fixed.
+  **Ruling: `sounding_steps_beyond` was written here and deleted again.** It belongs to round 02's Task 1 with its own test,
+  and shipping untested production code is what this round exists to refuse. Cost if wrong: none; it lands next round.
+  **Ruling: six "every step" assertions moved from `steps` to `iter()` / `len()`** (`clear_live`, `perform_live`,
+  `state_live`, `live_edit`, `bank`). Over thirty-two slots `all(|s| s.on)` is false by construction and `steps.len() == 16`
+  is now 32. Cost if wrong: none — they now assert the bar rather than the table.

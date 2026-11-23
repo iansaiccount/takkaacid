@@ -45,7 +45,7 @@ fn editing_one_step_keeps_the_other_fifteen() {
     let read = s.pattern();
     assert!(read.steps[2].accent);
     assert_eq!(read.steps[2].pitch, Pitch::G);
-    assert_eq!(read.steps.len(), 16);
+    assert_eq!(read.len(), 16);
     assert!(
         read.steps
             .iter()
@@ -71,5 +71,5 @@ fn a_stray_step_index_is_ignored_rather_than_panicking() {
     )));
     s.set_step(99, Step::rest());
     let read = s.pattern();
-    assert!(read.steps.iter().all(|step| step.on), "nothing may change");
+    assert!(read.iter().all(|step| step.on), "nothing may change");
 }

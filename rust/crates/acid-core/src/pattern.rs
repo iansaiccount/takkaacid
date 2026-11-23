@@ -10,7 +10,13 @@ use crate::drums::Drum;
 use crate::pitch::{Pitch, step_hz};
 
 /// Steps in one pattern.
-pub const STEPS_PER_PATTERN: usize = 16;
+/// The most slots a pattern can hold: the longest bar any grid needs ([`Grid::ThirtySecond`]'s thirty-two).
+///
+/// A pattern is a fixed table of these with a `len()` from its grid, because `Pattern` is `Copy` on purpose — the audio
+/// thread holds an `Arc` snapshot and every step edit copies the whole pattern.
+pub const PATTERN_SLOTS: usize = 32;
+
+pub const STEPS_PER_PATTERN: usize = Grid::Sixteenth.steps_per_bar();
 
 /// The grid a pattern's bar is divided into.
 ///
@@ -246,20 +252,78 @@ impl Step {
     }
 }
 
-/// Sixteen steps — one bar at 16th notes.
+/// One bar of a pattern: the grid it is divided by, and its slots.
+///
+/// A pattern is always **exactly one 4/4 bar**, so `len()` is the grid's own count and the slots above it are rests. That
+/// invariant is what makes "the row is the pattern" and "the file is the row" the same sentence: `from_steps_in` rests
+/// what it is not given, `with_grid` rests what a narrower bar drops, and the file writes only the steps that play.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Pattern {
-    pub steps: [Step; STEPS_PER_PATTERN],
+    /// How this bar is divided. A pattern is the grid's, not the device's, so a bank can hold all three.
+    pub grid: Grid,
+    /// The bar's slots. **Every slot at or above `len()` is a rest, always** — see the type's own note.
+    pub steps: [Step; PATTERN_SLOTS],
 }
 
 impl Pattern {
+    /// An empty sixteenth bar: what a pattern that has never said otherwise is.
     pub fn empty() -> Self {
         Self::default()
     }
 
-    pub fn from_steps(steps: [Step; STEPS_PER_PATTERN]) -> Self {
-        Self { steps }
+    /// An empty bar of `grid`: what `CLEAR` leaves behind, so clearing a pattern never shortens its bar.
+    pub fn empty_in(grid: Grid) -> Self {
+        Self {
+            grid,
+            ..Self::default()
+        }
+    }
+
+    /// Steps in this bar: the grid's count, and the only count a player of this pattern asks.
+    #[expect(
+        clippy::len_without_is_empty,
+        reason = "a bar always has steps; there is no empty pattern to name"
+    )]
+    pub fn len(&self) -> usize {
+        self.grid.steps_per_bar()
+    }
+
+    /// A sixteenth pattern from its sixteen steps. Extra steps are dropped and missing ones are rests: a pattern is
+    /// exactly one bar, and the grid says how long that is. Use [`Pattern::from_steps_in`] for any other grid.
+    pub fn from_steps(steps: impl AsRef<[Step]>) -> Self {
+        Self::from_steps_in(Grid::Sixteenth, steps)
+    }
+
+    /// A pattern of `grid` from up to `grid.steps_per_bar()` steps: the rest of the bar is rests, and anything past its
+    /// end is dropped.
+    pub fn from_steps_in(grid: Grid, steps: impl AsRef<[Step]>) -> Self {
+        let steps = steps.as_ref();
+        let mut pattern = Self::empty_in(grid);
+        let taken = steps.len().min(pattern.len());
+        pattern.steps[..taken].copy_from_slice(&steps[..taken]);
+        pattern
+    }
+
+    /// The same music on another grid. The steps the new bar can hold are kept and the ones it cannot are **rested** — the
+    /// one place a pattern loses sound, and the panel says so on the status line when it does.
+    pub fn with_grid(self, grid: Grid) -> Self {
+        let mut pattern = Self { grid, ..self };
+        let len = pattern.len();
+        for step in &mut pattern.steps[len..] {
+            *step = Step::rest();
+        }
+        pattern
+    }
+
+    /// The steps that play, in step order.
+    pub fn iter(&self) -> impl Iterator<Item = &Step> {
+        self.steps[..self.len()].iter()
+    }
+
+    /// The steps that play, for an edit to walk.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Step> {
+        let len = self.len();
+        self.steps[..len].iter_mut()
     }
 
     /// Every step moved by whole semitones: the same sound, spelled on a different lattice.
@@ -269,7 +333,43 @@ impl Pattern {
     pub fn transposed(self, semitones: i8) -> Self {
         Self {
             steps: self.steps.map(|step| step.transposed(semitones)),
+            ..self
         }
+    }
+}
+
+/// `{ "grid": "1/32", "steps": [ … the steps that play … ] }`.
+///
+/// The shadow exists because the file writes a *list of the steps that play* while the pattern holds a fixed slot table:
+/// a sixteenth pattern's step list is sixteen entries, exactly as a version-12 build wrote it, which is what lets an older
+/// build read a sixteenth song this build saved.
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
+struct PatternFile {
+    /// Absent in every version-12 file, and in a file naming a grid this build does not know: both read as sixteenths.
+    #[serde(default)]
+    grid: Grid,
+    steps: Vec<Step>,
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Pattern {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        PatternFile {
+            grid: self.grid,
+            steps: self.iter().copied().collect(),
+        }
+        .serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Pattern {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // `from_steps_in` pads a short list with rests and drops a long one, so a hand-edited file lands on the invariant
+        // rather than beside it.
+        let file = PatternFile::deserialize(deserializer)?;
+        Ok(Pattern::from_steps_in(file.grid, &file.steps))
     }
 }
 

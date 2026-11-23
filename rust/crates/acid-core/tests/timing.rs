@@ -1,3 +1,5 @@
+//! The bar is the tempo's; the grid only divides it. Every count here comes from `Grid::steps_per_bar`, so a grid added
+//! to the catalogue is measured here without a second hand-kept number.
 use acid_core::pattern::Grid;
 use acid_core::timing::*;
 
