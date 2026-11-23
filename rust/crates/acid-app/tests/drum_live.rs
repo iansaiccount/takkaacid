@@ -1599,6 +1599,58 @@ fn the_arrows_move_the_selected_step_on_a_drum_face() {
     assert_eq!(panel.selected, Grid::Sixteenth.steps_per_bar() - 1);
 }
 
+/// A triplet bar is twelve columns, the walk stops at its last (the face clamps, it does not wrap — the same rule the
+/// 303's border keeps), and the beat frame follows the grid: every third column, never every fourth.
+#[test]
+fn a_twelve_step_bar_has_twelve_columns() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    shared.set_pattern(Arc::new(Pattern::empty_in(Grid::EighthTriplet)));
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    let l = layout(screen());
+    let count = shared.pattern().len();
+    assert_eq!(count, 12, "twelve eighth-triplets to the bar");
+
+    // The first frame loads this device's editor slot; a hand settles the step after that.
+    paint(&ctx, &mut panel, &shared);
+    assert_eq!(drum_panel::row_cells(&l, Drum::Kick, count).len(), 12);
+    for step in 0..count {
+        let cell = drum_panel::cell_rect(&l, Drum::Kick, step, count);
+        assert!(
+            drum_panel::grid_area(&l).contains_rect(cell),
+            "column {step} escapes the grid"
+        );
+    }
+
+    panel.selected = 0;
+    for _ in 0..(count - 1) {
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
+    }
+    assert_eq!(
+        panel.selected,
+        count - 1,
+        "the walk reaches the twelfth column"
+    );
+    voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
+    assert_eq!(
+        panel.selected,
+        count - 1,
+        "and stops there: this face clamps, it does not wrap"
+    );
+
+    // The beat is the grid's: a triplet bar frames every third column, so column 4 is not a beat and column 3 is.
+    let stroked = strokes(&paint(&ctx, &mut panel, &shared));
+    for step in 0..count {
+        assert_eq!(
+            framed(&stroked, drum_panel::cell_rect(&l, Drum::Kick, step, count)),
+            Grid::EighthTriplet.is_beat(step),
+            "column {step} is framed as {} says",
+            Grid::EighthTriplet.name()
+        );
+    }
+}
+
 /// The columns are the bar: a thirty-second pattern has thirty-two of them, every one inside the grid area, and the
 /// keyboard's walk reaches the last — which is the column the face marks as selected.
 #[test]
@@ -1640,6 +1692,17 @@ fn a_thirty_second_bar_has_thirty_two_columns() {
             == drum_panel::column_rect(&l, count - 1, count)
             && stroke.color == accent),
         "the selected column is not the one the walk reached"
+    );
+
+    // The wash follows the published position at thirty-two as it does at sixteen: the step the line is on, not a fold
+    // back onto the first sixteen.
+    shared.set_transport(acid_app::device::Transport::Playing);
+    shared.position.store(20, Ordering::Relaxed);
+    let painted = paint(&ctx, &mut panel, &shared);
+    assert_eq!(
+        fill_at(&fills(&painted), drum_panel::column_rect(&l, 20, count)),
+        Some(drum_panel::playhead_fill(theme::palette(Scheme::Black))),
+        "the wash is not on the column the position names"
     );
 }
 

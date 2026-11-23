@@ -329,3 +329,19 @@ command, as every other picture has.
   step 15 of a sixteen-step bar leaves `15 % 32 = 15`, so the arriving thirty-two-step bar starts on its second half
   and its bar line lands half a bar late — for good) could not be reached before this key existed. It still waits for
   the player: the fix changes which step a swap into a longer bar is heard from.
+
+
+- **Task 2 — the drum face at twelve and thirty-two.** The columns were already count-aware from round 01 (the drum
+  face asks `pattern.len()`, `cell_rect`/`column_rect` clamp to it, and the beat frame is `grid.is_beat(step)`), so
+  this task added the reading that proves it: `a_twelve_step_bar_has_twelve_columns` — twelve cells inside the grid,
+  the walk reaching the twelfth and stopping there, and the beat frame on every third column — and a wash assertion
+  in the thirty-two test that the playhead sits on the column the published position names. Proved by that test and
+  `a_thirty_second_bar_has_thirty_two_columns`; **mutation-checked**, because the framing was right before the test
+  existed: `if step % 4 == 0` in place of `grid.is_beat(step)` makes the twelve-step test red on column 3.
+  The row's `Vec` is built once per row in `draw_grid` (eight a frame), and `column_rect` builds one per call — two a
+  frame — down from the 256 the module's comment records. Workspace suite **974/974**, clippy, `fmt --check`.
+  **Ruling: the plan's "the twelfth press wrapping to 0" is wrong for this face.** The drum face's arrows clamp at
+  both ends — `selection::move_selection` is documented as clamping "the same rule the 303's step border keeps", and
+  the existing `the_arrows_move_the_selected_step_on_a_drum_face` asserts "the last is the last". The test asserts the
+  clamp. Cost if wrong: the plan's sentence, not the behaviour — a wrapping border would be a different key model and
+  would need the 303's border to wrap too.
