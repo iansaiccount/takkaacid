@@ -554,6 +554,12 @@ The failure modes the spec implies and no task's own test names, each pinned in 
 
 ## Progress
 
-*(One line per task, written as it is done: what landed, the test or mutation check that proved it, and any ruling with
-what it costs if wrong. Round 01 is expected to move no page of the guide; if that turns out to be false, the page and
-the reason go here.)*
+- **Task 1 — `Grid`, a catalogue of three bars.** `acid_core::pattern::Grid` with `ALL`, `name`/`from_name`,
+  `steps_per_bar` (16 / 32 / 12, `const`), `is_beat`, and serde by caption with a `Sixteenth` fallback. Proved by
+  `the_grid_catalogue_names_one_bar_each`, `a_beat_is_every_fourth_eighth_or_third_step` and
+  `an_unknown_grid_caption_reads_as_sixteenths` in `crates/acid-core/tests/pattern.rs` — each watched fail first (the
+  serde impls were written early by mistake and deleted again so the test could fail for its own reason). Workspace suite
+  **941/941**, clippy `-D warnings`, `fmt --check` green.
+  **Ruling: `is_beat` is not a `const fn`** — the plan wrote it as one. It counts with `is_multiple_of`, and the
+  `% n == 0` spelling that would be `const` is the one clippy's `manual_is_multiple_of` rejects under `-D warnings`. Cost
+  if wrong: nothing needs it in a const context; a test that did would have to spell the count itself.

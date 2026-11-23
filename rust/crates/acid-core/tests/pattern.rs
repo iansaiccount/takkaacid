@@ -1,4 +1,4 @@
-use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, Pattern, PatternId, STEPS_PER_PATTERN, Step};
 use acid_core::pitch::Pitch;
 
 #[test]
@@ -38,4 +38,62 @@ fn pattern_ids_read_like_the_hardware() {
     assert_eq!(PatternId { bank: 0, number: 0 }.to_string(), "A1");
     assert_eq!(PatternId { bank: 2, number: 4 }.to_string(), "C5");
     assert_eq!(PatternId { bank: 7, number: 7 }.to_string(), "H8");
+}
+
+#[test]
+fn the_grid_catalogue_names_one_bar_each() {
+    assert_eq!(
+        Grid::ALL,
+        [Grid::Sixteenth, Grid::ThirtySecond, Grid::EighthTriplet]
+    );
+    for grid in Grid::ALL {
+        assert_eq!(
+            Grid::from_name(grid.name()),
+            Some(grid),
+            "a caption round-trips"
+        );
+    }
+    assert_eq!(Grid::Sixteenth.name(), "1/16");
+    assert_eq!(Grid::ThirtySecond.name(), "1/32");
+    assert_eq!(Grid::EighthTriplet.name(), "1/8T");
+    assert_eq!(
+        Grid::from_name("1/64"),
+        None,
+        "a caption this build has never had"
+    );
+    assert_eq!(Grid::Sixteenth.steps_per_bar(), 16);
+    assert_eq!(Grid::ThirtySecond.steps_per_bar(), 32);
+    assert_eq!(Grid::EighthTriplet.steps_per_bar(), 12);
+}
+
+#[test]
+fn a_beat_is_every_fourth_eighth_or_third_step() {
+    for (grid, beats) in [
+        (Grid::Sixteenth, [0, 4, 8, 12]),
+        (Grid::ThirtySecond, [0, 8, 16, 24]),
+        (Grid::EighthTriplet, [0, 3, 6, 9]),
+    ] {
+        let found: Vec<usize> = (0..grid.steps_per_bar())
+            .filter(|i| grid.is_beat(*i))
+            .collect();
+        assert_eq!(found, beats, "{} frames its beats", grid.name());
+    }
+}
+
+#[test]
+fn an_unknown_grid_caption_reads_as_sixteenths() {
+    assert_eq!(
+        serde_json::from_str::<Grid>("\"1/32\"").unwrap(),
+        Grid::ThirtySecond
+    );
+    // A word this build does not know must not cost the player their song: it reads as the grid every version-12
+    // file is on.
+    assert_eq!(
+        serde_json::from_str::<Grid>("\"1/64\"").unwrap(),
+        Grid::Sixteenth
+    );
+    assert_eq!(
+        serde_json::to_string(&Grid::EighthTriplet).unwrap(),
+        "\"1/8T\""
+    );
 }

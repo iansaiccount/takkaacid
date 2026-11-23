@@ -12,6 +12,94 @@ use crate::pitch::{Pitch, step_hz};
 /// Steps in one pattern.
 pub const STEPS_PER_PATTERN: usize = 16;
 
+/// The grid a pattern's bar is divided into.
+///
+/// A pattern is always exactly one 4/4 bar; the grid says how many steps that bar has. `1/16` is the sixteenths every
+/// pattern born before this build is on, `1/32` divides the same bar twice as finely, and `1/8T` divides it into
+/// eighth-note triplets, which sit *off* the sixteenth grid rather than inside it.
+///
+/// A catalogue, in this repo's sense: `ALL` is the order the face's key cycles, `name`/`from_name` are the mapping the
+/// file uses, and every `match` over it is written out so a fourth grid fails to compile where a decision is owed.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum Grid {
+    /// Sixteen steps to the bar: the grid every file written before this build is on, and the one a new pattern takes.
+    #[default]
+    Sixteenth,
+    /// Thirty-two steps to the bar: finer than a sixteenth.
+    ThirtySecond,
+    /// Twelve steps to the bar — eighth-note triplets.
+    EighthTriplet,
+}
+
+impl Grid {
+    /// Every grid, in the order the transport row's key cycles them.
+    pub const ALL: [Grid; 3] = [Grid::Sixteenth, Grid::ThirtySecond, Grid::EighthTriplet];
+
+    /// What the face and the file call it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Grid::Sixteenth => "1/16",
+            Grid::ThirtySecond => "1/32",
+            Grid::EighthTriplet => "1/8T",
+        }
+    }
+
+    /// The grid a caption names, or `None` for a word this build does not know.
+    pub fn from_name(name: &str) -> Option<Grid> {
+        match name {
+            "1/16" => Some(Grid::Sixteenth),
+            "1/32" => Some(Grid::ThirtySecond),
+            "1/8T" => Some(Grid::EighthTriplet),
+            _ => None,
+        }
+    }
+
+    /// Steps in one 4/4 bar of this grid.
+    ///
+    /// `const` because a test that builds a bar of steps sizes its array from it.
+    pub const fn steps_per_bar(self) -> usize {
+        match self {
+            Grid::Sixteenth => 16,
+            Grid::ThirtySecond => 32,
+            Grid::EighthTriplet => 12,
+        }
+    }
+
+    /// Whether `index` falls on a beat: every fourth step, every eighth, every third.
+    ///
+    /// Not `const`: the count comes from `beats_every`, and the modulo is `is_multiple_of` so the workspace's clippy
+    /// gate does not read `% n == 0` as a hand-rolled spelling of it.
+    pub fn is_beat(self, index: usize) -> bool {
+        index.is_multiple_of(self.beats_every())
+    }
+
+    /// Steps to a beat: a quarter note, which every grid divides evenly.
+    const fn beats_every(self) -> usize {
+        match self {
+            Grid::Sixteenth => 4,
+            Grid::ThirtySecond => 8,
+            Grid::EighthTriplet => 3,
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Grid {
+    /// By caption, so a reader of the file can see which grid a pattern is on, and a caption this build does not know
+    /// reads as sixteenths rather than refusing the song.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.name())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Grid {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        Ok(Grid::from_name(&name).unwrap_or_default())
+    }
+}
+
 /// The velocity a step plays at when nothing struck it: MIDI's full scale, so an untouched pattern sounds exactly as
 /// loud as it did before velocity existed.
 pub const DEFAULT_VELOCITY: u8 = 127;
