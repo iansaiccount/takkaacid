@@ -16,10 +16,13 @@ Rounds live here as `NN-topic.md`, one per round, in the shape the earlier phase
 review of the branch at the pull request (`AGENTS.md`). Commits are made with the gates green and the Progress lines current;
 the review is of the branch, not of each commit.
 
-**State: opened 2026-11-22; both rounds committed on `phase-5`, nothing pushed.** `cargo test --workspace` **937**, clippy
-`-D warnings`, `fmt --check` and `./docs/guide/check.sh` were green at the head of round `02`. Round `01` took `SAVE_VERSION`
-**12** and round `02` shares that number because a bank is a second kind of saved document, not a second save version. What is
-left for the player: the pull-request review of both rounds together, and the push.
+**State: both rounds complete and pushed; [PR #12](https://github.com/iansaiccount/takkaacid/pull/12) is open against `main`.**
+`cargo test --workspace` **938**, clippy `-D warnings`, `fmt --check` and `./docs/guide/check.sh` are green at its head. Round `01`
+took `SAVE_VERSION` **12** and round `02` shares that number because a bank is a second kind of saved document, not a second save
+version. The branch has been reviewed twice by subagents that wrote none of it; every finding was fixed on the branch and recorded
+in the plans' `## Progress`. Merging is the player's call, and
+[`handover-03-phase-5-closed`](handover-03-phase-5-closed.md) is what the next session starts from — it lists the untested glue,
+the one known wrinkle, and what phase 6 inherits.
 
 **What phase 5 does not do**, and where each is recorded: an **arrangement** (what plays when) is a later round with its own
 `SAVE_VERSION` bump — `plans/future/wishlist.md`, *The arrangement*; a **rack document** that loads is later — *Load and save a
