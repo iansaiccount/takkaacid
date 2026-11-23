@@ -10,7 +10,7 @@
 
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
-use acid_core::pattern::{PATTERN_SLOTS, Pattern, Step};
+use acid_core::pattern::{Grid, PATTERN_SLOTS, Pattern, Step};
 use acid_core::pitch::Pitch;
 
 use crate::persist::{Knobs, SAVE_VERSION, SavedState};
@@ -27,7 +27,15 @@ pub struct Demo {
 
 /// Every demo, in the order the card lists them.
 pub fn songs() -> Vec<Demo> {
-    vec![slow_acid(), hard_techno(), blues(), rock(), funk()]
+    vec![
+        slow_acid(),
+        hard_techno(),
+        blues(),
+        rock(),
+        funk(),
+        acid_jazz(),
+        fast_acid(),
+    ]
 }
 
 /// The drum side of every demo, in the demos' own order, as the bank a drum device loads from `DEMO BANKS`.
@@ -87,7 +95,7 @@ pub const NEW_SONG: &str = "New song";
 type Hit = (usize, Pitch, i8, &'static str);
 
 /// A phrase from a table of hits; every step not named is a rest.
-fn line(hits: &[Hit]) -> Pattern {
+fn line(grid: Grid, hits: &[Hit]) -> Pattern {
     let mut steps = [Step::rest(); PATTERN_SLOTS];
     for &(at, pitch, octave, flags) in hits {
         let mut step = Step::note(pitch, octave);
@@ -98,7 +106,7 @@ fn line(hits: &[Hit]) -> Pattern {
         }
         steps[at] = step;
     }
-    Pattern::from_steps(steps)
+    Pattern::from_steps_in(grid, steps)
 }
 
 /// What a ghost note plays at: audible, never the point.
@@ -138,9 +146,10 @@ fn variations(main: Pattern, fill: Pattern) -> [Pattern; 8] {
 
 /// Every other sounding step rests, so the line breathes: the variation to build a break on.
 fn sparser(pattern: Pattern) -> Pattern {
-    let mut steps = pattern.steps;
+    let mut pattern = pattern;
     let mut sounding = 0;
-    for step in steps.iter_mut() {
+    // Only the bar: a slot above `len()` is a rest, and the pattern's own grid is what the variation must come back on.
+    for step in pattern.iter_mut() {
         if step.on {
             sounding += 1;
             // The downbeat stays, the next note goes, and so on through the bar: half the line, in the same places.
@@ -149,7 +158,7 @@ fn sparser(pattern: Pattern) -> Pattern {
             }
         }
     }
-    Pattern::from_steps(steps)
+    pattern
 }
 
 /// One drum voice's strikes in a bar: which steps it hits, and which of those are accented.
@@ -162,20 +171,21 @@ type Strike = (Drum, &'static [usize], &'static [usize]);
 ///
 /// Every strike goes through [`Step::hit`], the only writer of the two masks and of `on`, so a groove cannot draw a cell
 /// the machine does not sound — a table written with `Step::note` would be a bar of rests with a grid that looked full.
-fn bar(strikes: &[Strike]) -> Pattern {
+fn bar(grid: Grid, strikes: &[Strike]) -> Pattern {
     let mut steps = [Step::rest(); PATTERN_SLOTS];
     for &(drum, hits, accents) in strikes {
         for &at in hits {
             steps[at].hit(drum, accents.contains(&at));
         }
     }
-    Pattern::from_steps(steps)
+    Pattern::from_steps_in(grid, steps)
 }
 
 /// The same bar with one voice taken out: the break a groove needs, without a second table to keep in step.
 fn without(pattern: Pattern, drum: Drum) -> Pattern {
     let mut pattern = pattern;
-    for step in &mut pattern.steps {
+    // Only the bar: every slot above `len()` is a rest, and walking the table would touch slots the bar does not hold.
+    for step in pattern.iter_mut() {
         step.clear_hit(drum);
     }
     pattern
@@ -185,7 +195,10 @@ fn without(pattern: Pattern, drum: Drum) -> Pattern {
 fn also(pattern: Pattern, drum: Drum, hits: &[usize], accented: bool) -> Pattern {
     let mut pattern = pattern;
     for &at in hits {
-        pattern.steps[at].hit(drum, accented);
+        // A table may name a step the bar does not hold; the grid decides, and a slot above `len()` stays a rest.
+        if let Some(step) = pattern.steps.get_mut(at) {
+            step.hit(drum, accented);
+        }
     }
     pattern
 }
@@ -198,15 +211,21 @@ fn also(pattern: Pattern, drum: Drum, hits: &[usize], accented: bool) -> Pattern
 /// whole point is to lose it — that is only true because the groove it is taken from has nothing else on its first step —
 /// and that each of them sounds at all is the test's to hold.
 fn drum_variations(groove: Pattern, turnaround: Pattern) -> [Pattern; 8] {
+    // The extra hits are placed **by the bar**, not at fixed sixteenths: "every fourth step from step 4" is a shaker on
+    // the offbeats of a sixteen-step bar, of a twelve-step triplet bar and of a thirty-second one alike, and "the last
+    // three steps" lifts the snare wherever the bar ends. At `1/16` these are the numbers this table used to spell.
+    let len = groove.len();
+    let offbeats: Vec<usize> = (3..len).step_by(4).collect();
+    let lift: Vec<usize> = (len.saturating_sub(3)..len).collect();
     [
         groove,
         also(groove, Drum::Crash, &[0], true),
         without(groove, Drum::ClosedHat),
         without(groove, Drum::Kick),
-        also(groove, Drum::Shaker, &[3, 7, 11, 15], false),
+        also(groove, Drum::Shaker, &offbeats, false),
         turnaround,
         without(turnaround, Drum::Snare),
-        also(turnaround, Drum::Snare, &[13, 14, 15], true),
+        also(turnaround, Drum::Snare, &lift, true),
     ]
 }
 
@@ -236,49 +255,61 @@ mod patches {
 
 /// The original: a saw, the filter open enough to hear the slides, and a slow line that leans on them.
 fn slow_acid() -> Demo {
-    let main = line(&[
-        (0, Pitch::A, 1, "a"),
-        (2, Pitch::A, 1, ""),
-        (3, Pitch::C, 2, "s"),
-        (4, Pitch::E, 1, ""),
-        (6, Pitch::A, 1, ""),
-        (7, Pitch::C, 2, "s"),
-        (8, Pitch::A, 1, "a"),
-        (10, Pitch::G, 1, ""),
-        (11, Pitch::E, 1, "s"),
-        (12, Pitch::A, 1, ""),
-        (14, Pitch::C, 2, ""),
-        (15, Pitch::E, 1, "s"),
-    ]);
-    let fill = line(&[
-        (0, Pitch::A, 1, "a"),
-        (2, Pitch::C, 2, ""),
-        (4, Pitch::A, 1, ""),
-        (6, Pitch::E, 2, "s"),
-        (8, Pitch::A, 1, "a"),
-        (9, Pitch::A, 1, "g"),
-        (10, Pitch::C, 2, ""),
-        (11, Pitch::A, 1, "s"),
-        (12, Pitch::G, 1, ""),
-        (13, Pitch::E, 1, "g"),
-        (14, Pitch::A, 1, ""),
-        (15, Pitch::C, 2, "s"),
-    ]);
+    let main = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::A, 1, "a"),
+            (2, Pitch::A, 1, ""),
+            (3, Pitch::C, 2, "s"),
+            (4, Pitch::E, 1, ""),
+            (6, Pitch::A, 1, ""),
+            (7, Pitch::C, 2, "s"),
+            (8, Pitch::A, 1, "a"),
+            (10, Pitch::G, 1, ""),
+            (11, Pitch::E, 1, "s"),
+            (12, Pitch::A, 1, ""),
+            (14, Pitch::C, 2, ""),
+            (15, Pitch::E, 1, "s"),
+        ],
+    );
+    let fill = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::A, 1, "a"),
+            (2, Pitch::C, 2, ""),
+            (4, Pitch::A, 1, ""),
+            (6, Pitch::E, 2, "s"),
+            (8, Pitch::A, 1, "a"),
+            (9, Pitch::A, 1, "g"),
+            (10, Pitch::C, 2, ""),
+            (11, Pitch::A, 1, "s"),
+            (12, Pitch::G, 1, ""),
+            (13, Pitch::E, 1, "g"),
+            (14, Pitch::A, 1, ""),
+            (15, Pitch::C, 2, "s"),
+        ],
+    );
 
     // The drums four to the floor, with the clap on two and four and a closed hat on the offbeats: the slow acid records'
     // own pulse, sparse enough that the slides are still what a player hears.
-    let groove = bar(&[
-        (Drum::Kick, &[0, 4, 8, 12], &[0]),
-        (Drum::Clap, &[4, 12], &[12]),
-        (Drum::ClosedHat, &[2, 6, 10, 14], &[6]),
-    ]);
-    let turnaround = bar(&[
-        (Drum::Kick, &[0, 8], &[0]),
-        (Drum::Snare, &[4, 12], &[]),
-        (Drum::ClosedHat, &[2, 6, 10], &[]),
-        (Drum::LowTom, &[13, 14], &[14]),
-        (Drum::HighTom, &[15], &[15]),
-    ]);
+    let groove = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 4, 8, 12], &[0]),
+            (Drum::Clap, &[4, 12], &[12]),
+            (Drum::ClosedHat, &[2, 6, 10, 14], &[6]),
+        ],
+    );
+    let turnaround = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 8], &[0]),
+            (Drum::Snare, &[4, 12], &[]),
+            (Drum::ClosedHat, &[2, 6, 10], &[]),
+            (Drum::LowTom, &[13, 14], &[14]),
+            (Drum::HighTom, &[15], &[15]),
+        ],
+    );
     Demo {
         name: "Slow Acid",
         state: song(
@@ -294,62 +325,74 @@ fn slow_acid() -> Demo {
 
 /// The same box at the other end: short, bright, and played as a chug with an octave jump every beat.
 fn hard_techno() -> Demo {
-    let main = line(&[
-        (0, Pitch::E, 1, "a"),
-        (1, Pitch::E, 1, ""),
-        (2, Pitch::E, 1, ""),
-        (3, Pitch::E, 1, "s"),
-        (4, Pitch::E, 2, "a"),
-        (5, Pitch::E, 1, ""),
-        (6, Pitch::E, 1, ""),
-        (7, Pitch::E, 1, "s"),
-        (8, Pitch::E, 1, "a"),
-        (9, Pitch::E, 1, ""),
-        (10, Pitch::G, 1, ""),
-        (11, Pitch::E, 1, "s"),
-        (12, Pitch::E, 2, "a"),
-        (13, Pitch::E, 1, ""),
-        (14, Pitch::E, 1, ""),
-        (15, Pitch::E, 1, "s"),
-    ]);
-    let fill = line(&[
-        (0, Pitch::E, 1, "a"),
-        (1, Pitch::E, 1, "g"),
-        (2, Pitch::E, 2, "s"),
-        (3, Pitch::E, 1, ""),
-        (4, Pitch::E, 1, "a"),
-        (5, Pitch::E, 1, "g"),
-        (6, Pitch::E, 1, "s"),
-        (7, Pitch::E, 1, ""),
-        (8, Pitch::E, 2, "a"),
-        (9, Pitch::E, 1, ""),
-        (10, Pitch::E, 1, "g"),
-        (11, Pitch::E, 1, "s"),
-        (12, Pitch::E, 1, "a"),
-        (13, Pitch::E, 1, ""),
-        (14, Pitch::E, 1, "g"),
-        (15, Pitch::E, 1, "s"),
-    ]);
+    let main = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (1, Pitch::E, 1, ""),
+            (2, Pitch::E, 1, ""),
+            (3, Pitch::E, 1, "s"),
+            (4, Pitch::E, 2, "a"),
+            (5, Pitch::E, 1, ""),
+            (6, Pitch::E, 1, ""),
+            (7, Pitch::E, 1, "s"),
+            (8, Pitch::E, 1, "a"),
+            (9, Pitch::E, 1, ""),
+            (10, Pitch::G, 1, ""),
+            (11, Pitch::E, 1, "s"),
+            (12, Pitch::E, 2, "a"),
+            (13, Pitch::E, 1, ""),
+            (14, Pitch::E, 1, ""),
+            (15, Pitch::E, 1, "s"),
+        ],
+    );
+    let fill = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (1, Pitch::E, 1, "g"),
+            (2, Pitch::E, 2, "s"),
+            (3, Pitch::E, 1, ""),
+            (4, Pitch::E, 1, "a"),
+            (5, Pitch::E, 1, "g"),
+            (6, Pitch::E, 1, "s"),
+            (7, Pitch::E, 1, ""),
+            (8, Pitch::E, 2, "a"),
+            (9, Pitch::E, 1, ""),
+            (10, Pitch::E, 1, "g"),
+            (11, Pitch::E, 1, "s"),
+            (12, Pitch::E, 1, "a"),
+            (13, Pitch::E, 1, ""),
+            (14, Pitch::E, 1, "g"),
+            (15, Pitch::E, 1, "s"),
+        ],
+    );
 
     // Sixteenth hats under the kick, the clap on two and four and a rim on the offbeats: the same chug the line plays, at the
     // tempo the demo calls hard techno.
-    let groove = bar(&[
-        (Drum::Kick, &[0, 4, 8, 12], &[0, 8]),
-        (Drum::Clap, &[4, 12], &[12]),
-        (
-            Drum::ClosedHat,
-            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-            &[2, 6, 10, 14],
-        ),
-        (Drum::Rim, &[2, 10], &[]),
-    ]);
-    let turnaround = bar(&[
-        (Drum::Kick, &[0, 4, 8], &[0]),
-        (Drum::Clap, &[4], &[]),
-        (Drum::Snare, &[14, 15], &[]),
-        (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10, 12], &[2, 10]),
-        (Drum::LowTom, &[11], &[]),
-    ]);
+    let groove = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 4, 8, 12], &[0, 8]),
+            (Drum::Clap, &[4, 12], &[12]),
+            (
+                Drum::ClosedHat,
+                &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+                &[2, 6, 10, 14],
+            ),
+            (Drum::Rim, &[2, 10], &[]),
+        ],
+    );
+    let turnaround = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 4, 8], &[0]),
+            (Drum::Clap, &[4], &[]),
+            (Drum::Snare, &[14, 15], &[]),
+            (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10, 12], &[2, 10]),
+            (Drum::LowTom, &[11], &[]),
+        ],
+    );
     Demo {
         name: "Hard Techno Acid",
         state: song(
@@ -365,46 +408,58 @@ fn hard_techno() -> Demo {
 
 /// A shuffle comes from the clock, not the notes: the walk is on the eighths and SWING does the rest.
 fn blues() -> Demo {
-    let main = line(&[
-        (0, Pitch::A, 1, "a"),
-        (2, Pitch::A, 1, ""),
-        (4, Pitch::C, 2, ""),
-        (6, Pitch::CSharp, 2, ""),
-        (8, Pitch::D, 2, "a"),
-        (10, Pitch::DSharp, 2, ""),
-        (12, Pitch::E, 2, ""),
-        (14, Pitch::D, 2, ""),
-    ]);
-    let fill = line(&[
-        (0, Pitch::A, 1, "a"),
-        (2, Pitch::A, 1, ""),
-        (3, Pitch::A, 1, "g"),
-        (4, Pitch::C, 2, ""),
-        (6, Pitch::CSharp, 2, ""),
-        (8, Pitch::D, 2, "a"),
-        (10, Pitch::DSharp, 2, ""),
-        (12, Pitch::E, 2, ""),
-        (13, Pitch::E, 2, "g"),
-        (14, Pitch::D, 2, ""),
-        (15, Pitch::D, 2, "s"),
-    ]);
+    let main = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::A, 1, "a"),
+            (2, Pitch::A, 1, ""),
+            (4, Pitch::C, 2, ""),
+            (6, Pitch::CSharp, 2, ""),
+            (8, Pitch::D, 2, "a"),
+            (10, Pitch::DSharp, 2, ""),
+            (12, Pitch::E, 2, ""),
+            (14, Pitch::D, 2, ""),
+        ],
+    );
+    let fill = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::A, 1, "a"),
+            (2, Pitch::A, 1, ""),
+            (3, Pitch::A, 1, "g"),
+            (4, Pitch::C, 2, ""),
+            (6, Pitch::CSharp, 2, ""),
+            (8, Pitch::D, 2, "a"),
+            (10, Pitch::DSharp, 2, ""),
+            (12, Pitch::E, 2, ""),
+            (13, Pitch::E, 2, "g"),
+            (14, Pitch::D, 2, ""),
+            (15, Pitch::D, 2, "s"),
+        ],
+    );
 
     // A shuffle is the clock's (this demo swings 0.35), so the ride walks the eighths straight on and the hats sit on the
     // last sixteenth of each beat: the drums lean where the walk leans.
-    let groove = bar(&[
-        (Drum::Ride, &[0, 2, 4, 6, 8, 10, 12, 14], &[0, 6, 12]),
-        (Drum::Kick, &[0, 8], &[0]),
-        (Drum::Snare, &[4, 12], &[]),
-        (Drum::ClosedHat, &[3, 7, 11, 15], &[]),
-    ]);
-    let turnaround = bar(&[
-        (Drum::Ride, &[0, 2, 4, 6], &[0]),
-        (Drum::Kick, &[0], &[0]),
-        (Drum::Snare, &[4, 12], &[]),
-        (Drum::LowTom, &[13], &[]),
-        (Drum::MidTom, &[14], &[]),
-        (Drum::Crash, &[15], &[15]),
-    ]);
+    let groove = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Ride, &[0, 2, 4, 6, 8, 10, 12, 14], &[0, 6, 12]),
+            (Drum::Kick, &[0, 8], &[0]),
+            (Drum::Snare, &[4, 12], &[]),
+            (Drum::ClosedHat, &[3, 7, 11, 15], &[]),
+        ],
+    );
+    let turnaround = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Ride, &[0, 2, 4, 6], &[0]),
+            (Drum::Kick, &[0], &[0]),
+            (Drum::Snare, &[4, 12], &[]),
+            (Drum::LowTom, &[13], &[]),
+            (Drum::MidTom, &[14], &[]),
+            (Drum::Crash, &[15], &[15]),
+        ],
+    );
     Demo {
         name: "Blues",
         state: song(
@@ -420,41 +475,53 @@ fn blues() -> Demo {
 
 /// Eighths, root and fifth, and one slide into the downbeat: the bass part of a rock band.
 fn rock() -> Demo {
-    let main = line(&[
-        (0, Pitch::E, 1, "a"),
-        (2, Pitch::E, 1, ""),
-        (4, Pitch::B, 1, ""),
-        (6, Pitch::E, 1, ""),
-        (8, Pitch::E, 1, "a"),
-        (10, Pitch::B, 1, ""),
-        (12, Pitch::E, 2, ""),
-        (14, Pitch::E, 1, "s"),
-    ]);
-    let fill = line(&[
-        (0, Pitch::E, 1, "a"),
-        (2, Pitch::E, 1, ""),
-        (4, Pitch::E, 2, ""),
-        (6, Pitch::E, 1, ""),
-        (8, Pitch::B, 1, "a"),
-        (10, Pitch::E, 1, ""),
-        (12, Pitch::E, 1, "s"),
-        (14, Pitch::E, 2, ""),
-    ]);
+    let main = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (2, Pitch::E, 1, ""),
+            (4, Pitch::B, 1, ""),
+            (6, Pitch::E, 1, ""),
+            (8, Pitch::E, 1, "a"),
+            (10, Pitch::B, 1, ""),
+            (12, Pitch::E, 2, ""),
+            (14, Pitch::E, 1, "s"),
+        ],
+    );
+    let fill = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (2, Pitch::E, 1, ""),
+            (4, Pitch::E, 2, ""),
+            (6, Pitch::E, 1, ""),
+            (8, Pitch::B, 1, "a"),
+            (10, Pitch::E, 1, ""),
+            (12, Pitch::E, 1, "s"),
+            (14, Pitch::E, 2, ""),
+        ],
+    );
 
     // A backbeat: the kick on one and the "and" of two, the snare on two and four, eighth hats over it. The rock band's
     // drums, which is what the bass part was written against.
-    let groove = bar(&[
-        (Drum::Kick, &[0, 6, 8], &[0, 8]),
-        (Drum::Snare, &[4, 12], &[12]),
-        (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10, 12, 14], &[]),
-    ]);
-    let turnaround = bar(&[
-        (Drum::Kick, &[0, 8], &[0]),
-        (Drum::Snare, &[4], &[]),
-        (Drum::ClosedHat, &[0, 2, 4, 6, 8], &[]),
-        (Drum::MidTom, &[12, 13], &[]),
-        (Drum::LowTom, &[14], &[]),
-    ]);
+    let groove = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 6, 8], &[0, 8]),
+            (Drum::Snare, &[4, 12], &[12]),
+            (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10, 12, 14], &[]),
+        ],
+    );
+    let turnaround = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 8], &[0]),
+            (Drum::Snare, &[4], &[]),
+            (Drum::ClosedHat, &[0, 2, 4, 6, 8], &[]),
+            (Drum::MidTom, &[12, 13], &[]),
+            (Drum::LowTom, &[14], &[]),
+        ],
+    );
     Demo {
         name: "Rock",
         state: song(
@@ -470,62 +537,223 @@ fn rock() -> Demo {
 
 /// The ghosts are the line: a funk bass plays around the beat as much as on it.
 fn funk() -> Demo {
-    let main = line(&[
-        (0, Pitch::E, 1, "a"),
-        (1, Pitch::E, 1, "g"),
-        (2, Pitch::E, 1, ""),
-        (4, Pitch::E, 1, ""),
-        (6, Pitch::G, 1, "g"),
-        (7, Pitch::E, 1, "s"),
-        (8, Pitch::E, 1, "a"),
-        (9, Pitch::E, 1, "g"),
-        (10, Pitch::E, 1, ""),
-        (12, Pitch::B, 1, ""),
-        (13, Pitch::E, 1, "g"),
-        (14, Pitch::E, 2, ""),
-        (15, Pitch::E, 2, "s"),
-    ]);
-    let fill = line(&[
-        (0, Pitch::E, 1, "a"),
-        (2, Pitch::E, 1, "g"),
-        (3, Pitch::E, 1, ""),
-        (4, Pitch::E, 1, "s"),
-        (6, Pitch::E, 1, "g"),
-        (8, Pitch::E, 2, "a"),
-        (10, Pitch::E, 1, "g"),
-        (11, Pitch::E, 1, ""),
-        (12, Pitch::G, 1, ""),
-        (13, Pitch::E, 1, "g"),
-        (14, Pitch::E, 1, ""),
-        (15, Pitch::B, 1, "s"),
-    ]);
+    let main = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (1, Pitch::E, 1, "g"),
+            (2, Pitch::E, 1, ""),
+            (4, Pitch::E, 1, ""),
+            (6, Pitch::G, 1, "g"),
+            (7, Pitch::E, 1, "s"),
+            (8, Pitch::E, 1, "a"),
+            (9, Pitch::E, 1, "g"),
+            (10, Pitch::E, 1, ""),
+            (12, Pitch::B, 1, ""),
+            (13, Pitch::E, 1, "g"),
+            (14, Pitch::E, 2, ""),
+            (15, Pitch::E, 2, "s"),
+        ],
+    );
+    let fill = line(
+        Grid::Sixteenth,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (2, Pitch::E, 1, "g"),
+            (3, Pitch::E, 1, ""),
+            (4, Pitch::E, 1, "s"),
+            (6, Pitch::E, 1, "g"),
+            (8, Pitch::E, 2, "a"),
+            (10, Pitch::E, 1, "g"),
+            (11, Pitch::E, 1, ""),
+            (12, Pitch::G, 1, ""),
+            (13, Pitch::E, 1, "g"),
+            (14, Pitch::E, 1, ""),
+            (15, Pitch::B, 1, "s"),
+        ],
+    );
 
     // The syncopation is the point: the kick around the beat rather than on it, sixteenth hats with the accents on the
     // offbeats, a clave on the last sixteenth of two, and an open hat to close the bar.
-    let groove = bar(&[
-        (Drum::Kick, &[0, 3, 6, 10], &[0]),
-        (Drum::Snare, &[4, 12], &[12]),
-        (
-            Drum::ClosedHat,
-            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-            &[2, 6, 10, 14],
-        ),
-        (Drum::OpenHat, &[15], &[15]),
-        (Drum::Clave, &[7], &[]),
-    ]);
-    let turnaround = bar(&[
-        (Drum::Kick, &[0, 6], &[0]),
-        (Drum::Snare, &[4], &[]),
-        (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10], &[2, 10]),
-        (Drum::LowConga, &[11], &[]),
-        (Drum::HighConga, &[13], &[]),
-    ]);
+    let groove = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 3, 6, 10], &[0]),
+            (Drum::Snare, &[4, 12], &[12]),
+            (
+                Drum::ClosedHat,
+                &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+                &[2, 6, 10, 14],
+            ),
+            (Drum::OpenHat, &[15], &[15]),
+            (Drum::Clave, &[7], &[]),
+        ],
+    );
+    let turnaround = bar(
+        Grid::Sixteenth,
+        &[
+            (Drum::Kick, &[0, 6], &[0]),
+            (Drum::Snare, &[4], &[]),
+            (Drum::ClosedHat, &[0, 2, 4, 6, 8, 10], &[2, 10]),
+            (Drum::LowConga, &[11], &[]),
+            (Drum::HighConga, &[13], &[]),
+        ],
+    );
     Demo {
         name: "Funk",
         state: song(
             104.0,
             0.12,
             patches::patch([patches::SAW, 0.5, 0.42, 0.58, 0.62, 0.34, 0.56, 0.88]),
+            main,
+            fill,
+        ),
+        drums: drum_variations(groove, turnaround),
+    }
+}
+
+/// The triplet grid *is* the swing: a walking line over a ride on every quarter, with the shuffle knob left at zero.
+///
+/// Twelve steps to the bar, so a "sixteenth" here is an eighth-note triplet — the line walks in threes and the ride
+/// marks the four beats at steps 1, 4, 7 and 10.
+fn acid_jazz() -> Demo {
+    let main = line(
+        Grid::EighthTriplet,
+        &[
+            (0, Pitch::A, 1, "a"),
+            (1, Pitch::C, 2, ""),
+            (2, Pitch::E, 2, ""),
+            (3, Pitch::D, 2, "s"),
+            (4, Pitch::C, 2, ""),
+            (5, Pitch::A, 1, ""),
+            (6, Pitch::G, 1, "a"),
+            (7, Pitch::E, 1, ""),
+            (8, Pitch::D, 1, ""),
+            (9, Pitch::C, 1, "s"),
+            (10, Pitch::A, 1, ""),
+            (11, Pitch::G, 1, ""),
+        ],
+    );
+    let fill = line(
+        Grid::EighthTriplet,
+        &[
+            (0, Pitch::A, 1, "a"),
+            (2, Pitch::C, 2, ""),
+            (3, Pitch::E, 2, "s"),
+            (5, Pitch::D, 2, ""),
+            (6, Pitch::C, 2, "a"),
+            (8, Pitch::A, 1, ""),
+            (9, Pitch::G, 1, "s"),
+            (11, Pitch::E, 1, ""),
+        ],
+    );
+
+    // The ride carries the quarter — steps 1, 4, 7 and 10 — with the snare comping late and the kick under the first
+    // and the turn into the second half. A hi-hat pedal on two and four, the way a jazz drummer keeps time with the foot,
+    // and a brush of shaker through the triplets the line leaves.
+    let groove = bar(
+        Grid::EighthTriplet,
+        &[
+            (Drum::Kick, &[0, 7], &[0]),
+            (Drum::Snare, &[2, 8], &[8]),
+            (Drum::Ride, &[0, 3, 6, 9], &[0]),
+            (Drum::ClosedHat, &[3, 9], &[]),
+            (Drum::Shaker, &[1, 4, 5, 10], &[]),
+        ],
+    );
+    let turnaround = bar(
+        Grid::EighthTriplet,
+        &[
+            (Drum::Kick, &[0, 9], &[0]),
+            (Drum::Snare, &[6, 8, 11], &[11]),
+            (Drum::Ride, &[0, 3], &[]),
+            (Drum::MidTom, &[10], &[]),
+            (Drum::HighTom, &[11], &[]),
+        ],
+    );
+    Demo {
+        name: "Acid Jazz",
+        state: song(
+            140.0,
+            0.0,
+            patches::patch([patches::SQUARE, 0.6, 0.5, 0.45, 0.55, 0.7, 0.4, 0.9]),
+            main,
+            fill,
+        ),
+        drums: drum_variations(groove, turnaround),
+    }
+}
+
+/// Sixteenth slides broken by thirty-second rolls at 152: the fast one, where the bar is twice as long as it looks.
+fn fast_acid() -> Demo {
+    let main = line(
+        Grid::ThirtySecond,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (2, Pitch::E, 1, ""),
+            (4, Pitch::G, 1, "s"),
+            (6, Pitch::E, 1, ""),
+            (8, Pitch::E, 1, "a"),
+            (10, Pitch::C, 2, ""),
+            (12, Pitch::E, 2, "s"),
+            (14, Pitch::D, 2, ""),
+            (16, Pitch::E, 1, "a"),
+            (18, Pitch::E, 1, "g"),
+            (20, Pitch::G, 1, "s"),
+            (22, Pitch::A, 1, ""),
+            (24, Pitch::E, 1, "a"),
+            (26, Pitch::C, 2, "s"),
+            (28, Pitch::B, 1, ""),
+            (30, Pitch::E, 1, "s"),
+        ],
+    );
+    // The roll: every thirty-second for the last quarter of the bar, so the fill is the grid showing off.
+    let fill = line(
+        Grid::ThirtySecond,
+        &[
+            (0, Pitch::E, 1, "a"),
+            (4, Pitch::E, 1, ""),
+            (8, Pitch::E, 2, "a"),
+            (12, Pitch::G, 1, ""),
+            (16, Pitch::E, 1, "s"),
+            (20, Pitch::C, 2, ""),
+            (24, Pitch::E, 1, "a"),
+            (25, Pitch::E, 1, ""),
+            (26, Pitch::E, 1, ""),
+            (27, Pitch::E, 1, ""),
+            (28, Pitch::E, 2, "s"),
+            (29, Pitch::E, 2, ""),
+            (30, Pitch::E, 2, "s"),
+            (31, Pitch::E, 2, ""),
+        ],
+    );
+
+    // Kick on every eighth — steps 1, 9, 17, 25 — closed hats on the odd thirty-seconds, snare on the second and
+    // fourth beats.
+    let odd: &[usize] = &[1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31];
+    let groove = bar(
+        Grid::ThirtySecond,
+        &[
+            (Drum::Kick, &[0, 8, 16, 24], &[0, 16]),
+            (Drum::Snare, &[8, 24], &[24]),
+            (Drum::ClosedHat, odd, &[5, 13, 21, 29]),
+        ],
+    );
+    let turnaround = bar(
+        Grid::ThirtySecond,
+        &[
+            (Drum::Kick, &[0, 16], &[0]),
+            (Drum::Snare, &[24, 28, 30], &[30]),
+            (Drum::ClosedHat, &[8, 12, 20], &[]),
+            (Drum::OpenHat, &[31], &[31]),
+        ],
+    );
+    Demo {
+        name: "Fast Acid",
+        state: song(
+            152.0,
+            0.0,
+            patches::patch([patches::SAW, 0.35, 0.28, 0.82, 0.8, 0.6, 0.58, 0.86]),
             main,
             fill,
         ),
@@ -545,13 +773,13 @@ mod tests {
     }
 
     #[test]
-    fn there_are_five_demos_and_no_two_share_a_name() {
+    fn there_are_seven_demos_and_no_two_share_a_name() {
         let demos = songs();
-        assert_eq!(demos.len(), 5);
+        assert_eq!(demos.len(), 7);
         let mut names: Vec<&str> = demos.iter().map(|demo| demo.name).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), 5, "two demos share a name");
+        assert_eq!(names.len(), 7, "two demos share a name");
     }
 
     #[test]

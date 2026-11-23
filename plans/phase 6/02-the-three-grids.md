@@ -345,3 +345,27 @@ command, as every other picture has.
   the existing `the_arrows_move_the_selected_step_on_a_drum_face` asserts "the last is the last". The test asserts the
   clamp. Cost if wrong: the plan's sentence, not the behaviour — a wrapping border would be a different key model and
   would need the 303's border to wrap too.
+- **Task 3 — the two demos.** `demo::line` / `demo::bar` take a `Grid` and answer `Pattern::from_steps_in`; `sparser`,
+  `without` and `also` walk `pattern.iter_mut()` (so a variation comes back on its line's grid), and
+  `drum_variations`' extra hits are **placed by the bar** — every fourth step from step 4 for the shaker, the last
+  three steps for the snare lift — which at `1/16` is the numbers the table used to spell, so the five existing demos
+  are byte-identical. `Acid Jazz` (`1/8T`, 12 steps, 140 BPM, shuffle 0) and `Fast Acid` (`1/32`, 32, 152 BPM) are
+  appended after `funk()`, each with its eight drum patterns on the same grid; `NAMES` is seven and
+  `load_drum_bank(rack, 7)` is `None`. Proved by `the_two_new_demos_are_on_the_other_two_grids` (grid, length, tempo
+  and a struck bar for all eight of each demo's drum patterns), plus the updated
+  `there_are_seven_demos_and_no_two_share_a_name` and `every_demo_variation_has_a_drum_bank_of_eight_patterns` —
+  which caught a real defect: `without(groove, ClosedHat)` on a groove that has no closed hat is the groove itself,
+  so the jazz kit gained a hi-hat pedal on two and four rather than shipping two identical rows.
+  Workspace suite **974/974**, clippy `-D warnings`, `fmt --check`, `guide: ok`.
+  **Ruling: `drum_variations`' fixed step numbers became derived from the bar.** The plan named the two demos and the
+  grid-aware constructors, not this; but `also(groove, Shaker, &[3, 7, 11, 15])` and
+  `also(turnaround, Snare, &[13, 14, 15])` assume sixteen steps, so a twelve-step bar got a shaker on 3, 7 and 11 but
+  a snare lift that fell outside the bar entirely (the eighth row would have been the seventh). Deriving them keeps
+  "the last three steps lift the snare" true at twelve and thirty-two. Cost if wrong: none — at `1/16` the derived
+  numbers are the literals they replace.
+  **The ear check is the player's and is not done.** `EAR_TESTING.md` now carries the seven demos with grid, length,
+  tempo, shuffle and what to listen for, but nothing here has been *heard*: the two new lines' acceptance is by ear
+  (`EAR_TESTING.md`'s procedure), and the two rows to write are — `Acid Jazz`: does the walking line swing against the
+  ride without the shuffle knob, and is the snare comping late enough to read as jazz; `Fast Acid`: do the
+  thirty-second rolls land as a fill rather than a stutter, and does the kick on every eighth hold the bar together at
+  152. A demo nobody has heard is not a demo, so this stays open until the player writes the two lines.
