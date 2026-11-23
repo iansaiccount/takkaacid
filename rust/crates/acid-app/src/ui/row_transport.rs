@@ -129,6 +129,10 @@ pub(super) fn draw(
         let cleared = before.sounding_steps_beyond(next);
         shared.set_grid(next);
         state.pattern = shared.pattern();
+        // The border is clamped into the bar that just arrived: a press that narrows thirty-two steps to twelve with the
+        // border on step 21 would leave no key outlined at all, and the keyboard's next write would land somewhere the
+        // face is not pointing at.
+        state.selected = state.selected.min(state.pattern.len() - 1);
         state.dirty = true;
         let notice = transport::grid_notice(before.len(), state.pattern.len(), cleared);
         state.notify(notice);

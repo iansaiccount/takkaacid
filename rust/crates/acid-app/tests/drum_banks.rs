@@ -201,6 +201,7 @@ fn the_two_new_demos_are_on_the_other_two_grids() {
     let jazz = songs.get(5).expect("the sixth demo");
     assert_eq!(jazz.name, "Acid Jazz");
     assert_eq!(jazz.state.bpm, 140.0);
+    assert_eq!(jazz.state.swing, 0.0, "the triplet grid is the swing");
     assert_eq!(jazz.state.bank.get(0).grid, Grid::EighthTriplet);
     assert_eq!(jazz.state.bank.get(0).len(), 12);
     for slot in 0..PATTERNS_PER_BANK {

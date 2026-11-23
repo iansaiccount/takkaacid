@@ -122,7 +122,8 @@ fn the_key_cycles_the_grid_mid_bar_and_the_engine_hears_it() {
     // Let the engine itself run to the middle of a bar: five sixteenths, position 5 of 16, and the clock knows it.
     let mut renderer = AudioRenderer::new(48_000.0, 2, Arc::clone(&shared), 2_048);
     let bpm = shared.tempo_bpm.get();
-    let sixteenth = acid_core::timing::samples_per_step(bpm, 48_000.0, 16);
+    let sixteenth =
+        acid_core::timing::samples_per_step(bpm, 48_000.0, Grid::Sixteenth.steps_per_bar());
     let mut out = vec![0.0f32; (sixteenth * 5.5) as usize * 2];
     renderer.render_into(&mut out);
     let mid_bar = shared.position.load(Ordering::Relaxed);
@@ -144,7 +145,9 @@ fn the_key_cycles_the_grid_mid_bar_and_the_engine_hears_it() {
 
     // The clock, mid-bar: a block half a thirty-second long crosses one step — never two (a double trigger) and never
     // none (a stall), which is what a rescaled step in flight could do.
-    let half = (acid_core::timing::samples_per_step(bpm, 48_000.0, 32) / 2.0) as usize;
+    let half =
+        (acid_core::timing::samples_per_step(bpm, 48_000.0, Grid::ThirtySecond.steps_per_bar())
+            / 2.0) as usize;
     let mut out = vec![0.0f32; (half + 4) * 2];
     let before = shared.position.load(Ordering::Relaxed);
     renderer.render_into(&mut out);
@@ -188,12 +191,18 @@ fn narrowing_the_bar_counts_the_sound_it_rests() {
     shared.set_pattern(Arc::new(Pattern::from_steps_in(Grid::ThirtySecond, steps)));
     let mut panel = panel_showing();
     paint(&ctx, &mut panel, &shared);
+    // The border is on step 21 of thirty-two; the press narrows the bar to twelve and must pull it in with it.
+    panel.selected = 20;
 
     click(&ctx, &mut panel, &shared, grid_key());
 
     assert_eq!(panel.pattern.grid, Grid::EighthTriplet);
     assert_eq!(panel.pattern.len(), 12, "the row is twelve keys now");
     assert_eq!(notice(&panel), "32 TO 12 STEPS, 2 CLEARED");
+    assert_eq!(
+        panel.selected, 11,
+        "the border is pulled into the arriving bar, not left off the row"
+    );
     for index in [20, 21, 22] {
         assert!(
             !panel.pattern.steps[index].on,
@@ -259,7 +268,7 @@ fn the_note_fits_a_thirty_second_key() {
         let ctx = Context::default();
         let rect = Rect::from_min_size(Pos2::ZERO, window);
         let l = layout(rect);
-        let cells = step_cells(l.steps, 32);
+        let cells = step_cells(l.steps, Grid::ThirtySecond.steps_per_bar());
         assert_eq!(cells.len(), 32);
         for cell in &cells {
             assert!(
@@ -285,7 +294,11 @@ fn the_note_fits_a_thirty_second_key() {
                 cell.width()
             );
         }
-        assert_eq!(labels, 32 * 2, "every key drew its note and its number");
+        assert_eq!(
+            labels,
+            Grid::ThirtySecond.steps_per_bar() * 2,
+            "every key drew its note and its number"
+        );
     }
 }
 

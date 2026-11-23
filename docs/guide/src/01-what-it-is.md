@@ -37,7 +37,7 @@ The drum machine plays samples, but it is not a sampler either: each of its sixt
 filter and a tuning, in a kit, and nothing on the face slices, maps or layers one. What it adds is rhythm, not sampling —
 [`22-the-drum-machine`](22-the-drum-machine.md) says what it is.
 
-What it does have: five demo songs to start from, sixty-four patterns to fill, MIDI in for a keyboard or a controller,
+What it does have: seven demo songs to start from, sixty-four patterns to fill, MIDI in for a keyboard or a controller,
 and a save file that keeps it all.
 
 The next page gets you running.

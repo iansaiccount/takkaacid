@@ -78,6 +78,7 @@ gone 'MY BANKS' "the guide names a section the card no longer prints"
 # Phase 6 turned the two undecided cells into `GRID` and its readout: no page may still call them TBC, and the three grid
 # captions, the key's name and the two new demos are the facts the round is about (`23-pattern-grids`).
 gone 'TBC' "the guide still names the undecided cells"
+gone 'five demo' "the guide still counts five demos"
 # Anchored so the *correct* card line (`shift+up / down: tempo by 1 BPM`, which a page may quote) cannot trip it: the
 # character before `up` must not be a `+`.
 gone_re '(^|[^+])up / down: tempo' "the guide gives the tempo the plain arrows again"

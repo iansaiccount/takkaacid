@@ -23,7 +23,8 @@ rows are the sixteen sounds, top to bottom:
 
 A click on a cell strikes that voice on that step; a click on a struck cell takes it off again. `SHIFT`-click accents it —
 the 303's own accent gesture, louder and brighter — and an accent is printed brighter than a plain strike, so the pattern
-reads at a glance. Every fourth column is framed in the silk, which is where the beats are.
+reads at a glance. Every beat column is framed in the silk — every fourth step at `1/16`, every eighth at `1/32`, every
+third at `1/8T` — and a `1/32` pattern is thirty-two columns wide ([`23-pattern-grids`](23-pattern-grids.md)).
 
 **The playing column.** While the line runs, the column it is on is washed in the lamp — the 303's playhead, and a whole column
 of it, because a column here *is* a step. The wash is laid over the cells rather than in place of them, so a column struck on all
@@ -114,8 +115,9 @@ repository records where every sample in the three that ship came from and that 
 
 ## The demos, as drums
 
-`BANKS` is the same browser the 303 opens ([`12-songs-and-demos`](12-songs-and-demos.md)), with the same five demo names
-under `DEMO BANKS` — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and **Funk**. On a drum machine a click
+`BANKS` is the same browser the 303 opens ([`12-songs-and-demos`](12-songs-and-demos.md)), with the same seven demo names
+under `DEMO BANKS` — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock**, **Funk**, **Acid Jazz** and **Fast Acid**.
+On a drum machine a click
 loads that demo's **drum bank** instead of a song: eight grooves into `A1` to `A8`, at the demo's tempo and shuffle, with
 this machine's kit and the session's name left alone. The acid line and its drums are two halves of one variation, and a
 later round is where one gesture loads both.
