@@ -394,3 +394,30 @@ command, as every other picture has.
   picture budget went to the three that a stale face would have contradicted. `23-pattern-grids` therefore describes
   the drum columns in prose and references none; the row's own picture carries the grid. Cost if wrong: the book has no
   picture of twelve drum columns until the player takes one.
+
+**Branch review (round 02).** A subagent that wrote none of it reviewed `a3b24fa..HEAD`. It blocked on four findings;
+all four are fixed in `e2e0969`, and the suite is **974/974** with clippy, `fmt --check` and `guide: ok`.
+
+- **Fixed: a `GRID` press that narrowed the bar left the step border outside it.** With the border on step 21 of
+  thirty-two, pressing to `1/8T` showed no outlined key at all and the next keystroke wrote clamped step 12 — the border
+  stopped being where the keyboard would land. `row_transport` now clamps `selected` into the arriving bar (the rule the
+  paste already keeps), and `narrowing_the_bar_counts_the_sound_it_rests` asserts 20 → 11.
+- **Fixed: `22-the-drum-machine.md` contradicted the framing this round shipped.** It said "every fourth column is
+  framed"; the face frames `grid.is_beat(step)`. It now says every fourth/eighth/third by grid, links
+  `23-pattern-grids`, and names the seven demos.
+- **Fixed: three pages still sold five demos** (`01`, `05`, `22`). All seven are named now, and `check.sh` gains
+  `gone 'five demo'` so the count cannot slide back.
+- **Fixed: the `Acid Jazz` shuffle is pinned** (`assert_eq!(jazz.state.swing, 0.0)`) — the book and `EAR_TESTING.md` both
+  claim "the triplet grid is the swing", and a regression to `0.35` would otherwise have passed every gate.
+- **Fixed: `grid_live` spelled `16`/`32`** in four places; it now asks `Grid::…::steps_per_bar()`.
+
+**Still open, recorded rather than silently deferred:**
+- **Review focus 2 (a `1/8T` slide off its last step) has no test.** The look-ahead is `(i + 1) % len` and the glide
+  across the wrap depends on `Voice::prev_slide` surviving it, but nothing exercises a twelve-step bar's last-step
+  slide. The test it needs is a live one (a slide on step 12 into a sounding step 1, read back from the painted arrow)
+  or a `Voice` test beside the factory's slide check; it was not written before this session's budget ran out.
+- **P2 words:** `demo.rs`'s header and `the_five_demos_are_five_lines` still say five (the test passes over seven),
+  `tests/drum_banks.rs`'s doc comment and two messages say five, `ui/banks.rs:27` says five, `img/README.md`'s
+  provenance bullet still describes the old `banks-card.png` session, and Progress's claim that pages `09`/`10`/`16`
+  and `11` were all edited is stronger than what landed (`10`'s "the sixteenths are even" is still there; `11` was not
+  touched). None contradicts the panel except the `10` sentence, which is true at `1/16` and stale at the others.
