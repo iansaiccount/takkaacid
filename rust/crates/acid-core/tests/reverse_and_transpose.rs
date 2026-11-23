@@ -219,20 +219,20 @@ fn a_direction_asked_for_mid_bar_waits_out_a_pause() {
 /// answer. `deliver` plays through this, so a panel drawing it cannot point at a step that is not the one sounding.
 #[test]
 fn sounding_step_is_the_mirror_of_the_clock() {
-    assert_eq!(sounding_step(0, false), 0);
+    assert_eq!(sounding_step(0, false, 16), 0);
     assert_eq!(
-        sounding_step(3, true),
+        sounding_step(3, true, 16),
         12,
         "a reversed bar reads from its other end"
     );
     assert_eq!(
-        sounding_step(0, true),
+        sounding_step(0, true, 16),
         15,
         "and the two ends do not swap by one"
     );
-    assert_eq!(sounding_step(15, true), 0);
+    assert_eq!(sounding_step(15, true, 16), 0);
     // A position past the bar wraps rather than panicking: the panel reads the clock out of a cell a block behind the audio,
     // and `start_at` already takes a wrapping count.
-    assert_eq!(sounding_step(STEPS_PER_PATTERN, false), 0);
-    assert_eq!(sounding_step(STEPS_PER_PATTERN + 1, true), 14);
+    assert_eq!(sounding_step(STEPS_PER_PATTERN, false, 16), 0);
+    assert_eq!(sounding_step(STEPS_PER_PATTERN + 1, true, 16), 14);
 }

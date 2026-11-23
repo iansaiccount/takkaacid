@@ -514,7 +514,11 @@ fn draw_grid(
     // is. This way the strikes show through it and the column is always visible. A stopped or paused machine has no playhead,
     // as the 303's LEDs go out; `column_rect` clamps, so a position a block behind cannot land outside the grid.
     if state.playing {
-        let sounding = sounding_step(state.position, shared.is_reverse_active());
+        let sounding = sounding_step(
+            state.position,
+            shared.is_reverse_active(),
+            state.pattern.len(),
+        );
         ui.painter()
             .rect_filled(column_rect(l, sounding), 2.0 * s, playhead_fill(p));
     }

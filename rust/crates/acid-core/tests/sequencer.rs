@@ -3,7 +3,7 @@
 //! Sample-accuracy is the point. `render` splits a block at every step boundary, so a note starts on the
 //! exact sample the clock says it should, whatever block size the audio device asks for.
 
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 use acid_core::sequencer::Sequencer;
 use acid_core::voice::Voice;
@@ -61,4 +61,63 @@ fn position_wraps_at_sixteen_and_stop_closes_the_gate() {
     let mut buf = vec![0.0; 4_800];
     seq.render(&mut v, &mut buf);
     assert!(acid_core::analysis::rms(&buf) < 0.001);
+}
+
+#[test]
+fn a_twelve_step_pattern_wraps_at_twelve() {
+    let sr = 48_000.0;
+    let mut seq = Sequencer::new(sr);
+    seq.set_pattern(Arc::new(Pattern::from_steps_in(
+        Grid::EighthTriplet,
+        [Step::note(Pitch::A, 0); 12],
+    )));
+    seq.set_bpm(120.0);
+    seq.start();
+    let mut v = Voice::new(sr);
+    // One bar at 120 BPM is 96 000 samples, and a twelfth of it is a whole 8000: no float ambiguity.
+    let step = acid_core::timing::samples_per_bar(120.0, sr) / 12.0;
+    seq.render(&mut v, &mut vec![0.0; 11 * step as usize + 1]);
+    assert_eq!(seq.position(), 11, "eleven steps into a twelve-step bar");
+    seq.render(&mut v, &mut vec![0.0; step as usize + 1]);
+    assert_eq!(
+        seq.position(),
+        0,
+        "the twelfth wraps to the top of the bar, not to a thirteenth step"
+    );
+    assert_eq!(seq.clock().step_index(), 12, "one bar is twelve steps");
+}
+
+#[test]
+fn a_bar_line_arrives_after_one_bar_at_every_grid() {
+    let sr = 48_000.0;
+    let bar = acid_core::timing::samples_per_bar(120.0, sr) as usize;
+    for grid in Grid::ALL {
+        let mut seq = Sequencer::new(sr);
+        seq.set_pattern(Arc::new(Pattern::empty_in(grid)));
+        seq.set_bpm(120.0);
+        seq.start();
+        let mut v = Voice::new(sr);
+        seq.render(&mut v, &mut vec![0.0; bar]);
+        assert_eq!(
+            seq.bar_line(),
+            Some(bar),
+            "{}: a bar is a bar, so its line lands at the same sample",
+            grid.name()
+        );
+    }
+}
+
+#[test]
+fn sounding_step_mirrors_within_the_count() {
+    use acid_core::sequencer::sounding_step;
+    assert_eq!(sounding_step(0, false, 12), 0);
+    assert_eq!(sounding_step(11, false, 12), 11);
+    assert_eq!(
+        sounding_step(0, true, 12),
+        11,
+        "a twelve-step bar reads from 11"
+    );
+    assert_eq!(sounding_step(11, true, 12), 0);
+    assert_eq!(sounding_step(0, true, 32), 31);
+    assert_eq!(sounding_step(31, true, 32), 0);
 }

@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use crate::clock::Clock;
-use crate::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use crate::pattern::{Pattern, Step};
 
 /// What a machine does when the clock hands it a step.
 ///
@@ -43,10 +43,12 @@ pub trait Performer: Sized {
 /// walking forward, and a playhead left on the clock would be on the one step that is silent.
 ///
 /// `position` wraps, so a caller may hand a long-running count or a value read from a cell a block behind the audio.
-pub fn sounding_step(position: usize, reversed: bool) -> usize {
-    let position = position % STEPS_PER_PATTERN;
+pub fn sounding_step(position: usize, reversed: bool, steps: usize) -> usize {
+    // A pattern always has steps, so this is a guard against a caller's arithmetic rather than a case the app reaches.
+    let steps = steps.max(1);
+    let position = position % steps;
     if reversed {
-        STEPS_PER_PATTERN - 1 - position
+        steps - 1 - position
     } else {
         position
     }
@@ -56,7 +58,7 @@ pub fn sounding_step(position: usize, reversed: bool) -> usize {
 pub struct Sequencer {
     clock: Clock,
     pattern: Arc<Pattern>,
-    /// Current step, always `0..STEPS_PER_PATTERN`.
+    /// Current step, always `0..pattern.len()`.
     position: usize,
     /// Read the pattern from its other end. A direction, not a different pattern: nothing is stored, copied or saved. It only
     /// ever changes on a bar line — see [`Sequencer::set_reverse`].
@@ -96,6 +98,11 @@ impl Sequencer {
     /// Swap the playing pattern. Position, slide history and the clock are untouched, so a switch at
     /// speed does not stutter the beat.
     pub fn set_pattern(&mut self, pattern: Arc<Pattern>) {
+        // The grid is the pattern's, and the clock divides the bar by it: a pattern swapped for one of another grid takes
+        // the bar with it, rescaled like a tempo change. The position wraps into the new bar, so a swap from a long bar into
+        // a short one begins the new bar at its first step rather than a step that no longer exists.
+        self.clock.set_steps_per_bar(pattern.grid.steps_per_bar());
+        self.position %= pattern.len();
         self.pattern = pattern;
     }
 
@@ -124,7 +131,7 @@ impl Sequencer {
     /// clock is put back on a boundary and the step it lands on sounds, so a seek is never a silent restart. `step` wraps:
     /// callers may hand a long-running count, not an index.
     pub fn start_at(&mut self, step: usize) {
-        self.position = step % STEPS_PER_PATTERN;
+        self.position = step % self.pattern.len();
         self.arm();
     }
 
@@ -144,7 +151,7 @@ impl Sequencer {
         self.running = false;
         self.trigger_pending = false;
         self.gate_close_pending = false;
-        self.pending_later = Some((step % STEPS_PER_PATTERN, silence));
+        self.pending_later = Some((step % self.pattern.len(), silence));
     }
 
     /// Where step 0 began in the last [`Sequencer::render`], in samples from its start, if it began in that block at all.
@@ -250,7 +257,7 @@ impl Sequencer {
         self.arm();
     }
 
-    /// The step being played, `0..16`.
+    /// The step being played, `0..pattern.len()`.
     pub fn position(&self) -> usize {
         self.position
     }
@@ -265,7 +272,7 @@ impl Sequencer {
     /// step count all still mean what they meant, and only the step that sounds is mirrored. What makes a step sound is the
     /// performer's: a rest, and a drum step striking no voice, are both silence there — the clock does not decide it.
     fn deliver<P: Performer>(&mut self, performer: &mut P, position: usize) {
-        let step = self.pattern.steps[sounding_step(position, self.reverse)];
+        let step = self.pattern.steps[sounding_step(position, self.reverse, self.pattern.len())];
         performer.step(&step);
     }
 
@@ -309,7 +316,7 @@ impl Sequencer {
             let crossed = self.clock.advance_by(take);
             if crossed > 0 {
                 let before = self.position;
-                self.position = (self.position + crossed) % STEPS_PER_PATTERN;
+                self.position = (self.position + crossed) % self.pattern.len();
                 // The bar line: where a direction may change, and where a device waiting to join is let in. Both halves of
                 // the old bar played in the direction that bar began in.
                 if self.position == 0 {

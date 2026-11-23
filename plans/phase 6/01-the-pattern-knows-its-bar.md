@@ -596,3 +596,17 @@ The failure modes the spec implies and no task's own test names, each pinned in 
   **Ruling: six "every step" assertions moved from `steps` to `iter()` / `len()`** (`clear_live`, `perform_live`,
   `state_live`, `live_edit`, `bank`). Over thirty-two slots `all(|s| s.on)` is false by construction and `steps.len() == 16`
   is now 32. Cost if wrong: none — they now assert the bar rather than the table.
+
+- **Task 4 — `acid-core` asks the pattern.** `sounding_step` takes the count; `Sequencer::set_pattern` hands the pattern's
+  grid to the clock and wraps `position` into the new bar; `start_at`, `start_later`, the crossing in `render` and `deliver`
+  all ask `pattern.len()`. `pattern_swap::swap_now` takes the count, and `main` passes the **playing** bar's — the ruling the
+  builder check put into the spec. Proved by `a_twelve_step_pattern_wraps_at_twelve`,
+  `a_bar_line_arrives_after_one_bar_at_every_grid`, `sounding_step_mirrors_within_the_count` and the swap's own unit test,
+  each watched fail first (as E0061, the missing argument). Workspace suite **954/954**, clippy `-D warnings`, `fmt --check`
+  green.
+  **Ruling: the plan's twelve-step test asserted the wrong position.** It first said "a bar plus a step lands on 1", which is
+  100 samples short of a boundary. It now walks eleven steps and then the twelfth, which is what proves the wrap — and
+  asserts `step_index() == 12`, so "twelve steps is a bar" is said in the test as well as the prose.
+  **Ruling: `factory`'s displacement moved to `% base.len()` in Task 3**, while the type was open and before this task
+  started. Cost if wrong: none — it is what this task's list asks for, and it could not wait without leaving a hard-coded 16
+  in the one function that rotates a phrase.

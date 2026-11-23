@@ -736,7 +736,11 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         // its other end, so the light walks back along the keys with the notes it is sounding. The direction is the one the
         // audio thread published, not the one the key asked for — a running line takes a request at the bar line, and a light
         // on the request would turn a bar ahead of the sound.
-        let sounding = sounding_step(state.position, shared.is_reverse_active());
+        let sounding = sounding_step(
+            state.position,
+            shared.is_reverse_active(),
+            state.pattern.len(),
+        );
         for (i, cell) in keys.iter().enumerate() {
             let step = state.pattern.steps[i % STEPS_PER_PATTERN];
             let view = step_key::step_view(
