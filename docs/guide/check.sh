@@ -75,6 +75,9 @@ gone 'plain up/down' "the guide puts the tempo on the plain arrows again"
 # Phase 5's second round renamed one heading and added two sections, and the words are the point of that round: the card says
 # SONGS, PATTERN BANKS and RACKS, and no page may go back to the name a song list had while it was the only list.
 gone 'MY BANKS' "the guide names a section the card no longer prints"
+# Phase 6 turned the two undecided cells into `GRID` and its readout: no page may still call them TBC, and the three grid
+# captions, the key's name and the two new demos are the facts the round is about (`23-pattern-grids`).
+gone 'TBC' "the guide still names the undecided cells"
 # Anchored so the *correct* card line (`shift+up / down: tempo by 1 BPM`, which a page may quote) cannot trip it: the
 # character before `up` must not be a `+`.
 gone_re '(^|[^+])up / down: tempo' "the guide gives the tempo the plain arrows again"
@@ -96,6 +99,7 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'runs the column right to left with the pattern' \
             '| `shift+up` / `shift+down` | tempo' \
             'PATTERN BANKS' 'SAVE BANK' 'SAVE RACK' 'LOAD RACK' 'banks/<name>.json' \
+            '1/16' '1/32' '1/8T' 'GRID' 'Acid Jazz' 'Fast Acid' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
 done

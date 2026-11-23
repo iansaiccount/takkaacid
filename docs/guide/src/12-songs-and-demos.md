@@ -5,12 +5,13 @@ keys along the bottom. It keeps three different amounts of work: a **song** is t
 patterns and the machine they were written on, and a **rack** is a document of its own that this build only has keys for.
 
 ## The four lists
-**`DEMO BANKS`** are the five that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock** and
-**Funk**. They are read-only — there is no way to overwrite one — and each is a patch plus eight patterns in `A1` to `A8`
+**`DEMO BANKS`** are the seven that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock**,
+**Funk**, **Acid Jazz** (a `1/8T` triplet line) and **Fast Acid** (a `1/32` one). They are read-only — there is no way to
+overwrite one — and each is a patch plus eight patterns in `A1` to `A8` ([`23-pattern-grids`](23-pattern-grids.md))
 ([`11-the-bank`](11-the-bank.md)). Clicking one loads it as a **new** song: named `New song`, not yet on disk — its name
 sits in amber until you save it, which is how the face says "not yet written".
 
-On a drum machine the same five rows load that demo's **drum bank** instead: eight grooves into `A1` to `A8`, at the
+On a drum machine the same seven rows load that demo's **drum bank** instead: eight grooves into `A1` to `A8`, at the
 demo's tempo and shuffle, with that machine's kit and the session's name left exactly as they were. The tempo is the whole
 rack's, though — one cell, every machine on it — so loading a bank also retunes the 303s beside it, and that tempo, unlike a
 second device's grooves, is what a save keeps. A drum bank is patterns, not a song — nothing is renamed and no sound is loaded with it.

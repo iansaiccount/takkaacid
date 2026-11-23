@@ -369,3 +369,28 @@ command, as every other picture has.
   ride without the shuffle knob, and is the snare comping late enough to read as jazz; `Fast Acid`: do the
   thirty-second rolls land as a fill rather than a stutter, and does the kick on every eighth hold the bar together at
   152. A demo nobody has heard is not a demo, so this stays open until the player writes the two lines.
+
+- **Task 4 — the book, the pins and the pictures.** New page `23-pattern-grids` (what a grid is, the three and what each
+  is for, the `GRID` key and its readout, what a press costs outside the new bar and that the status line counts it,
+  the row and the beat, and the six things that keep a grid — `CLEAR`, `RANDOM`, the bank, the clipboard, shuffle, a
+  pattern change at the bar line), in `SUMMARY` under Part III after *Copying and pasting a pattern*, and
+  cross-referenced from `01`, `04`, `08`, `12` and `22`. The stale claims are edited in place: `01` (a bar of steps),
+  `04` and `20` (`GRID` and its readout instead of `TBC` twice), `08` (one bar divided by its grid), `09`/`10`/`16`
+  (the swing leans *the steps*, not sixteenths), `10` (`CLEAR` empties the bar's steps), `12` (seven demos, the two
+  new ones named), `18` (a device's own bar of steps), `21` (the clipboard carries the grid), `22` (the bar's steps).
+  `check.sh` gains `gone 'TBC'` and the pins `1/16`, `1/32`, `1/8T`, `GRID`, `Acid Jazz`, `Fast Acid`.
+  **Pictures:** `transport.png` retaken (the row now reads `REVERSE TRANS - +0 TRANS + GRID 1/16 LEARN` — no `TBC`),
+  `banks-card.png` retaken (seven demo rows, ending `Acid Jazz` and `Fast Acid`), and a new `35-grid.png` — the row at
+  thirty-two keys, `-crop 1896x208+32+832` from the layout's step band — with `img/README.md` updated for all three.
+  Taken on a fresh `Xvfb :86 -screen 0 2000x1400x24` (`getdisplaygeometry` → `2000 1400`, window `1960x1340`, a
+  throwaway `TAKKA_ACID_DATA_DIR`, pointer parked away from the panel). `./docs/guide/check.sh` → `guide: ok`.
+  **The manual check on the corner number, recorded as the plan asks.** `35-grid.png` was opened and read: at thirty-two
+  keys the corner number is legible at 8 pt (`1`..`32` along the bottom of each key, the two-digit values tight but
+  distinct) and the note sits above it in the key — a `C#5`-class label is the widest and still inside its key at the
+  design size; at the smallest window the keycap now shrinks the note to fit (Task 1's ruling), so the note is small
+  there but never spills. The player's own eye on the picture is the verdict this records toward, not a substitute for
+  it.
+  **Not taken: `35-drum-grid.png`.** It needs a second device (a drum machine) on a `1/8T` pattern, and the round's
+  picture budget went to the three that a stale face would have contradicted. `23-pattern-grids` therefore describes
+  the drum columns in prose and references none; the row's own picture carries the grid. Cost if wrong: the book has no
+  picture of twelve drum columns until the player takes one.

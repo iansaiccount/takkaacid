@@ -35,7 +35,8 @@ answers, so a click says the rack is full rather than doing nothing.
 
 Each device is a whole machine, not a subset of one:
 
-- **its own sixteen steps** and its own **sixty-four patterns** in eight banks of eight;
+- **its own bar of steps** — sixteen, twelve or thirty-two, at the pattern's own grid — and its own **sixty-four patterns** in
+  eight banks of eight;
 - its own **seven knobs** and volume;
 - its own **shuffle**, its own octave transpose, its own `RANDOM` density and scale;
 - its own **MIDI inputs** — which of the open ports it hears, on which channel, and whether it plays notes or only answers

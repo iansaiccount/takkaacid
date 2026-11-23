@@ -82,7 +82,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/running.png` | the transport running: `PLAY` lit in the tape deck, `PAUSE` dark | `space` from the first-sound state |
 | `img/help-card.png` | the help card over the panel: the arrows as two pairs (`shift+left` / `right` the pattern, `shift+up` / `down` the tempo, then the plain `left` / `right` and `up` / `down` for the face), the drum face's keys folded into those lines, and its two own lines — `h` and `l` / `b` / `p` | `F1` on the arrows round's session (below), pointer parked outside the window |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
-| `img/banks-card.png` | the bank browser, retaken this round: `NOW: New song - SAVED`, the five demo banks, `PATTERN BANKS` with one saved bank (`Easy`) and its `x`, the `bank name` field with `SAVE BANK`, `SONGS` with one saved song and its `x`, and `RACKS`' `SAVE RACK` / `LOAD RACK` | click `BANKS`; the bank row is a file seeded before the launch, because a first run has none |
+| `img/banks-card.png` | the bank browser, retaken for phase 6: `NOW: New song - UNSAVED`, the **seven** demo banks ending in `Acid Jazz` and `Fast Acid`, the `PATTERN BANKS` field with `SAVE BANK`, empty `SONGS`, and `RACKS`' `SAVE RACK` / `LOAD RACK` | click `BANKS` on a first run |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
 | `img/picker.png` | the picker: `ADD DEVICE` with the `ACID` and `DRUMS` rows and `CLOSE`, and nothing under them — retaken in the whole-rack round, when the line that said names and extra devices were not saved went away | click `+` at the strip's right end; park the pointer outside the window before grabbing |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |
@@ -96,7 +96,8 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/knob-row.png` | the seven tone knobs and their captions | `-crop 1960x480+0+200` |
 | `img/step-row.png` | the sixteen step keys, their LEDs and their numbers | `-crop 1960x280+0+792` |
 | `img/switches.png` | `BANK PATTERN COPY PASTE SAVE BANKS STEP` | `-crop 1960x132+0+1056` |
-| `img/transport.png` | the row as the face draws it: `REVERSE TRANS - [+n] TRANS + TBC TBC LEARN` — the transport itself lives in the top band's tape deck | `-crop 1960x104+0+1192` |
+| `img/transport.png` | the row as the face draws it: `REVERSE TRANS - [+n] TRANS + GRID [1/16] LEARN` — the transport itself lives in the top band's tape deck | `-crop 1960x104+0+1192` |
+| `img/35-grid.png` | the step row on a `1/32` pattern: thirty-two keys, the notes and the corner numbers the player judged by eye | press `GRID` on a first run, then `-crop 1896x208+32+832` |
 
 The five band crops and `strip.png` come from the same session as `first-sound.png` (the strip crop from the two-device
 state, because one cell does not show what a strip is).

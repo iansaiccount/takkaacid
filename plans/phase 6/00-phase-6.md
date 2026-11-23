@@ -29,7 +29,7 @@ wrong.
 Progress lines current; the review is of the branch at the pull request, by a subagent that wrote none of it
 (`AGENTS.md`).
 
-**State: round 01 complete and reviewed; round 02 not started.** Round 01 changed no pixels, so the book did not move
+**State: round 01 complete and reviewed; round 02 complete but for the ear check and one picture.** Round 01 changed no pixels, so the book did not move
 in it; the plan's `## Progress` says so rather than leaving the absence unexplained, and records the branch review
 and what was done about each finding. Round 02 is where the face, the demos and the book change.
 

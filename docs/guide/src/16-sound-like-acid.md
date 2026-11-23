@@ -41,7 +41,7 @@ always cut off down, not resonance down.
 
 ## One line, not chords
 
-Sixteen steps, one voice. Write a phrase a bass player could play with one finger: a few notes, a couple of octave jumps,
+A bar of steps, one voice. Write a phrase a bass player could play with one finger: a few notes, a couple of octave jumps,
 a rest where you want the breath. Sparse lines carry the accent and the slide much better than busy ones; a step row full
 of notes is a step row with nowhere to put emphasis.
 
@@ -49,7 +49,7 @@ A good test: hum the line. If you can, it will sound like a bass line. If you ca
 
 ## Shuffle late, not early
 
-Swing leans the offbeat back. A little of it — the knob just off zero — is what makes a straight sixteenth line feel like
+Swing leans the offbeat back. A little of it — the knob just off zero — is what makes a straight line feel like
 it is being played rather than generated. Too much and the line limps; the groove has to stay a groove.
 
 And it is a seasoning, not an ingredient: start straight, and push `SHUFFLE` up when the line needs a lift, rather than

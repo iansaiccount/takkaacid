@@ -23,6 +23,7 @@
 - [The performance row](10-performance-row.md)
 - [The bank](11-the-bank.md)
 - [Copying and pasting a pattern](21-copy-and-paste.md)
+- [Pattern grids](23-pattern-grids.md)
 
 # Part IV — Keeping and connecting
 

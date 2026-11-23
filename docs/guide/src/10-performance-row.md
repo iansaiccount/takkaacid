@@ -38,11 +38,11 @@ Every roll is a brand-new line, so there is no undo. Save first if what you have
 ## The row while the line runs
 
 All three groups work with the transport running, and that is how they are meant to be used: octave the second bar, roll
-a new line for the break, nudge the shuffle until the sixteenths sit where you want them.
+a new line for the break, nudge the shuffle until the steps sit where you want them.
 ## `CLEAR`
 
 The row's only destructive key, and it asks twice: the first click arms it and the key itself says `CLEAR?`, the second
-empties the sixteen steps. An arm goes stale after a couple of seconds, and anything that changes the pattern — a step, an
+empties the bar's steps. An arm goes stale after a couple of seconds, and anything that changes the pattern — a step, an
 octave move, a `RANDOM`, a pattern switch — disarms it, so the second click always means the empty you were just asked about.
 [`08-writing-steps`](08-writing-steps.md) covers it beside the step keys, which is where it began.
 
