@@ -7,7 +7,7 @@
 
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
-use acid_core::pattern::STEPS_PER_PATTERN;
+
 use eframe::egui::{Event, Key};
 
 use super::{PanelState, drum_panel, kits, learn, selection, shortcuts, tape, transport};
@@ -174,8 +174,11 @@ pub fn handle(
                         return Handled::Selection;
                     }
                     drum_panel::FaceKey::MoveStep(delta) => {
-                        panel.selected =
-                            selection::move_selection(panel.selected, delta, STEPS_PER_PATTERN);
+                        panel.selected = selection::move_selection(
+                            panel.selected,
+                            delta,
+                            shared.pattern().len(),
+                        );
                         return Handled::Selection;
                     }
                     drum_panel::FaceKey::Write { accented } => {

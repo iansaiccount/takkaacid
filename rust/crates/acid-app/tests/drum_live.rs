@@ -20,7 +20,7 @@ use acid_app::ui::tips;
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::bank::PatternBank;
 use acid_core::drums::{Drum, FilterKind, KitVoice};
-use acid_core::pattern::{STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, Pattern, STEPS_PER_PATTERN, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{
     self, Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape,
@@ -300,11 +300,11 @@ fn the_grid_has_sixteen_labelled_rows_and_sixteen_cells() {
         let label = drum_panel::label_rect(&l, drum);
         assert!(row.contains_rect(label), "{drum:?}'s label escapes its row");
         assert!(
-            label.right() <= drum_panel::cell_rect(&l, drum, 0).left() + 0.01,
+            label.right() <= drum_panel::cell_rect(&l, drum, 0, STEPS_PER_PATTERN).left() + 0.01,
             "{drum:?}'s label overlaps the first cell"
         );
         for step in 0..STEPS_PER_PATTERN {
-            let cell = drum_panel::cell_rect(&l, drum, step);
+            let cell = drum_panel::cell_rect(&l, drum, step, STEPS_PER_PATTERN);
             assert!(
                 row.contains_rect(cell),
                 "{drum:?}'s step {step} escapes its row"
@@ -347,7 +347,7 @@ fn a_click_arms_a_voice_on_a_step() {
         &ctx,
         &mut panel,
         &shared,
-        drum_panel::cell_rect(&l, Drum::Snare, 4).center(),
+        drum_panel::cell_rect(&l, Drum::Snare, 4, STEPS_PER_PATTERN).center(),
         Modifiers::default(),
     );
 
@@ -372,7 +372,7 @@ fn a_shift_click_accents_it() {
         &ctx,
         &mut panel,
         &shared,
-        drum_panel::cell_rect(&l, Drum::Kick, 2).center(),
+        drum_panel::cell_rect(&l, Drum::Kick, 2, STEPS_PER_PATTERN).center(),
         shift,
     );
 
@@ -484,7 +484,7 @@ fn a_shift_click_on_a_label_mutes_the_row_and_the_mask() {
     let mut struck = shared.pattern().steps[0];
     struck.hit(Drum::Clap, true);
     shared.set_step(0, struck);
-    let cell = drum_panel::cell_rect(&l, Drum::Clap, 0);
+    let cell = drum_panel::cell_rect(&l, Drum::Clap, 0, STEPS_PER_PATTERN);
     let accent = theme::palette(Scheme::Black).led_accent;
     let dim = theme::palette(Scheme::Black).silkscreen_dim;
     assert_eq!(
@@ -536,7 +536,7 @@ fn a_shift_click_on_a_label_mutes_the_row_and_the_mask() {
 fn the_face_paints_from_the_palette() {
     let shared = SharedState::new();
     let l = layout(screen());
-    let accent_cell = drum_panel::cell_rect(&l, Drum::Kick, 0);
+    let accent_cell = drum_panel::cell_rect(&l, Drum::Kick, 0, STEPS_PER_PATTERN);
     shared.set_step(0, {
         let mut step = shared.pattern().steps[0];
         step.hit(Drum::Kick, true);
@@ -608,15 +608,24 @@ fn every_fourth_column_is_framed() {
     let stroked = strokes(&paint(&ctx, &mut panel, &shared));
 
     assert!(
-        framed(&stroked, drum_panel::cell_rect(&l, Drum::Kick, 0)),
+        framed(
+            &stroked,
+            drum_panel::cell_rect(&l, Drum::Kick, 0, STEPS_PER_PATTERN)
+        ),
         "the downbeat is framed"
     );
     assert!(
-        framed(&stroked, drum_panel::cell_rect(&l, Drum::Snare, 4)),
+        framed(
+            &stroked,
+            drum_panel::cell_rect(&l, Drum::Snare, 4, STEPS_PER_PATTERN)
+        ),
         "and every fourth column on every row is"
     );
     assert!(
-        !framed(&stroked, drum_panel::cell_rect(&l, Drum::Kick, 1)),
+        !framed(
+            &stroked,
+            drum_panel::cell_rect(&l, Drum::Kick, 1, STEPS_PER_PATTERN)
+        ),
         "an off-beat cell is not framed"
     );
 }
@@ -641,7 +650,7 @@ fn a_click_lands_on_the_step_under_the_pointer_while_the_line_runs() {
         &ctx,
         &mut panel,
         &shared,
-        drum_panel::cell_rect(&l, Drum::Snare, 3).center(),
+        drum_panel::cell_rect(&l, Drum::Snare, 3, STEPS_PER_PATTERN).center(),
         Modifiers::default(),
     );
 
@@ -683,7 +692,7 @@ fn the_grid_stays_hittable_at_both_scale_extremes() {
                 row.contains_rect(label),
                 "{factor}x: {drum:?}'s label escapes its row"
             );
-            let first = drum_panel::cell_rect(&l, drum, 0);
+            let first = drum_panel::cell_rect(&l, drum, 0, STEPS_PER_PATTERN);
             assert!(
                 label.right() <= first.left() + 0.01
                     || label.top() >= first.bottom()
@@ -691,7 +700,7 @@ fn the_grid_stays_hittable_at_both_scale_extremes() {
                 "{factor}x: {drum:?}'s label overlaps the cell beside it"
             );
             for step in 0..STEPS_PER_PATTERN {
-                let cell = drum_panel::cell_rect(&l, drum, step);
+                let cell = drum_panel::cell_rect(&l, drum, step, STEPS_PER_PATTERN);
                 assert!(
                     row.contains_rect(cell),
                     "{factor}x: {drum:?}'s step {step} escapes its row"
@@ -711,7 +720,8 @@ fn the_grid_stays_hittable_at_both_scale_extremes() {
                         !label.intersects(drum_panel::cell_rect(
                             &l,
                             Drum::ALL[rows.len() - 1],
-                            step
+                            step,
+                            STEPS_PER_PATTERN
                         )),
                         "{factor}x: a label sits on the row above's cells"
                     );
@@ -1513,7 +1523,7 @@ fn the_selected_step_is_painted() {
     let painted = paint(&ctx, &mut panel, &shared);
 
     let accent = theme::palette(Scheme::Black).led_accent;
-    let selected = drum_panel::column_rect(&l, 6);
+    let selected = drum_panel::column_rect(&l, 6, STEPS_PER_PATTERN);
     assert!(
         strokes_with_ink(&painted)
             .iter()
@@ -1521,9 +1531,9 @@ fn the_selected_step_is_painted() {
         "the selected step's column is not stroked in the accent"
     );
     assert!(
-        !strokes_with_ink(&painted)
-            .iter()
-            .any(|(rect, stroke)| *rect == drum_panel::column_rect(&l, 7) && stroke.color == accent),
+        !strokes_with_ink(&painted).iter().any(|(rect, stroke)| *rect
+            == drum_panel::column_rect(&l, 7, STEPS_PER_PATTERN)
+            && stroke.color == accent),
         "a column that is not selected is stroked"
     );
 
@@ -1585,6 +1595,50 @@ fn the_arrows_move_the_selected_step_on_a_drum_face() {
         Handled::Shortcut(Shortcut::TempoUp)
     );
     assert_eq!(panel.selected, STEPS_PER_PATTERN - 1);
+}
+
+/// The columns are the bar: a thirty-second pattern has thirty-two of them, every one inside the grid area, and the
+/// keyboard's walk reaches the last — which is the column the face marks as selected.
+#[test]
+fn a_thirty_second_bar_has_thirty_two_columns() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    shared.set_pattern(Arc::new(Pattern::empty_in(Grid::ThirtySecond)));
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    let l = layout(screen());
+    let count = shared.pattern().len();
+    assert_eq!(count, 32, "thirty-two steps to the bar");
+
+    let cells = drum_panel::row_cells(&l, Drum::Kick, count);
+    assert_eq!(cells.len(), 32, "a column per step of the bar");
+    for (index, cell) in cells.iter().enumerate() {
+        assert!(
+            drum_panel::grid_area(&l).contains_rect(*cell),
+            "column {index} escapes the grid: {cell:?}"
+        );
+    }
+
+    // The first frame loads this device's editor slot, which starts the step at 0; a hand settles it after that.
+    paint(&ctx, &mut panel, &shared);
+    panel.selected = 0;
+    for _ in 0..(count - 1) {
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
+    }
+    assert_eq!(
+        panel.selected,
+        count - 1,
+        "the walk reaches the last column"
+    );
+
+    let painted = paint(&ctx, &mut panel, &shared);
+    let accent = theme::palette(Scheme::Black).led_accent;
+    assert!(
+        strokes_with_ink(&painted).iter().any(|(rect, stroke)| *rect
+            == drum_panel::column_rect(&l, count - 1, count)
+            && stroke.color == accent),
+        "the selected column is not the one the walk reached"
+    );
 }
 
 #[test]
@@ -1680,7 +1734,7 @@ fn the_keyboard_and_the_pointer_write_the_same_step() {
             &ctx,
             &mut panel,
             &shared,
-            drum_panel::cell_rect(&l, Drum::Clap, 3).center(),
+            drum_panel::cell_rect(&l, Drum::Clap, 3, STEPS_PER_PATTERN).center(),
             Modifiers::SHIFT,
         );
         shared.pattern().steps[3]

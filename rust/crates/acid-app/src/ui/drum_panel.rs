@@ -10,7 +10,7 @@
 use std::sync::atomic::Ordering;
 
 use acid_core::drums::{Drum, FilterKind, KitVoice};
-use acid_core::pattern::{STEPS_PER_PATTERN, Step};
+use acid_core::pattern::Step;
 use acid_core::sequencer::sounding_step;
 use eframe::egui::{self, Align2, Pos2, Rect};
 
@@ -156,7 +156,7 @@ pub fn strike_step(
     drum: Drum,
     accent: bool,
 ) {
-    let index = step.min(STEPS_PER_PATTERN - 1);
+    let index = step.min(shared.pattern().len() - 1);
     let updated = toggle_hit(shared.pattern().steps[index], drum, accent);
     shared.set_step(index, updated);
     state.pattern = shared.pattern();
@@ -327,33 +327,32 @@ pub fn label_rect(l: &layout::PanelLayout, drum: Drum) -> Rect {
 }
 
 /// One cell of the grid: a voice on a step.
-pub fn cell_rect(l: &layout::PanelLayout, drum: Drum, step: usize) -> Rect {
-    row_cells(l, drum)[step]
+pub fn cell_rect(l: &layout::PanelLayout, drum: Drum, step: usize, count: usize) -> Rect {
+    row_cells(l, drum, count)[step.min(count.saturating_sub(1))]
 }
 
 /// One voice's step cells, in step order — the row's geometry, built once per row rather than once per cell.
 ///
 /// Sixteen cells a row and sixteen rows is 256 rects a frame; building the row's `Vec` once per cell (as the first cut did)
-/// was 256 transient allocations a frame on the UI thread, while a hand drags a dial.
-pub fn row_cells(l: &layout::PanelLayout, drum: Drum) -> [Rect; STEPS_PER_PATTERN] {
+/// was 256 transient allocations a frame on the UI thread, while a hand drags a dial. The count is the pattern's own bar,
+/// so a thirty-second pattern draws thirty-two columns and a triplet one twelve.
+pub fn row_cells(l: &layout::PanelLayout, drum: Drum, count: usize) -> Vec<Rect> {
     let row = row_band(l, drum);
     let label = label_rect(l, drum);
     let steps = Rect::from_min_max(
         Pos2::new(label.right() + theme::GAP, row.top()),
         Pos2::new(row.right(), row.bottom()),
     );
-    let mut cells = [Rect::NOTHING; STEPS_PER_PATTERN];
-    cells.copy_from_slice(&layout::knob_cells(steps, STEPS_PER_PATTERN));
-    cells
+    layout::knob_cells(steps, count)
 }
 
-/// One step's column: the sixteen cells under each other, from the first row's band to the last's.
+/// One step's column: the cells of every voice under each other, from the first row's band to the last's.
 ///
 /// Derived from the rows rather than from the cells, so the column keeps the row inset's shape at every scale. It is the step
 /// selection's mark, the way the 303's border is drawn round its step key — this face has no step row to put one in.
-pub fn column_rect(l: &layout::PanelLayout, step: usize) -> Rect {
-    let step = step.min(STEPS_PER_PATTERN - 1);
-    let first = cell_rect(l, Drum::ALL[0], step);
+pub fn column_rect(l: &layout::PanelLayout, step: usize, count: usize) -> Rect {
+    let step = step.min(count.saturating_sub(1));
+    let first = cell_rect(l, Drum::ALL[0], step, count);
     let top = row_band(l, Drum::ALL[0]).top();
     let bottom = row_band(l, Drum::ALL[Drum::ALL.len() - 1]).bottom();
     Rect::from_min_max(
@@ -418,7 +417,10 @@ fn draw_grid(
     let selected = state.drum.selected;
     let band = faint(p.led_accent, 36);
     let label_font = |row: Rect| theme::legend((row.height() * 0.72).max(6.0));
-
+    // The columns are the bar: the count and the beat framing both come from the pattern's grid, so a thirty-second
+    // pattern draws thirty-two columns and a triplet one twelve.
+    let count = state.pattern.len();
+    let grid = state.pattern.grid;
     for drum in Drum::ALL {
         let row = row_band(l, drum);
         let label = label_rect(l, drum);
@@ -464,7 +466,7 @@ fn draw_grid(
             }
         }
 
-        for (step, cell) in row_cells(l, drum).iter().enumerate() {
+        for (step, cell) in row_cells(l, drum, count).iter().enumerate() {
             let cell = *cell;
             let painted_step = state.pattern.steps[step];
             let struck = painted_step.is_hit(drum);
@@ -481,8 +483,9 @@ fn draw_grid(
                 p.well
             };
             ui.painter().rect_filled(cell, 1.5 * s, fill);
-            if step % 4 == 0 {
-                // Every fourth column framed in silk: the beat is findable without counting sixteen squares.
+            if grid.is_beat(step) {
+                // Every beat column framed in silk: the beat is findable without counting the bar's squares. A beat is
+                // every fourth step at `1/16`, every eighth at `1/32` and every third at `1/8T`.
                 ui.painter().rect_stroke(
                     cell,
                     1.5 * s,
@@ -520,13 +523,13 @@ fn draw_grid(
             state.pattern.len(),
         );
         ui.painter()
-            .rect_filled(column_rect(l, sounding), 2.0 * s, playhead_fill(p));
+            .rect_filled(column_rect(l, sounding, count), 2.0 * s, playhead_fill(p));
     }
 
     // The step selection: one column, the mark the 303 draws round its step key. Drawn after both the cells and the playhead
     // so it reads over their edges. Two marks now share this rectangle, which is why they are drawn differently: the playhead
     // is a wash *in* the column and the selection is a border *round* it, so a step that is both still reads as both.
-    let column = column_rect(l, state.selected);
+    let column = column_rect(l, state.selected, count);
     ui.painter().rect_stroke(
         column,
         2.0 * s,
@@ -742,6 +745,7 @@ mod tests {
     use super::*;
     use crate::device::Scheme;
     use crate::ui::theme::DESIGN_SIZE;
+    use acid_core::pattern::Grid;
 
     fn l() -> layout::PanelLayout {
         layout::layout(Rect::from_min_size(Pos2::ZERO, DESIGN_SIZE))
@@ -934,12 +938,19 @@ mod tests {
         // The painted test compares against `column_rect`, so this is the one that says the rect is the column and not a
         // cell: one step wide, from the first row's band to the last's, clamped like every other index on the face.
         let l = l();
-        let column = column_rect(&l, 6);
-        let first = cell_rect(&l, Drum::Kick, 6);
+        let column = column_rect(&l, 6, Grid::Sixteenth.steps_per_bar());
+        let first = cell_rect(&l, Drum::Kick, 6, Grid::Sixteenth.steps_per_bar());
         assert_eq!(column.left(), first.left());
         assert_eq!(column.right(), first.right());
         assert_eq!(column.top(), row_band(&l, Drum::Kick).top());
         assert_eq!(column.bottom(), row_band(&l, Drum::Shaker).bottom());
-        assert_eq!(column_rect(&l, 99), column_rect(&l, STEPS_PER_PATTERN - 1));
+        assert_eq!(
+            column_rect(&l, 99, Grid::Sixteenth.steps_per_bar()),
+            column_rect(
+                &l,
+                Grid::Sixteenth.steps_per_bar() - 1,
+                Grid::Sixteenth.steps_per_bar()
+            )
+        );
     }
 }

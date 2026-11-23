@@ -111,6 +111,7 @@ fn stopping_clears_the_chase() {
     let view = acid_app::ui::step_key::step_view(
         &Step::rest(),
         position,
+        acid_core::pattern::Grid::Sixteenth,
         position,
         playing,
         false,

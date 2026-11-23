@@ -1,7 +1,7 @@
 //! The selected step and the edits the keyboard makes to it — pure functions, so the rules are testable
 //! without a window.
 
-use acid_core::pattern::{STEPS_PER_PATTERN, Step};
+use acid_core::pattern::Step;
 use acid_core::pitch::Pitch;
 use eframe::egui::Key;
 
@@ -64,10 +64,13 @@ pub fn dispatch(key: Key, shift: bool, panel: &mut PanelState, shared: &SharedSt
     if panel.a_card_is_up() {
         return Press::Refused;
     }
-    let index = panel.selected.min(STEPS_PER_PATTERN - 1);
+    // The border is clamped into the bar the pattern is on: a selection left on step 20 of a thirty-second pattern must
+    // not walk a twelve-step one, and a twelve-step bar must not be walked past its last step.
+    let count = shared.pattern().len();
+    let index = panel.selected.min(count - 1);
     match edit {
-        EditKey::SelectPrev => panel.selected = move_selection(index, -1, STEPS_PER_PATTERN),
-        EditKey::SelectNext => panel.selected = move_selection(index, 1, STEPS_PER_PATTERN),
+        EditKey::SelectPrev => panel.selected = move_selection(index, -1, count),
+        EditKey::SelectNext => panel.selected = move_selection(index, 1, count),
         EditKey::NoteUp | EditKey::NoteDown => {
             let semitones = if matches!(edit, EditKey::NoteUp) {
                 1
@@ -158,7 +161,7 @@ fn place(
     note: Option<(Pitch, i8)>,
     velocity: Option<u8>,
 ) -> Step {
-    let index = panel.selected.min(STEPS_PER_PATTERN - 1);
+    let index = panel.selected.min(shared.pattern().len() - 1);
     let step = shared.pattern().steps[index];
     let (on, pitch, octave_offset) = match note {
         Some((pitch, octave)) => (true, pitch, octave),
@@ -180,8 +183,8 @@ fn place(
 
 /// Walk the border to the next step, wrapping after the last one: step mode does this on a key *release*, so one press
 /// writes one step and nothing is written ahead of the hand.
-pub fn walk(panel: &mut PanelState) {
-    panel.selected = (panel.selected.min(STEPS_PER_PATTERN - 1) + 1) % STEPS_PER_PATTERN;
+pub fn walk(panel: &mut PanelState, count: usize) {
+    panel.selected = (panel.selected.min(count - 1) + 1) % count;
 }
 
 #[cfg(test)]
@@ -382,13 +385,22 @@ mod tests {
             selected: 15,
             ..PanelState::default()
         };
-        walk(&mut panel);
+        walk(
+            &mut panel,
+            acid_core::pattern::Grid::Sixteenth.steps_per_bar(),
+        );
         assert_eq!(panel.selected, 0, "after step 16 comes step 1");
-        walk(&mut panel);
+        walk(
+            &mut panel,
+            acid_core::pattern::Grid::Sixteenth.steps_per_bar(),
+        );
         assert_eq!(panel.selected, 1);
 
         panel.selected = 99;
-        walk(&mut panel);
+        walk(
+            &mut panel,
+            acid_core::pattern::Grid::Sixteenth.steps_per_bar(),
+        );
         assert_eq!(panel.selected, 0, "a stale border is pulled back in first");
     }
 

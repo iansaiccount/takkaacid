@@ -610,3 +610,25 @@ The failure modes the spec implies and no task's own test names, each pinned in 
   **Ruling: `factory`'s displacement moved to `% base.len()` in Task 3**, while the type was open and before this task
   started. Cost if wrong: none — it is what this task's list asks for, and it could not wait without leaving a hard-coded 16
   in the one function that rotates a phrase.
+
+- **Task 5 — the panel asks the pattern.** `layout::step_cells(area, count) -> Vec<Rect>` and `STEP_COUNT` is gone;
+  the acid row draws `state.pattern.len()` keys with no `% STEPS_PER_PATTERN` left; `step_view` takes the `Grid` and
+  derives `beat: grid.is_beat(index)`; the slide look-ahead is `(i + 1) % len`; `selection::dispatch` / `place` /
+  `walk` take the pattern's count; `drum_panel::{row_cells, cell_rect, column_rect}` take it and the grid's beat
+  framing replaces `step % 4 == 0`. Proved by `the_step_row_is_as_long_as_the_bar_it_draws` (layout),
+  `a_twelve_step_bar_draws_twelve_keys` and `a_twelve_step_bar_lights_its_own_keys` (live, twelve keys and the
+  playhead inside them, forwards and `REVERSE`), and `a_thirty_second_bar_has_thirty_two_columns` (live, thirty-two
+  columns and the walk reaching the last), plus `the_beat_is_the_grids_and_flags_are_copied` for `step_view`'s three
+  framings. The drum test was watched fail first (the painted selection column was the sixteen-column one); the two
+  twelve-key tests passed at first run because step 2's signature change had already carried the count into the row,
+  so they were **mutation-checked** instead — `step_cells(l.steps, 16)` in place of `state.pattern.len()` makes both
+  fail, and the file was restored byte-for-byte. Workspace suite **958/958**, clippy `-D warnings`, `fmt --check`
+  green; nothing visible changed, since the only grid a face can reach is still `1/16`.
+  **Ruling: `dispatch.rs`'s drum `MoveStep` moved to `shared.pattern().len()` here, not in Task 6.** It is a
+  selection call site of the count this task makes the panel ask, and leaving `STEPS_PER_PATTERN` in it would have
+  been the one drum selection that walks sixteen steps on a twelve-step bar. Cost if wrong: none — Task 6 deletes
+  that constant, and this is the use it was waiting on.
+  **Ruling: `step_view` carries `#[expect(clippy::too_many_arguments, reason = …)]`.** The grid is the eighth
+  argument and the gate is `-D warnings`; a struct holding the seven facts would exist only to be unpacked in the
+  function. Cost if wrong: an `expect` that fails the gate the day the signature shrinks below eight — which the
+  gate would tell us loudly.

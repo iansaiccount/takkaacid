@@ -3,7 +3,7 @@
 use acid_app::state::SharedState;
 use acid_app::ui::layout::layout;
 use acid_app::ui::{PanelState, draw_panel};
-use acid_core::pattern::Step;
+use acid_core::pattern::{Grid, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
@@ -31,7 +31,8 @@ fn clear_centre() -> Pos2 {
 }
 
 fn step_centre(index: usize) -> Pos2 {
-    acid_app::ui::layout::step_cells(layout(screen()).steps)[index].center()
+    acid_app::ui::layout::step_cells(layout(screen()).steps, Grid::Sixteenth.steps_per_bar())[index]
+        .center()
 }
 
 fn press(at: Pos2, modifiers: Modifiers) -> Event {

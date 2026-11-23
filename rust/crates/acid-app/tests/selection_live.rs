@@ -4,7 +4,7 @@
 use acid_app::state::SharedState;
 use acid_app::ui::layout::{layout, step_cells};
 use acid_app::ui::{PanelState, draw_panel};
-use acid_core::pattern::Step;
+use acid_core::pattern::{Grid, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{self, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
@@ -30,7 +30,7 @@ fn run_on(
 
 /// Centre of step `index`'s cell, in window coordinates.
 fn step_centre(index: usize) -> Pos2 {
-    let cells = step_cells(layout(screen()).steps);
+    let cells = step_cells(layout(screen()).steps, Grid::Sixteenth.steps_per_bar());
     cells[index].center()
 }
 
@@ -373,7 +373,7 @@ fn selection_dispatch(
 #[test]
 fn the_layout_gives_sixteen_distinct_cells() {
     // Cheap guard for the harness above: overlapping cells would make every test in this file a coin toss.
-    let cells = step_cells(layout(screen()).steps);
+    let cells = step_cells(layout(screen()).steps, Grid::Sixteenth.steps_per_bar());
     assert_eq!(cells.len(), 16);
     for pair in cells.windows(2) {
         assert!(pair[0].right() <= pair[1].left() + 0.01);

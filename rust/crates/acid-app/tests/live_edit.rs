@@ -5,7 +5,7 @@ use acid_app::audio::renderer::AudioRenderer;
 use acid_app::state::SharedState;
 use acid_app::ui::{PanelState, draw_panel, layout};
 use acid_core::analysis::peak;
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 
 fn window() -> egui::Rect {
@@ -66,6 +66,7 @@ fn clicking_a_step_key_toggles_it_in_the_shared_state() {
             egui::vec2(980.0, 560.0),
         ))
         .steps,
+        Grid::Sixteenth.steps_per_bar(),
     );
     let pos = cells[3].center();
 
@@ -124,7 +125,11 @@ fn click_step(
     clicks: usize,
 ) {
     let ctx = egui::Context::default();
-    let pos = layout::step_cells(layout::layout(window()).steps)[index].center();
+    let pos = layout::step_cells(
+        layout::layout(window()).steps,
+        Grid::Sixteenth.steps_per_bar(),
+    )[index]
+        .center();
     let button = |pressed: bool| egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
@@ -192,7 +197,11 @@ fn double_click_clears_the_step_back_to_a_rest() {
 /// Drag step key `index` upwards by `dy` pixels through `draw_panel` and return the resulting step.
 fn drag_step(shared: &SharedState, panel: &mut PanelState, index: usize, dy: f32) -> Step {
     let ctx = egui::Context::default();
-    let pos = layout::step_cells(layout::layout(window()).steps)[index].center();
+    let pos = layout::step_cells(
+        layout::layout(window()).steps,
+        Grid::Sixteenth.steps_per_bar(),
+    )[index]
+        .center();
     let button = |pressed: bool, at: egui::Pos2| egui::Event::PointerButton {
         pos: at,
         button: egui::PointerButton::Primary,
