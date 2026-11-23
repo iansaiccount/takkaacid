@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use acid_core::engine::Engine;
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, Pattern, STEPS_PER_PATTERN, Step};
 use acid_core::pitch::Pitch;
 use acid_core::sequencer::sounding_step;
 use acid_core::timing;
@@ -84,7 +84,8 @@ fn first_step_only() -> Arc<Pattern> {
 
 /// A whole bar at the engine's tempo, in samples, plus a step to land on the next downbeat.
 fn bar_and_a_step(engine: &Engine) -> usize {
-    let step = timing::step_duration_samples(0, engine.bpm(), SR, 0.0);
+    let step =
+        timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar());
     (step * (STEPS_PER_PATTERN + 1) as f64).round() as usize
 }
 
@@ -97,7 +98,9 @@ fn a_direction_asked_for_mid_bar_waits_for_the_bar_line() {
     engine.start_at(0);
 
     // Two steps of the bar, then ask to go backwards.
-    let step = timing::step_duration_samples(0, engine.bpm(), SR, 0.0) as usize;
+    let step =
+        timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar())
+            as usize;
     let mut two_steps = vec![0.0; step * 2];
     engine.render(&mut two_steps);
     engine.set_reverse(true);
@@ -126,13 +129,16 @@ fn the_same_bar_forwards_opens_on_its_note() {
     let mut engine = Engine::new(SR);
     engine.set_pattern(first_step_only());
     engine.start_at(0);
-    let step = timing::step_duration_samples(0, engine.bpm(), SR, 0.0) as usize;
+    let step =
+        timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar())
+            as usize;
     let mut two_steps = vec![0.0; step * 2];
     engine.render(&mut two_steps);
 
     // Onto the downbeat and a little past it: a whole step further would render past the note's release and the control
     // would be asserting silence for the wrong reason.
-    let step_len = timing::step_duration_samples(0, engine.bpm(), SR, 0.0);
+    let step_len =
+        timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar());
     let to_downbeat = (step_len * (STEPS_PER_PATTERN as f64 - 2.0)).round() as usize + 64;
     let mut out = vec![0.0; to_downbeat];
     engine.render(&mut out);
@@ -201,7 +207,9 @@ fn a_direction_asked_for_mid_bar_waits_out_a_pause() {
     assert!(!engine.is_reverse(), "the resume carries on in it");
     // The wrap takes the direction, as it does for any bar: a pause only postponed the question. One long block rather than
     // sixteen exact ones, because a sixteenth is not a whole number of samples and the boundary would fall just past the end.
-    let step = timing::step_duration_samples(0, engine.bpm(), SR, 0.0) as usize;
+    let step =
+        timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar())
+            as usize;
     let mut bar_and_a_bit = vec![0.0; step * (STEPS_PER_PATTERN + 1)];
     engine.render(&mut bar_and_a_bit);
     assert!(engine.is_reverse(), "the next bar line takes it");

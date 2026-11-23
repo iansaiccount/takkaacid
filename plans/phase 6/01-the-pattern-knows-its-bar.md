@@ -563,3 +563,17 @@ The failure modes the spec implies and no task's own test names, each pinned in 
   **Ruling: `is_beat` is not a `const fn`** — the plan wrote it as one. It counts with `is_multiple_of`, and the
   `% n == 0` spelling that would be `const` is the one clippy's `manual_is_multiple_of` rejects under `-D warnings`. Cost
   if wrong: nothing needs it in a const context; a test that did would have to spell the count itself.
+
+- **Task 2 — a bar, divided instead of a sixteenth.** `timing` gains `samples_per_bar`, and `samples_per_step` /
+  `step_duration_samples` take `steps_per_bar`. `Clock` holds the count, publishes `steps_per_bar()`, and `set_steps_per_bar`
+  rescales the step in flight through the same `rescale` the tempo and swing use. Proved by
+  `a_bar_is_the_same_length_at_every_grid`, `swing_keeps_a_bar_of_each_grid_the_same_length`,
+  `a_grid_change_rescales_the_step_in_flight` and `setting_the_same_grid_changes_nothing` — all four watched fail first (the
+  clock's two after deleting the methods I had written early). Workspace suite **945/945**, clippy `-D warnings`, `fmt
+  --check` green.
+  **Ruling: five test files call `timing` directly, not the one the plan named** (`clock`, `pause`, `reverse_and_transpose`,
+  `acid-app`'s `renderer`, `timing`). Each now passes `Grid::Sixteenth.steps_per_bar()` rather than a literal, so the count
+  still comes from the catalogue. Cost if wrong: none.
+  **Ruling: `samples_per_bar` is `sr · 60 / bpm · 4`, not the sixteenth's `sr · 60 / (bpm · 4)`.** The first cut kept the
+  sixteenth's parentheses, so a bar came out as a sixteenth and every clock test fell over —
+  `eight_steps_fit_in_one_second_at_120_bpm` is what caught it.

@@ -7,6 +7,7 @@ use acid_app::audio::renderer::{AudioRenderer, apply};
 use acid_app::state::SharedState;
 use acid_core::analysis::peak;
 use acid_core::oscillator::Waveform;
+use acid_core::pattern::Grid;
 
 /// The step the renderer last published into the state: the number the panel's chase reads, so a test reads the bar the way
 /// a player does rather than reaching into whichever machine rendered it.
@@ -158,7 +159,10 @@ fn a_pause_through_the_seam_keeps_the_bar_and_a_resume_carries_on() {
 
     // Play, and get halfway into a step.
     s.set_transport(Transport::Playing);
-    let half = (timing::step_duration_samples(0, 130.0, 48_000.0, 0.0) / 2.0).round() as usize;
+    let half =
+        (timing::step_duration_samples(0, 130.0, 48_000.0, 0.0, Grid::Sixteenth.steps_per_bar())
+            / 2.0)
+            .round() as usize;
     let mut block = vec![0.0; half];
     r.render_into(&mut block);
     let held = step(&s);
@@ -217,7 +221,9 @@ fn the_published_direction_waits_for_the_bar_line() {
         );
 
         // One bar and a step, so the wrap is behind us: the next bar begins in the new direction.
-        let step = timing::step_duration_samples(0, 120.0, 48_000.0, 0.0) as usize;
+        let step =
+            timing::step_duration_samples(0, 120.0, 48_000.0, 0.0, Grid::Sixteenth.steps_per_bar())
+                as usize;
         let mut bar_and_a_bit = vec![0.0; step * (STEPS_PER_PATTERN + 1)];
         r.render_into(&mut bar_and_a_bit);
         assert!(

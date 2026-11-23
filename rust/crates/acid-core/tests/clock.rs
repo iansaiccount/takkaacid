@@ -12,6 +12,7 @@
 //!   every count here deterministic.
 
 use acid_core::clock::Clock;
+use acid_core::pattern::Grid;
 
 #[test]
 fn eight_steps_fit_in_one_second_at_120_bpm() {
@@ -43,8 +44,9 @@ fn odd_block_sizes_do_not_accumulate_drift() {
         c.advance_by(n);
         consumed += n;
     }
-    let expected_steps =
-        (total as f64 / acid_core::timing::samples_per_step(137.0, 44_100.0)) as usize;
+    let expected_steps = (total as f64
+        / acid_core::timing::samples_per_step(137.0, 44_100.0, Grid::Sixteenth.steps_per_bar()))
+        as usize;
     assert!(
         (c.step_index() as i64 - expected_steps as i64).abs() <= 1,
         "{} vs {expected_steps}",
@@ -150,4 +152,36 @@ fn a_restart_at_full_swing_starts_on_the_long_step() {
         "an even step at full swing is 1.5 steps long: {}",
         c.samples_until_next_step()
     );
+}
+
+#[test]
+fn a_grid_change_rescales_the_step_in_flight() {
+    let mut c = Clock::new(48_000.0);
+    assert_eq!(
+        c.steps_per_bar(),
+        16,
+        "a clock is a sixteenth clock until told"
+    );
+    let sixteenth = c.samples_until_next_step();
+    c.advance_by((sixteenth / 2.0) as usize); // half a step gone
+    let left = c.samples_until_next_step();
+    c.set_steps_per_bar(32);
+    let after = c.samples_until_next_step();
+    assert!(
+        (after / left - 0.5).abs() < 1e-3,
+        "half a step stays half a step: {after} vs {left}"
+    );
+    assert!(
+        (after - 0.25 * sixteenth).abs() < 2.0,
+        "a 32nd is half a 16th"
+    );
+}
+
+#[test]
+fn setting_the_same_grid_changes_nothing() {
+    let mut c = Clock::new(48_000.0);
+    c.advance_by(100);
+    let before = c.samples_until_next_step();
+    c.set_steps_per_bar(16);
+    assert_eq!(c.samples_until_next_step(), before);
 }
