@@ -202,3 +202,37 @@ fn a_short_list_pads_and_a_long_one_truncates() {
         assert_eq!(step.on, index < 16, "the rest are rested, not played");
     }
 }
+
+/// The `GRID` key cycles the catalogue in `ALL`'s order and wraps: sixteenths, thirty-seconds, eighth-note triplets, and
+/// round again. A full `match`, so a fourth grid added to the catalogue fails to compile here until it is placed.
+#[test]
+fn the_grid_key_cycles_the_catalogue() {
+    assert_eq!(Grid::Sixteenth.next(), Grid::ThirtySecond);
+    assert_eq!(Grid::ThirtySecond.next(), Grid::EighthTriplet);
+    assert_eq!(Grid::EighthTriplet.next(), Grid::Sixteenth);
+}
+
+/// A press to a narrower grid rests whatever falls outside the new bar, and the status line counts what that cost in
+/// steps that *sounded*, not slots that stopped being drawn — a rest that falls outside has cost the player nothing.
+#[test]
+fn a_press_counts_the_sound_it_would_drop() {
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
+    steps[0] = Step::note(Pitch::A, 1);
+    steps[20] = Step::note(Pitch::C, 2);
+    steps[21] = Step::note(Pitch::D, 2);
+    steps[22] = Step::rest(); // a rest is not sound, however far outside the bar it sits
+    let wide = Pattern::from_steps_in(Grid::ThirtySecond, steps);
+
+    assert_eq!(wide.sounding_steps_beyond(Grid::EighthTriplet), 2);
+    assert_eq!(
+        wide.sounding_steps_beyond(Grid::ThirtySecond),
+        0,
+        "nothing sounds past a bar that holds it all"
+    );
+    assert_eq!(
+        wide.with_grid(Grid::Sixteenth)
+            .sounding_steps_beyond(Grid::Sixteenth),
+        0,
+        "nothing sounds past a bar it already fits"
+    );
+}

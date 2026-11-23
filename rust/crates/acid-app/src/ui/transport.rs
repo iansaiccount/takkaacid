@@ -31,6 +31,19 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
     acid_core::timing::clamp_bpm(bpm + f32::from(direction))
 }
 
+/// What a `GRID` press says on the status line: the bar's length before and after, and — only when the shorter bar drops
+/// sound — how many steps that had it.
+///
+/// `cleared` counts steps **that sounded**, not slots that stopped being drawn: the row already shows the new length the
+/// moment it changes shape, so a count of bare slots would say nothing the face is not saying.
+pub fn grid_notice(before: usize, after: usize, cleared: usize) -> String {
+    if cleared == 0 {
+        format!("{before} TO {after} STEPS")
+    } else {
+        format!("{before} TO {after} STEPS, {cleared} CLEARED")
+    }
+}
+
 /// Move the rack's tempo one BPM in `direction`, and answer whether the session is now unsaved (it is: the tempo is in the
 /// save file).
 ///
@@ -95,10 +108,11 @@ pub enum Cell {
     /// The transpose's value, in a well between the two keys that move it. A cell, not a key: nothing presses it.
     Readout,
     TransposeUp,
-    Tbc,
-    /// The cell the player asked to keep labelled `TBC` beside the first: a spare, labelled honestly rather than given a job
-    /// it does not have. The row is seven to match the switch row above it, and a spare that said nothing would be a hole.
-    Spare,
+    /// The `GRID` key: cycles this pattern's grid through `Grid::ALL`. A pattern edit, not a transport request.
+    Grid,
+    /// The grid's value, in a well beside the key that cycles it — the transpose pair's shape, a key and the value it is
+    /// on. A cell, not a key: nothing presses it.
+    GridWell,
     Learn,
 }
 
@@ -109,8 +123,8 @@ impl Cell {
         Cell::TransposeDown,
         Cell::Readout,
         Cell::TransposeUp,
-        Cell::Tbc,
-        Cell::Spare,
+        Cell::Grid,
+        Cell::GridWell,
         Cell::Learn,
     ];
 
@@ -121,8 +135,8 @@ impl Cell {
             Cell::TransposeDown => 1,
             Cell::Readout => 2,
             Cell::TransposeUp => 3,
-            Cell::Tbc => 4,
-            Cell::Spare => 5,
+            Cell::Grid => 4,
+            Cell::GridWell => 5,
             Cell::Learn => 6,
         }
     }
@@ -338,7 +352,7 @@ mod tests {
     }
     #[test]
     fn the_row_reads_left_to_right_as_the_face_does() {
-        // The face's order, written out: REVERSE, TRANS −, the readout between the two keys that move it, TBC, the spare, then
+        // The face's order, written out: REVERSE, TRANS −, the readout between the two keys that move it, GRID, its well, then
         // LEARN. That `ALL` and `index()` agree is not the same claim — both could be reordered together, and every other test
         // here, and every live test, would follow them: the drawing asks the same catalogue the clicker does, so a swapped
         // pair moves the key on the face rather than landing a click on its neighbour.
@@ -347,8 +361,8 @@ mod tests {
             Cell::TransposeDown,
             Cell::Readout,
             Cell::TransposeUp,
-            Cell::Tbc,
-            Cell::Spare,
+            Cell::Grid,
+            Cell::GridWell,
             Cell::Learn,
         ];
         assert_eq!(
@@ -364,5 +378,14 @@ mod tests {
                 pair[1]
             );
         }
+    }
+
+    /// What a `GRID` press says: the bar before and after, and — only when the shorter bar drops sound — how many steps
+    /// that had it. A press that costs nothing says nothing about clearing, and a press that costs sound always says so.
+    #[test]
+    fn the_notice_reads_as_a_bar_before_and_after() {
+        assert_eq!(grid_notice(16, 32, 0), "16 TO 32 STEPS");
+        assert_eq!(grid_notice(32, 12, 3), "32 TO 12 STEPS, 3 CLEARED");
+        assert_eq!(grid_notice(16, 12, 0), "16 TO 12 STEPS");
     }
 }

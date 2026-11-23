@@ -138,11 +138,26 @@ pub fn step_key(
     // While the step is being dragged the panel prints the live pitch in the cell, larger and in silk; a
     // second label on the keycap would collide with it and read as two overlapping words.
     if !view.dragging {
+        // The note is 12 pt wherever 12 pt fits the key. A thirty-second key is 24 px wide at the design size and 13 at
+        // the smallest window, and a sharp note at 12 pt is 22 px — so the font is chosen by measuring the label against
+        // the room the keycap has, at most 12 pt and smaller only where it would otherwise spill out of its key.
+        let label = step_label(step);
+        let wanted = theme::legend(12.0 * s);
+        let room = (keycap.width() - 2.0 * s).max(1.0);
+        let measured = painter
+            .layout_no_wrap(label.to_owned(), wanted.clone(), p.keycap_ink)
+            .rect
+            .width();
+        let font = if measured > room {
+            theme::legend(12.0 * s * (room / measured))
+        } else {
+            wanted
+        };
         painter.text(
             keycap.center() + egui::vec2(0.0, -s),
             egui::Align2::CENTER_CENTER,
-            step_label(step),
-            theme::legend(12.0 * s),
+            label,
+            font,
             p.keycap_ink,
         );
     }

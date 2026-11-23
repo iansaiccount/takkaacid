@@ -296,6 +296,36 @@ command, as every other picture has.
 
 ## Progress
 
-*(One line per task, written as it is done: what landed, the test or mutation check that proved it, what was heard when the
-demos were played, and any ruling with what it costs if wrong. The branch review's findings and what was done about each go
-here too, before the pull request.)*
+- **Task 1 — the `GRID` key and the 303's row.** `Grid::next` cycles the catalogue with a full `match`;
+  `Pattern::sounding_steps_beyond` counts the steps **that sound** outside a grid's bar; `SharedState::set_grid` is a
+  copy-on-write on the same `rcu` seam as `set_step`; `transport::Cell::{Tbc, Spare}` are now
+  `{Grid, GridWell}` and `tips::Control::Grid` carries the words (`TBC` no longer appears anywhere in `rust/`);
+  `transport::grid_notice` says the bar before and after, and the count of sound it cost. The row draws the key with id
+  `"grid"` and the well beside it in the transpose readout's shape — dim at `1/16`, `p.led_accent` otherwise — and a
+  press is a pattern edit: `shared.set_grid(next)`, the panel re-reads the pattern, the session goes dirty, the status
+  line says what happened. `CLEAR` now builds `Pattern::empty_in(shared.pattern().grid)`.
+  Proved by `the_grid_key_cycles_the_catalogue` and `a_press_counts_the_sound_it_would_drop` (watched fail first, as
+  `no method next`), `the_notice_reads_as_a_bar_before_and_after`, `the_grid_key_cycles_and_its_well_is_not_a_key`,
+  and the new `tests/grid_live.rs`: `the_key_cycles_the_grid_mid_bar_and_the_engine_hears_it` (the engine run to
+  position 5 of 16 by rendering, then the press, then a half-thirty-second block that advances exactly one step —
+  no stall, no double trigger — with the well's caption read back out of the frame at each of `1/16`, `1/32`, `1/8T`),
+  `narrowing_the_bar_counts_the_sound_it_rests` (`32 TO 12 STEPS, 2 CLEARED`, the two sounding steps rested rather
+  than hidden), `clear_keeps_the_grid` (two clicks, thirty-two keys still), and `the_note_fits_a_thirty_second_key`.
+  Workspace suite **972/972**, clippy `-D warnings`, `fmt --check`, `guide: ok`.
+  **Ruling: the keycap's note now fits its key, which the plan said not to change.** The plan's measurement test fails
+  as written: a sharp note at 12 pt measures 21.9 px in a 23.8 px thirty-second key at the design size (0.9 px a
+  side, not the 4 px the plan asked for), and 14.25 px in a 13.4 px key at the smallest window. The premise "the text
+  scale and the cell width are both linear in the panel" is false: `theme::GAP` is a design-space constant, so a
+  thirty-two-key row loses proportionally more width than the font does. `step_key` now draws the note at **12 pt
+  wherever 12 pt fits**, and scales it down by one measurement of the label against the keycap's room only where it
+  would spill out. The test reads every label back out of the frame's text shapes and asserts it is narrower than the
+  key it was drawn in, at both sizes — the note and the corner number alike. Cost if wrong: at `1/32` in the smallest
+  window the note falls to about 6.6 pt, which is small; it is legible at the design size (~11.9 pt) and the picture
+  in Task 4 is where the player judges it. The corner step number still never shrinks, by the player's ruling.
+  **Ruling: the test reads `panel.pattern.grid`, the public field, not `pattern.grid()`.** The plan's live-test
+  sketch wrote `grid()`; `Pattern` exposes the field and no accessor, and adding one would be a second spelling of
+  the same thing. Cost if wrong: none.
+  **Round 01's open question is now reachable.** `Sequencer::set_pattern`'s short→long wrap (a request released at
+  step 15 of a sixteen-step bar leaves `15 % 32 = 15`, so the arriving thirty-two-step bar starts on its second half
+  and its bar line lands half a bar late — for good) could not be reached before this key existed. It still waits for
+  the player: the fix changes which step a swap into a longer bar is heard from.

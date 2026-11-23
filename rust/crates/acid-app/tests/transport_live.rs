@@ -177,22 +177,26 @@ fn the_transpose_keys_ask_for_a_semitone_each_way() {
 }
 
 #[test]
-fn both_tbc_keys_say_what_they_are() {
-    // Two cells kept for the player, with nothing decided behind either. They say so rather than doing nothing: a silent key
-    // reads as broken, and these have no feature to be silent about.
-    for which in [transport::Cell::Tbc, transport::Cell::Spare] {
-        let shared = SharedState::new();
-        let mut panel = PanelState::default();
-        click_transport(&shared, &mut panel, which);
-        assert_eq!(
-            panel.transport_request, None,
-            "{which:?} asks the rack for nothing"
-        );
-        assert_eq!(
-            panel.notice_now(std::time::Instant::now()),
-            Some("TBC IS NOT DECIDED YET")
-        );
-    }
+fn the_grid_key_cycles_and_its_well_is_not_a_key() {
+    // The grid is a pattern edit, not a transport request: the key writes the pattern at once and asks the rack for
+    // nothing. The cell beside it is the value's well — the transpose readout's shape — so a click on it is a click on
+    // the face, not a gesture.
+    let shared = SharedState::new();
+    let mut panel = PanelState::default();
+    click_transport(&shared, &mut panel, transport::Cell::Grid);
+    assert_eq!(
+        panel.transport_request, None,
+        "a grid press is not a transport request"
+    );
+    assert_eq!(panel.pattern.grid, acid_core::pattern::Grid::ThirtySecond);
+    assert!(panel.dirty, "and it is a change to save");
+
+    click_transport(&shared, &mut panel, transport::Cell::GridWell);
+    assert_eq!(
+        panel.pattern.grid,
+        acid_core::pattern::Grid::ThirtySecond,
+        "the well is read, not pressed"
+    );
 }
 
 /// A hovered key's ring is ink on that key's own face: a lit key is a raised surface and takes `lit_ink`, an unlit one is a
@@ -319,18 +323,17 @@ fn each_legend_is_painted_in_the_cell_that_names_it() {
         );
     }
 
-    // Both `TBC` cells say it. They are the two cells the catalogue cannot tell apart by their drawing, so this pins that
-    // both are painted and that each is painted in one of the two rather than somewhere else in the row.
-    let tbc: Vec<egui::Pos2> = said
-        .iter()
-        .filter(|(_, text)| text == "TBC")
-        .map(|(pos, _)| *pos)
-        .collect();
-    assert_eq!(tbc.len(), 2, "both spare cells print TBC");
-    for pos in tbc {
+    // The `GRID` key prints its name, and its well prints the grid the pattern is on — `1/16` for a fresh session. Both
+    // are painted inside their own cells, so the key and the value it is on cannot drift onto the face.
+    for (legend, which) in [
+        ("GRID", transport::Cell::Grid),
+        ("1/16", transport::Cell::GridWell),
+    ] {
         assert!(
-            rect(transport::Cell::Tbc).contains(pos) || rect(transport::Cell::Spare).contains(pos),
-            "a TBC is painted outside the two spare cells"
+            said.iter()
+                .any(|(pos, text)| text == legend && rect(which).contains(*pos)),
+            "no {legend:?} painted inside {which:?} at {:?}",
+            rect(which)
         );
     }
 }

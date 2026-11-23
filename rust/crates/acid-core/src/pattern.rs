@@ -76,6 +76,18 @@ impl Grid {
     pub const fn is_beat(self, index: usize) -> bool {
         index.is_multiple_of(self.steps_per_bar() / 4)
     }
+
+    /// The next grid the key cycles to: `ALL`'s order, wrapping back to sixteenths after eighth-note triplets.
+    ///
+    /// A full `match` with no `_` arm, so a fourth grid added to the catalogue fails to compile here until someone says
+    /// where the key reaches it.
+    pub fn next(self) -> Grid {
+        match self {
+            Grid::Sixteenth => Grid::ThirtySecond,
+            Grid::ThirtySecond => Grid::EighthTriplet,
+            Grid::EighthTriplet => Grid::Sixteenth,
+        }
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -302,6 +314,17 @@ impl Pattern {
             *step = Step::rest();
         }
         pattern
+    }
+
+    /// How many steps **that sound** sit outside `grid`'s bar: what a press to that grid would cost.
+    ///
+    /// The count is of notes, not slots. The row already shows the new length the moment it changes shape; what it cannot
+    /// show is how much music the shorter bar leaves behind, and that is the number the status line says.
+    pub fn sounding_steps_beyond(&self, grid: Grid) -> usize {
+        self.steps[grid.steps_per_bar()..]
+            .iter()
+            .filter(|step| step.on)
+            .count()
     }
 
     /// The steps that play, in step order.

@@ -80,8 +80,8 @@ pub enum Control {
     TapePlay,
     /// The row's REVERSE key: this device's line, backwards, from the next bar.
     Reverse,
-    /// The row's TBC key: a cell kept for the player, with nothing decided behind it.
-    Tbc,
+    /// The row's GRID key: cycles this pattern's grid, and the well beside it shows which one the pattern is on.
+    Grid,
     /// The row's TRANS -: this device down a semitone, as a performance control.
     TransposeDown,
     /// The row's TRANS +: this device up a semitone.
@@ -142,7 +142,7 @@ impl Control {
         Control::TapeRecord,
         Control::TapePlay,
         Control::Reverse,
-        Control::Tbc,
+        Control::Grid,
         Control::TransposeDown,
         Control::TransposeUp,
         Control::Copy,
@@ -183,7 +183,7 @@ impl Control {
             Control::TapeRecord => TIPS[32],
             Control::TapePlay => TIPS[33],
             Control::Reverse => TIPS[34],
-            Control::Tbc => TIPS[35],
+            Control::Grid => TIPS[35],
             Control::TransposeDown => TIPS[36],
             Control::TransposeUp => TIPS[37],
             Control::Copy => TIPS[38],
@@ -436,8 +436,8 @@ const TIPS: [Tip; 49] = [
         shortcut: None,
     },
     Tip {
-        title: "TBC",
-        what: "A cell kept for the player: nothing is decided for it yet.",
+        title: "GRID",
+        what: "Sets this pattern's grid: sixteenths, thirty-seconds or eighth-note triplets.",
         shortcut: None,
     },
     Tip {
