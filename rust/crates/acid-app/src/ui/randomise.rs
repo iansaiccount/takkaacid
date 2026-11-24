@@ -192,7 +192,11 @@ mod tests {
                 .count()
         };
         assert_eq!(count(0.0), 1, "the guaranteed step, and nothing else");
-        assert_eq!(count(1.0), 16, "every step sounds");
+        assert_eq!(
+            count(1.0),
+            Grid::Sixteenth.steps_per_bar(),
+            "every step sounds"
+        );
         assert!(count(0.25) < count(0.5), "a thinner setting is thinner");
         assert!(count(0.5) < count(0.75));
     }

@@ -40,7 +40,10 @@ fn a_thousand_edits_from_another_thread_never_break_the_pattern() {
         let s = s.clone();
         std::thread::spawn(move || {
             for i in 0..1_000 {
-                s.set_step(i % 16, Step::note(Pitch::ALL[i % 13], 0));
+                s.set_step(
+                    i % Grid::Sixteenth.steps_per_bar(),
+                    Step::note(Pitch::ALL[i % 13], 0),
+                );
             }
         })
     };

@@ -3,7 +3,7 @@
 ![The drum machine's face](img/drum-face.png)
 
 A second kind of device, in the same rack and on the same bar: **sixteen sample voices against the bar's steps**, where
-the 303 has one voice against the same sixteen. Add one with `+` on the strip and pick `DRUMS`
+the 303 has one voice against the same bar's steps. Add one with `+` on the strip and pick `DRUMS`
 ([`18-a-rack-of-devices`](18-a-rack-of-devices.md)); everything a rack does — the transport, the tempo, `REVERSE`, that
 device's own transpose, the themes — it does to the drums the same way ([`05-the-three-cards`](05-the-three-cards.md) is the
 cards, [`04-the-face`](04-the-face.md) the face the two machines share).

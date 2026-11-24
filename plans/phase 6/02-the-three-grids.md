@@ -431,3 +431,26 @@ fail (330 vs 329 shapes), and the file was restored. The P2 words are done too: 
 `every_demo_is_a_line_and_a_drum_bank`, the four "five"s in `tests/drum_banks.rs`, `ui/banks.rs`\'s doc, page 10\'s
 "the steps are even", and `img/README.md`\'s phase-6 session paragraph (which now records the three pictures and the
 commands). Suite **976/976**, clippy `-D warnings`, `fmt --check`, `guide: ok`.
+
+**Final pull-request review (the whole branch, before merge).** A third subagent, none of the branch written by it, read
+`main..phase-6` against both plans. It blocked on two findings and both are fixed here; the suite is **976/976** with
+clippy, `fmt --check` and `guide: ok`.
+
+- **Fixed: a `GRID` press did not disarm a pending `CLEAR`.** Every other pattern edit does (a step click, a drag, a
+  strike, an octave, `RANDOM`, a pattern change, a paste) and the rule is written down in `ui/clear.rs`; this round added
+  a new way to change the pattern and skipped it. So arm `CLEAR`, press `GRID` — which may also rest steps by narrowing
+  the bar — then `CLEAR`: one click empties a bar the player never armed against. The press now disarms, and
+  `the_key_cycles_the_grid_mid_bar_and_the_engine_hears_it` asserts it.
+- **Fixed: three pages still stated the bar is sixteen steps** (`04`'s "Sixteen keys" and "1 to 16", `10`'s "how many of
+  the sixteen steps sound", `22`'s "one voice against the same sixteen"). All three now say "the bar's", and `04` links
+  `23-pattern-grids`.
+- **P2, fixed while there:** `demo::also` claimed "the grid decides" while bounding by `PATTERN_SLOTS` — it now checks
+  `at < pattern.len()`; the last count literals in tests (`randomise`, `selection`, `banks_live`, `live_edit`) ask
+  `Grid::Sixteenth.steps_per_bar()`; and the new page's leftover blank lines are gone.
+- **Corrected in this Progress: the round-01 handover file is no longer in the tree.** `plans/phase 6/` holds only the
+  `00-` overview and the two plans — the handover was committed in `f982f2e` and removed by `510d0fe`. Deleting it is
+  the right call under `AGENTS.md` (one plan per round plus an overview), but the earlier sentence saying it was "left
+  alone" was written before that and is now false; a resuming session should trust the tree.
+
+The branch is pushed and **PR #13** is open. What it leaves open is the player's and is listed in the PR: the ear check
+on the two new demos, and `Sequencer::set_pattern`'s short→long wrap.

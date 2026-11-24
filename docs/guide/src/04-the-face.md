@@ -45,11 +45,12 @@ last printing the scale it is sitting on (`CHROM` for chromatic). [`10-performan
 
 ![The step row](img/step-row.png)
 
-Sixteen keys, one per step, each printing its note (`A1`, `C2`, `E1`, or `--` for a rest), and a row of small LEDs above: one
+One key per step of the bar — sixteen at `1/16`, twelve at `1/8T`, thirty-two at `1/32` ([`23-pattern-grids`](23-pattern-grids.md)) —
+each printing its note (`A1`, `C2`, `E1`, or `--` for a rest), and a row of small LEDs above: one
 lit while that step is playing or holds a note, and ringed when the step is accented. The step you have selected wears an
 amber outline around the whole key.
 
-In the corner of each keycap, its number, 1 to 16. An amber bar under a keycap means slide; the `>` beside the note says it will
+In the corner of each keycap, its number, 1 to the bar's last step. An amber bar under a keycap means slide; the `>` beside the note says it will
 really glide into the next step. A slide whose next step is a rest keeps the bar but drops the arrow, because there is
 nothing for it to glide into.
 

@@ -14,9 +14,6 @@ long as each other. That is what keeps every machine in a rack on the same bar â
 still land their downbeats together, and a device joining a running rack still waits for the same bar.
 
 ## The key
-
-
-
 In the transport row, beside the transpose pair: **`GRID`** and, next to it, the grid the pattern is on â€” `1/16`, `1/32`
 or `1/8T`.
 

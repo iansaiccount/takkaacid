@@ -133,6 +133,8 @@ pub(super) fn draw(
         // border on step 21 would leave no key outlined at all, and the keyboard's next write would land somewhere the
         // face is not pointing at.
         state.selected = state.selected.min(state.pattern.len() - 1);
+        // A pending `CLEAR` was armed against the pattern as it was, and this press may have rested steps inside it.
+        super::clear::disarm(state);
         state.dirty = true;
         let notice = transport::grid_notice(before.len(), state.pattern.len(), cleared);
         state.notify(notice);

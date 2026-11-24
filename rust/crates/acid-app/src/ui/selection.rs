@@ -190,6 +190,7 @@ pub fn walk(panel: &mut PanelState, count: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use acid_core::pattern::Grid;
 
     #[test]
     fn the_plain_arrows_edit_the_step_and_shift_is_the_transport() {
@@ -209,10 +210,17 @@ mod tests {
 
     #[test]
     fn the_selection_moves_and_clamps_at_both_ends() {
-        assert_eq!(move_selection(0, 1, 16), 1);
-        assert_eq!(move_selection(15, 1, 16), 15);
-        assert_eq!(move_selection(0, -1, 16), 0);
-        assert_eq!(move_selection(3, -2, 16), 1);
+        assert_eq!(move_selection(0, 1, Grid::Sixteenth.steps_per_bar()), 1);
+        assert_eq!(
+            move_selection(
+                Grid::Sixteenth.steps_per_bar() - 1,
+                1,
+                Grid::Sixteenth.steps_per_bar()
+            ),
+            15
+        );
+        assert_eq!(move_selection(0, -1, Grid::Sixteenth.steps_per_bar()), 0);
+        assert_eq!(move_selection(3, -2, Grid::Sixteenth.steps_per_bar()), 1);
     }
 
     #[test]

@@ -129,11 +129,17 @@ fn the_key_cycles_the_grid_mid_bar_and_the_engine_hears_it() {
     let mid_bar = shared.position.load(Ordering::Relaxed);
     assert_eq!(mid_bar, 5, "five sixteenths in, the line is on step six");
 
+    // An armed CLEAR was armed against the pattern as it was: a grid press may rest steps inside it.
+    panel.clear_armed_at = Some(std::time::Instant::now());
     click(&ctx, &mut panel, &shared, grid_key());
     assert_eq!(
         panel.pattern.grid,
         Grid::ThirtySecond,
         "sixteenths cycle to thirty-seconds"
+    );
+    assert!(
+        panel.clear_armed_at.is_none(),
+        "a grid press must spend an armed CLEAR"
     );
     assert_eq!(
         shared.pattern().grid,
@@ -142,7 +148,6 @@ fn the_key_cycles_the_grid_mid_bar_and_the_engine_hears_it() {
     );
     assert!(panel.dirty, "a grid press is a change to save");
     assert_eq!(notice(&panel), "16 TO 32 STEPS");
-
     // The clock, mid-bar: a block half a thirty-second long crosses one step — never two (a double trigger) and never
     // none (a stall), which is what a rescaled step in flight could do.
     let half =

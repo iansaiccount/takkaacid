@@ -23,7 +23,7 @@ sweep and hear immediately, which is why it lives here rather than with the tone
 
 Two knobs and a key:
 
-- **The left knob** prints a percentage: the **density**, one step in two by default. It decides how many of the sixteen
+- **The left knob** prints a percentage: the **density**, one step in two by default. It decides how many of the bar's
   steps sound.
 - **The right knob** prints the **scale** it is on, from `CHROM` to `MAJ PEN`, and snaps to one of six faces like the wave
   switch does: chromatic, major, minor, dorian, minor pentatonic, major pentatonic.

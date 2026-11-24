@@ -10,6 +10,7 @@ use acid_app::ui::banks::{Banks, Request};
 use acid_app::ui::layout::{layout, scale};
 use acid_app::ui::{PanelState, SongState, draw_panel, theme};
 use acid_core::bank::PatternBank;
+use acid_core::pattern::Grid;
 use eframe::egui::{Context, Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
 fn screen() -> Rect {
@@ -377,7 +378,7 @@ fn loading_a_bank_gives_the_device_all_sixty_four_patterns() {
     let mut written = PatternBank::factory();
     for index in 1..64 {
         let mut pattern = *written.get(0);
-        pattern.steps[index % 16].on = index % 2 == 0;
+        pattern.steps[index % Grid::Sixteenth.steps_per_bar()].on = index % 2 == 0;
         written.replace(index, pattern);
     }
     save_bank(
