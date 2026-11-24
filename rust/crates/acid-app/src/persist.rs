@@ -1562,3 +1562,11 @@ impl Autosave {
         due
     }
 }
+
+/// What the status line says when a launch refused a newer document: the version it named, and the promise that the file
+/// is still there. A notice, not a dialog — nothing this app says needs dismissing (`AGENTS.md`).
+pub fn refusal_notice(version: u32) -> String {
+    format!(
+        "session file is version {version}; this build reads {SAVE_VERSION} - opened a demo, file untouched"
+    )
+}

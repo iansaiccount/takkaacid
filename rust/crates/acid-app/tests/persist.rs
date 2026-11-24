@@ -1682,3 +1682,17 @@ fn a_launch_on_a_current_file_refuses_nothing() {
     assert!(!opened.first_run);
     assert!((opened.state.bpm - 137.0).abs() < 1e-6);
 }
+
+/// The notice a refused launch shows names the version it found and says the file was left alone — the words a player
+/// reads, in one place and testable, because `main` is a binary no test can drive.
+#[test]
+fn the_refusal_notice_names_the_version_and_the_promise() {
+    let said = acid_app::persist::refusal_notice(14);
+    assert!(said.contains("14"), "the version it found: {said}");
+    assert!(said.contains("13"), "and this build's: {said}");
+    assert!(
+        said.contains("untouched"),
+        "and that the file is still there: {said}"
+    );
+    assert!(said.is_ascii(), "the face may not print a glyph");
+}

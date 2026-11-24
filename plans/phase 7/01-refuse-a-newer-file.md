@@ -183,3 +183,15 @@ wrong. The branch review's findings and what was done about each go here too, be
   destructures it (the refusal is bound for Task 3). Proved by `a_launch_refuses_a_newer_file_and_does_not_touch_it`
   (the bytes on disk are compared before and after) and `a_launch_on_a_current_file_refuses_nothing`, watched fail first
   as `no field refused on type (SavedState, bool)`. Suite **981/981**, clippy `-D warnings`, `fmt --check`.
+- **Task 3 — the notice, and no autosave over it.** `TakkaApp` holds `refused_version: Option<u32>` and the autosave tick
+  is gated on `refused_version.is_none()`, so a refused session never writes itself; the panel shows
+  `persist::refusal_notice(version)` on the status line at launch ("session file is version 14; this build reads 13 -
+  opened a demo, file untouched"). Proved by `the_refusal_notice_names_the_version_and_the_promise` (the words, ASCII, in
+  one place) and by Task 2's byte comparison. Suite **982/982**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: the plan's live test is not written, and this is why.** `TakkaApp` — and so the autosave tick and the
+  launch-time notice — lives in `main.rs`, a **binary** no `tests/*_live.rs` can construct; the plan's Task 3 assumed a
+  panel the way the other live tests have one. The two halves are covered where they can be: the refusal's *decision*
+  by `Opens`' tests (the file is byte-identical after `open`), the refusal's *words* by the notice test, and the gate
+  itself is one visible condition in the tick. Cost if wrong: the wiring between them (that `main` passes the field and
+  keeps the gate) is read by the branch review rather than proved by a test — so it is named here, and the review focus
+  keeps it first.

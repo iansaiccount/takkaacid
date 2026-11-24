@@ -25,7 +25,7 @@ fn main() -> eframe::Result {
     let persist::Opened {
         state: saved,
         first_run,
-        refused: _refused_version,
+        refused: refused_version,
     } = persist::open(&dir);
     let rack = device::Rack::from_saved(&saved);
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
@@ -64,7 +64,7 @@ fn main() -> eframe::Result {
         "takka-acid",
         options,
         Box::new(move |_cc| {
-            let panel = panel_ui::PanelState {
+            let mut panel = panel_ui::PanelState {
                 pattern: rack.state().pattern(),
                 // The saved session may have been left on another pattern, so the display starts from the bank.
                 pattern_id: PatternBank::id_of(rack.bank().current()),
@@ -87,6 +87,10 @@ fn main() -> eframe::Result {
                 scale_knob: panel_ui::scale::scale_position(saved_scale),
                 ..Default::default()
             };
+            // A newer file was refused: say which version, on the status line, where a notice lives.
+            if let Some(version) = refused_version {
+                panel.notify(persist::refusal_notice(version));
+            }
             // The MIDI side takes the two cells it needs before the rack moves into the app: a router writes the tempo cell
             // and loads the published bus, and never sees the rack itself.
             let tempo_cell = rack.tempo_cell();
@@ -96,6 +100,7 @@ fn main() -> eframe::Result {
                 rack,
                 panel,
                 autosave: persist::Autosave::new(),
+                refused_version,
                 settings_was_open: false,
                 card_filled: None,
                 midi: Midi::new(midi_enabled, tempo_cell, midi_bus),
@@ -114,6 +119,8 @@ struct TakkaApp {
     rack: device::Rack,
     panel: panel_ui::PanelState,
     autosave: persist::Autosave,
+    /// A newer session file this launch refused, if any: the session must never autosave over it.
+    refused_version: Option<u32>,
     /// Whether the settings card was open last frame, so its device lists are filled on the rising edge and not per frame.
     settings_was_open: bool,
     /// Which device the card was filled for, or `None` while it is closed. The name and the port list are the round trip —
@@ -637,7 +644,8 @@ impl eframe::App for TakkaApp {
         }
         ctx.request_repaint_after(Duration::from_millis(200));
         // Write the session when the player turned autosave on, something changed, and the interval has passed.
-        if self.panel.autosave
+        if self.refused_version.is_none()
+            && self.panel.autosave
             && self
                 .autosave
                 .should_save(self.panel.dirty, std::time::Instant::now())
