@@ -166,3 +166,14 @@ wrong. The branch review's findings and what was done about each go here too, be
   presses back to thirty-two and asserts the notes play again. Suite **983/983**, clippy `-D warnings`, `fmt --check`.
   **Ruling: the file does not carry the held steps yet** — that is Task 3, and until it lands a held note survives a
   grid change but not a save. Cost if wrong: the restoration is session-only for one commit; the next task closes it.
+- **Task 3 — the file carries what it holds.** `PatternFile` grows `held`, written as the steps above `len()` up to the
+  last one that is **not a rest** and skipped entirely when empty — so a pattern with nothing held writes exactly the
+  bytes it wrote at version 13 (the first cut wrote the trailing rest slate and the version-nine mask test caught it,
+  4096 where 2048 was owed). The deserialiser restores `held` above `len()`, where it does not play. `SAVE_VERSION`
+  **14**, pin renamed and asserting it. Proved by `a_held_note_travels_through_the_file_and_plays_again` (narrow → save →
+  load → widen equals the original, and an untouched pattern has no `held` key) and the version-nine/ten/eleven upgrade
+  tests, which pin the old files' shape. Suite **984/984**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: `held` is truncated at the last non-rest step.** A held *rest* is nothing to carry, and writing the slate
+  would make every untouched pattern's file longer for no music — the cost of the naive version, caught by
+  `a_version_nine_file_upgrades_with_empty_drum_masks`. Cost if wrong: a hand-edited file that lists a held rest gets it
+  dropped, which is no loss.

@@ -250,3 +250,33 @@ fn a_press_counts_the_sound_it_would_drop() {
         "narrowed to sixteenths the two notes are held, and counted as what stops playing"
     );
 }
+
+/// A note a grid change stopped playing travels through the file and plays again when a wider grid arrives; a pattern
+/// with nothing held writes **no `held` key**, so its bytes are what they were before the field existed.
+#[test]
+fn a_held_note_travels_through_the_file_and_plays_again() {
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
+    steps[20] = Step::note(Pitch::C, 2);
+    let wide = Pattern::from_steps_in(Grid::ThirtySecond, steps);
+    let narrow = wide.with_grid(Grid::EighthTriplet);
+
+    let json = serde_json::to_string(&narrow).unwrap();
+    assert!(
+        json.contains("\"held\""),
+        "the held note is written: {json}"
+    );
+    let back: Pattern = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.len(), 12);
+    assert!(back.steps[20].on, "the held note is restored above the bar");
+    assert_eq!(
+        back.with_grid(Grid::ThirtySecond),
+        wide,
+        "and widening plays it again"
+    );
+
+    let plain = serde_json::to_string(&Pattern::empty()).unwrap();
+    assert!(
+        !plain.contains("held"),
+        "an untouched pattern keeps its bytes: {plain}"
+    );
+}

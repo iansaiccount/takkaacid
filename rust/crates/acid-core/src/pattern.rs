@@ -359,14 +359,29 @@ struct PatternFile {
     #[serde(default)]
     grid: Grid,
     steps: Vec<Step>,
+    /// The steps a grid change stopped playing. Absent when nothing is held, so a pattern with nothing held writes exactly
+    /// the bytes it wrote before this field existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    held: Vec<Step>,
 }
 
 #[cfg(feature = "serde")]
 impl Serialize for Pattern {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Only what a grid change actually stopped playing: trailing rests are not a held note, so an untouched pattern
+        // writes exactly the bytes it wrote before `held` existed.
+        let len = self.len();
+        let held = match self.steps[len..]
+            .iter()
+            .rposition(|step| *step != Step::rest())
+        {
+            Some(at) => self.steps[len..=len + at].to_vec(),
+            None => Vec::new(),
+        };
         PatternFile {
             grid: self.grid,
             steps: self.iter().copied().collect(),
+            held,
         }
         .serialize(serializer)
     }
@@ -378,7 +393,13 @@ impl<'de> Deserialize<'de> for Pattern {
         // `from_steps_in` pads a short list with rests and drops a long one, so a hand-edited file lands on the invariant
         // rather than beside it.
         let file = PatternFile::deserialize(deserializer)?;
-        Ok(Pattern::from_steps_in(file.grid, &file.steps))
+        let mut pattern = Pattern::from_steps_in(file.grid, &file.steps);
+        // The held steps are restored above `len()`: they do not play, and a wider grid plays them again.
+        let held = file.held;
+        let len = pattern.len();
+        let room = pattern.steps.len().saturating_sub(len).min(held.len());
+        pattern.steps[len..len + room].copy_from_slice(&held[..room]);
+        Ok(pattern)
     }
 }
 

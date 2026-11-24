@@ -501,14 +501,14 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 /// an accidental bump fail the suite instead of passing every test that compares a file against `SAVE_VERSION` itself.
 /// (Nothing in this build yet refuses a *newer* version — see the wishlist — so the number is a promise, not a guard.)
 #[test]
-fn the_save_version_is_pinned_at_thirteen() {
-    assert_eq!(SAVE_VERSION, 13, "a bump is a migration, not an edit");
+fn the_save_version_is_pinned_at_fourteen() {
+    assert_eq!(SAVE_VERSION, 14, "a bump is a migration, not an edit");
 
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
     let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
     assert!(
-        text.contains("\"version\": 13"),
+        text.contains("\"version\": 14"),
         "the document names the version it was written in"
     );
     // `devices` is appended after every field a version-11 build knows, so its prefix — `kit` included — still reads.
@@ -1689,7 +1689,10 @@ fn a_launch_on_a_current_file_refuses_nothing() {
 fn the_refusal_notice_names_the_version_and_the_promise() {
     let said = acid_app::persist::refusal_notice(14);
     assert!(said.contains("14"), "the version it found: {said}");
-    assert!(said.contains("13"), "and this build's: {said}");
+    assert!(
+        said.contains(&format!("{SAVE_VERSION}")),
+        "and this build's: {said}"
+    );
     assert!(
         said.contains("untouched"),
         "and that the file is still there: {said}"
