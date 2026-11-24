@@ -31,7 +31,7 @@ card's business. [`13-settings`](13-settings.md) walks the card.
 
 ![The bank browser](img/banks-card.png)
 
-The card with the most on it: the name field and `SAVE` / `SAVE A COPY`, the five demo songs, your own songs, and `NEW`,
+The card with the most on it: the name field and `SAVE` / `SAVE A COPY`, the seven demo songs, your own songs, and `NEW`,
 `IMPORT`, `EXPORT` and `CLOSE`. [`12-songs-and-demos`](12-songs-and-demos.md) walks that one.
 
 **Out:** the same as settings: the card's own close, `Escape`, or a click outside it.

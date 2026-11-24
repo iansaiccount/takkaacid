@@ -19,7 +19,7 @@ use acid_app::demo::{self, Demo};
 use acid_core::analysis;
 use acid_core::engine::Engine;
 use acid_core::oscillator::Waveform;
-use acid_core::pattern::STEPS_PER_PATTERN;
+use acid_core::pattern::Grid;
 
 const SAMPLE_RATE: f32 = 48_000.0;
 const BLOCK: usize = 256;
@@ -126,7 +126,7 @@ fn render(demo: &Demo) -> Rendered {
 /// One bar of audio at this tempo, rounded to a whole buffer so the render loop never splits a block.
 fn bar_samples(bpm: f32) -> usize {
     let sixteenths = 60.0 / bpm / 4.0;
-    let samples = (sixteenths * STEPS_PER_PATTERN as f32 * SAMPLE_RATE) as usize;
+    let samples = (sixteenths * Grid::Sixteenth.steps_per_bar() as f32 * SAMPLE_RATE) as usize;
     samples.next_multiple_of(BLOCK)
 }
 

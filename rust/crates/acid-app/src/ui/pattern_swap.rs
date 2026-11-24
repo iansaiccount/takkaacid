@@ -6,7 +6,6 @@
 //! transport to come round.
 
 use acid_core::bank::PatternBank;
-use acid_core::pattern::STEPS_PER_PATTERN;
 
 use crate::state::SharedState;
 
@@ -14,13 +13,13 @@ use super::PanelState;
 
 /// Whether a held pattern request may be applied this frame.
 ///
-/// `position` and `last_position` are the transport's step, `0..16`, as published for the panel's LEDs. The swap has to
+/// `position` and `last_position` are the transport's step, `0..pattern.len()`, as published for the panel's LEDs. The swap has to
 /// land *before* the next bar's first note, and the panel only sees a step after the audio thread has already triggered
 /// it: step 0 is published after the old pattern played it. So the last step is the due one — swapping there means the
 /// trigger that follows is the new pattern's first. A step that went backwards also counts, because a fast bar can be
 /// crossed between two frames. Stopped, there is no bar to wait for.
-pub fn swap_now(playing: bool, position: usize, last_position: usize) -> bool {
-    !playing || position + 1 >= STEPS_PER_PATTERN || position < last_position
+pub fn swap_now(playing: bool, position: usize, last_position: usize, steps: usize) -> bool {
+    !playing || position + 1 >= steps.max(1) || position < last_position
 }
 
 /// Adopt the bank's current pattern into the panel and the engine.
@@ -54,17 +53,37 @@ mod tests {
     #[test]
     fn the_swap_waits_for_the_bar() {
         // Stopped: nothing is playing, so there is nothing to interrupt.
-        assert!(swap_now(false, 7, 7));
+        assert!(swap_now(false, 7, 7, 16));
         // The bar has come round.
         assert!(
-            swap_now(true, 15, 14),
+            swap_now(true, 15, 14, 16),
             "the last step: the next trigger is the new bar"
         );
-        assert!(swap_now(true, 0, 15));
+        assert!(swap_now(true, 0, 15, 16));
         // ... or a short bar was crossed between two frames, so the step went backwards.
-        assert!(swap_now(true, 2, 9));
+        assert!(swap_now(true, 2, 9, 16));
         // Mid-bar: the request is held.
-        assert!(!swap_now(true, 5, 4));
-        assert!(!swap_now(true, 6, 5));
+        assert!(!swap_now(true, 5, 4, 16));
+        assert!(!swap_now(true, 6, 5, 16));
+    }
+
+    /// The count is the **playing** bar's, not sixteen: the two step values are that bar's published position, so a
+    /// request held through a thirty-two-step bar must not be released at its sixteenth — which is halfway through.
+    /// `main` passes `self.rack.state().pattern().len()`, and this is the test that fails if that ever becomes 16.
+    #[test]
+    fn a_request_waits_for_the_playing_bars_own_last_step() {
+        assert!(
+            !swap_now(true, 15, 14, 32),
+            "step sixteen of a thirty-two-step bar is its middle"
+        );
+        assert!(
+            swap_now(true, 31, 30, 32),
+            "the last step of the playing bar is where the swap is due"
+        );
+        assert!(
+            !swap_now(true, 10, 9, 12),
+            "a twelve-step bar is not due at its eleventh step either"
+        );
+        assert!(swap_now(true, 11, 10, 12), "and its twelfth is its last");
     }
 }

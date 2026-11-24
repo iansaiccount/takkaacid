@@ -11,7 +11,7 @@ use crate::notes::NoteQueue;
 use acid_core::drums::{Drum, Kit, default_kit};
 use acid_core::engine::DEFAULT_TUNING_KNOB;
 use acid_core::oscillator::Waveform;
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::voice::{
     DEFAULT_ACCENT_KNOB, DEFAULT_CUTOFF_KNOB, DEFAULT_DECAY_KNOB, DEFAULT_ENV_MOD_KNOB,
     DEFAULT_RESONANCE_KNOB,
@@ -141,7 +141,7 @@ pub struct SharedState {
     /// True when the player has muted this device. A gain, not a stop: the audio thread reads it once per block and the
     /// sequencer keeps running underneath, so unmuting rejoins on the beat instead of restarting the pattern.
     pub mute: AtomicBool,
-    /// Step the transport is on, `0..16`, published by the audio thread for the LEDs.
+    /// Step the transport is on, `0..pattern.len()`, published by the audio thread for the LEDs.
     pub position: AtomicUsize,
     /// Whether a tempo was written by something other than the panel since the panel last looked. The learned tempo fader
     /// writes the cell from the MIDI thread and cannot touch panel state, and the tempo is in the save file: the panel takes
@@ -461,7 +461,7 @@ impl SharedState {
 
     /// Clone-on-write one step. Stray indices are ignored: this is reachable from the UI.
     pub fn set_step(&self, index: usize, step: Step) {
-        if index >= STEPS_PER_PATTERN {
+        if index >= self.pattern().len() {
             return;
         }
         self.pattern.rcu(|current| {
@@ -469,6 +469,16 @@ impl SharedState {
             next.steps[index] = step;
             Arc::new(next)
         });
+    }
+
+    /// Change the pattern's grid, as the `GRID` key does: one copy-on-write of the whole pattern, the same seam
+    /// `set_step` uses, so the audio thread hears it on its next block.
+    ///
+    /// A narrower bar **rests** the steps it cannot hold — that rule is `Pattern::with_grid`'s, the one place it lives,
+    /// and the caller counts what a press costs (`Pattern::sounding_steps_beyond`) before it is gone.
+    pub fn set_grid(&self, grid: Grid) {
+        self.pattern
+            .rcu(|current| Arc::new((**current).with_grid(grid)));
     }
 
     pub fn status(&self) -> AudioStatus {

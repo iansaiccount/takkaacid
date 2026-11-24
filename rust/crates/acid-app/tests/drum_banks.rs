@@ -1,12 +1,12 @@
 //! The demo drum banks: a groove for every demo variation, and what loading one does to a device.
 //!
 //! The acid demos and their drum sides are **one list** (`demo::songs`), so nothing here holds two hand-kept lists
-//! together: each `Demo` carries its own eight grooves, and `demo::drum_banks` is the same five songs read from the drum
-//! side. What these tests pin is the part a pairing cannot state for itself — the five names the book prints, that every
+//! together: each `Demo` carries its own eight grooves, and `demo::drum_banks` is the same seven songs read from the drum
+//! side. What these tests pin is the part a pairing cannot state for itself — the seven names the book prints, that every
 //! pattern a player can load strikes something, and that a demo arrives on a drum machine as patterns, a tempo and a
 //! shuffle, with the kit its own.
 //!
-//! Not a `_live` test: nothing here drives `draw_panel`. The card's `DEMO BANKS` rows are the same five rows on either
+//! Not a `_live` test: nothing here drives `draw_panel`. The card's `DEMO BANKS` rows are the same seven rows on either
 //! face, so the widget's behaviour does not differ and `tests/songs_live.rs` already pins the row's request.
 
 use std::sync::Arc;
@@ -18,10 +18,18 @@ use acid_app::ui::PanelState;
 use acid_app::ui::pattern_swap;
 use acid_core::bank::{PATTERNS_PER_BANK, PatternBank, TOTAL_PATTERNS};
 use acid_core::drums::{Drum, Kit, default_kit};
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 
-/// The five variations the card lists, page 12 names and a later song document will pair by.
-const NAMES: [&str; 5] = ["Slow Acid", "Hard Techno Acid", "Blues", "Rock", "Funk"];
+/// The seven variations the card lists, page 12 names and a later song document will pair by.
+const NAMES: [&str; 7] = [
+    "Slow Acid",
+    "Hard Techno Acid",
+    "Blues",
+    "Rock",
+    "Funk",
+    "Acid Jazz",
+    "Fast Acid",
+];
 
 /// How many voices this step strikes, counted through the voice catalogue rather than a mask constant.
 fn struck(step: &Step) -> usize {
@@ -79,7 +87,7 @@ fn the_demo_names_are_the_acid_names() {
     let songs = demo::songs();
     let banks = demo::drum_banks();
 
-    // The five names, in the order the card lists and the book names them. This is the assertion that bites: the two
+    // The seven names, in the order the card lists and the book names them. This is the assertion that bites: the two
     // accessors read one list, so a rename has to be a decision about the book too.
     let names: Vec<&str> = banks.iter().map(|(name, _)| *name).collect();
     assert_eq!(names, NAMES);
@@ -91,7 +99,7 @@ fn the_demo_names_are_the_acid_names() {
         "a drum bank is not under its demo's name"
     );
 
-    // Five names with four grooves would be five rows that play the same thing on two of them.
+    // Seven names with six grooves would be seven rows that play the same thing on the pair that shares one.
     for (a, first) in banks.iter().enumerate() {
         for second in banks.iter().skip(a + 1) {
             assert_ne!(
@@ -178,8 +186,61 @@ fn a_demo_arrives_on_a_drum_machine_as_patterns_a_tempo_and_a_shuffle() {
     assert_eq!(panel.pattern_id, PatternBank::id_of(0));
     assert_eq!(panel.selected, 0);
 
-    // A sixth demo does not exist, and asking for one leaves the machine where it was.
-    assert_eq!(demo::load_drum_bank(&mut rack, 5), None);
+    // A seventh demo does not exist — seven names, indexes 0..6 — and asking for one leaves the machine where it was.
+    assert_eq!(demo::load_drum_bank(&mut rack, 7), None);
     assert_eq!(rack.device().bank.get(0), bank.get(0));
     assert_eq!(rack.tempo_bpm(), funk.state.bpm);
+}
+
+/// The two demos that put the other grids on the card: the jazz line is twelve eighth-triplets at 140, the fast one
+/// thirty-two thirty-seconds at 152, and each arrives with its eight drums on the same grid — the drum machine's own
+/// showcase of what a grid is for.
+#[test]
+fn the_two_new_demos_are_on_the_other_two_grids() {
+    let songs = demo::songs();
+    let jazz = songs.get(5).expect("the sixth demo");
+    assert_eq!(jazz.name, "Acid Jazz");
+    assert_eq!(jazz.state.bpm, 140.0);
+    assert_eq!(jazz.state.swing, 0.0, "the triplet grid is the swing");
+    assert_eq!(jazz.state.bank.get(0).grid, Grid::EighthTriplet);
+    assert_eq!(jazz.state.bank.get(0).len(), 12);
+    for slot in 0..PATTERNS_PER_BANK {
+        assert_eq!(
+            jazz.state.bank.get(slot).grid,
+            Grid::EighthTriplet,
+            "Acid Jazz A{} is not a triplet bar",
+            slot + 1
+        );
+        assert_eq!(
+            jazz.drums[slot].grid,
+            Grid::EighthTriplet,
+            "Acid Jazz's drum A{} is not on the line's grid",
+            slot + 1
+        );
+        assert!(
+            strikes(&jazz.drums[slot]) > 0,
+            "Acid Jazz A{} is silent",
+            slot + 1
+        );
+    }
+
+    let fast = songs.get(6).expect("the seventh demo");
+    assert_eq!(fast.name, "Fast Acid");
+    assert_eq!(fast.state.bpm, 152.0);
+    assert_eq!(fast.state.bank.get(0).grid, Grid::ThirtySecond);
+    assert_eq!(fast.state.bank.get(0).len(), 32);
+    for slot in 0..PATTERNS_PER_BANK {
+        assert_eq!(
+            fast.state.bank.get(slot).grid,
+            Grid::ThirtySecond,
+            "Fast Acid A{} is not a thirty-second bar",
+            slot + 1
+        );
+        assert_eq!(fast.drums[slot].grid, Grid::ThirtySecond);
+        assert!(
+            strikes(&fast.drums[slot]) > 0,
+            "Fast Acid A{} is silent",
+            slot + 1
+        );
+    }
 }

@@ -70,6 +70,24 @@ its neighbour, the filter is doing something you have not accounted for — that
 | `15-square` | hollow, more harmonics than the saw | a square that sounds identical to the saw |
 | `16-everything-max` | max resonance + env mod + decay + accent + cutoff: extreme, loud, still finite | clipping, crackle, or a runaway feedback tone |
 
+## The demo songs, by ear
+
+Seven demos load from the card. Each is a line, a patch and its own eight drum patterns, and each arrives at its own
+tempo and shuffle — a demo left at another one's tempo is not the demo it is named after.
+
+| Demo | Grid | Steps | BPM | Shuffle | Listen for |
+|---|---|---|---|---|---|
+| Slow Acid | `1/16` | 16 | 118 | 0.0 | the original: slides leaning, kick four to the floor |
+| Hard Techno Acid | `1/16` | 16 | 142 | 0.0 | the chug, octave jumps through the bar |
+| Blues | `1/16` | 16 | 92 | 0.35 | the shuffle: the line should limp, not stumble |
+| Rock | `1/16` | 16 | 126 | 0.0 | straight, no shuffle |
+| Funk | `1/16` | 16 | 104 | 0.12 | ghost notes and the kick around the beat |
+| Acid Jazz | `1/8T` | 12 | 140 | 0.0 | a walking line in threes over a ride on every quarter; the triplet grid *is* the swing, so the shuffle stays at zero |
+| Fast Acid | `1/32` | 32 | 152 | 0.0 | sixteenth slides broken by thirty-second rolls; kick on every eighth, hats on the odd thirty-seconds |
+
+The last two are the ones that show what a grid is for: twelve keys that are a bar of threes, thirty-two that are a bar
+twice as finely divided. A bar is a bar at every one of them, so the two demos keep time with the five above.
+
 ## Two machines, and what one cannot show you
 
 Everything above judges one voice. Phase 2 put up to four devices in one window — the strip's `+` adds one, a click or

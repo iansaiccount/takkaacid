@@ -6,7 +6,7 @@
 //! at sample 6000, not 12 000 — and the pitch is read inside step 1, before the rest closes the gate.
 
 use acid_core::analysis::{dominant_hz, peak, rms};
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, PATTERN_SLOTS, Pattern, Step};
 use acid_core::pitch::Pitch;
 use acid_core::sequencer::Sequencer;
 use acid_core::voice::Voice;
@@ -106,5 +106,38 @@ fn a_slide_step_does_not_restart_the_envelope() {
     assert!(
         late > 78.0,
         "should have glided up toward the octave: {late} Hz"
+    );
+}
+
+/// A slide on the **last step of a twelve-step bar** glides into the bar's first note. The wrap is a step boundary
+/// like any other, so a triplet bar's step 12 must not re-attack the note the next bar opens on — the `% len` in the
+/// sequencer, and `Voice::prev_slide` surviving it, are what this pins.
+#[test]
+fn a_slide_on_the_last_step_of_a_triplet_bar_glides_across_the_wrap() {
+    let sr = 48_000.0;
+    let mut seq = Sequencer::new(sr);
+    let mut last = Step::note(Pitch::FSharp, 1);
+    last.slide = true;
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
+    steps[0] = Step::note(Pitch::FSharp, 2);
+    steps[11] = last;
+    seq.set_pattern(Arc::new(Pattern::from_steps_in(Grid::EighthTriplet, steps)));
+    seq.set_bpm(120.0); // a triplet bar is 96 000 samples, so step 12 turns over at 96 000
+    let mut v = Voice::new(sr);
+    seq.start();
+    let mut buf = vec![0.0; 108_000];
+    seq.render(&mut v, &mut buf);
+
+    // Just past the wrap the pitch is still near the old note — a glide, not a jump to the octave.
+    let early = dominant_hz(&buf[96_200..98_000], sr);
+    assert!(
+        early < 70.0,
+        "pitch jumped across the wrap instead of gliding: {early} Hz"
+    );
+    // By the end of the new bar's first step it has climbed most of the way to the octave.
+    let late = dominant_hz(&buf[99_500..101_900], sr);
+    assert!(
+        late > 78.0,
+        "should have glided up across the wrap: {late} Hz"
     );
 }

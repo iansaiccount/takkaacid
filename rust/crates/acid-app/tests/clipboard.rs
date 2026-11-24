@@ -8,13 +8,13 @@ use acid_app::clipboard::{self, Clip};
 use acid_app::state::SharedState;
 use acid_app::ui::{PanelState, dispatch};
 use acid_core::bank::PatternBank;
-use acid_core::pattern::{Pattern, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, PATTERN_SLOTS, Pattern, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{Color32, ColorImage, Event, Key, Modifiers, Pos2};
 
 /// Two patterns, neither empty: the one in the slot and the one on the clipboard, so a test can tell them apart by content.
 fn left() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0] = Step::note(Pitch::C, -1);
     steps[4] = Step {
         accent: true,
@@ -24,7 +24,7 @@ fn left() -> Pattern {
 }
 
 fn right() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[2] = Step {
         slide: true,
         velocity: 40,
@@ -49,7 +49,7 @@ fn edited() -> Pattern {
 /// A third pattern, so "the neighbour was not touched" means something: the paste, the slot it lands in and the slot beside
 /// it are three different things.
 fn neighbour() -> Pattern {
-    let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0] = Step {
         accent: true,
         slide: true,
@@ -147,6 +147,29 @@ fn pasting_lands_the_pattern_and_says_what_it_replaced() {
     assert!(panel.dirty, "a paste is a change to save");
     assert_eq!(panel.clear_armed_at, None, "and it spends an armed CLEAR");
     assert_eq!(notice(&panel), "pasted A1 into B2");
+}
+
+/// A paste clamps the border into the bar it lands: a twelve-step pattern pasted while the border sits on step 21 of a
+/// thirty-second one must leave the border on a key the row actually draws — otherwise no key is outlined at all until
+/// the next arrow press. The spec asks for exactly this in "The face → Elsewhere".
+#[test]
+fn a_paste_clamps_the_border_into_the_arriving_bar() {
+    let (shared, mut bank, mut panel) = rig();
+    shared.set_pattern(std::sync::Arc::new(Pattern::empty_in(Grid::ThirtySecond)));
+    panel.selected = 20;
+    let clip = clipboard::encode(&Clip::Pattern {
+        pattern: Pattern::empty_in(Grid::EighthTriplet),
+        from: None,
+    });
+
+    dispatch::clipboard(&[Event::Paste(clip)], false, &mut panel, &shared, &mut bank);
+
+    assert_eq!(shared.pattern().len(), 12, "the triplet bar landed");
+    assert!(
+        panel.selected < 12,
+        "the border must stay on a key the twelve-step row draws, not step {}",
+        panel.selected + 1
+    );
 }
 
 #[test]

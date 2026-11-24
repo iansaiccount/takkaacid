@@ -22,7 +22,9 @@ pub fn randomised(pattern: Pattern, seed: u64, density: f32, scale: Scale) -> Pa
     let chance = (density.clamp(0.0, 1.0) * 1000.0).round() as u64;
     let pitches = scale.members();
     let mut steps = pattern.steps;
-    for step in &mut steps {
+    // Only the bar's own steps are rolled: every slot above `len()` is a rest by the pattern's invariant, and a roll that
+    // filled one would be sound the row and the file never show.
+    for step in &mut steps[..pattern.len()] {
         let on = rng.below(1000) < chance;
         let pitch = Pitch::ALL[pitches[rng.below(pitches.len() as u64) as usize] as usize];
         *step = Step {
@@ -33,10 +35,11 @@ pub fn randomised(pattern: Pattern, seed: u64, density: f32, scale: Scale) -> Pa
         };
     }
     // A jump start that lands on silence is not a jump start: one step always sounds, whatever the density says.
-    if !steps.iter().any(|step| step.on) {
+    if !steps[..pattern.len()].iter().any(|step| step.on) {
         steps[0].on = true;
     }
-    Pattern::from_steps(steps)
+    // The bar comes back on the grid it went in on: a reroll is new notes, not a shorter or longer bar.
+    Pattern::from_steps_in(pattern.grid, steps)
 }
 
 /// The octave closest to `wanted` that keeps `pitch` inside the instrument's range.
@@ -95,6 +98,7 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use acid_core::pattern::Grid;
 
     /// A pattern with three accents placed on alternating steps, so gate/accent/slide survival has something to prove.
     fn pattern() -> Pattern {
@@ -122,7 +126,8 @@ mod tests {
 
         assert_ne!(after, before, "nothing was randomised");
         assert!(
-            (0..16).any(|index| after.steps[index].on != before.steps[index].on),
+            (0..Grid::Sixteenth.steps_per_bar())
+                .any(|index| after.steps[index].on != before.steps[index].on),
             "the gates should move too: it is a jump start, not a variation"
         );
         assert!(
@@ -136,7 +141,7 @@ mod tests {
         // Accent, slide and velocity are the player's touch; only the gate and the note are rerolled.
         let before = pattern();
         let after = roll(9);
-        for index in 0..16 {
+        for index in 0..Grid::Sixteenth.steps_per_bar() {
             assert_eq!(after.steps[index].accent, before.steps[index].accent);
             assert_eq!(after.steps[index].slide, before.steps[index].slide);
             assert_eq!(after.steps[index].velocity, before.steps[index].velocity);
@@ -187,7 +192,11 @@ mod tests {
                 .count()
         };
         assert_eq!(count(0.0), 1, "the guaranteed step, and nothing else");
-        assert_eq!(count(1.0), 16, "every step sounds");
+        assert_eq!(
+            count(1.0),
+            Grid::Sixteenth.steps_per_bar(),
+            "every step sounds"
+        );
         assert!(count(0.25) < count(0.5), "a thinner setting is thinner");
         assert!(count(0.5) < count(0.75));
     }
@@ -252,5 +261,32 @@ mod tests {
         // Zero is xorshift's fixed point; the panel seeds from the clock, but a zero must not collapse to a constant.
         assert_ne!(roll(0), pattern(), "a zero seed randomised nothing");
         assert_ne!(roll(0), roll(1));
+    }
+
+    /// A reroll keeps the bar it was given: the grid decides how many steps are rolled, and nothing outside the bar is
+    /// written. A randomise that quietly returned a sixteenth pattern would shrink a thirty-second one on the press.
+    #[test]
+    fn a_reroll_keeps_the_grid_and_rolls_only_the_bar() {
+        for grid in Grid::ALL {
+            let source = Pattern::empty_in(grid);
+            let after = randomised(source, 5, 1.0, Scale::Chromatic);
+            assert_eq!(
+                after.grid,
+                grid,
+                "{} came back as another grid",
+                grid.name()
+            );
+            assert_eq!(after.len(), source.len(), "{} changed length", grid.name());
+            assert!(
+                after.iter().all(|step| step.on),
+                "{}: every step of the bar sounds at full density",
+                grid.name()
+            );
+            assert!(
+                after.steps[source.len()..].iter().all(|step| !step.on),
+                "{}: nothing above the bar was written",
+                grid.name()
+            );
+        }
     }
 }

@@ -3,7 +3,7 @@
 use acid_app::state::SharedState;
 use acid_app::ui::layout::layout;
 use acid_app::ui::{PanelState, draw_panel};
-use acid_core::pattern::Step;
+use acid_core::pattern::{Grid, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 
@@ -31,7 +31,8 @@ fn clear_centre() -> Pos2 {
 }
 
 fn step_centre(index: usize) -> Pos2 {
-    acid_app::ui::layout::step_cells(layout(screen()).steps)[index].center()
+    acid_app::ui::layout::step_cells(layout(screen()).steps, Grid::Sixteenth.steps_per_bar())[index]
+        .center()
 }
 
 fn press(at: Pos2, modifiers: Modifiers) -> Event {
@@ -66,7 +67,7 @@ fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2, 
 
 fn lit_shared() -> std::sync::Arc<SharedState> {
     let shared = SharedState::new();
-    for index in 0..16 {
+    for index in 0..Grid::Sixteenth.steps_per_bar() {
         shared.set_step(index, Step::note(Pitch::C, 0));
     }
     shared
@@ -158,7 +159,7 @@ fn a_click_on_the_panel_elsewhere_leaves_the_pattern_alone() {
         Modifiers::default(),
     );
     assert!(panel.clear_armed_at.is_none(), "selecting is not clearing");
-    assert!(shared.pattern().steps.iter().all(|step| step.on));
+    assert!(shared.pattern().iter().all(|step| step.on));
 }
 
 #[test]

@@ -39,7 +39,7 @@ pub mod transport;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use acid_core::pattern::{Pattern, PatternId, STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Pattern, PatternId, Step};
 use acid_core::sequencer::sounding_step;
 use acid_core::timing::DEFAULT_BPM;
 
@@ -67,7 +67,7 @@ pub struct PanelState {
     pub tempo: f32,
     /// Transport state: drives the position LED.
     pub playing: bool,
-    /// Step the transport is on, `0..16`.
+    /// Step the transport is on, `0..pattern.len()`.
     pub position: usize,
     /// Pitch a step takes when a gesture turns a rest into a note.
     pub last_pitch: Pitch,
@@ -83,7 +83,7 @@ pub struct PanelState {
     pub reprobe_requested: bool,
     /// True while the help card is showing.
     pub help_visible: bool,
-    /// The step the face edits — the 303's border, the drum grid's lit column; always in `0..16`, never saved.
+    /// The step the face edits — the 303's border, the drum grid's lit column; clamped into the pattern's bar, never saved.
     pub selected: usize,
     /// The drum face's editor: which voice its dials are on. Panel-wide, not per device — plan 01, task 4's ruling. Not
     /// saved: the kit it edits is in memory only this phase.
@@ -504,7 +504,8 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         selection::place_note(state, shared, pitch, octave, Some(waiting.velocity));
         // A MIDI keyboard's release never reaches this queue, so its note walks here, on arrival: one note, one step.
         if state.step_mode {
-            selection::walk(state);
+            let count = state.pattern.len();
+            selection::walk(state, count);
         }
     }
     let l = layout::layout(window);
@@ -731,23 +732,31 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
     // The step row is the 303's editor; a drum device's columns are the grid's cells, and drawing the row would give the
     // face two editors and the player a step border nothing on the drum face shows.
     if kind == crate::device::DeviceKind::Acid {
-        let keys = layout::step_cells(l.steps);
+        let keys = layout::step_cells(l.steps, state.pattern.len());
         // The LED is on the step that **sounds**, not the step the clock is on: under `REVERSE` the line reads the bar from
         // its other end, so the light walks back along the keys with the notes it is sounding. The direction is the one the
         // audio thread published, not the one the key asked for — a running line takes a request at the bar line, and a light
         // on the request would turn a bar ahead of the sound.
-        let sounding = sounding_step(state.position, shared.is_reverse_active());
+        let sounding = sounding_step(
+            state.position,
+            shared.is_reverse_active(),
+            state.pattern.len(),
+        );
+        // The row is the bar: one key per step of the pattern's own grid, so twelve keys at `1/8T` and thirty-two at
+        // `1/32`. Every index below is the step's own — the old `% 16` folded a longer bar back onto sixteen keys.
+        let len = state.pattern.len();
         for (i, cell) in keys.iter().enumerate() {
-            let step = state.pattern.steps[i % STEPS_PER_PATTERN];
+            let step = state.pattern.steps[i];
             let view = step_key::step_view(
                 &step,
                 i,
+                state.pattern.grid,
                 sounding,
                 state.playing,
-                i % STEPS_PER_PATTERN == state.selected,
+                i == state.selected,
                 state.drag.is_some_and(|(dragged, ..)| dragged == i),
                 // A slide only glides into a step that sounds, so the keycap needs to know about the next one.
-                state.pattern.steps[(i + 1) % STEPS_PER_PATTERN].on,
+                state.pattern.steps[(i + 1) % len].on,
             );
             let response = step_key::step_key(ui, i, &step, &view, *cell, p);
             let (shift, alt, ctrl) =
@@ -755,7 +764,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
             // Every click moves the selection, editing or not: the outline must always say where the keyboard
             // and the next gesture will land.
             if response.clicked() || response.drag_started() {
-                state.selected = i % STEPS_PER_PATTERN;
+                state.selected = i;
             }
             let gesture = edit::gesture_from_input(
                 response.clicked(),
@@ -773,7 +782,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                     state.last_pitch = edited.pitch;
                     state.last_octave = edited.octave_offset;
                 }
-                shared.set_step(i % STEPS_PER_PATTERN, edited);
+                shared.set_step(i, edited);
                 state.pattern = shared.pattern();
                 state.dirty = true;
                 // An edit makes a pending CLEAR stale: it was armed against a pattern that no longer exists.
@@ -1144,7 +1153,8 @@ fn play_computer_keys(shared: &SharedState, ui: &egui::Ui, state: &mut PanelStat
                     // Only a key this panel wrote with walks on: an auditioned note is not an edit, and a release with
                     // no press behind it (a lost frame, a stuck key) moves nothing.
                     if keys::release(&mut state.placed, key) && state.step_mode && !state.a_card_is_up() {
-                        selection::walk(state);
+                        let count = state.pattern.len();
+                        selection::walk(state, count);
                     }
                 }
             }

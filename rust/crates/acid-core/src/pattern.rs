@@ -1,4 +1,4 @@
-//! The 16-step pattern — the model the step keys, the sequencer and the file format all share.
+//! The pattern — a bar of steps at a grid, the model the step keys, the sequencer and the file format all share.
 //!
 //! This is `acid-core`'s only serde type. Its shape is deliberately flat and `Copy` so the audio thread
 //! can hold a snapshot and the UI can edit a clone without coordination.
@@ -9,8 +9,103 @@ use serde::{Deserialize, Serialize};
 use crate::drums::Drum;
 use crate::pitch::{Pitch, step_hz};
 
-/// Steps in one pattern.
-pub const STEPS_PER_PATTERN: usize = 16;
+/// The most slots a pattern can hold: the longest bar any grid needs ([`Grid::ThirtySecond`]'s thirty-two).
+///
+/// A pattern is a fixed table of these with a `len()` from its grid, because `Pattern` is `Copy` on purpose — the audio
+/// thread holds an `Arc` snapshot and every step edit copies the whole pattern.
+pub const PATTERN_SLOTS: usize = 32;
+
+/// The grid a pattern's bar is divided into.
+///
+/// A pattern is always exactly one 4/4 bar; the grid says how many steps that bar has. `1/16` is the sixteenths every
+/// pattern born before this build is on, `1/32` divides the same bar twice as finely, and `1/8T` divides it into
+/// eighth-note triplets, which sit *off* the sixteenth grid rather than inside it.
+///
+/// A catalogue, in this repo's sense: `ALL` is the order the face's key cycles, `name`/`from_name` are the mapping the
+/// file uses, and every `match` over it is written out so a fourth grid fails to compile where a decision is owed.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum Grid {
+    /// Sixteen steps to the bar: the grid every file written before this build is on, and the one a new pattern takes.
+    #[default]
+    Sixteenth,
+    /// Thirty-two steps to the bar: finer than a sixteenth.
+    ThirtySecond,
+    /// Twelve steps to the bar — eighth-note triplets.
+    EighthTriplet,
+}
+
+impl Grid {
+    /// Every grid, in the order the transport row's key cycles them.
+    pub const ALL: [Grid; 3] = [Grid::Sixteenth, Grid::ThirtySecond, Grid::EighthTriplet];
+
+    /// What the face and the file call it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Grid::Sixteenth => "1/16",
+            Grid::ThirtySecond => "1/32",
+            Grid::EighthTriplet => "1/8T",
+        }
+    }
+
+    /// The grid a caption names, or `None` for a word this build does not know.
+    pub fn from_name(name: &str) -> Option<Grid> {
+        match name {
+            "1/16" => Some(Grid::Sixteenth),
+            "1/32" => Some(Grid::ThirtySecond),
+            "1/8T" => Some(Grid::EighthTriplet),
+            _ => None,
+        }
+    }
+
+    /// Steps in one 4/4 bar of this grid.
+    ///
+    /// `const` because a test that builds a bar of steps sizes its array from it.
+    pub const fn steps_per_bar(self) -> usize {
+        match self {
+            Grid::Sixteenth => 16,
+            Grid::ThirtySecond => 32,
+            Grid::EighthTriplet => 12,
+        }
+    }
+
+    /// Whether `index` falls on a beat: every fourth step at `1/16`, every eighth at `1/32`, every third at `1/8T`.
+    ///
+    /// A beat is a quarter note and every grid divides the bar into four of them, so the interval *is*
+    /// `steps_per_bar() / 4` — derived from the one catalogue rather than a second table of counts. `is_multiple_of`
+    /// rather than `% n == 0`, which the workspace's clippy gate reads as a hand-rolled spelling of it.
+    pub const fn is_beat(self, index: usize) -> bool {
+        index.is_multiple_of(self.steps_per_bar() / 4)
+    }
+
+    /// The next grid the key cycles to: `ALL`'s order, wrapping back to sixteenths after eighth-note triplets.
+    ///
+    /// A full `match` with no `_` arm, so a fourth grid added to the catalogue fails to compile here until someone says
+    /// where the key reaches it.
+    pub fn next(self) -> Grid {
+        match self {
+            Grid::Sixteenth => Grid::ThirtySecond,
+            Grid::ThirtySecond => Grid::EighthTriplet,
+            Grid::EighthTriplet => Grid::Sixteenth,
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Grid {
+    /// By caption, so a reader of the file can see which grid a pattern is on, and a caption this build does not know
+    /// reads as sixteenths rather than refusing the song.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.name())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Grid {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        Ok(Grid::from_name(&name).unwrap_or_default())
+    }
+}
 
 /// The velocity a step plays at when nothing struck it: MIDI's full scale, so an untouched pattern sounds exactly as
 /// loud as it did before velocity existed.
@@ -158,20 +253,89 @@ impl Step {
     }
 }
 
-/// Sixteen steps — one bar at 16th notes.
+/// One bar of a pattern: the grid it is divided by, and its slots.
+///
+/// A pattern is always **exactly one 4/4 bar**, so `len()` is the grid's own count and the slots above it are rests. That
+/// invariant is what makes "the row is the pattern" and "the file is the row" the same sentence: `from_steps_in` rests
+/// what it is not given, `with_grid` rests what a narrower bar drops, and the file writes only the steps that play.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Pattern {
-    pub steps: [Step; STEPS_PER_PATTERN],
+    /// How this bar is divided. A pattern is the grid's, not the device's, so a bank can hold all three.
+    pub grid: Grid,
+    /// The bar's slots. **Every slot at or above `len()` is a rest, always** — see the type's own note.
+    pub steps: [Step; PATTERN_SLOTS],
 }
 
 impl Pattern {
+    /// An empty sixteenth bar: what a pattern that has never said otherwise is.
     pub fn empty() -> Self {
         Self::default()
     }
 
-    pub fn from_steps(steps: [Step; STEPS_PER_PATTERN]) -> Self {
-        Self { steps }
+    /// An empty bar of `grid`: what `CLEAR` leaves behind, so clearing a pattern never shortens its bar.
+    pub fn empty_in(grid: Grid) -> Self {
+        Self {
+            grid,
+            ..Self::default()
+        }
+    }
+
+    /// Steps in this bar: the grid's count, and the only count a player of this pattern asks.
+    #[expect(
+        clippy::len_without_is_empty,
+        reason = "a bar always has steps; there is no empty pattern to name"
+    )]
+    pub fn len(&self) -> usize {
+        self.grid.steps_per_bar()
+    }
+
+    /// A sixteenth pattern from its sixteen steps. Extra steps are dropped and missing ones are rests: a pattern is
+    /// exactly one bar, and the grid says how long that is. Use [`Pattern::from_steps_in`] for any other grid.
+    pub fn from_steps(steps: impl AsRef<[Step]>) -> Self {
+        Self::from_steps_in(Grid::Sixteenth, steps)
+    }
+
+    /// A pattern of `grid` from up to `grid.steps_per_bar()` steps: the rest of the bar is rests, and anything past its
+    /// end is dropped.
+    pub fn from_steps_in(grid: Grid, steps: impl AsRef<[Step]>) -> Self {
+        let steps = steps.as_ref();
+        let mut pattern = Self::empty_in(grid);
+        let taken = steps.len().min(pattern.len());
+        pattern.steps[..taken].copy_from_slice(&steps[..taken]);
+        pattern
+    }
+
+    /// The same music on another grid. The steps the new bar can hold are kept and the ones it cannot are **rested** — the
+    /// one place a pattern loses sound, and the panel says so on the status line when it does.
+    pub fn with_grid(self, grid: Grid) -> Self {
+        let mut pattern = Self { grid, ..self };
+        let len = pattern.len();
+        for step in &mut pattern.steps[len..] {
+            *step = Step::rest();
+        }
+        pattern
+    }
+
+    /// How many steps **that sound** sit outside `grid`'s bar: what a press to that grid would cost.
+    ///
+    /// The count is of notes, not slots. The row already shows the new length the moment it changes shape; what it cannot
+    /// show is how much music the shorter bar leaves behind, and that is the number the status line says.
+    pub fn sounding_steps_beyond(&self, grid: Grid) -> usize {
+        self.steps[grid.steps_per_bar()..]
+            .iter()
+            .filter(|step| step.on)
+            .count()
+    }
+
+    /// The steps that play, in step order.
+    pub fn iter(&self) -> impl Iterator<Item = &Step> {
+        self.steps[..self.len()].iter()
+    }
+
+    /// The steps that play, for an edit to walk.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Step> {
+        let len = self.len();
+        self.steps[..len].iter_mut()
     }
 
     /// Every step moved by whole semitones: the same sound, spelled on a different lattice.
@@ -181,7 +345,43 @@ impl Pattern {
     pub fn transposed(self, semitones: i8) -> Self {
         Self {
             steps: self.steps.map(|step| step.transposed(semitones)),
+            ..self
         }
+    }
+}
+
+/// `{ "grid": "1/32", "steps": [ … the steps that play … ] }`.
+///
+/// The shadow exists because the file writes a *list of the steps that play* while the pattern holds a fixed slot table:
+/// a sixteenth pattern's step list is sixteen entries, exactly as a version-12 build wrote it, which is what lets an older
+/// build read a sixteenth song this build saved.
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
+struct PatternFile {
+    /// Absent in every version-12 file, and in a file naming a grid this build does not know: both read as sixteenths.
+    #[serde(default)]
+    grid: Grid,
+    steps: Vec<Step>,
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Pattern {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        PatternFile {
+            grid: self.grid,
+            steps: self.iter().copied().collect(),
+        }
+        .serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Pattern {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // `from_steps_in` pads a short list with rests and drops a long one, so a hand-edited file lands on the invariant
+        // rather than beside it.
+        let file = PatternFile::deserialize(deserializer)?;
+        Ok(Pattern::from_steps_in(file.grid, &file.steps))
     }
 }
 

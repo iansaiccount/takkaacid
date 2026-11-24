@@ -43,7 +43,7 @@ fn the_panel_never_overlaps_itself_at_any_reasonable_size() {
                 "knob cell escapes its row at {w}x{h}"
             );
         }
-        let keys = step_cells(l.steps);
+        let keys = step_cells(l.steps, acid_core::pattern::Grid::Sixteenth.steps_per_bar());
         for (i, a) in keys.iter().enumerate() {
             for b in keys.iter().skip(i + 1) {
                 assert!(!a.intersects(*b), "step keys overlap at {w}x{h}");

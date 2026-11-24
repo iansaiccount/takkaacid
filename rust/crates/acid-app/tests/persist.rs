@@ -14,7 +14,7 @@ use acid_app::persist::{
 };
 use acid_core::bank::PatternBank;
 use acid_core::drums::Drum;
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 
 #[test]
@@ -501,14 +501,14 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 /// an accidental bump fail the suite instead of passing every test that compares a file against `SAVE_VERSION` itself.
 /// (Nothing in this build yet refuses a *newer* version — see the wishlist — so the number is a promise, not a guard.)
 #[test]
-fn the_save_version_is_pinned_at_twelve() {
-    assert_eq!(SAVE_VERSION, 12, "a bump is a migration, not an edit");
+fn the_save_version_is_pinned_at_thirteen() {
+    assert_eq!(SAVE_VERSION, 13, "a bump is a migration, not an edit");
 
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
     let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
     assert!(
-        text.contains("\"version\": 12"),
+        text.contains("\"version\": 13"),
         "the document names the version it was written in"
     );
     // `devices` is appended after every field a version-11 build knows, so its prefix — `kit` included — still reads.
@@ -520,6 +520,78 @@ fn the_save_version_is_pinned_at_twelve() {
         text.contains("\"devices\": []"),
         "one device is the empty list: the mirror above is the machine, and `sanitize` builds it back from there"
     );
+}
+
+/// A pattern's grid travels with it: a thirty-second bar writes thirty-two steps and says which grid they are on.
+#[test]
+fn a_thirty_second_pattern_writes_thirty_two_steps() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut written = SavedState::default();
+    written
+        .bank
+        .replace(0, Pattern::empty_in(Grid::ThirtySecond));
+    save(dir.path(), &written).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let pattern = &document["bank"]["patterns"][0];
+    assert_eq!(pattern["grid"], "1/32");
+    assert_eq!(
+        pattern["steps"].as_array().unwrap().len(),
+        32,
+        "one step per slot of the bar"
+    );
+
+    let loaded = load(dir.path())
+        .expect("a file this build wrote is readable")
+        .expect("the file is on disk")
+        .upgraded();
+    assert_eq!(loaded.bank.get(0).grid, Grid::ThirtySecond);
+    assert_eq!(loaded.bank.get(0).len(), 32);
+}
+
+/// The version-12 shape: a sixteenth pattern whose step list is sixteen entries and which has no `grid` field at all.
+/// That is what an older build wrote, and the sentence the round's risk note rests on is that this build still reads it.
+#[test]
+fn a_version_twelve_pattern_shape_still_reads() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut written = SavedState::default();
+    written
+        .bank
+        .replace(0, Pattern::from_steps([Step::note(Pitch::A, 1); 16]));
+    save(dir.path(), &written).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let pattern = document["bank"]["patterns"][0]
+        .as_object_mut()
+        .expect("a pattern is an object");
+    assert_eq!(
+        pattern["steps"].as_array().unwrap().len(),
+        16,
+        "a sixteenth bar writes sixteen steps, not thirty-two"
+    );
+    assert!(
+        pattern.remove("grid").is_some(),
+        "this build writes the grid, so an older one would not"
+    );
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&document).unwrap(),
+    )
+    .unwrap();
+
+    let loaded = load(dir.path())
+        .expect("a version-12 shape is readable")
+        .expect("the file is on disk");
+    let pattern = loaded.bank.get(0);
+    assert_eq!(
+        pattern.grid,
+        Grid::Sixteenth,
+        "no grid means the grid every version-12 file was on"
+    );
+    assert_eq!(pattern.len(), 16);
+    assert!(pattern.steps[0].on, "the sixteen steps came through");
 }
 
 /// The kit's name is appended after every field a version-10 file has, so such a file still reads: its prefix is unchanged
@@ -642,7 +714,7 @@ fn a_version_nine_file_upgrades_with_empty_drum_masks() {
     let stripped = strip_drum_masks(&mut legacy);
     assert_eq!(
         stripped,
-        written.bank.pattern_count() * acid_core::pattern::STEPS_PER_PATTERN * 2,
+        written.bank.pattern_count() * Grid::Sixteenth.steps_per_bar() * 2,
         "every step of every pattern lost both masks"
     );
     std::fs::write(
@@ -687,7 +759,7 @@ fn a_version_nine_file_upgrades_with_empty_drum_masks() {
 fn a_drum_step_survives_the_save_file() {
     let dir = tempfile::tempdir().unwrap();
     let mut written = SavedState::default();
-    let mut steps = [Step::rest(); acid_core::pattern::STEPS_PER_PATTERN];
+    let mut steps = [Step::rest(); acid_core::pattern::PATTERN_SLOTS];
     steps[3].hit(Drum::Kick, false);
     steps[3].hit(Drum::Snare, true);
     steps[7].hit(Drum::Cowbell, true);

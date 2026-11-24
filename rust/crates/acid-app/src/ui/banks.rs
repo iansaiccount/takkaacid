@@ -24,7 +24,7 @@ pub struct Banks {
     /// The song whose delete cross has been clicked once. Deleting a file has no undo, so it takes two clicks.
     pub delete_armed: Option<String>,
     /// The demo banks built into the app, in their own order. They are not files, so they are never deleted or renamed —
-    /// and the five names are the same on either face, because they are the same demos: a 303 loads the song, a drum
+    /// and the seven names are the same on either face, because they are the same demos: a 303 loads the song, a drum
     /// machine the groove it is played over.
     pub demos: Vec<String>,
     /// The row whose load has been clicked once while the session was unsaved: loading again replaces it. Replacing work

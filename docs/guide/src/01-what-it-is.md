@@ -3,8 +3,8 @@
 takka-acid is a bass synthesizer built to do one thing: play a single acid line, very well — and, in the same window, a drum
 machine to play it over.
 
-One device is **one voice** (the 303) or **sixteen of them** (the drums), and **sixteen steps**: that is the whole machine.
-You write a bar of up to sixteen steps, you shape the sound, and the same sixteen steps play it. The 303 is a line of
+One device is **one voice** (the 303) or **sixteen of them** (the drums), and **a bar of steps**: that is the whole machine.
+You write a bar of steps, you shape the sound, and the same steps play it — sixteen of them, or twelve, or thirty-two ([`23-pattern-grids`](23-pattern-grids.md)). The 303 is a line of
 notes and the drum machine is a grid of strikes, but they are the same bar, the same clock, the same bank and the same
 transport — [`22-the-drum-machine`](22-the-drum-machine.md) is the second machine. 64 patterns sit in **eight banks of
 eight** — `A1` through `H8` — so a whole night of lines fits in one session.
@@ -37,7 +37,7 @@ The drum machine plays samples, but it is not a sampler either: each of its sixt
 filter and a tuning, in a kit, and nothing on the face slices, maps or layers one. What it adds is rhythm, not sampling —
 [`22-the-drum-machine`](22-the-drum-machine.md) says what it is.
 
-What it does have: five demo songs to start from, sixty-four patterns to fill, MIDI in for a keyboard or a controller,
+What it does have: seven demo songs to start from, sixty-four patterns to fill, MIDI in for a keyboard or a controller,
 and a save file that keeps it all.
 
 The next page gets you running.

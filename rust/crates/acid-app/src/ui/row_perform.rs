@@ -83,7 +83,9 @@ pub(super) fn draw(
             super::clear::Click::Armed => state.clear_armed_at = Some(now),
             super::clear::Click::Cleared => {
                 super::clear::disarm(state);
-                let empty = Arc::new(acid_core::pattern::Pattern::empty());
+                // CLEAR empties the bar without leaving it: a key a player meets in the first minute must not
+                // silently turn thirty-two keys into sixteen.
+                let empty = Arc::new(acid_core::pattern::Pattern::empty_in(shared.pattern().grid));
                 shared.set_pattern(Arc::clone(&empty));
                 state.pattern = empty;
                 state.dirty = true;

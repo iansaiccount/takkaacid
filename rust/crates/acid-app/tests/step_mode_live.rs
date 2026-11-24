@@ -1,12 +1,13 @@
 //! Step mode and note placement: a note typed on a keyboard writes the selected step, and step mode walks on.
 
 use acid_app::state::SharedState;
-use acid_app::ui::layout::layout;
+use acid_app::ui::layout::{layout, step_cells};
 use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, draw_panel};
-use acid_core::pattern::Step;
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 fn screen() -> Rect {
@@ -67,7 +68,7 @@ fn step_centre() -> Pos2 {
 
 fn lit_shared() -> std::sync::Arc<SharedState> {
     let shared = SharedState::new();
-    for index in 0..16 {
+    for index in 0..Grid::Sixteenth.steps_per_bar() {
         shared.set_step(index, Step::note(Pitch::C, 0));
     }
     shared
@@ -470,4 +471,37 @@ fn a_release_without_a_press_never_walks() {
     run_on(&ctx, &mut panel, &shared, vec![release(Key::A)]);
 
     assert_eq!(panel.selected, 5, "nothing was pressed, so nothing walks");
+}
+
+/// The row is the bar: a twelve-step pattern draws twelve keys across the band, and each one takes the selection. A
+/// press where the thirteenth key of a sixteen-key row used to be lands inside this bar — there is no thirteenth key.
+#[test]
+fn a_twelve_step_bar_draws_twelve_keys() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    shared.set_pattern(Arc::new(Pattern::empty_in(Grid::EighthTriplet)));
+    let mut panel = PanelState::default();
+    let l = layout(screen());
+    let cells = step_cells(l.steps, 12);
+    assert_eq!(cells.len(), 12, "a triplet bar is twelve steps");
+
+    for (index, cell) in cells.iter().enumerate() {
+        click(&ctx, &mut panel, &shared, cell.center());
+        assert_eq!(
+            panel.selected,
+            index,
+            "the key on step {} takes it",
+            index + 1
+        );
+    }
+
+    // Sixteen keys used to be drawn whatever the bar was; where that row's thirteenth key stood, this bar's key is
+    // one of its own twelve, never a thirteenth.
+    let sixteenths = step_cells(l.steps, 16);
+    click(&ctx, &mut panel, &shared, sixteenths[12].center());
+    assert!(
+        panel.selected < 12,
+        "there is no thirteenth key, but the selection is on {}",
+        panel.selected
+    );
 }

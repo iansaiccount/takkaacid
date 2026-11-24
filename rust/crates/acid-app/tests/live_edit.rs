@@ -5,7 +5,7 @@ use acid_app::audio::renderer::AudioRenderer;
 use acid_app::state::SharedState;
 use acid_app::ui::{PanelState, draw_panel, layout};
 use acid_core::analysis::peak;
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 
 fn window() -> egui::Rect {
@@ -40,7 +40,10 @@ fn a_thousand_edits_from_another_thread_never_break_the_pattern() {
         let s = s.clone();
         std::thread::spawn(move || {
             for i in 0..1_000 {
-                s.set_step(i % 16, Step::note(Pitch::ALL[i % 13], 0));
+                s.set_step(
+                    i % Grid::Sixteenth.steps_per_bar(),
+                    Step::note(Pitch::ALL[i % 13], 0),
+                );
             }
         })
     };
@@ -48,7 +51,7 @@ fn a_thousand_edits_from_another_thread_never_break_the_pattern() {
     let mut out = vec![0.0f32; 2_048];
     while !writer.is_finished() {
         r.render_into(&mut out);
-        assert_eq!(s.pattern().steps.len(), 16);
+        assert_eq!(s.pattern().len(), 16);
     }
     writer.join().unwrap();
     assert!(s.pattern().steps.iter().filter(|st| st.on).count() >= 1);
@@ -66,6 +69,7 @@ fn clicking_a_step_key_toggles_it_in_the_shared_state() {
             egui::vec2(980.0, 560.0),
         ))
         .steps,
+        Grid::Sixteenth.steps_per_bar(),
     );
     let pos = cells[3].center();
 
@@ -124,7 +128,11 @@ fn click_step(
     clicks: usize,
 ) {
     let ctx = egui::Context::default();
-    let pos = layout::step_cells(layout::layout(window()).steps)[index].center();
+    let pos = layout::step_cells(
+        layout::layout(window()).steps,
+        Grid::Sixteenth.steps_per_bar(),
+    )[index]
+        .center();
     let button = |pressed: bool| egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
@@ -192,7 +200,11 @@ fn double_click_clears_the_step_back_to_a_rest() {
 /// Drag step key `index` upwards by `dy` pixels through `draw_panel` and return the resulting step.
 fn drag_step(shared: &SharedState, panel: &mut PanelState, index: usize, dy: f32) -> Step {
     let ctx = egui::Context::default();
-    let pos = layout::step_cells(layout::layout(window()).steps)[index].center();
+    let pos = layout::step_cells(
+        layout::layout(window()).steps,
+        Grid::Sixteenth.steps_per_bar(),
+    )[index]
+        .center();
     let button = |pressed: bool, at: egui::Pos2| egui::Event::PointerButton {
         pos: at,
         button: egui::PointerButton::Primary,

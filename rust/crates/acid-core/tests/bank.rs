@@ -60,7 +60,7 @@ fn selecting_out_of_range_clamps_instead_of_losing_the_bank() {
     bank.select(0);
     assert_eq!(bank.current(), 0);
     assert_eq!(
-        bank.get(999).steps.len(),
+        bank.get(999).len(),
         16,
         "a stray index reads the last pattern"
     );
@@ -75,7 +75,7 @@ fn a_truncated_bank_is_repaired_rather_than_panicking() {
     assert_eq!(short.pattern_count(), 1, "the file really is short");
 
     // Reading before the repair must not panic either: `get` is on the audio path.
-    assert_eq!(short.get(5).steps.len(), 16);
+    assert_eq!(short.get(5).len(), 16);
 
     short.normalise();
     assert_eq!(short.pattern_count(), acid_core::bank::TOTAL_PATTERNS);
@@ -90,7 +90,7 @@ fn a_truncated_bank_is_repaired_rather_than_panicking() {
 fn a_bank_with_no_patterns_at_all_reads_silence_instead_of_panicking() {
     let empty: PatternBank =
         serde_json::from_value(short_bank_json(0, 7)).expect("an empty bank parses");
-    assert_eq!(empty.get(7).steps.len(), 16);
+    assert_eq!(empty.get(7).len(), 16);
     assert!(!empty.get(7).steps.iter().any(|step| step.on));
 }
 

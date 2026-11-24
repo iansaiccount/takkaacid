@@ -15,7 +15,7 @@ brings them back.
 
 ## `SHUFFLE`
 
-The swing knob. At zero the sixteenths are even; turned up, the pairs lean — the first of each pair long, the second
+The swing knob. At zero the steps are even; turned up, the pairs lean — the first of each pair long, the second
 short, and the pair still exactly two steps, so the bar is always the same length. It is the one knob on the row you can
 sweep and hear immediately, which is why it lives here rather than with the tone knobs.
 
@@ -23,7 +23,7 @@ sweep and hear immediately, which is why it lives here rather than with the tone
 
 Two knobs and a key:
 
-- **The left knob** prints a percentage: the **density**, one step in two by default. It decides how many of the sixteen
+- **The left knob** prints a percentage: the **density**, one step in two by default. It decides how many of the bar's
   steps sound.
 - **The right knob** prints the **scale** it is on, from `CHROM` to `MAJ PEN`, and snaps to one of six faces like the wave
   switch does: chromatic, major, minor, dorian, minor pentatonic, major pentatonic.
@@ -38,11 +38,11 @@ Every roll is a brand-new line, so there is no undo. Save first if what you have
 ## The row while the line runs
 
 All three groups work with the transport running, and that is how they are meant to be used: octave the second bar, roll
-a new line for the break, nudge the shuffle until the sixteenths sit where you want them.
+a new line for the break, nudge the shuffle until the steps sit where you want them.
 ## `CLEAR`
 
 The row's only destructive key, and it asks twice: the first click arms it and the key itself says `CLEAR?`, the second
-empties the sixteen steps. An arm goes stale after a couple of seconds, and anything that changes the pattern — a step, an
+empties the bar's steps. An arm goes stale after a couple of seconds, and anything that changes the pattern — a step, an
 octave move, a `RANDOM`, a pattern switch — disarms it, so the second click always means the empty you were just asked about.
 [`08-writing-steps`](08-writing-steps.md) covers it beside the step keys, which is where it began.
 

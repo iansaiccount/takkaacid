@@ -1,6 +1,7 @@
 # Writing steps
 
-A pattern is **sixteen steps**. Each step is either a rest or a note; the first row below is the step itself, and the
+A pattern is **one bar**, divided by its grid: sixteen steps at `1/16`, twelve at `1/8T`, thirty-two at `1/32`
+([`23-pattern-grids`](23-pattern-grids.md)). Each step is either a rest or a note; the first row below is the step itself, and the
 other five are what a note carries:
 
 | Part | What it is |
@@ -50,7 +51,7 @@ While you are in the step row, the **arrows** move the selection — `left` / `r
 selected note by a step — `enter` turns the step on and off, and `backspace`, while you are editing, empties it to a rest.
 
 **`STEP`** is the mode that makes typing a line quick: with it on, a key **down** writes the note to the selected step and
-the key **up** walks the selection on by one. Type a phrase left to right and the sixteen steps fill in behind your
+the key **up** walks the selection on by one. Type a phrase left to right and the bar's steps fill in behind your
 fingers. Press `STEP` again to stop walking.
 
 `CLEAR` empties the whole pattern, and it takes two clicks: the key reads `CLEAR?` for a few seconds in between, and any

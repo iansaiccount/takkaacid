@@ -3,7 +3,7 @@
 
 use acid_app::state::SharedState;
 use acid_core::oscillator::Waveform;
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 
 #[test]
@@ -45,7 +45,7 @@ fn editing_one_step_keeps_the_other_fifteen() {
     let read = s.pattern();
     assert!(read.steps[2].accent);
     assert_eq!(read.steps[2].pitch, Pitch::G);
-    assert_eq!(read.steps.len(), 16);
+    assert_eq!(read.len(), 16);
     assert!(
         read.steps
             .iter()
@@ -71,5 +71,28 @@ fn a_stray_step_index_is_ignored_rather_than_panicking() {
     )));
     s.set_step(99, Step::rest());
     let read = s.pattern();
-    assert!(read.steps.iter().all(|step| step.on), "nothing may change");
+    assert!(read.iter().all(|step| step.on), "nothing may change");
+}
+
+/// The bound on a step edit is the pattern's own bar, not sixteen: step 21 of a thirty-second bar is a step the editor
+/// can write, and the step just past a twelve-step bar is not — the table has room for it, the bar does not.
+#[test]
+fn a_step_edit_lands_inside_the_bar_and_nowhere_past_it() {
+    let s = SharedState::new();
+    s.set_pattern(std::sync::Arc::new(Pattern::empty_in(Grid::ThirtySecond)));
+    s.set_step(20, Step::note(Pitch::A, 1));
+    let read = s.pattern();
+    assert!(
+        read.steps[20].on,
+        "the edit must land on step 21 of the bar"
+    );
+    assert_eq!(read.steps[20].pitch, Pitch::A);
+    assert_eq!(read.len(), 32);
+
+    s.set_pattern(std::sync::Arc::new(Pattern::empty_in(Grid::EighthTriplet)));
+    s.set_step(12, Step::note(Pitch::C, 0));
+    assert!(
+        !s.pattern().steps[12].on,
+        "twelve steps is the whole bar, whatever the table can hold"
+    );
 }

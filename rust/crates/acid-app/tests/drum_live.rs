@@ -20,7 +20,7 @@ use acid_app::ui::tips;
 use acid_app::ui::{PanelState, draw_panel};
 use acid_core::bank::PatternBank;
 use acid_core::drums::{Drum, FilterKind, KitVoice};
-use acid_core::pattern::{STEPS_PER_PATTERN, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 use eframe::egui::{
     self, Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape,
@@ -289,7 +289,7 @@ fn the_face_names_the_kit_it_plays() {
 fn the_grid_has_sixteen_labelled_rows_and_sixteen_cells() {
     // The grid is the catalogue's shape, not a second sixteen written down beside it.
     assert_eq!(Drum::ALL.len(), 16);
-    assert_eq!(STEPS_PER_PATTERN, 16);
+    assert_eq!(Grid::Sixteenth.steps_per_bar(), 16);
 
     let l = layout(screen());
     let grid = drum_panel::grid_area(&l);
@@ -300,11 +300,13 @@ fn the_grid_has_sixteen_labelled_rows_and_sixteen_cells() {
         let label = drum_panel::label_rect(&l, drum);
         assert!(row.contains_rect(label), "{drum:?}'s label escapes its row");
         assert!(
-            label.right() <= drum_panel::cell_rect(&l, drum, 0).left() + 0.01,
+            label.right()
+                <= drum_panel::cell_rect(&l, drum, 0, Grid::Sixteenth.steps_per_bar()).left()
+                    + 0.01,
             "{drum:?}'s label overlaps the first cell"
         );
-        for step in 0..STEPS_PER_PATTERN {
-            let cell = drum_panel::cell_rect(&l, drum, step);
+        for step in 0..Grid::Sixteenth.steps_per_bar() {
+            let cell = drum_panel::cell_rect(&l, drum, step, Grid::Sixteenth.steps_per_bar());
             assert!(
                 row.contains_rect(cell),
                 "{drum:?}'s step {step} escapes its row"
@@ -347,7 +349,7 @@ fn a_click_arms_a_voice_on_a_step() {
         &ctx,
         &mut panel,
         &shared,
-        drum_panel::cell_rect(&l, Drum::Snare, 4).center(),
+        drum_panel::cell_rect(&l, Drum::Snare, 4, Grid::Sixteenth.steps_per_bar()).center(),
         Modifiers::default(),
     );
 
@@ -372,7 +374,7 @@ fn a_shift_click_accents_it() {
         &ctx,
         &mut panel,
         &shared,
-        drum_panel::cell_rect(&l, Drum::Kick, 2).center(),
+        drum_panel::cell_rect(&l, Drum::Kick, 2, Grid::Sixteenth.steps_per_bar()).center(),
         shift,
     );
 
@@ -484,7 +486,7 @@ fn a_shift_click_on_a_label_mutes_the_row_and_the_mask() {
     let mut struck = shared.pattern().steps[0];
     struck.hit(Drum::Clap, true);
     shared.set_step(0, struck);
-    let cell = drum_panel::cell_rect(&l, Drum::Clap, 0);
+    let cell = drum_panel::cell_rect(&l, Drum::Clap, 0, Grid::Sixteenth.steps_per_bar());
     let accent = theme::palette(Scheme::Black).led_accent;
     let dim = theme::palette(Scheme::Black).silkscreen_dim;
     assert_eq!(
@@ -536,7 +538,7 @@ fn a_shift_click_on_a_label_mutes_the_row_and_the_mask() {
 fn the_face_paints_from_the_palette() {
     let shared = SharedState::new();
     let l = layout(screen());
-    let accent_cell = drum_panel::cell_rect(&l, Drum::Kick, 0);
+    let accent_cell = drum_panel::cell_rect(&l, Drum::Kick, 0, Grid::Sixteenth.steps_per_bar());
     shared.set_step(0, {
         let mut step = shared.pattern().steps[0];
         step.hit(Drum::Kick, true);
@@ -608,15 +610,24 @@ fn every_fourth_column_is_framed() {
     let stroked = strokes(&paint(&ctx, &mut panel, &shared));
 
     assert!(
-        framed(&stroked, drum_panel::cell_rect(&l, Drum::Kick, 0)),
+        framed(
+            &stroked,
+            drum_panel::cell_rect(&l, Drum::Kick, 0, Grid::Sixteenth.steps_per_bar())
+        ),
         "the downbeat is framed"
     );
     assert!(
-        framed(&stroked, drum_panel::cell_rect(&l, Drum::Snare, 4)),
+        framed(
+            &stroked,
+            drum_panel::cell_rect(&l, Drum::Snare, 4, Grid::Sixteenth.steps_per_bar())
+        ),
         "and every fourth column on every row is"
     );
     assert!(
-        !framed(&stroked, drum_panel::cell_rect(&l, Drum::Kick, 1)),
+        !framed(
+            &stroked,
+            drum_panel::cell_rect(&l, Drum::Kick, 1, Grid::Sixteenth.steps_per_bar())
+        ),
         "an off-beat cell is not framed"
     );
 }
@@ -641,7 +652,7 @@ fn a_click_lands_on_the_step_under_the_pointer_while_the_line_runs() {
         &ctx,
         &mut panel,
         &shared,
-        drum_panel::cell_rect(&l, Drum::Snare, 3).center(),
+        drum_panel::cell_rect(&l, Drum::Snare, 3, Grid::Sixteenth.steps_per_bar()).center(),
         Modifiers::default(),
     );
 
@@ -683,15 +694,15 @@ fn the_grid_stays_hittable_at_both_scale_extremes() {
                 row.contains_rect(label),
                 "{factor}x: {drum:?}'s label escapes its row"
             );
-            let first = drum_panel::cell_rect(&l, drum, 0);
+            let first = drum_panel::cell_rect(&l, drum, 0, Grid::Sixteenth.steps_per_bar());
             assert!(
                 label.right() <= first.left() + 0.01
                     || label.top() >= first.bottom()
                     || label.bottom() <= first.top(),
                 "{factor}x: {drum:?}'s label overlaps the cell beside it"
             );
-            for step in 0..STEPS_PER_PATTERN {
-                let cell = drum_panel::cell_rect(&l, drum, step);
+            for step in 0..Grid::Sixteenth.steps_per_bar() {
+                let cell = drum_panel::cell_rect(&l, drum, step, Grid::Sixteenth.steps_per_bar());
                 assert!(
                     row.contains_rect(cell),
                     "{factor}x: {drum:?}'s step {step} escapes its row"
@@ -706,12 +717,13 @@ fn the_grid_stays_hittable_at_both_scale_extremes() {
                     previous.bottom() <= row.top() + 0.01,
                     "{factor}x: two rows overlap"
                 );
-                for step in 0..STEPS_PER_PATTERN {
+                for step in 0..Grid::Sixteenth.steps_per_bar() {
                     assert!(
                         !label.intersects(drum_panel::cell_rect(
                             &l,
                             Drum::ALL[rows.len() - 1],
-                            step
+                            step,
+                            Grid::Sixteenth.steps_per_bar()
                         )),
                         "{factor}x: a label sits on the row above's cells"
                     );
@@ -1062,7 +1074,7 @@ fn a_drum_device_does_not_draw_the_303_rows() {
     assert!(painted.iter().any(|text| text == "RANDOM"));
     assert_eq!(
         painted.iter().filter(|text| *text == "--").count(),
-        STEPS_PER_PATTERN,
+        Grid::Sixteenth.steps_per_bar(),
         "and its own step row: one keycap per step"
     );
 }
@@ -1234,7 +1246,7 @@ fn a_drum_device_ignores_the_keyboard_and_the_note_queue() {
     // writes no 303 note with it. (A step's `on` bit follows its drum mask, which is `Step::hit`'s own rule and the click's
     // before this round; the note's pitch, level and shaping are what this asserts.)
     let mut bank = PatternBank::new_empty();
-    let step = panel.selected.min(STEPS_PER_PATTERN - 1);
+    let step = panel.selected.min(Grid::Sixteenth.steps_per_bar() - 1);
     let note = shared.pattern().steps[step];
     let enter = KeyPress {
         key: Key::Enter,
@@ -1513,7 +1525,7 @@ fn the_selected_step_is_painted() {
     let painted = paint(&ctx, &mut panel, &shared);
 
     let accent = theme::palette(Scheme::Black).led_accent;
-    let selected = drum_panel::column_rect(&l, 6);
+    let selected = drum_panel::column_rect(&l, 6, Grid::Sixteenth.steps_per_bar());
     assert!(
         strokes_with_ink(&painted)
             .iter()
@@ -1521,9 +1533,9 @@ fn the_selected_step_is_painted() {
         "the selected step's column is not stroked in the accent"
     );
     assert!(
-        !strokes_with_ink(&painted)
-            .iter()
-            .any(|(rect, stroke)| *rect == drum_panel::column_rect(&l, 7) && stroke.color == accent),
+        !strokes_with_ink(&painted).iter().any(|(rect, stroke)| *rect
+            == drum_panel::column_rect(&l, 7, Grid::Sixteenth.steps_per_bar())
+            && stroke.color == accent),
         "a column that is not selected is stroked"
     );
 
@@ -1566,11 +1578,11 @@ fn the_arrows_move_the_selected_step_on_a_drum_face() {
     panel.selected = 0;
     voice_press(&mut panel, &shared, &mut bank, Key::ArrowLeft, false);
     assert_eq!(panel.selected, 0, "the first step is the first");
-    panel.selected = STEPS_PER_PATTERN - 1;
+    panel.selected = Grid::Sixteenth.steps_per_bar() - 1;
     voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
     assert_eq!(
         panel.selected,
-        STEPS_PER_PATTERN - 1,
+        Grid::Sixteenth.steps_per_bar() - 1,
         "and the last is the last"
     );
 
@@ -1584,7 +1596,114 @@ fn the_arrows_move_the_selected_step_on_a_drum_face() {
         voice_press(&mut panel, &shared, &mut bank, Key::ArrowUp, true),
         Handled::Shortcut(Shortcut::TempoUp)
     );
-    assert_eq!(panel.selected, STEPS_PER_PATTERN - 1);
+    assert_eq!(panel.selected, Grid::Sixteenth.steps_per_bar() - 1);
+}
+
+/// A triplet bar is twelve columns, the walk stops at its last (the face clamps, it does not wrap — the same rule the
+/// 303's border keeps), and the beat frame follows the grid: every third column, never every fourth.
+#[test]
+fn a_twelve_step_bar_has_twelve_columns() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    shared.set_pattern(Arc::new(Pattern::empty_in(Grid::EighthTriplet)));
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    let l = layout(screen());
+    let count = shared.pattern().len();
+    assert_eq!(count, 12, "twelve eighth-triplets to the bar");
+
+    // The first frame loads this device's editor slot; a hand settles the step after that.
+    paint(&ctx, &mut panel, &shared);
+    assert_eq!(drum_panel::row_cells(&l, Drum::Kick, count).len(), 12);
+    for step in 0..count {
+        let cell = drum_panel::cell_rect(&l, Drum::Kick, step, count);
+        assert!(
+            drum_panel::grid_area(&l).contains_rect(cell),
+            "column {step} escapes the grid"
+        );
+    }
+
+    panel.selected = 0;
+    for _ in 0..(count - 1) {
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
+    }
+    assert_eq!(
+        panel.selected,
+        count - 1,
+        "the walk reaches the twelfth column"
+    );
+    voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
+    assert_eq!(
+        panel.selected,
+        count - 1,
+        "and stops there: this face clamps, it does not wrap"
+    );
+
+    // The beat is the grid's: a triplet bar frames every third column, so column 4 is not a beat and column 3 is.
+    let stroked = strokes(&paint(&ctx, &mut panel, &shared));
+    for step in 0..count {
+        assert_eq!(
+            framed(&stroked, drum_panel::cell_rect(&l, Drum::Kick, step, count)),
+            Grid::EighthTriplet.is_beat(step),
+            "column {step} is framed as {} says",
+            Grid::EighthTriplet.name()
+        );
+    }
+}
+
+/// The columns are the bar: a thirty-second pattern has thirty-two of them, every one inside the grid area, and the
+/// keyboard's walk reaches the last — which is the column the face marks as selected.
+#[test]
+fn a_thirty_second_bar_has_thirty_two_columns() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    shared.set_pattern(Arc::new(Pattern::empty_in(Grid::ThirtySecond)));
+    let mut panel = drum_panel_state();
+    let mut bank = PatternBank::new_empty();
+    let l = layout(screen());
+    let count = shared.pattern().len();
+    assert_eq!(count, 32, "thirty-two steps to the bar");
+
+    let cells = drum_panel::row_cells(&l, Drum::Kick, count);
+    assert_eq!(cells.len(), 32, "a column per step of the bar");
+    for (index, cell) in cells.iter().enumerate() {
+        assert!(
+            drum_panel::grid_area(&l).contains_rect(*cell),
+            "column {index} escapes the grid: {cell:?}"
+        );
+    }
+
+    // The first frame loads this device's editor slot, which starts the step at 0; a hand settles it after that.
+    paint(&ctx, &mut panel, &shared);
+    panel.selected = 0;
+    for _ in 0..(count - 1) {
+        voice_press(&mut panel, &shared, &mut bank, Key::ArrowRight, false);
+    }
+    assert_eq!(
+        panel.selected,
+        count - 1,
+        "the walk reaches the last column"
+    );
+
+    let painted = paint(&ctx, &mut panel, &shared);
+    let accent = theme::palette(Scheme::Black).led_accent;
+    assert!(
+        strokes_with_ink(&painted).iter().any(|(rect, stroke)| *rect
+            == drum_panel::column_rect(&l, count - 1, count)
+            && stroke.color == accent),
+        "the selected column is not the one the walk reached"
+    );
+
+    // The wash follows the published position at thirty-two as it does at sixteen: the step the line is on, not a fold
+    // back onto the first sixteen.
+    shared.set_transport(acid_app::device::Transport::Playing);
+    shared.position.store(20, Ordering::Relaxed);
+    let painted = paint(&ctx, &mut panel, &shared);
+    assert_eq!(
+        fill_at(&fills(&painted), drum_panel::column_rect(&l, 20, count)),
+        Some(drum_panel::playhead_fill(theme::palette(Scheme::Black))),
+        "the wash is not on the column the position names"
+    );
 }
 
 #[test]
@@ -1680,7 +1799,7 @@ fn the_keyboard_and_the_pointer_write_the_same_step() {
             &ctx,
             &mut panel,
             &shared,
-            drum_panel::cell_rect(&l, Drum::Clap, 3).center(),
+            drum_panel::cell_rect(&l, Drum::Clap, 3, Grid::Sixteenth.steps_per_bar()).center(),
             Modifiers::SHIFT,
         );
         shared.pattern().steps[3]

@@ -266,6 +266,9 @@ impl eframe::App for TakkaApp {
                 self.rack.state().is_playing(),
                 position,
                 self.last_position,
+                // The **playing** bar's count: `position` is that bar's published step, and a request held through
+                // a thirty-two-step bar must not be released on its sixteenth.
+                self.rack.state().pattern().len(),
             )
         {
             let device = self.rack.device_mut();

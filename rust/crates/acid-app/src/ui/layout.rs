@@ -24,8 +24,6 @@ pub const PERFORM_RIGHT: usize = super::perform::Perform::RIGHT.len();
 /// How wide a performance cell is, as a multiple of the row's height: enough for a knob and the caption under it, tight
 /// enough that the three in a cluster read as one group rather than a third of the panel each.
 const PERFORM_CELL_WIDTH: f32 = 1.35;
-/// Step keys in the row.
-pub const STEP_COUNT: usize = 16;
 
 /// One control row: the band it occupies and one cell per control.
 pub struct Row {
@@ -204,16 +202,16 @@ pub fn perform_cells(area: Rect) -> Vec<Rect> {
     cells
 }
 
-/// Sixteen keycap cells across the step band.
-pub fn step_cells(area: Rect) -> [Rect; STEP_COUNT] {
-    let mut cells = [Rect::NOTHING; STEP_COUNT];
-    cells.copy_from_slice(&knob_cells(area, STEP_COUNT));
-    cells
+/// One keycap cell per step of the bar, across the step band: twelve keys at `1/8T`, sixteen at `1/16`, thirty-two at
+/// `1/32`. The count is the pattern's, never a constant here — the row is the bar, whatever grid the bar is on.
+pub fn step_cells(area: Rect, count: usize) -> Vec<Rect> {
+    knob_cells(area, count)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use acid_core::pattern::Grid;
     use egui::Vec2;
 
     /// The window grown by half a pixel: the tolerance for float error in a region that must merely *fit*.
@@ -290,7 +288,7 @@ mod tests {
             assert!(cell.height() >= 40.0, "row too shallow: {}", cell.height());
         }
         // The step keys keep their height: the row was paid for by growing the panel, not by squeezing the instrument.
-        assert!(step_cells(l.steps)[0].height() > 100.0);
+        assert!(step_cells(l.steps, Grid::Sixteenth.steps_per_bar())[0].height() > 100.0);
     }
 
     #[test]
@@ -348,7 +346,7 @@ mod tests {
         for pair in l.knobs.cells.windows(2) {
             assert!(pair[0].right() <= pair[1].left());
         }
-        let keys = step_cells(l.steps);
+        let keys = step_cells(l.steps, Grid::Sixteenth.steps_per_bar());
         assert_eq!(keys.len(), 16);
         assert!(keys.iter().all(|k| k.width() > 12.0 && k.height() > 20.0));
         for pair in keys.windows(2) {
@@ -356,6 +354,30 @@ mod tests {
                 (pair[1].left() - pair[0].left() - (keys[1].left() - keys[0].left())).abs() < 0.5
             );
         }
+    }
+
+    /// The row is the bar: whatever count the pattern says, the band is divided into that many keys — twelve for
+    /// eighth-triplets, thirty-two for thirty-seconds. A count of zero is a bar with no steps, so no keys at all.
+    #[test]
+    fn the_step_row_is_as_long_as_the_bar_it_draws() {
+        let area = layout(Rect::from_min_size(Pos2::ZERO, theme::DESIGN_SIZE)).steps;
+        for count in [12, 16, 32] {
+            let cells = step_cells(area, count);
+            assert_eq!(cells.len(), count, "{count} steps");
+            for (index, cell) in cells.iter().enumerate() {
+                assert!(
+                    area.contains_rect(*cell),
+                    "cell {index} of {count} escapes the band: {cell:?}"
+                );
+                if index > 0 {
+                    assert!(
+                        cells[index - 1].right() <= cell.left(),
+                        "cell {index} of {count} is out of order"
+                    );
+                }
+            }
+        }
+        assert!(step_cells(area, 0).is_empty(), "no steps, no keys");
     }
 
     #[test]

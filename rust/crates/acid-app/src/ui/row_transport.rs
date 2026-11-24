@@ -1,7 +1,8 @@
-//! The transport row: the device's direction, its transpose and the transpose's readout, two cells still labelled `TBC`, and
-//! the MIDI LEARN key.
+//! The transport row: the device's direction and transpose, the pattern's grid and its readout, and the MIDI LEARN key.
 
 use eframe::egui;
+
+use acid_core::pattern::Grid;
 
 use crate::state::SharedState;
 
@@ -24,8 +25,8 @@ pub(super) fn draw(
     let transpose_down = transport::cell(l.transport, transport::Cell::TransposeDown);
     let readout = transport::cell(l.transport, transport::Cell::Readout);
     let transpose_up = transport::cell(l.transport, transport::Cell::TransposeUp);
-    let tbc_cell = transport::cell(l.transport, transport::Cell::Tbc);
-    let spare_cell = transport::cell(l.transport, transport::Cell::Spare);
+    let grid_cell = transport::cell(l.transport, transport::Cell::Grid);
+    let grid_well = transport::cell(l.transport, transport::Cell::GridWell);
     let learn_cell = transport::cell(l.transport, transport::Cell::Learn);
     // REVERSE is the displayed device's direction, read from its own state and asked for as a request: the engine takes
     // it at the bar line, so the key may be lit for a bar before the line turns.
@@ -45,24 +46,6 @@ pub(super) fn draw(
         // Not `dirty`: the direction lives in `SharedState` and no save file has a field for it. The transpose keys
         // beside it do not dirty for the same reason, and one of them dirtying is a file written for nothing.
         state.transport_request = Some(transport::Request::Reverse(!reversed));
-    }
-    // TBC: two cells kept for the player — the row is seven to match the switch row above it, and a spare cell that said
-    // nothing would be a hole. Both say so rather than doing nothing, because a silent key reads as broken.
-    for (id, rect) in [("tbc", tbc_cell), ("tbc-spare", spare_cell)] {
-        if switch_key(
-            ui,
-            state,
-            Key {
-                id,
-                rect,
-                label: "TBC",
-                lit: false,
-                control: tips::Control::Tbc,
-            },
-            p,
-        ) {
-            state.notify("TBC IS NOT DECIDED YET");
-        }
     }
     // The transpose pair: this device, a semitone at a time, as performance and never as the patch. The readout and both keys'
     // litness read `shared`, the device on the panel, so the row shows exactly the cell the keys write.
@@ -117,6 +100,63 @@ pub(super) fn draw(
             format!("{semitones:+}"),
             theme::legend(14.0 * scale),
             if semitones == 0 {
+                p.silkscreen_dim
+            } else {
+                p.led_accent
+            },
+        );
+    }
+
+    // GRID: a **pattern edit**, not a transport request — the grid belongs to the pattern, so the key writes it at once and
+    // the engine hears it on its next block. The well beside it prints the grid the pattern is on, dim at `1/16` and in
+    // the accent otherwise: "this pattern is not on the plain grid" at a glance.
+    if switch_key(
+        ui,
+        state,
+        Key {
+            id: "grid",
+            rect: grid_cell,
+            label: "GRID",
+            lit: false,
+            control: tips::Control::Grid,
+        },
+        p,
+    ) {
+        // What the press costs is counted on the pattern that is going, before it goes: the shorter bar rests the steps
+        // it cannot hold, and the status line says how many of them had sound.
+        let before = shared.pattern();
+        let next = before.grid.next();
+        let cleared = before.sounding_steps_beyond(next);
+        shared.set_grid(next);
+        state.pattern = shared.pattern();
+        // The border is clamped into the bar that just arrived: a press that narrows thirty-two steps to twelve with the
+        // border on step 21 would leave no key outlined at all, and the keyboard's next write would land somewhere the
+        // face is not pointing at.
+        state.selected = state.selected.min(state.pattern.len() - 1);
+        // A pending `CLEAR` was armed against the pattern as it was, and this press may have rested steps inside it.
+        super::clear::disarm(state);
+        state.dirty = true;
+        let notice = transport::grid_notice(before.len(), state.pattern.len(), cleared);
+        state.notify(notice);
+    }
+    {
+        let well = grid_well;
+        let scale = transport::key_scale(well);
+        let painter = ui.painter();
+        painter.rect_filled(well, 3.0 * scale, p.well);
+        painter.rect_stroke(
+            well,
+            3.0 * scale,
+            p.silkscreen_stroke(scale),
+            egui::StrokeKind::Inside,
+        );
+        let grid = state.pattern.grid;
+        painter.text(
+            well.center(),
+            egui::Align2::CENTER_CENTER,
+            grid.name(),
+            theme::legend(14.0 * scale),
+            if grid == Grid::Sixteenth {
                 p.silkscreen_dim
             } else {
                 p.led_accent

@@ -210,7 +210,7 @@ impl Engine {
         self.sequencer.set_swing(swing);
     }
 
-    /// The step being played, `0..16`.
+    /// The step being played, `0..pattern.len()`.
     pub fn position(&self) -> usize {
         self.sequencer.position()
     }

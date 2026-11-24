@@ -25,7 +25,7 @@ held.
 ## Swing
 
 Swing makes the first of each pair of steps long and the second short by the same amount, so a pair always lasts exactly
-two steps and the bar length never changes however far you turn it. At zero the sixteenths are even; turned up, the second
+two steps and the bar length never changes however far you turn it. At zero the steps are even; turned up, the second
 of each pair arrives late and the line leans. That lean is the shuffle.
 
 The knob is **`SHUFFLE`**, in the performance row, and it is [`10-performance-row`](10-performance-row.md)'s subject.

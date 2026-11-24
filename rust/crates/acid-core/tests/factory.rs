@@ -51,7 +51,7 @@ fn every_slide_leads_into_a_sounding_step() {
     for (pattern_index, pattern) in factory_patterns().iter().enumerate() {
         for (index, step) in pattern.steps.iter().enumerate() {
             if step.slide {
-                let next = pattern.steps[(index + 1) % acid_core::pattern::STEPS_PER_PATTERN];
+                let next = pattern.steps[(index + 1) % pattern.len()];
                 assert!(
                     next.on,
                     "pattern {pattern_index} step {index} slides into a rest, so nothing glides"

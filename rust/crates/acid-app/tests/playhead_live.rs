@@ -9,8 +9,9 @@ use acid_app::state::SharedState;
 use acid_app::ui::layout::{layout, step_cells};
 use acid_app::ui::{PanelState, draw_panel, drum_panel, strip::StripCell, theme};
 use acid_core::drums::Drum;
-use acid_core::pattern::STEPS_PER_PATTERN;
+use acid_core::pattern::{Grid, Pattern};
 use eframe::egui::{Color32, Context, FullOutput, Pos2, RawInput, Rect, Shape, vec2};
+use std::sync::Arc;
 
 fn screen() -> Rect {
     Rect::from_min_size(Pos2::ZERO, acid_app::ui::theme::DESIGN_SIZE)
@@ -55,9 +56,9 @@ fn fills(output: &FullOutput) -> Vec<(Rect, Color32)> {
 
 /// Which step keys have a lit LED, by cell index. The LED is the only filled lamp inside the step band, so this reads the
 /// playhead out of the picture rather than out of a private field.
-fn lit_step_keys(output: &FullOutput, band: Rect) -> Vec<usize> {
+fn lit_step_keys(output: &FullOutput, band: Rect, count: usize) -> Vec<usize> {
     let lamp = theme::BLACK.led_on;
-    let cells = step_cells(band);
+    let cells = step_cells(band, count);
     fills(output)
         .into_iter()
         .filter(|(rect, colour)| *colour == lamp && band.contains(rect.center()))
@@ -105,14 +106,43 @@ fn the_303_lights_the_step_that_sounds_when_the_bar_runs_backwards() {
         let shared = SharedState::new();
         running_at(&shared, 3, reverse_active);
         let mut panel = panel_showing(DeviceKind::Acid);
-        lit_step_keys(&paint(&ctx, &mut panel, &shared), l.steps)
+        let count = Grid::Sixteenth.steps_per_bar();
+        lit_step_keys(&paint(&ctx, &mut panel, &shared), l.steps, count)
     };
 
     assert_eq!(lit(false), vec![3], "forwards, the light is on the sound");
     assert_eq!(
         lit(true),
-        vec![STEPS_PER_PATTERN - 1 - 3],
+        vec![Grid::Sixteenth.steps_per_bar() - 1 - 3],
         "reversed, the bar reads from its other end, so the light does too"
+    );
+}
+
+/// The light follows the bar the pattern is on, not sixteen: on a twelve-step pattern position seven is the eighth key
+/// of twelve, and a reversed line mirrors within twelve as well.
+#[test]
+fn a_twelve_step_bar_lights_its_own_keys() {
+    let l = layout(screen());
+    let ctx = Context::default();
+    let count = Grid::EighthTriplet.steps_per_bar();
+
+    let lit = |position: usize, reverse_active: bool| {
+        let shared = SharedState::new();
+        shared.set_pattern(Arc::new(Pattern::empty_in(Grid::EighthTriplet)));
+        running_at(&shared, position, reverse_active);
+        let mut panel = panel_showing(DeviceKind::Acid);
+        lit_step_keys(&paint(&ctx, &mut panel, &shared), l.steps, count)
+    };
+
+    assert_eq!(
+        lit(7, false),
+        vec![7],
+        "position seven is the eighth key of twelve"
+    );
+    assert_eq!(
+        lit(3, true),
+        vec![count - 1 - 3],
+        "reversed, the light mirrors within the twelve-step bar"
     );
 }
 
@@ -150,31 +180,51 @@ fn the_wash_is_on_the_column_that_sounds() {
     // Forwards: the wash is on the step the clock is on.
     let filled = painted(3, false, Scheme::Black);
     assert_eq!(
-        fill_index_at(&filled, drum_panel::column_rect(&l, 3)).map(|at| filled[at].1),
+        fill_index_at(
+            &filled,
+            drum_panel::column_rect(&l, 3, Grid::Sixteenth.steps_per_bar())
+        )
+        .map(|at| filled[at].1),
         Some(wash(Scheme::Black)),
         "the playing column is washed in the lamp"
     );
     assert!(
-        fill_index_at(&filled, drum_panel::column_rect(&l, 12)).is_none(),
+        fill_index_at(
+            &filled,
+            drum_panel::column_rect(&l, 12, Grid::Sixteenth.steps_per_bar())
+        )
+        .is_none(),
         "and no other column is"
     );
 
     // Backwards: the line reads the bar from its other end, so the wash is on the step that sounds.
     let filled = painted(3, true, Scheme::Black);
     assert_eq!(
-        fill_index_at(&filled, drum_panel::column_rect(&l, 12)).map(|at| filled[at].1),
+        fill_index_at(
+            &filled,
+            drum_panel::column_rect(&l, 12, Grid::Sixteenth.steps_per_bar())
+        )
+        .map(|at| filled[at].1),
         Some(wash(Scheme::Black)),
         "reversed, the wash follows the sound"
     );
     assert!(
-        fill_index_at(&filled, drum_panel::column_rect(&l, 3)).is_none(),
+        fill_index_at(
+            &filled,
+            drum_panel::column_rect(&l, 3, Grid::Sixteenth.steps_per_bar())
+        )
+        .is_none(),
         "and is not left on the step the clock is on"
     );
 
     // The palette decides the ink: the same frame on the other scheme washes in its own lamp.
     let filled = painted(3, false, Scheme::ChoirPastel);
     assert_eq!(
-        fill_index_at(&filled, drum_panel::column_rect(&l, 3)).map(|at| filled[at].1),
+        fill_index_at(
+            &filled,
+            drum_panel::column_rect(&l, 3, Grid::Sixteenth.steps_per_bar())
+        )
+        .map(|at| filled[at].1),
         Some(wash(Scheme::ChoirPastel)),
         "the light scheme washes in its own lamp"
     );
@@ -199,9 +249,13 @@ fn a_stopped_or_paused_machine_has_no_playhead() {
         let mut panel = panel_showing(DeviceKind::Drums);
         let filled = fills(&paint(&ctx, &mut panel, &shared));
 
-        for step in 0..STEPS_PER_PATTERN {
+        for step in 0..Grid::Sixteenth.steps_per_bar() {
             assert!(
-                fill_index_at(&filled, drum_panel::column_rect(&l, step)).is_none(),
+                fill_index_at(
+                    &filled,
+                    drum_panel::column_rect(&l, step, Grid::Sixteenth.steps_per_bar())
+                )
+                .is_none(),
                 "column {step} is washed on a {transport:?} machine"
             );
         }
@@ -218,7 +272,7 @@ fn the_wash_reads_over_a_column_of_strikes() {
     let ctx = Context::default();
     let shared = SharedState::new();
     running_at(&shared, 3, true);
-    let sounding = STEPS_PER_PATTERN - 1 - 3;
+    let sounding = Grid::Sixteenth.steps_per_bar() - 1 - 3;
     for drum in Drum::ALL {
         let mut step = shared.pattern().steps[sounding];
         step.hit(drum, false);
@@ -227,8 +281,11 @@ fn the_wash_reads_over_a_column_of_strikes() {
 
     let mut panel = panel_showing(DeviceKind::Drums);
     let filled = fills(&paint(&ctx, &mut panel, &shared));
-    let at = fill_index_at(&filled, drum_panel::column_rect(&l, sounding))
-        .unwrap_or_else(|| panic!("the sounding column carries no wash, so there is no playhead"));
+    let at = fill_index_at(
+        &filled,
+        drum_panel::column_rect(&l, sounding, Grid::Sixteenth.steps_per_bar()),
+    )
+    .unwrap_or_else(|| panic!("the sounding column carries no wash, so there is no playhead"));
     assert_eq!(
         filled[at].1,
         wash(Scheme::Black),
@@ -236,7 +293,7 @@ fn the_wash_reads_over_a_column_of_strikes() {
     );
 
     for drum in Drum::ALL {
-        let cell = drum_panel::cell_rect(&l, drum, sounding);
+        let cell = drum_panel::cell_rect(&l, drum, sounding, Grid::Sixteenth.steps_per_bar());
         let painted = fill_index_at(&filled, cell)
             .unwrap_or_else(|| panic!("{drum:?}: the struck cell was not painted"));
         assert_eq!(

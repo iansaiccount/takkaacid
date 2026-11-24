@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub const MAGIC: &str = "takka-acid";
 
 /// The payload format this build writes, and the only one it reads.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 /// One thing on the clipboard.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -47,13 +47,13 @@ pub fn decode(text: &str) -> Option<Clip> {
 mod tests {
     use super::*;
 
-    use acid_core::pattern::{STEPS_PER_PATTERN, Step};
+    use acid_core::pattern::{Grid, PATTERN_SLOTS, Step};
     use acid_core::pitch::Pitch;
 
     /// A pattern with one of everything in it: sounding and resting steps, both ends of the octave range, accents, slides,
     /// and two velocities that are neither the default nor each other.
     fn varied() -> Pattern {
-        let mut steps = [Step::rest(); STEPS_PER_PATTERN];
+        let mut steps = [Step::rest(); PATTERN_SLOTS];
         steps[0] = Step::note(Pitch::C, -2);
         steps[1] = Step {
             accent: true,
@@ -115,7 +115,7 @@ mod tests {
             from: None,
         });
         let header = encoded.lines().next().unwrap_or_default();
-        assert_eq!(header, "takka-acid 1");
+        assert_eq!(header, "takka-acid 2");
         assert!(
             encoded.contains(&format!("{MAGIC} {VERSION}")),
             "a reader must be able to tell what wrote it: {encoded}"
@@ -138,12 +138,13 @@ mod tests {
             // Our payload with no magic line: a bare payload is not ours, even when it parses.
             &payload,
             // A version this build does not know, in both directions.
-            &format!("takka-acid 2\n{payload}"),
+            &format!("takka-acid 1\n{payload}"),
+            &format!("takka-acid 3\n{payload}"),
             &format!("takka-acid 0\n{payload}"),
             // And a payload that does not parse, under the right header.
-            &format!("takka-acid 1\n{{{payload}"),
+            &format!("takka-acid 2\n{{{payload}"),
             // A kind a newer build might write.
-            "takka-acid 1\n{\"kind\":\"device\",\"name\":\"BASS\"}",
+            "takka-acid 2\n{\"kind\":\"device\",\"name\":\"BASS\"}",
         ] {
             assert_eq!(decode(text), None, "should have been refused: {text:?}");
         }
@@ -156,5 +157,45 @@ mod tests {
             from: None,
         };
         assert_eq!(decode(&encode(&clip)), Some(clip));
+    }
+
+    /// A thirty-second bar travels with its grid: the payload is the pattern, so both the count and the caption have to
+    /// be in it — and the envelope's version is what makes a version-1 build refuse it instead of reading half a bar.
+    #[test]
+    fn a_thirty_second_bar_round_trips_with_its_grid() {
+        let mut steps = [Step::rest(); PATTERN_SLOTS];
+        steps[0] = Step::note(Pitch::A, 1);
+        steps[31] = Step::note(Pitch::C, 2);
+        let wide = Clip::Pattern {
+            pattern: Pattern::from_steps_in(Grid::ThirtySecond, steps),
+            from: Some("A1".to_string()),
+        };
+
+        let Some(Clip::Pattern { pattern, .. }) = decode(&encode(&wide)) else {
+            panic!("a pattern clip must decode as one");
+        };
+        assert_eq!(pattern.grid, Grid::ThirtySecond);
+        assert_eq!(pattern.len(), 32, "thirty-two steps to the bar");
+        assert!(
+            pattern.steps[31].on,
+            "the last step of the long bar came through"
+        );
+
+        let encoded = encode(&Clip::Pattern {
+            pattern: Pattern::empty_in(Grid::EighthTriplet),
+            from: None,
+        });
+        let Some(Clip::Pattern { pattern, .. }) = decode(&encoded) else {
+            panic!("a triplet clip must decode as one");
+        };
+        assert_eq!(pattern.grid, Grid::EighthTriplet);
+        assert_eq!(pattern.len(), 12);
+
+        assert_eq!(VERSION, 2);
+        assert_eq!(
+            decode(&encoded.replacen("takka-acid 2", "takka-acid 1", 1)),
+            None,
+            "a version-1 header is refused, not misread into a twelve-step bar"
+        );
     }
 }

@@ -6,7 +6,7 @@
 
 ## What a copy takes
 
-The sixteen steps as they are on screen, edits included, and the name of the slot they came from — so the session says
+The bar's steps as they are on screen — edits, grid and all — and the name of the slot they came from, so the session says
 `copied A1` and nothing else changes.
 
 ## What a paste does

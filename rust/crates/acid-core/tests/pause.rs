@@ -9,6 +9,7 @@ use std::sync::Arc;
 use acid_core::analysis::rms;
 use acid_core::engine::Engine;
 use acid_core::factory::starter;
+use acid_core::pattern::Grid;
 use acid_core::timing;
 
 /// 48 kHz, so a sixteenth at the launch tempo is 5_538 samples.
@@ -23,7 +24,8 @@ fn engine_at(step: usize) -> Engine {
 
 /// Half a step at the engine's own tempo, from the one place that owns the formula.
 fn half_step(engine: &Engine) -> usize {
-    (timing::step_duration_samples(0, engine.bpm(), SR, 0.0) / 2.0).round() as usize
+    (timing::step_duration_samples(0, engine.bpm(), SR, 0.0, Grid::Sixteenth.steps_per_bar()) / 2.0)
+        .round() as usize
 }
 
 #[test]

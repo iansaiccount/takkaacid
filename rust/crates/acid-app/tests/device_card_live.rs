@@ -228,7 +228,10 @@ fn a_click_outside_the_card_closes_it_rather_than_pressing_the_panel() {
     run(&ctx, &mut panel, &state, vec![]);
 
     // A step key, well outside the card, would select step 3 if the panel underneath were still listening.
-    let steps = acid_app::ui::layout::step_cells(layout(screen()).steps);
+    let steps = acid_app::ui::layout::step_cells(
+        layout(screen()).steps,
+        acid_core::pattern::Grid::Sixteenth.steps_per_bar(),
+    );
     click(&ctx, &mut panel, &state, steps[3].center());
     assert_eq!(panel.device_request, Some(Request::Close));
     assert_eq!(panel.selected, 0, "the step under the shade was not edited");

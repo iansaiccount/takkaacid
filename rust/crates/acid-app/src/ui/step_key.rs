@@ -7,7 +7,7 @@
 use egui::{Rect, Response};
 
 use super::{edit, theme};
-use acid_core::pattern::Step;
+use acid_core::pattern::{Grid, Step};
 
 /// The paint inputs for one key.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -28,11 +28,17 @@ pub struct StepView {
 ///
 /// `sounding` is the step that is **sounding**, already mirrored by the caller through
 /// [`acid_core::sequencer::sounding_step`]: under `REVERSE` the line reads the bar from its other end, so the light belongs on
-/// `15 - position` while the notes stay where they are written. This view does no arithmetic of its own, so it cannot disagree
+/// `len() - 1 - position` while the notes stay where they are written. This view does no arithmetic of its own, so it cannot disagree
 /// with the audio about which step that is.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one keycap's view is seven facts about the pattern and the transport; a struct holding \
+              them would exist only to be unpacked here"
+)]
 pub fn step_view(
     step: &Step,
     index: usize,
+    grid: Grid,
     sounding: usize,
     playing: bool,
     selected: bool,
@@ -46,7 +52,8 @@ pub fn step_view(
         // A rest cannot glide either — and a rest keeps its flags, so it can carry `slide`.
         slide_glides: step.on && next_on,
         current: playing && index == sounding,
-        beat: index.is_multiple_of(4),
+        // The beat is the grid's, not a fourth: every fourth key at `1/16`, every eighth at `1/32`, every third at `1/8T`.
+        beat: grid.is_beat(index),
         selected,
         dragging,
     }
@@ -131,11 +138,26 @@ pub fn step_key(
     // While the step is being dragged the panel prints the live pitch in the cell, larger and in silk; a
     // second label on the keycap would collide with it and read as two overlapping words.
     if !view.dragging {
+        // The note is 12 pt wherever 12 pt fits the key. A thirty-second key is 24 px wide at the design size and 13 at
+        // the smallest window, and a sharp note at 12 pt is 22 px — so the font is chosen by measuring the label against
+        // the room the keycap has, at most 12 pt and smaller only where it would otherwise spill out of its key.
+        let label = step_label(step);
+        let wanted = theme::legend(12.0 * s);
+        let room = (keycap.width() - 2.0 * s).max(1.0);
+        let measured = painter
+            .layout_no_wrap(label.to_owned(), wanted.clone(), p.keycap_ink)
+            .rect
+            .width();
+        let font = if measured > room {
+            theme::legend(12.0 * s * (room / measured))
+        } else {
+            wanted
+        };
         painter.text(
             keycap.center() + egui::vec2(0.0, -s),
             egui::Align2::CENTER_CENTER,
-            step_label(step),
-            theme::legend(12.0 * s),
+            label,
+            font,
             p.keycap_ink,
         );
     }
@@ -212,37 +234,42 @@ mod tests {
     #[test]
     fn the_view_carries_the_selection() {
         let step = Step::note(Pitch::C, 0);
-        assert!(step_view(&step, 0, 0, false, true, false, true).selected);
-        assert!(!step_view(&step, 0, 0, false, false, false, true).selected);
+        assert!(step_view(&step, 0, Grid::Sixteenth, 0, false, true, false, true).selected);
+        assert!(!step_view(&step, 0, Grid::Sixteenth, 0, false, false, false, true).selected);
     }
 
     #[test]
     fn only_the_playing_position_lights_up() {
         let step = Step::note(Pitch::C, 0);
-        let v = step_view(&step, 3, 3, true, false, false, true);
+        let v = step_view(&step, 3, Grid::Sixteenth, 3, true, false, false, true);
         assert!(v.current && !v.beat);
-        let w = step_view(&step, 3, 4, true, false, false, true);
+        let w = step_view(&step, 3, Grid::Sixteenth, 4, true, false, false, true);
         assert!(!w.current);
-        let stopped = step_view(&step, 3, 3, false, false, false, true);
+        let stopped = step_view(&step, 3, Grid::Sixteenth, 3, false, false, false, true);
         assert!(!stopped.current);
     }
 
     #[test]
-    fn every_fourth_key_is_a_beat_and_flags_are_copied() {
+    fn the_beat_is_the_grids_and_flags_are_copied() {
         let step = Step {
             accent: true,
             slide: true,
             ..Step::note(Pitch::E, 0)
         };
-        let v = step_view(&step, 8, 0, false, false, false, true);
+        let v = step_view(&step, 8, Grid::Sixteenth, 0, false, false, false, true);
         assert!(v.on && v.beat && v.accent && v.slide && !v.current);
-        assert!(!step_view(&step, 9, 0, false, false, false, true).beat);
+        assert!(!step_view(&step, 9, Grid::Sixteenth, 0, false, false, false, true).beat);
+        // The framing follows the bar, not a fourth: every eighth key is a beat on a thirty-second grid, and every third
+        // on eighth-triplets — so key 8 is a beat in one and not in the other.
+        assert!(step_view(&step, 8, Grid::ThirtySecond, 0, false, false, false, true).beat);
+        assert!(!step_view(&step, 8, Grid::EighthTriplet, 0, false, false, false, true).beat);
+        assert!(step_view(&step, 9, Grid::EighthTriplet, 0, false, false, false, true).beat);
     }
 
     #[test]
     fn an_off_step_still_reports_its_pitch_flags_but_is_not_lit() {
         let rest = Step::rest();
-        let v = step_view(&rest, 0, 0, true, false, false, true);
+        let v = step_view(&rest, 0, Grid::Sixteenth, 0, true, false, false, true);
         assert!(!v.on && v.current);
     }
     /// The outline the human partner asked for must actually paint, not just be a flag on the view.
@@ -262,7 +289,8 @@ mod tests {
                     },
                     |ui| {
                         let step = Step::note(Pitch::C, 0);
-                        let view = step_view(&step, 0, 0, false, selected, false, true);
+                        let view =
+                            step_view(&step, 0, Grid::Sixteenth, 0, false, selected, false, true);
                         let cell = egui::Rect::from_min_size(
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
@@ -299,7 +327,8 @@ mod tests {
                     },
                     |ui| {
                         let step = Step::note(Pitch::C, 0);
-                        let view = step_view(&step, 0, 0, false, false, dragging, true);
+                        let view =
+                            step_view(&step, 0, Grid::Sixteenth, 0, false, false, dragging, true);
                         let cell = egui::Rect::from_min_size(
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
@@ -340,7 +369,8 @@ mod tests {
                             slide,
                             ..Step::note(Pitch::C, 0)
                         };
-                        let view = step_view(&step, 0, 0, false, false, false, glides);
+                        let view =
+                            step_view(&step, 0, Grid::Sixteenth, 0, false, false, false, glides);
                         let cell = egui::Rect::from_min_size(
                             egui::Pos2::new(8.0, 8.0),
                             egui::vec2(48.0, 104.0),
@@ -375,14 +405,14 @@ mod tests {
             slide: true,
             ..Step::note(Pitch::C, 0)
         };
-        assert!(step_view(&step, 0, 0, false, false, false, true).slide_glides);
-        assert!(!step_view(&step, 0, 0, false, false, false, false).slide_glides);
+        assert!(step_view(&step, 0, Grid::Sixteenth, 0, false, false, false, true).slide_glides);
+        assert!(!step_view(&step, 0, Grid::Sixteenth, 0, false, false, false, false).slide_glides);
         // A rest keeps its flags, so a rest can carry a slide — but it cannot glide out of one.
         let rested = Step {
             on: false,
             ..Step::note(Pitch::C, 0)
         };
-        assert!(!step_view(&rested, 0, 0, false, false, false, true).slide_glides);
+        assert!(!step_view(&rested, 0, Grid::Sixteenth, 0, false, false, false, true).slide_glides);
     }
     /// The plan's "look at it" step, in headless form: sixteen keys paint, and the lit/accent/slide ones
     /// paint more than a bare key does.
@@ -413,13 +443,17 @@ mod tests {
                     ..Default::default()
                 },
                 |ui| {
-                    let cells = super::super::layout::step_cells(egui::Rect::from_min_size(
-                        egui::Pos2::new(16.0, 316.0),
-                        egui::vec2(948.0, 104.0),
-                    ));
+                    let cells = super::super::layout::step_cells(
+                        egui::Rect::from_min_size(
+                            egui::Pos2::new(16.0, 316.0),
+                            egui::vec2(948.0, 104.0),
+                        ),
+                        Grid::Sixteenth.steps_per_bar(),
+                    );
                     for (i, cell) in cells.iter().enumerate() {
                         let step = pattern[i % pattern.len()];
-                        let view = step_view(&step, i, 1, false, false, false, true);
+                        let view =
+                            step_view(&step, i, Grid::Sixteenth, 1, false, false, false, true);
                         step_key(ui, i, &step, &view, *cell, &theme::BLACK);
                     }
                 },
