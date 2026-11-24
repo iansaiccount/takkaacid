@@ -50,8 +50,7 @@ pub fn with_grid(self, grid: Grid) -> Self {
 
 **The words.** `grid_notice(before, after, held)` says what stops playing:
 `16 TO 12 STEPS` when nothing is held, `32 TO 12 STEPS, 2 HELD` when two notes fall outside. **The word `HELD` is the
-one thing in this plan that is the player's to change** (it is on the status line a player reads); everything else here is
-the code's.
+player's and is ruled** — `32 TO 12 STEPS, 2 HELD` is what the face says; everything else here is the code's.
 
 **What does not change.** `len()` is still the grid's bar and still what the row draws, the selection clamps to, the
 randomiser rolls, `set_step` bounds, and `iter()` yields. `Pattern::empty_in` and `from_steps_in` still rest slots they
