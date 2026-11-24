@@ -168,3 +168,13 @@ newer than this build". `import_song` keeps its rule that it never lands on a ta
 
 *(One line per task, written as it is done: what landed, the test that proved it, and any ruling with what it costs if
 wrong. The branch review's findings and what was done about each go here too, before the pull request.)*
+- **Task 1 — the comparison, in one place.** `persist::LoadError { Newer { version, path }, Other(anyhow) }` with
+  `Display` naming the version and the file; `load_document(bytes, path)` probes `version` on its own first, so a file
+  too broken to parse is `Other` and never reported as somebody's newer one, then compares once against `SAVE_VERSION`;
+  `load` returns `Result<Option<SavedState>, LoadError>` and is one line over it. Proved by
+  `a_newer_document_is_refused_with_its_version`, `a_current_and_an_unversioned_document_still_load` and
+  `a_truncated_document_is_a_broken_file_not_a_newer_one`, watched fail first as `no LoadError in persist`.
+  Workspace suite **979/979**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: the test asserts `SAVE_VERSION + 1`, not a literal 14.** Round 02 bumps the number to 14, and a test
+  spelling the next version would have to be edited by a round it is not about. Cost if wrong: none — the refusal is
+  relative to whatever this build writes, which is the rule.

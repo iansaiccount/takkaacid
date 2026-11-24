@@ -1559,3 +1559,74 @@ fn a_bank_file_with_fewer_patterns_opens_as_sixty_four() {
         "and it opens on one of the patterns the file actually had"
     );
 }
+
+/// A document written by a newer build is **refused**, and the version it named is the answer — not a state relabelled
+/// as this build's and quietly rewritten by the next save.
+#[test]
+fn a_newer_document_is_refused_with_its_version() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document["version"] = serde_json::json!(SAVE_VERSION + 1);
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&document).unwrap(),
+    )
+    .unwrap();
+
+    match load(dir.path()) {
+        Err(acid_app::persist::LoadError::Newer { version, .. }) => {
+            assert_eq!(
+                version,
+                SAVE_VERSION + 1,
+                "the refusal names the file's version"
+            );
+        }
+        other => panic!("a newer document must be refused, got {other:?}"),
+    }
+}
+
+/// A document this build's age loads as it always did, and one with no `version` field is version 0.
+#[test]
+fn a_current_and_an_unversioned_document_still_load() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    assert!(
+        load(dir.path()).unwrap().is_some(),
+        "this build's own file loads"
+    );
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document.as_object_mut().unwrap().remove("version");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&document).unwrap(),
+    )
+    .unwrap();
+    let old = load(dir.path())
+        .unwrap()
+        .expect("an unversioned document loads");
+    assert_eq!(old.version, 0, "no field, no version");
+}
+
+/// A file that will not parse is a **broken** file, not somebody else's newer one: the refusal names a version only when
+/// it could read one.
+#[test]
+fn a_truncated_document_is_a_broken_file_not_a_newer_one() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("state.json"),
+        b"{\"version\": 14, \"bank\": {",
+    )
+    .unwrap();
+    assert!(
+        matches!(
+            load(dir.path()),
+            Err(acid_app::persist::LoadError::Other(_))
+        ),
+        "a truncated file must not be reported as a newer build's"
+    );
+}

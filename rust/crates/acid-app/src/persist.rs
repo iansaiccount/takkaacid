@@ -321,17 +321,72 @@ pub fn save(dir: &Path, state: &SavedState) -> Result<()> {
     write_atomic(&dir.join(STATE_FILE), &json)
 }
 
+/// Why a document could not be read.
+#[derive(Debug)]
+pub enum LoadError {
+    /// Written by a newer build: its `version` is greater than this one's. The file has not been touched.
+    Newer { version: u32, path: PathBuf },
+    /// Anything else: no permission, a truncated file, JSON this build cannot parse.
+    Other(anyhow::Error),
+}
+
+impl fmt::Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Newer { version, path } => write!(
+                f,
+                "{} was written by a newer build (version {version}; this build reads {SAVE_VERSION})",
+                path.display()
+            ),
+            Self::Other(error) => write!(f, "{error:#}"),
+        }
+    }
+}
+
+impl std::error::Error for LoadError {}
+
+impl From<anyhow::Error> for LoadError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Other(error)
+    }
+}
+
+/// Read a document from bytes, refusing one a newer build wrote. **The one place `version` is compared**: the save
+/// file, a song and an import all come through here, so the rule cannot drift between the three readers.
+pub fn load_document(bytes: &[u8], path: &Path) -> std::result::Result<SavedState, LoadError> {
+    // The version first, and on its own: a file too broken to parse must be `Other`, never reported as somebody's
+    // newer document. `#[serde(default)]` keeps every version-0 file (no field) readable.
+    #[derive(serde::Deserialize)]
+    struct Version {
+        #[serde(default)]
+        version: u32,
+    }
+    let probe: Version =
+        serde_json::from_slice(bytes).with_context(|| format!("parsing {}", path.display()))?;
+    if probe.version > SAVE_VERSION {
+        return Err(LoadError::Newer {
+            version: probe.version,
+            path: path.to_path_buf(),
+        });
+    }
+    serde_json::from_slice(bytes)
+        .with_context(|| format!("parsing {}", path.display()))
+        .map_err(LoadError::Other)
+}
+
 /// Read the save file. `Ok(None)` means there is nothing saved yet; a broken file is an error that names it.
-pub fn load(dir: &Path) -> Result<Option<SavedState>> {
+pub fn load(dir: &Path) -> std::result::Result<Option<SavedState>, LoadError> {
     let path = dir.join(STATE_FILE);
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
+        Err(error) => {
+            return Err(LoadError::Other(
+                anyhow::Error::new(error).context(format!("reading {}", path.display())),
+            ));
+        }
     };
-    let state =
-        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
-    Ok(Some(state))
+    load_document(&bytes, &path).map(Some)
 }
 
 /// Write `bytes` to `path` through a `.tmp` and a rename, which is the one place the app writes a file it could be
