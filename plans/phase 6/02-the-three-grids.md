@@ -421,3 +421,13 @@ all four are fixed in `e2e0969`, and the suite is **974/974** with clippy, `fmt 
   provenance bullet still describes the old `banks-card.png` session, and Progress's claim that pages `09`/`10`/`16`
   and `11` were all edited is stronger than what landed (`10`'s "the sixteenths are even" is still there; `11` was not
   touched). None contradicts the panel except the `10` sentence, which is true at `1/16` and stale at the others.
+
+**The review\'s open items, closed.** The `1/8T` slide-wrap pin the review found missing now exists in both halves:
+`a_slide_on_the_last_step_of_a_triplet_bar_glides_across_the_wrap` (`acid-core/tests/sequencer_feel.rs` — a slide on step
+12 of a twelve-step bar glides into the next bar\'s first note, measured as pitch just after and later in the step) and
+`a_slide_on_the_last_step_reads_its_next_step_across_the_wrap` (`grid_live` — the keycap paints its amber cue on step 12,
+read from the frame\'s shape count). The panel half was **mutation-checked**: `i + 1` in place of `(i + 1) % len` makes it
+fail (330 vs 329 shapes), and the file was restored. The P2 words are done too: `demo.rs`\'s header and the renamed
+`every_demo_is_a_line_and_a_drum_bank`, the four "five"s in `tests/drum_banks.rs`, `ui/banks.rs`\'s doc, page 10\'s
+"the steps are even", and `img/README.md`\'s phase-6 session paragraph (which now records the three pictures and the
+commands). Suite **976/976**, clippy `-D warnings`, `fmt --check`, `guide: ok`.

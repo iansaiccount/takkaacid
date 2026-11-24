@@ -1,12 +1,12 @@
 //! The demo drum banks: a groove for every demo variation, and what loading one does to a device.
 //!
 //! The acid demos and their drum sides are **one list** (`demo::songs`), so nothing here holds two hand-kept lists
-//! together: each `Demo` carries its own eight grooves, and `demo::drum_banks` is the same five songs read from the drum
-//! side. What these tests pin is the part a pairing cannot state for itself — the five names the book prints, that every
+//! together: each `Demo` carries its own eight grooves, and `demo::drum_banks` is the same seven songs read from the drum
+//! side. What these tests pin is the part a pairing cannot state for itself — the seven names the book prints, that every
 //! pattern a player can load strikes something, and that a demo arrives on a drum machine as patterns, a tempo and a
 //! shuffle, with the kit its own.
 //!
-//! Not a `_live` test: nothing here drives `draw_panel`. The card's `DEMO BANKS` rows are the same five rows on either
+//! Not a `_live` test: nothing here drives `draw_panel`. The card's `DEMO BANKS` rows are the same seven rows on either
 //! face, so the widget's behaviour does not differ and `tests/songs_live.rs` already pins the row's request.
 
 use std::sync::Arc;
@@ -87,7 +87,7 @@ fn the_demo_names_are_the_acid_names() {
     let songs = demo::songs();
     let banks = demo::drum_banks();
 
-    // The five names, in the order the card lists and the book names them. This is the assertion that bites: the two
+    // The seven names, in the order the card lists and the book names them. This is the assertion that bites: the two
     // accessors read one list, so a rename has to be a decision about the book too.
     let names: Vec<&str> = banks.iter().map(|(name, _)| *name).collect();
     assert_eq!(names, NAMES);
@@ -99,7 +99,7 @@ fn the_demo_names_are_the_acid_names() {
         "a drum bank is not under its demo's name"
     );
 
-    // Five names with four grooves would be five rows that play the same thing on two of them.
+    // Seven names with six grooves would be seven rows that play the same thing on the pair that shares one.
     for (a, first) in banks.iter().enumerate() {
         for second in banks.iter().skip(a + 1) {
             assert_ne!(

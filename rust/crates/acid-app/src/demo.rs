@@ -1,4 +1,4 @@
-//! The demo songs: five patches and their lines, built into the binary.
+//! The demo songs: seven patches and their lines, built into the binary.
 //!
 //! A song here is a bank of up to sixty-four one-bar patterns plus a patch, so a demo is one bank of eight variations of a
 //! genre's line and the knobs that make it sound like that genre. Nothing here touches the disk: the demos cannot be
@@ -825,7 +825,7 @@ mod tests {
     }
 
     #[test]
-    fn the_five_demos_are_five_lines() {
+    fn every_demo_is_a_line_and_a_drum_bank() {
         let firsts: Vec<Pattern> = songs().iter().map(|demo| *demo.state.bank.get(0)).collect();
         for (a, first) in firsts.iter().enumerate() {
             for second in firsts.iter().skip(a + 1) {

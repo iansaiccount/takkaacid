@@ -15,7 +15,7 @@ brings them back.
 
 ## `SHUFFLE`
 
-The swing knob. At zero the sixteenths are even; turned up, the pairs lean — the first of each pair long, the second
+The swing knob. At zero the steps are even; turned up, the pairs lean — the first of each pair long, the second
 short, and the pair still exactly two steps, so the bar is always the same length. It is the one knob on the row you can
 sweep and hear immediately, which is why it lives here rather than with the tone knobs.
 

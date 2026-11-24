@@ -333,3 +333,34 @@ fn said(output: &eframe::egui::FullOutput) -> Vec<String> {
     }
     out
 }
+
+/// The slide look-ahead is `(i + 1) % len`: a slide on the last step of a twelve-step bar glides into the bar's first
+/// note, so the keycap must draw its amber cue on step 12 exactly as it does anywhere else in the bar.
+#[test]
+fn a_slide_on_the_last_step_reads_its_next_step_across_the_wrap() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut steps = [Step::rest(); PATTERN_SLOTS];
+    steps[0] = Step::note(Pitch::C, 1);
+    steps[11] = Step {
+        slide: true,
+        ..Step::note(Pitch::A, 1)
+    };
+    let sliding = Pattern::from_steps_in(Grid::EighthTriplet, steps);
+
+    let shapes = |pattern: Pattern| {
+        shared.set_pattern(Arc::new(pattern));
+        let mut panel = panel_showing();
+        paint(&ctx, &mut panel, &shared).shapes.len()
+    };
+
+    let with_slide = shapes(sliding);
+    // The same bar with the slide cleared: the only difference on the face is the cue — an amber strip and two lines.
+    let mut cleared = sliding;
+    cleared.steps[11].slide = false;
+    let without = shapes(cleared);
+    assert!(
+        with_slide >= without + 3,
+        "the slide on step 12 drew no cue: {with_slide} vs {without} shapes"
+    );
+}

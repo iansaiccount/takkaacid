@@ -61,8 +61,11 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
   `import -window <id> -crop 1896x574+32+466`, the grid's own rect (`grid_area` at 2×) with no pixel of the dial row above it —
   the first attempt at `+456` caught the bottom edges of `LP | BP | HP` and `HIT`, and was thrown away rather than trimmed. The
   face's other picture, `drum-face.png`, is a first run with an empty grid and is still stopped, so it still shows no playhead.
-- **`banks-card.png` is the bank-files round's own picture**, retaken on 2026-11-22 on a fresh `Xvfb :93 -screen 0 2000x1400x24`
-  — `DISPLAY=:93 xdotool getdisplaygeometry` said `2000 1400` before the app was launched and `getwindowgeometry` then said
+- **The phase-6 picture session** was 2026-11-23 on a fresh `Xvfb :86 -screen 0 2000x1400x24` — `DISPLAY=:86 xdotool getdisplaygeometry`
+  said `2000 1400` before the launch and `getwindowgeometry` then said `1960x1340` — with `TAKKA_ACID_DATA_DIR=/tmp/takka-guide`,
+  emptied first, and the pointer parked at 5,5 before every grab. It took three pictures: `transport.png` (first run:
+  `GRID` and its `1/16` readout, no `TBC`), `35-grid.png` after one press of `GRID` (the row at thirty-two keys, the
+  step band only), and `banks-card.png` after clicking `BANKS` on that same first run (seven demo rows).
   `1960x1340` — with `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-banks`, emptied first. The card's other rows are driven by clicks, but
   its **text fields cannot be typed into under Xvfb**: `xdotool type` and `xdotool key --window <id>` both printed
   `XGetInputFocus returned the focused window of 1` and delivered nothing, though the click that focused the field did take (the
@@ -99,7 +102,8 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/transport.png` | the row as the face draws it: `REVERSE TRANS - [+n] TRANS + GRID [1/16] LEARN` — the transport itself lives in the top band's tape deck | `-crop 1960x104+0+1192` |
 | `img/35-grid.png` | the step row on a `1/32` pattern: thirty-two keys, the notes and the corner numbers the player judged by eye | press `GRID` on a first run, then `-crop 1896x208+32+832` |
 
-The five band crops and `strip.png` come from the same session as `first-sound.png` (the strip crop from the two-device
+The five band crops, `strip.png` and (from an earlier round) the step row come from the same session as `first-sound.png`; `35-grid.png`
+is from the phase-6 session above, and `strip.png` itself is the two-device
 state, because one cell does not show what a strip is).
 
 Four pictures were re-taken when the theme catalogue replaced the second scheme: `device-card.png`, `theme-list.png`,
