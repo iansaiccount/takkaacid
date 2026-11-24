@@ -22,7 +22,11 @@ fn main() -> eframe::Result {
     // Restore the last session. A first run opens on a demo, under the name a new song starts with, and nothing about it
     // is on disk yet — so the first thing the player sees is a line that plays, and a lamp that says "keep me".
     let dir = persist::data_dir();
-    let (saved, first_run) = persist::open(&dir);
+    let persist::Opened {
+        state: saved,
+        first_run,
+        refused: _refused_version,
+    } = persist::open(&dir);
     let rack = device::Rack::from_saved(&saved);
     // The MIDI thread reads this to know which bank a pattern controller is pointing into.
     rack.state().set_pattern_index(rack.bank().current());

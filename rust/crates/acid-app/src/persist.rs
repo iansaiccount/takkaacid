@@ -607,16 +607,50 @@ pub fn rack_to_saved(rack: &Rack) -> SavedState {
 ///
 /// The second half of the answer is whether this was a first run — no session file at all — which `main` uses to mark the
 /// session unsaved and to say so: a first run opens on a demo, and nothing about it is on disk yet.
-pub fn open(dir: &Path) -> (SavedState, bool) {
+/// What a launch opened.
+pub struct Opened {
+    pub state: SavedState,
+    /// Nothing was on disk: the session is a demo, and it is unsaved.
+    pub first_run: bool,
+    /// A newer document was refused, with the version it named. The file is still there and must not be overwritten.
+    pub refused: Option<u32>,
+}
+
+pub fn open(dir: &Path) -> Opened {
     match load(dir) {
         Ok(Some(mut state)) => {
             sanitize(&mut state);
-            (state.upgraded(), false)
+            Opened {
+                state: state.upgraded(),
+                first_run: false,
+                refused: None,
+            }
         }
-        Ok(None) => (crate::demo::seed(), true),
+        Ok(None) => Opened {
+            state: crate::demo::seed(),
+            first_run: true,
+            refused: None,
+        },
+        Err(LoadError::Newer { version, path }) => {
+            // The document is newer than this build. It is left exactly as it is: the session opens as a first run and
+            // `main` keeps it out of the autosave path, so a tick cannot rewrite what it could not read.
+            eprintln!(
+                "takka-acid: {} is version {version}, newer than this build; opened a demo and left it alone",
+                path.display()
+            );
+            Opened {
+                state: crate::demo::seed(),
+                first_run: true,
+                refused: Some(version),
+            }
+        }
         Err(error) => {
             eprintln!("takka-acid: ignoring unreadable save file: {error}");
-            (crate::demo::seed(), true)
+            Opened {
+                state: crate::demo::seed(),
+                first_run: true,
+                refused: None,
+            }
         }
     }
 }

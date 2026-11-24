@@ -1074,18 +1074,19 @@ fn the_autosave_switch_round_trips_and_an_old_file_gets_it_off() {
 #[test]
 fn a_first_run_opens_on_a_demo_under_a_new_name() {
     let dir = tempfile::tempdir().unwrap();
-    let (opened, first_run) = open(dir.path());
-    assert!(first_run, "a missing session file is a first run");
-    assert_eq!(opened.song.as_deref(), Some("New song"));
+    let opened = open(dir.path());
+    assert!(opened.first_run, "a missing session file is a first run");
+    let saved = opened.state;
+    assert_eq!(saved.song.as_deref(), Some("New song"));
     assert!(
-        opened.bank.get(0).steps.iter().any(|step| step.on),
+        saved.bank.get(0).steps.iter().any(|step| step.on),
         "the opening demo plays something"
     );
 
-    save(dir.path(), &opened).unwrap();
-    let (again, first_run) = open(dir.path());
-    assert!(!first_run, "a written session is not a first run");
-    assert_eq!(again.bank.get(0), opened.bank.get(0));
+    save(dir.path(), &saved).unwrap();
+    let again = open(dir.path());
+    assert!(!again.first_run, "a written session is not a first run");
+    assert_eq!(again.state.bank.get(0), saved.bank.get(0));
 }
 
 /// A song can leave the library and come back: the export is the library format, so the import is a plain copy in.
@@ -1257,18 +1258,19 @@ fn a_version_eleven_file_is_one_device_and_its_kit_names_the_kind() {
     // kit ever writes one.
     let drums = tempfile::tempdir().unwrap();
     write_a_version_eleven_file(drums.path(), serde_json::json!("808"));
-    let (loaded, first_run) = open(drums.path());
+    let opened = open(drums.path());
     assert!(
-        !first_run,
+        !opened.first_run,
         "the file is readable, so this is not a first run"
     );
+    let loaded = opened.state;
     assert_eq!(loaded.devices.len(), 1);
     assert_eq!(loaded.devices[0].kind, "DRUMS");
     assert_eq!(loaded.devices[0].kit.as_deref(), Some("808"));
 
     let acid = tempfile::tempdir().unwrap();
     write_a_version_eleven_file(acid.path(), serde_json::Value::Null);
-    let (loaded, _) = open(acid.path());
+    let loaded = open(acid.path()).state;
     assert_eq!(loaded.devices.len(), 1);
     assert_eq!(loaded.devices[0].kind, "ACID");
 }
@@ -1629,4 +1631,54 @@ fn a_truncated_document_is_a_broken_file_not_a_newer_one() {
         ),
         "a truncated file must not be reported as a newer build's"
     );
+}
+
+/// A launch on a newer document refuses it: it answers the version, opens a demo as a first run, and — the part that
+/// matters — **leaves the file exactly as it was**.
+#[test]
+fn a_launch_refuses_a_newer_file_and_does_not_touch_it() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    let path = dir.path().join("state.json");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document["version"] = serde_json::json!(SAVE_VERSION + 1);
+    std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+
+    let opened = acid_app::persist::open(dir.path());
+
+    assert_eq!(
+        opened.refused,
+        Some(SAVE_VERSION + 1),
+        "the version it named"
+    );
+    assert!(opened.first_run, "a refusal opens a first run");
+    assert_eq!(
+        opened.state,
+        acid_app::demo::seed(),
+        "and a demo, not the document it could not read"
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "the refused file must not be touched"
+    );
+}
+
+/// A document this build can read opens as it always did: no refusal, not a first run.
+#[test]
+fn a_launch_on_a_current_file_refuses_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let written = SavedState {
+        bpm: 137.0,
+        ..SavedState::default()
+    };
+    save(dir.path(), &written).unwrap();
+
+    let opened = acid_app::persist::open(dir.path());
+
+    assert_eq!(opened.refused, None);
+    assert!(!opened.first_run);
+    assert!((opened.state.bpm - 137.0).abs() < 1e-6);
 }

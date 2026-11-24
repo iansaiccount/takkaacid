@@ -178,3 +178,8 @@ wrong. The branch review's findings and what was done about each go here too, be
   **Ruling: the test asserts `SAVE_VERSION + 1`, not a literal 14.** Round 02 bumps the number to 14, and a test
   spelling the next version would have to be edited by a round it is not about. Cost if wrong: none — the refusal is
   relative to whatever this build writes, which is the rule.
+- **Task 2 — `open`'s second face.** `persist::Opened { state, first_run, refused }`; a newer document answers the demo
+  seed with `first_run` and `refused: Some(version)`, and every other error keeps today's answer byte for byte. `main`
+  destructures it (the refusal is bound for Task 3). Proved by `a_launch_refuses_a_newer_file_and_does_not_touch_it`
+  (the bytes on disk are compared before and after) and `a_launch_on_a_current_file_refuses_nothing`, watched fail first
+  as `no field refused on type (SavedState, bool)`. Suite **981/981**, clippy `-D warnings`, `fmt --check`.
