@@ -126,7 +126,7 @@ pub(super) fn draw(
         // it cannot hold, and the status line says how many of them had sound.
         let before = shared.pattern();
         let next = before.grid.next();
-        let cleared = before.sounding_steps_beyond(next);
+        let held = before.sounding_steps_beyond(next);
         shared.set_grid(next);
         state.pattern = shared.pattern();
         // The border is clamped into the bar that just arrived: a press that narrows thirty-two steps to twelve with the
@@ -136,7 +136,7 @@ pub(super) fn draw(
         // A pending `CLEAR` was armed against the pattern as it was, and this press may have rested steps inside it.
         super::clear::disarm(state);
         state.dirty = true;
-        let notice = transport::grid_notice(before.len(), state.pattern.len(), cleared);
+        let notice = transport::grid_notice(before.len(), state.pattern.len(), held);
         state.notify(notice);
     }
     {

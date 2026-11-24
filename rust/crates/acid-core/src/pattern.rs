@@ -307,13 +307,10 @@ impl Pattern {
 
     /// The same music on another grid. The steps the new bar can hold are kept and the ones it cannot are **rested** — the
     /// one place a pattern loses sound, and the panel says so on the status line when it does.
+    /// A narrower grid **holds** the steps it stops playing: they keep their notes, stay silent, and play again when a
+    /// later grid can hold them. Nothing is destroyed, in memory or in the file.
     pub fn with_grid(self, grid: Grid) -> Self {
-        let mut pattern = Self { grid, ..self };
-        let len = pattern.len();
-        for step in &mut pattern.steps[len..] {
-            *step = Step::rest();
-        }
-        pattern
+        Self { grid, ..self }
     }
 
     /// How many steps **that sound** sit outside `grid`'s bar: what a press to that grid would cost.

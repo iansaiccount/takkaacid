@@ -115,7 +115,7 @@ fn a_pattern_is_as_long_as_its_grid() {
 }
 
 #[test]
-fn a_narrower_grid_rests_the_steps_that_fall_outside() {
+fn a_narrower_grid_holds_the_steps_it_stops_playing() {
     let mut steps = [Step::rest(); PATTERN_SLOTS];
     steps[0] = Step::note(Pitch::A, 1);
     steps[20] = Step::note(Pitch::C, 2); // beyond a 12-step bar
@@ -126,27 +126,41 @@ fn a_narrower_grid_rests_the_steps_that_fall_outside() {
     let narrow = wide.with_grid(Grid::EighthTriplet);
     assert_eq!(narrow.len(), 12);
     assert!(narrow.steps[0].on, "the steps inside the bar are untouched");
-    assert!(!narrow.steps[20].on, "the steps outside it are rested");
+    assert!(
+        narrow.steps[20].on,
+        "the step outside the bar is held, not destroyed"
+    );
+
+    // Back again: the held note plays, unchanged. This is the whole point of the round.
+    let back = narrow.with_grid(Grid::ThirtySecond);
+    assert_eq!(back.len(), 32);
+    assert!(back.steps[20].on, "the note came back");
+    assert_eq!(back.steps[20].pitch, Pitch::C);
+    assert_eq!(back, wide, "narrowing and widening is the identity");
 }
 
 #[test]
-fn every_slot_above_len_is_a_rest() {
+fn every_slot_above_len_is_not_played() {
     let steps = [Step::note(Pitch::G, 0); PATTERN_SLOTS];
     for grid in Grid::ALL {
-        for pattern in [
-            Pattern::empty_in(grid),
-            Pattern::from_steps_in(grid, steps),
-            Pattern::from_steps(steps).with_grid(grid),
-        ] {
+        for pattern in [Pattern::empty_in(grid), Pattern::from_steps_in(grid, steps)] {
             for (index, step) in pattern.steps.iter().enumerate().skip(pattern.len()) {
                 assert_eq!(
                     *step,
                     Step::rest(),
-                    "{} slot {index} holds sound",
+                    "{} slot {index} holds sound from a constructor",
                     grid.name()
                 );
             }
         }
+        // A grid *change* is the one path that may hold a note above the bar, and it must not play it.
+        let held = Pattern::from_steps_in(Grid::ThirtySecond, steps).with_grid(grid);
+        assert!(
+            held.iter().all(|step| step.on),
+            "{} plays only its own bar",
+            grid.name()
+        );
+        assert_eq!(held.iter().count(), held.len());
     }
 }
 
@@ -232,7 +246,7 @@ fn a_press_counts_the_sound_it_would_drop() {
     assert_eq!(
         wide.with_grid(Grid::Sixteenth)
             .sounding_steps_beyond(Grid::Sixteenth),
-        0,
-        "nothing sounds past a bar it already fits"
+        2,
+        "narrowed to sixteenths the two notes are held, and counted as what stops playing"
     );
 }

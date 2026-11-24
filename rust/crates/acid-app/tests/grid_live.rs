@@ -203,15 +203,15 @@ fn narrowing_the_bar_counts_the_sound_it_rests() {
 
     assert_eq!(panel.pattern.grid, Grid::EighthTriplet);
     assert_eq!(panel.pattern.len(), 12, "the row is twelve keys now");
-    assert_eq!(notice(&panel), "32 TO 12 STEPS, 2 CLEARED");
+    assert_eq!(notice(&panel), "32 TO 12 STEPS, 2 HELD");
     assert_eq!(
         panel.selected, 11,
         "the border is pulled into the arriving bar, not left off the row"
     );
-    for index in [20, 21, 22] {
+    for index in [20, 21] {
         assert!(
-            !panel.pattern.steps[index].on,
-            "step {} must be rested, not hidden",
+            panel.pattern.steps[index].on,
+            "step {} must be held, not destroyed",
             index + 1
         );
     }
@@ -220,8 +220,18 @@ fn narrowing_the_bar_counts_the_sound_it_rests() {
         "the steps inside the bar are untouched"
     );
     assert!(
-        !shared.pattern().steps[20].on,
-        "and the engine's bar rests it too"
+        shared.pattern().steps[20].on,
+        "and the engine's bar holds it too"
+    );
+
+    // Back to thirty-two: the cycle is 1/16 -> 1/32 -> 1/8T -> 1/16, so two presses reach the long bar and the held
+    // notes play again, which is the whole point of the round.
+    click(&ctx, &mut panel, &shared, grid_key());
+    click(&ctx, &mut panel, &shared, grid_key());
+    assert_eq!(panel.pattern.grid, Grid::ThirtySecond);
+    assert!(
+        panel.pattern.steps[20].on && panel.pattern.steps[21].on,
+        "the notes the triplet bar could not play came back"
     );
 }
 

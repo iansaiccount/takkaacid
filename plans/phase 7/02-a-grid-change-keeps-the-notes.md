@@ -157,3 +157,12 @@ exactly as the notes are.
 
 *(One line per task, written as it is done: what landed, the test that proved it, and any ruling with what it costs if
 wrong. The branch review's findings and what was done about each go here too, before the pull request.)*
+- **Tasks 1, 2 and 4 landed together, as the bug the player reported.** "A full pattern on 32, switch to `1/8T`, back to
+  32" lost the notes: phase 6's `with_grid` rested everything outside the narrower bar. It is now `Self { grid, ..self }`
+  — nothing is destroyed — the notice says `32 TO 12 STEPS, 2 HELD`, and the invariant test reads "not played" (a
+  constructor still rests what it was not given; a grid *change* is the one path that may hold a note above the bar).
+  Proved by `a_narrower_grid_holds_the_steps_it_stops_playing` (narrow → hold → widen → **equals the original pattern**),
+  `every_slot_above_len_is_not_played`, and `narrowing_the_bar_counts_the_sound_it_rests` in `grid_live`, which now
+  presses back to thirty-two and asserts the notes play again. Suite **983/983**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: the file does not carry the held steps yet** — that is Task 3, and until it lands a held note survives a
+  grid change but not a save. Cost if wrong: the restoration is session-only for one commit; the next task closes it.
