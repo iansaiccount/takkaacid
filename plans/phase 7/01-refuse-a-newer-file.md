@@ -195,3 +195,11 @@ wrong. The branch review's findings and what was done about each go here too, be
   itself is one visible condition in the tick. Cost if wrong: the wiring between them (that `main` passes the field and
   keeps the gate) is read by the branch review rather than proved by a test — so it is named here, and the review focus
   keeps it first.
+- **Task 4 — the songs follow.** `load_song` and `import_song` now parse through `load_document`, so a newer song is
+  refused with its version named in both, and nothing lands in the library on the import path. Proved by
+  `a_newer_song_is_refused_by_import_and_by_load` — **mutation-checked**, because the implementation landed before its
+  test: widening the comparison by one (`> SAVE_VERSION + 1`) makes it fail at the `expect_err`, and the file was
+  restored. Suite **983/983**, clippy `-D warnings`, `fmt --check`.
+- **Task 5 — the book, the pin.** `17-trouble` gains *"It opened a demo and said my session file is newer"*: the refusal,
+  the notice, that the file is untouched, that an autosave will not touch it, and that an older file is read as always.
+  `check.sh` pins the word `newer`. `./docs/guide/check.sh` → `guide: ok`. Suite **983/983**, clippy, `fmt --check`.

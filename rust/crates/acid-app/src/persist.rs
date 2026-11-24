@@ -855,8 +855,7 @@ pub fn save_song(dir: &Path, name: &str, state: &SavedState) -> Result<()> {
 pub fn load_song(dir: &Path, name: &str) -> Result<SavedState> {
     let path = song_path(dir, name);
     let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
-    let mut state: SavedState =
-        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+    let mut state = load_document(&bytes, &path).map_err(anyhow::Error::new)?;
     // A song is a save file like any other, and it may be hand-edited: sanitise before anyone reads its bank.
     sanitize(&mut state);
     Ok(state.upgraded())
@@ -913,8 +912,7 @@ pub fn export_song(to: &Path, state: &SavedState) -> Result<()> {
 /// file that is not a song is refused before anything touches the library.
 pub fn import_song(from: &Path, dir: &Path) -> Result<String> {
     let bytes = std::fs::read(from).with_context(|| format!("reading {}", from.display()))?;
-    let mut state: SavedState =
-        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", from.display()))?;
+    let mut state = load_document(&bytes, from).map_err(anyhow::Error::new)?;
     sanitize(&mut state);
     let state = state.upgraded();
 

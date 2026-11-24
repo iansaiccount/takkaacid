@@ -1696,3 +1696,36 @@ fn the_refusal_notice_names_the_version_and_the_promise() {
     );
     assert!(said.is_ascii(), "the face may not print a glyph");
 }
+
+/// A song from a newer build is refused by the same rule as the save file, and **names its version** — the dialog shows
+/// that, and nothing ever lands in the library.
+#[test]
+fn a_newer_song_is_refused_by_import_and_by_load() {
+    let library = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    save_song(library.path(), "Song", &SavedState::default()).unwrap();
+
+    // The song as this build wrote it, carried out and stamped with the next build's version.
+    let text =
+        std::fs::read_to_string(acid_app::persist::song_path(library.path(), "Song")).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document["version"] = serde_json::json!(SAVE_VERSION + 1);
+    let incoming = elsewhere.path().join("Song.json");
+    std::fs::write(&incoming, serde_json::to_vec(&document).unwrap()).unwrap();
+
+    let refused = import_song(&incoming, library.path()).expect_err("a newer song is refused");
+    assert!(
+        refused
+            .to_string()
+            .contains(&format!("version {}", SAVE_VERSION + 1)),
+        "the refusal names the version it found: {refused}"
+    );
+    assert_eq!(
+        list_songs(library.path()),
+        vec!["Song".to_string()],
+        "nothing landed"
+    );
+
+    let loaded = load_song(library.path(), "Song").expect("a song this build can read still loads");
+    assert_eq!(loaded.version, SAVE_VERSION, "the song itself is unchanged");
+}
