@@ -1,4 +1,4 @@
-//! The `BANKS` card's four sections: the demos, the player's bank files, their songs, and the rack files.
+//! The `BANKS` card's four sections: their songs, the demos, the player's bank files, and the rack files.
 //!
 //! The card is a painter: every test here drives `draw_panel` through real egui frames and asserts on the request the card
 //! left behind, because what a click writes is `main`'s to do and not the card's.
@@ -170,10 +170,8 @@ fn the_song_list_sits_under_the_name_that_saves_it() {
     let shared = SharedState::new();
     let mut panel = open_card(false);
 
-    assert!(
-        song_row_centre(0).y < demo_row_centre(0).y,
-        "the songs come before the demos"
-    );
+    // The click below is the proof of the order: the helpers and the painter are the same arithmetic, so a card that still
+    // drew the demos first would answer this click with `LoadDemo(0)`.
 
     click(&ctx, &mut panel, &shared, song_row_centre(0));
     assert_eq!(
@@ -242,7 +240,7 @@ fn the_card_lists_the_four_sections_and_asks_for_a_bank_load() {
     assert_eq!(
         panel.songs.request,
         Some(Request::Load("Acid 1".to_string())),
-        "the player's songs are still the third section, under a heading that now says so"
+        "the player's songs are the first section, under the field that names them"
     );
 }
 

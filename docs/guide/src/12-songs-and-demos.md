@@ -5,12 +5,14 @@ keys along the bottom. It keeps three different amounts of work: a **song** is t
 patterns and the machine they were written on, and a **rack** is every machine with its patches and banks, as a file of its own.
 
 ## The four lists
+
 **`SONGS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
 click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
 `SONGS` is the first list on the card, directly under the name field that saves the song it names.
 
 Every row of `SONGS`, `PATTERN BANKS` and `RACKS` has a small `x` at its right end. One click turns it into `SURE`; the second
 deletes that file. The demos have no `x`.
+
 **`DEMO BANKS`** are the seven that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock**,
 **Funk**, **Acid Jazz** (a `1/8T` triplet line) and **Fast Acid** (a `1/32` one). They are read-only — there is no way to
 overwrite one — and each is a patch plus eight patterns in `A1` to `A8` ([`23-pattern-grids`](23-pattern-grids.md))

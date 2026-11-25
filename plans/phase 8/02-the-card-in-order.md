@@ -131,3 +131,28 @@ wrong. The branch review's findings and what was done about each go here too, be
   **Ruling: the pinned sentence sits on one line.** `check.sh`'s positive pins are raw `grep -F`, not the flattened read the
   negative guards use, so a phrase the page wraps is not found — the first version of the sentence wrapped and the pin failed.
   Cost if wrong: none; the page's wrap is chosen by the pin, which the comment above the pin does not say.
+
+**Branch review (this round).** A subagent that wrote none of it read `e074674..ac4e5a0` against this plan. One Important and
+six Minor findings: the minors are fixed here, and the Important one is the player's and is carried to them rather than settled
+quietly.
+
+- **Important, and the player's to decide: a full song list now takes the *doors* off the card.** With the songs first, the
+  card's own arithmetic at the design size gives: **12 songs** → `RACKS`, its rows and `SAVE RACK` are not drawn (`y = 605`,
+  `605 + 15 > 618`); **13** → `PATTERN BANKS` and `SAVE BANK`; **21** → the song rows cap and `DEMO BANKS` is a heading with no
+  demos. Before this round, twelve songs drew twelve rows and kept every other section. The plan accepted one cost — "a long
+  song list can push the demo rows off the bottom" — and the demos are the **last** casualty, not the first, while `banks.rs`'s
+  own comment promises the opposite ("a player with a full list must still be able to save a new bank"). Reserving room for the
+  two save rows and leaving it are materially different things a player will see, so this one goes to the player with the
+  numbers instead of being settled here.
+- **Minor, fixed: a message that said the opposite** — "the player's songs are still the third section, under a heading that
+  now says so" → the first section, under the field that names them.
+- **Minor, fixed: the test module's doc** listed the card's sections in the old order.
+- **Minor, fixed: an assertion that could not fail.** `song_row_centre(0).y < demo_row_centre(0).y` compares two values from
+  one chain, so it holds for any painter; it is now a comment saying the click is the proof.
+- **Minor, fixed: two missing blank lines on page 12**, which rendered the crosses' sentence against the `DEMO BANKS`
+  paragraph.
+- **Minor, recorded: the two `songs_top()` are not the same value.** `banks_live`'s is the section heading's top and
+  `songs_live`'s is the first row's top — both correct, both named the same, which is an argument for doing the deferred
+  `tests/common/` fix in the round that next moves a section.
+- **Minor, accepted: `check.sh`'s new pin is outside the plan's Task 2 `Files` block.** Recorded here; the pin is the round's
+  claim and belongs in the fact list.
