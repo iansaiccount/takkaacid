@@ -1,4 +1,4 @@
-# Plan 03 — duplicate a device
+# Plan 04 — duplicate a device
 
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans`, one commit per task, and a subagent review of
 > the branch at the pull request (`AGENTS.md`).

@@ -144,6 +144,9 @@ quietly.
   own comment promises the opposite ("a player with a full list must still be able to save a new bank"). Reserving room for the
   two save rows and leaving it are materially different things a player will see, so this one goes to the player with the
   numbers instead of being settled here.
+  **The player's answer (2026-11-25): redesign the card instead — round 03, the card as a browser.** The doors stop being rows under a
+  list and become the strip's fixed furniture, so the cost this round accepted is closed by the next one; nothing is capped here and
+  nothing scrolls here.
 - **Minor, fixed: a message that said the opposite** — "the player's songs are still the third section, under a heading that
   now says so" → the first section, under the field that names them.
 - **Minor, fixed: the test module's doc** listed the card's sections in the old order.
