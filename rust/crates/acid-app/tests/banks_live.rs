@@ -1,13 +1,17 @@
-//! The `BANKS` card's four sections: the demos, the player's bank files, their songs, and the rack keys that refuse.
+//! The `BANKS` card's four sections: their songs, the demos, the player's bank files, and the rack files.
 //!
 //! The card is a painter: every test here drives `draw_panel` through real egui frames and asserts on the request the card
 //! left behind, because what a click writes is `main`'s to do and not the card's.
+//!
+//! The rack section's tests live here rather than in a file of their own: the geometry that finds a section's rows is
+//! measured by the helpers above, and a second copy of it would be the hand-kept list this project has paid for twice.
 
 use acid_app::device::{DeviceKind, Rack};
 use acid_app::persist::{BankDocument, SavedState, list_banks, load_bank, save_bank};
 use acid_app::state::SharedState;
 use acid_app::ui::banks::{Banks, Request};
 use acid_app::ui::layout::{layout, scale};
+use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, SongState, draw_panel, theme};
 use acid_core::bank::PatternBank;
 use acid_core::pattern::Grid;
@@ -77,9 +81,18 @@ fn field_y() -> f32 {
     card().top() + padding() + 18.0 * scale(screen())
 }
 
-/// `DEMO BANKS` sits one row below the name row, and its rows start under its heading.
-fn demos_top() -> f32 {
+/// `SONGS` sits directly under the name field and its two keys: the list a player is naming, where they name it.
+fn songs_top() -> f32 {
     field_y() + row_height() + padding()
+}
+
+fn song_row_centre(index: usize) -> Pos2 {
+    Pos2::new(left() + 20.0, row_centre(songs_top() + heading(), index))
+}
+
+/// `DEMO BANKS` follows the songs — these tests' card draws one song.
+fn demos_top() -> f32 {
+    section_top(songs_top(), 1)
 }
 
 /// The centre of row `index` of a section whose rows start at `top`.
@@ -130,30 +143,57 @@ fn bank_save_centre(rows: usize) -> Pos2 {
     )
 }
 
-/// `SONGS` starts after the bank rows and the bank's own save row.
-fn songs_top() -> f32 {
+/// `RACKS` starts after the bank rows and the bank's own save row.
+fn racks_top() -> f32 {
     section_top(banks_top(), 2)
 }
 
-fn song_row_centre(index: usize) -> Pos2 {
-    Pos2::new(left() + 20.0, row_centre(songs_top() + heading(), index))
+fn rack_row_centre(index: usize) -> Pos2 {
+    Pos2::new(left() + 20.0, row_centre(racks_top() + heading(), index))
 }
 
-fn racks_top() -> f32 {
-    section_top(songs_top(), 1)
-}
-
-fn rack_save_centre() -> Pos2 {
+/// `SAVE RACK` sits under the rack rows, in the pattern `PATTERN BANKS` heads: a name field, then one key.
+fn rack_save_centre(rows: usize) -> Pos2 {
+    let save_left = left() + width() * 0.40 + padding();
     Pos2::new(
-        left() + 96.0 * scale(screen()) * 0.5,
-        row_centre(racks_top() + heading(), 0),
+        save_left + (width() * 0.30 - padding()) * 0.5,
+        row_centre(racks_top() + heading(), rows),
     )
 }
 
-fn rack_load_centre() -> Pos2 {
+#[test]
+fn the_song_list_sits_under_the_name_that_saves_it() {
+    // The song's field and `SAVE` are the first thing under the title, so its list is the first list: the player's own songs
+    // directly under the box that names them, and the factory's demos below. Before this, the songs were the fourth list down
+    // and the box that names them had nothing to do with where they were.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+
+    // The click below is the proof of the order: the helpers and the painter are the same arithmetic, so a card that still
+    // drew the demos first would answer this click with `LoadDemo(0)`.
+
+    click(&ctx, &mut panel, &shared, song_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::Load("Acid 1".to_string())),
+        "the first row under the field loads the song it names"
+    );
+}
+
+/// The cross at a rack row's right end, where deleting takes two clicks.
+fn rack_delete_centre(index: usize) -> Pos2 {
     Pos2::new(
-        left() + 96.0 * scale(screen()) + padding() + 96.0 * scale(screen()) * 0.5,
-        row_centre(racks_top() + heading(), 0),
+        left() + width() * 0.66 + padding() + width() * 0.14 * 0.5,
+        row_centre(racks_top() + heading(), index),
+    )
+}
+
+/// The cross at a song row's right end, in the same column as the bank's and the rack's.
+fn song_delete_centre(index: usize) -> Pos2 {
+    Pos2::new(
+        left() + width() * 0.66 + padding() + width() * 0.14 * 0.5,
+        row_centre(songs_top() + heading(), index),
     )
 }
 
@@ -165,6 +205,7 @@ fn open_card(dirty: bool) -> PanelState {
             card: Some(Banks {
                 demos: vec!["Slow Acid".to_string()],
                 bank_names: vec!["Easy".to_string()],
+                rack_names: vec!["Studio".to_string()],
                 names: vec!["Acid 1".to_string()],
                 ..Banks::default()
             }),
@@ -199,7 +240,7 @@ fn the_card_lists_the_four_sections_and_asks_for_a_bank_load() {
     assert_eq!(
         panel.songs.request,
         Some(Request::Load("Acid 1".to_string())),
-        "the player's songs are still the third section, under a heading that now says so"
+        "the player's songs are the first section, under the field that names them"
     );
 }
 
@@ -238,25 +279,196 @@ fn a_dirty_session_arms_a_bank_load_first() {
 }
 
 #[test]
-fn the_rack_keys_ask_and_write_nothing() {
-    // A rack document is a later round. The keys are drawn where they will live and they ask `main`, which says so; the card
-    // itself has no file to write and no dialog to open, so the request being the whole effect is the assertion.
+fn the_rack_section_lists_the_files_and_asks_for_a_load() {
+    // A rack file is a document now, so its section is the bank's shape: rows that load, and a field and a key that save.
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = open_card(false);
 
-    click(&ctx, &mut panel, &shared, rack_save_centre());
-    assert_eq!(panel.songs.request, Some(Request::SaveRack));
-
-    panel.songs.request = None;
-    click(&ctx, &mut panel, &shared, rack_load_centre());
-    assert_eq!(panel.songs.request, Some(Request::LoadRack));
+    click(&ctx, &mut panel, &shared, rack_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::LoadRack("Studio".to_string())),
+        "a row loads that rack"
+    );
 
     let card = panel.songs.card.as_ref().expect("the card stays open");
-    assert_eq!(card.load_armed, None, "a refusal is not a two-click load");
-    assert_eq!(card.delete_armed, None, "and not a two-click delete");
-    assert_eq!(card.bank_names, vec!["Easy".to_string()], "nothing moved");
-    assert_eq!(card.names, vec!["Acid 1".to_string()]);
+    assert_eq!(card.load_armed, None, "a saved session loads on one click");
+    assert_eq!(card.rack_names, vec!["Studio".to_string()]);
+}
+
+#[test]
+fn a_dirty_session_arms_a_rack_load_first() {
+    // A rack load replaces every machine in the session, so an unsaved session costs two clicks, as a song's load does.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(true);
+
+    click(&ctx, &mut panel, &shared, rack_row_centre(0));
+    assert_eq!(panel.songs.request, None, "the first click loads nothing");
+    let card = panel.songs.card.as_ref().unwrap();
+    assert_eq!(
+        card.load_armed.as_deref(),
+        Some("rack:Studio"),
+        "the row says which click it is waiting for"
+    );
+    assert!(
+        card.message
+            .as_deref()
+            .is_some_and(|line| line.contains("replace")),
+        "and the card says so in words"
+    );
+
+    click(&ctx, &mut panel, &shared, rack_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::LoadRack("Studio".to_string()))
+    );
+}
+
+#[test]
+fn saving_a_rack_asks_with_the_typed_name_or_the_file_it_came_from() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    panel.songs.card.as_mut().unwrap().rack_name = "Studio 2".to_string();
+
+    click(&ctx, &mut panel, &shared, rack_save_centre(1));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveRack("Studio 2".to_string())),
+        "the typed name"
+    );
+
+    // A blank field keeps the rack the session came from, SAVE's own rule for the other document.
+    panel.songs.request = None;
+    panel.songs.card.as_mut().unwrap().rack_name.clear();
+    panel.songs.rack_file = Some("Studio".to_string());
+    click(&ctx, &mut panel, &shared, rack_save_centre(1));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveRack("Studio".to_string())),
+        "a blank field names the rack the session is on"
+    );
+}
+
+#[test]
+fn a_rack_rows_cross_asks_to_delete_twice() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+
+    click(&ctx, &mut panel, &shared, rack_delete_centre(0));
+    assert_eq!(panel.songs.request, None, "one click only arms the cross");
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
+        Some("rack:Studio"),
+        "and the cross turns into SURE, armed under the rack's own key"
+    );
+
+    click(&ctx, &mut panel, &shared, rack_delete_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::DeleteRack("Studio".to_string())),
+        "deleting a file has no undo, so it takes two clicks"
+    );
+}
+
+#[test]
+fn a_rack_cross_and_a_song_cross_do_not_share_their_arm() {
+    // Two files can have one name: `songs/Studio.json` and `racks/Studio.json` are different documents to the app and one
+    // word to a player. Arming the rack's cross must not arm the song's, or the second click lands on the song and deletes
+    // it — the one action on this card with no undo.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    {
+        let card = panel.songs.card.as_mut().unwrap();
+        card.names = vec!["Studio".to_string()];
+        card.rack_names = vec!["Studio".to_string()];
+    }
+
+    click(&ctx, &mut panel, &shared, rack_delete_centre(0));
+    assert_eq!(panel.songs.request, None, "the rack's cross only arms");
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
+        Some("rack:Studio"),
+        "and it arms under its own name, not the bare track name a song uses"
+    );
+
+    click(&ctx, &mut panel, &shared, song_delete_centre(0));
+    assert_eq!(
+        panel.songs.request, None,
+        "a click on the song's cross must not delete the song because a rack of the same name was armed"
+    );
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
+        Some("Studio"),
+        "it arms the song instead"
+    );
+}
+
+/// How many rack rows the card draws before its save row: the bank's arithmetic, over the rack section's top.
+fn rack_rows_drawn(count: usize) -> usize {
+    let rows_limit = list_limit() - row_height() - gap();
+    let top = racks_top() + heading();
+    (0..count)
+        .take_while(|index| {
+            top + (row_height() + gap()) * *index as f32 + row_height() <= rows_limit
+        })
+        .count()
+}
+
+#[test]
+fn a_full_rack_list_still_leaves_save_rack_on_the_card() {
+    // The save row is the section's door and the card has no scrolling, so a rack list long enough to reach the limit must
+    // stop a row short of it — the bank's rule, and the rack's own door must not be the thing it costs.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    let names: Vec<String> = (0..30).map(|index| format!("Rack {index:02}")).collect();
+    let drawn = rack_rows_drawn(names.len());
+    assert!(drawn < names.len(), "the list is long enough to be cut");
+    {
+        let card = panel.songs.card.as_mut().unwrap();
+        card.rack_names = names;
+        card.rack_name = "Thirty One".to_string();
+    }
+
+    click(&ctx, &mut panel, &shared, rack_save_centre(drawn));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveRack("Thirty One".to_string())),
+        "the save row is still on the card, one row under the last rack it drew"
+    );
+}
+
+#[test]
+fn opening_the_card_prefills_the_rack_field_from_the_rack_the_session_is_on() {
+    // `SAVE RACK` writes in place when the field names the rack the machines came from, so the field opens on it — the rule
+    // `SAVE BANK`'s field keeps for the selected device's bank, said for the other document.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState {
+        songs: SongState {
+            rack_file: Some("Studio".to_string()),
+            ..SongState::default()
+        },
+        ..PanelState::default()
+    };
+
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        switches::cell(layout(screen()).switches, Switch::Banks).center(),
+    );
+    assert!(panel.songs.card.is_some(), "the key opens the card");
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().rack_name,
+        "Studio",
+        "the rack field opens on the rack the session came from"
+    );
 }
 
 #[test]

@@ -397,7 +397,7 @@ const TIPS: [Tip; 49] = [
     },
     Tip {
         title: "ADD DEVICE",
-        what: "Another machine in the rack, up to four. Names and the rack are not saved yet.",
+        what: "Another machine in the rack, up to four. Every machine, and its name, is saved with the song.",
         shortcut: None,
     },
     Tip {

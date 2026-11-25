@@ -2,9 +2,17 @@
 
 `BANKS` opens the browser that keeps your work: a name field with `SAVE` and `SAVE A COPY` beside it, four lists, and four
 keys along the bottom. It keeps three different amounts of work: a **song** is the whole rack, a **pattern bank** is sixty-four
-patterns and the machine they were written on, and a **rack** is a document of its own that this build only has keys for.
+patterns and the machine they were written on, and a **rack** is every machine with its patches and banks, as a file of its own.
 
 ## The four lists
+
+**`SONGS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
+click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
+`SONGS` is the first list on the card, directly under the name field that saves the song it names.
+
+Every row of `SONGS`, `PATTERN BANKS` and `RACKS` has a small `x` at its right end. One click turns it into `SURE`; the second
+deletes that file. The demos have no `x`.
+
 **`DEMO BANKS`** are the seven that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock**,
 **Funk**, **Acid Jazz** (a `1/8T` triplet line) and **Fast Acid** (a `1/32` one). They are read-only — there is no way to
 overwrite one — and each is a patch plus eight patterns in `A1` to `A8` ([`23-pattern-grids`](23-pattern-grids.md))
@@ -30,15 +38,19 @@ bank's own name rewrites that file, a different name writes a new one — beside
 another by being given its name — and a blank field saves the bank the device came from. A bank's door is on its own heading
 rather than in the footer, and there is no `IMPORT` or `EXPORT` for one: `banks/` is the folder, and a file dropped into it loads.
 
-**`SONGS`** are the saves you have named. Click a row to load one. If what is on screen has unsaved changes, the first
-click only arms the row — it prints `<name> - click again to replace` — and the second click loads it.
+**`RACKS`** are the racks you have saved: one `racks/<name>.json` per file, each the whole instrument — every machine with its
+kind, name, colour, ports, channel, role, patterns, patch, kit, shuffle and learned controllers. A row loads that rack into
+the session, replacing **every** machine in it; the song's name and the tempo stay where they are, because a rack file carries
+no transport and no song. If what is on screen has unsaved changes, the first click only arms the row — it prints
+`<name> - click again to replace the rack` — and the second loads it. Each row's `x` turns into `SURE` and deletes the file.
 
-Every row of `PATTERN BANKS` and `SONGS` has a small `x` at its right end. One click turns it into `SURE`; the second deletes
-that file. The demos have no `x`.
+`SAVE RACK`, under those rows, keeps the session's machines under a name, and its field behaves as the bank's does: the rack's
+own name rewrites that file, a different name writes a new one — beside a taken one, `Studio (2)` — and a blank field saves
+the rack the session came from. That name is remembered for this session and not across a restart, so after relaunching, a
+name already taken is stepped around rather than written over.
 
-**`RACKS`** holds `SAVE RACK` and `LOAD RACK`, and it is the one place on the card that does nothing yet: a rack of its own —
-the machines, their patches and their banks as one document — is a later round. On this build both keys say so on the status
-line and open nothing.
+A load brings the machines back as the file wrote them, and what a restart forgets a recall forgets too: every machine comes
+back unmuted, running forwards and in tune.
 
 ## One song, the whole rack
 
@@ -66,7 +78,7 @@ name stays amber until you do it — and what a save writes depends entirely on 
 branch: load a demo, hit `SAVE A COPY`, and rename the copy.
 
 Names are trimmed, may be up to 48 characters, and may not contain `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, or start
-with a dot — they become file names in `songs/` or `banks/`.
+with a dot — they become file names in `songs/`, `banks/` or `racks/`.
 
 ## The buttons
 

@@ -66,7 +66,7 @@ pub fn help_sections() -> [(&'static str, &'static [&'static str]); 4] {
                 "settings: tooltips, autosave, MIDI in, sound out",
                 "each device is one voice: MIDI and the keyboard share it",
                 "the strip: click picks a device; M is its MUTE; + adds one",
-                "four devices; names and extra devices are not saved yet",
+                "four devices; every one of them is saved with the song",
                 "the song name is amber while unsaved, plain silk once saved",
                 "saved on exit; AUTOSAVE writes as you go",
                 "BANKS: new, save, save a copy, import, export, load, delete",

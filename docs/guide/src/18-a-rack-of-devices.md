@@ -78,3 +78,14 @@ playing a semitone up never drags the others with it.
 A kit is sounds as well as a name. A kit that was edited — a copy of a factory kit, or one imported — has a *folder* written
 beside the session when it is saved, so the samples come back with the name. A folder that has been moved or deleted is said
 on the status line when the machine tries to load it, and the machine keeps the silence rather than a substitute.
+
+## A rack of your own
+
+The session file keeps the rack you are working on. A **rack file** keeps the machines themselves, as a preset you can recall
+into any session: `BANKS`'s `RACKS` section saves one, lists the ones you have, loads one and deletes one
+([`12-songs-and-demos`](12-songs-and-demos.md#the-four-lists) is that section of the card).
+
+A load replaces every machine in the session and leaves the song's name and the tempo alone — a rack built at 150 is heard at
+whatever the song is playing when you recall it, which is what keeps four machines on one clock. What a restart forgets, a
+recall forgets too: the machines come back unmuted, running forwards and in tune. And the file's name is remembered for the
+session and not across a restart, so a save under a name already on disk lands beside it rather than over it.

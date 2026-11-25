@@ -6,6 +6,7 @@ use acid_app::demo;
 use acid_app::device;
 use acid_app::midi;
 use acid_app::persist;
+use acid_app::rack_recall;
 use acid_app::state::{self, AudioStatus};
 use acid_app::ui as panel_ui;
 use acid_core::bank::PatternBank;
@@ -327,16 +328,30 @@ impl eframe::App for TakkaApp {
                         Err(error) => self.notice(format!("could not delete the bank: {error}")),
                     }
                 }
-                // A rack document is a later round: the keys are drawn and refuse, so the place on the face is found once and
-                // a wiring round cannot rename their ids. Both notices say which round, because a player who pressed one is
-                // owed that much.
-                panel_ui::banks::Request::SaveRack => self.notice(
-                    "a rack file is not saved yet: the rack round comes after this one".to_string(),
-                ),
-                panel_ui::banks::Request::LoadRack => self.notice(
-                    "a rack file does not load yet: the rack round comes after this one"
-                        .to_string(),
-                ),
+                // The rack document's three doors, on the bank's rule: saving and loading are the two methods below, and
+                // deleting is the file plus the session's memory of it.
+                panel_ui::banks::Request::SaveRack(typed) => self.save_rack_now(&dir, &typed),
+                panel_ui::banks::Request::LoadRack(name) => self.load_rack_now(&dir, &name),
+                panel_ui::banks::Request::DeleteRack(name) => {
+                    match persist::delete_rack(&dir, &name) {
+                        Ok(()) => {
+                            // A rack file that is gone must not be written back in place by the next SAVE RACK.
+                            if self.panel.songs.rack_file.as_deref() == Some(name.as_str()) {
+                                self.panel.songs.rack_file = None;
+                            }
+                            if let Some(card) = self.panel.songs.card.as_mut() {
+                                card.rack_names = persist::list_racks(&dir);
+                                card.delete_armed = None;
+                                card.load_armed = None;
+                                if card.rack_name == name {
+                                    card.rack_name.clear();
+                                }
+                            }
+                            self.notice(format!("deleted rack {name}"));
+                        }
+                        Err(error) => self.notice(format!("could not delete the rack: {error}")),
+                    }
+                }
                 panel_ui::banks::Request::Save(typed) => {
                     // One button: an unchanged name keeps the song, a new name writes a new file and leaves the old one
                     // where it is, so a save can never move a song out from under its own name.
@@ -375,6 +390,8 @@ impl eframe::App for TakkaApp {
                         self.panel.songs.file = None;
                         // The selected device's bank is the starter phrase now, not any file the session came from.
                         self.panel.songs.bank_file = None;
+                        // A new song is a new rack: the file the old machines came from is not this one's.
+                        self.panel.songs.rack_file = None;
                         card.names = persist::list_songs(&dir);
                         card.bank_names = persist::list_banks(&dir);
                         card.delete_armed = None;
@@ -477,6 +494,8 @@ impl eframe::App for TakkaApp {
                                 self.panel.songs.file = None;
                                 // A demo is a bank too: the device's patterns are no longer a file of the player's.
                                 self.panel.songs.bank_file = None;
+                                // And a demo brings its own machines: the rack file is not this session's either.
+                                self.panel.songs.rack_file = None;
                                 self.panel.songs.card = None;
                                 self.panel.dirty = true;
                                 self.panel.tooltips = demo.state.tooltips;
@@ -767,8 +786,8 @@ impl TakkaApp {
     ///
     /// The **edited** device is not always the selected one: a player can turn a dial on the second drum machine, click back to
     /// the bass, and save. So the panel records *which* device is owed the write (`PanelState::kit_dirty`), and this reads that
-    /// number. The document still names only the saved device's kit (this phase's rule), so a kit edited on a second drum
-    /// machine lands in the library where the browser lists it and is named by the rack round — but it is written.
+    /// number. A kit edited on a second drum machine is that machine's own: `saved_device_from` writes every machine's kit
+    /// into the document, so the folder this writes is named by the same save that names the machine playing it.
     fn write_kit(&mut self) -> bool {
         let Some(number) = self.panel.kit_dirty else {
             return true;
@@ -1094,6 +1113,8 @@ impl TakkaApp {
         self.panel.songs.file = Some(name.to_string());
         // A song's load replaces the rack, so the selected device's bank is the file's, not any bank file the session had.
         self.panel.songs.bank_file = None;
+        // A song brings its own rack, so the rack file the session was on is not this one's.
+        self.panel.songs.rack_file = None;
         // Every drum machine's kit is a folder of WAVs, decoded at the rate the running device plays at. Which machines want
         // one, and which kit, is `persist`'s to say: it is a property of the document, not of the load.
         self.kit_wanted = persist::wanted_kits(&saved);
@@ -1125,6 +1146,74 @@ impl TakkaApp {
             card.open = Some(name.to_string());
         }
         self.panel.notify(format!("loaded {name}"));
+    }
+
+    /// Save the session's whole rack as a document under `typed`, or over the rack file it came from when the field was
+    /// left blank.
+    ///
+    /// Where the file lands is `save_target`'s question — the same one a song and a bank ask — and a new name that is taken
+    /// lands beside its namesake, so one rack can never destroy another by being given its name.
+    fn save_rack_now(&mut self, dir: &std::path::Path, typed: &str) {
+        let name = match persist::save_target(self.panel.songs.rack_file.as_deref(), typed) {
+            Some(persist::SaveTarget::InPlace(name)) => name,
+            Some(persist::SaveTarget::NewFile(name)) => persist::free_rack_name(dir, &name),
+            None => return,
+        };
+        // A rack file holds no panel state, but an edited kit's folder belongs to the machine that plays it, so it travels
+        // with the machines exactly as a song's does.
+        self.write_kit();
+        let document = persist::RackDocument::of(&self.rack);
+        match persist::save_rack(dir, &name, &document) {
+            Ok(()) => {
+                self.panel.songs.rack_file = Some(name.clone());
+                if let Some(card) = self.panel.songs.card.as_mut() {
+                    card.rack_names = persist::list_racks(dir);
+                    card.rack_name = name.clone();
+                    card.load_armed = None;
+                }
+                self.notice(format!("saved rack {name}"));
+            }
+            Err(error) => self.notice(format!("could not save the rack: {error}")),
+        }
+    }
+
+    /// Load a rack document and make its machines the session's own: the rack replaces the rack, and nothing about the song
+    /// — its name, its tempo — changes. Unsaved work is written first, as a song load does, so a click never throws away a
+    /// session that only lived in memory.
+    fn load_rack_now(&mut self, dir: &std::path::Path, name: &str) {
+        let document = match persist::load_rack(dir, name) {
+            Ok(document) => document,
+            Err(error) => {
+                self.notice(format!("could not load the rack: {error}"));
+                return;
+            }
+        };
+        self.save();
+        let open_ports = self.midi.enabled();
+        let recalled = rack_recall::recall(&mut self.rack, &mut self.panel, &document, open_ports);
+        // A held controller request belongs to the machines that were playing, and they are gone.
+        self.pending_pattern = None;
+        self.panel.songs.rack_file = Some(name.to_string());
+        // Every drum machine's kit is a folder of WAVs, decoded at the rate the running device plays at; which machines want
+        // one is `rack_recall`'s answer, and the decoding is this side's because it needs the device.
+        self.kit_wanted = recalled.kits;
+        if let Some(rate) = self.kit_rate {
+            self.load_wanted_kits(rate);
+        }
+        if let Some(card) = self.panel.songs.card.as_mut() {
+            card.rack_names = persist::list_racks(dir);
+            card.rack_name = name.to_string();
+            card.load_armed = None;
+        }
+        self.notice(format!("loaded rack {name}"));
+        // Said after the load's own line, because a machine that cannot hear anything is the fact the player needs on the
+        // status line, and the line holds one sentence at a time.
+        if !recalled.unopened_ports.is_empty() {
+            self.notice(format!(
+                "ports this rack names are not open: {}",
+                recalled.unopened_ports.join(", ")
+            ));
+        }
     }
 
     /// Save the selected device's bank under `typed`, or over the file it came from when the field was left blank.

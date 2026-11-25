@@ -196,6 +196,11 @@ pub struct SongState {
     /// `file` is compared against the song's name, so the two documents follow one rule. It is about one device's bank, so it
     /// cannot outlive that: `NEW`, a song load and a change of selection clear it.
     pub bank_file: Option<String>,
+    /// The rack file the session's machines came from, if they came from one. `SAVE RACK` compares against this the way
+    /// `file` is compared against the song's name, so the two documents follow one rule. Unlike `bank_file` it survives a
+    /// change of selection — it is the whole rack's, not one machine's — and it lives for the session, because the save
+    /// file records no such fact.
+    pub rack_file: Option<String>,
 }
 /// What the player chose on the panel, consumed by `main` on the next frame. The output list lives in the settings card,
 /// which asks for a choice the same way the old status-line picker did, so the stream handling is unchanged. The inputs
@@ -1033,6 +1038,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         let kind = state.showing_kind();
         // The bank the selected device's bank came from, copied out before the card borrows the same `SongState` mutably.
         let bank_file = state.songs.bank_file.clone();
+        let rack_file = state.songs.rack_file.clone();
         if let Some(card) = state.songs.card.as_mut() {
             request = banks::paint(
                 ui,
@@ -1043,6 +1049,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                     name: session.as_deref(),
                     dirty: state.dirty,
                     bank_file: bank_file.as_deref(),
+                    rack_file: rack_file.as_deref(),
                 },
                 kind,
             );
@@ -1277,6 +1284,8 @@ fn open_banks(state: &mut PanelState) {
         names: crate::persist::list_songs(&crate::persist::data_dir()),
         // Both libraries, read the frame the card opens: a bank saved before this session started is a row without a refresh.
         bank_names: crate::persist::list_banks(&crate::persist::data_dir()),
+        // The rack files, read with them: a rack saved before this session started is a row without a refresh.
+        rack_names: crate::persist::list_racks(&crate::persist::data_dir()),
         // The demos are built into the binary, so the card only needs their names to list them.
         demos: crate::demo::songs()
             .iter()
@@ -1285,6 +1294,8 @@ fn open_banks(state: &mut PanelState) {
         name: state.songs.name.clone().unwrap_or_default(),
         // The bank field opens on the file the selected device's bank is in, so `SAVE BANK` writes in place without retyping.
         bank_name: state.songs.bank_file.clone().unwrap_or_default(),
+        // And the rack's field opens on the rack the session is on, for the same reason.
+        rack_name: state.songs.rack_file.clone().unwrap_or_default(),
         open: state.songs.file.clone(),
         ..banks::Banks::default()
     });

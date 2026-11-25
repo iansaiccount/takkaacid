@@ -463,7 +463,10 @@ impl Rack {
     /// Replace every machine with the ones `saved` carries, keeping this rack's **tempo cell**, transport and bus: the audio
     /// thread holds the bus and every engine holds the cell, so a load may not swap either of them out. The panel shows slot 0
     /// afterwards — the file records no selection, and "where I was" means nothing once the rack it pointed into is gone.
-    pub fn replace_from_saved(&mut self, saved: &crate::persist::SavedState) {
+    ///
+    /// The document's own `bpm` is **not** read. This is the seam a document with no clock goes through — a rack file — and a
+    /// song's load adds its tempo on top, in [`Self::replace_from_saved`].
+    pub fn replace_devices_from(&mut self, saved: &crate::persist::SavedState) {
         self.devices = Self::devices_for(saved, &self.tempo_bpm);
         self.selected = 0;
         self.next_number = self
@@ -473,9 +476,15 @@ impl Rack {
             .max()
             .unwrap_or(0)
             + 1;
-        self.set_tempo_bpm(saved.bpm);
         self.sync_transport();
         self.publish();
+    }
+
+    /// A song load: the machines, and the document's tempo. The tempo is set before the machines are built on the one cell,
+    /// so the bus is published with the clock the file asked for rather than the one the session had.
+    pub fn replace_from_saved(&mut self, saved: &crate::persist::SavedState) {
+        self.set_tempo_bpm(saved.bpm);
+        self.replace_devices_from(saved);
     }
 
     /// Every machine a document describes, each holding `tempo` — the rack's one cell, so a tempo written by the panel or the

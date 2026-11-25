@@ -42,15 +42,16 @@ The binary lands at `rust/target/release/takka-acid` afterwards, so you can star
 ## Where it keeps things
 
 The session and your songs live in `$XDG_DATA_HOME/takka-acid`, or `~/.local/share/takka-acid` when `XDG_DATA_HOME` is
-not set. Three things are in there:
+not set. What is in there:
 
-- `state.json` — the session: the pattern on screen, the patch, the tempo, the switches in settings, your MIDI choice, and which
-  kit the device plays.
+- `state.json` — the session: **every machine in the rack**, its patterns, patch, kit's name, shuffle and learned controllers,
+  plus the rack's tempo, the switches in settings and your MIDI choice.
 - `songs/` — one file per song you have named.
+- `banks/` — one file per pattern bank you have saved.
+- `racks/` — one file per rack you have saved: the machines, their patches and their banks, with no tempo and no song name.
 - `kits/` — one folder per kit you have made or imported, each holding a `kit.json` and one WAV per sampled voice. The three
   kits that ship are inside the app, so they have no folder here, and the folder appears the first time you save a session
   that plays an edited or imported one ([`22-the-drum-machine`](22-the-drum-machine.md)).
-
 Point `TAKKA_ACID_DATA_DIR` at another directory to keep a separate rig, or to experiment without touching the real one:
 
 ```bash

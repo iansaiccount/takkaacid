@@ -75,6 +75,13 @@ gone 'plain up/down' "the guide puts the tempo on the plain arrows again"
 # Phase 5's second round renamed one heading and added two sections, and the words are the point of that round: the card says
 # SONGS, PATTERN BANKS and RACKS, and no page may go back to the name a song list had while it was the only list.
 gone 'MY BANKS' "the guide names a section the card no longer prints"
+# Phase 8 gave `RACKS` a working section: a rack is a file with rows of its own, so the keys that refused are gone, and the
+# sentence that said the section did nothing is a claim the book may not make again.
+gone 'LOAD RACK' "the guide names a key the card no longer prints"
+gone 'does nothing yet' "the guide says the rack section is unwired"
+# "a later round" is the other half of the same claim: a rack document was deferred, and it is not deferred now. The phrase
+# is narrowed to the sentence that said so, because two other pages use "a later round" for things that still are.
+gone 'is a later round' "the guide defers a round that has landed"
 # Phase 6 turned the two undecided cells into `GRID` and its readout: no page may still call them TBC, and the three grid
 # captions, the key's name and the two new demos are the facts the round is about (`23-pattern-grids`).
 gone 'TBC' "the guide still names the undecided cells"
@@ -85,7 +92,7 @@ gone 'five demo' "the guide still counts five demos"
 gone_re '(^|[^+])up / down: tempo' "the guide gives the tempo the plain arrows again"
 for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RETRY' '--midi-map' \
             'Ctrl+1' 'F3' 'COLOUR' 'Ctrl+C' 'four machines' 'VINYL NOIR' \
-            'every machine in the rack' 'theme is saved with the device' \
+            'every machine in the rack' 'theme is saved with the device' 'unmuted, running forwards and in tune' \
             'media.io/color-palette/music-color-palette.html' "that page's work" \
             'it makes no sound until the bar the rack is in finishes' 'NOTHING TO PAUSE' \
             'BANKS' 'PAUSE' 'REVERSE' 'TRANS -' 'COPY' 'PASTE' \
@@ -100,7 +107,8 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'the step that sounds, not the step the clock is on' \
             'runs the column right to left with the pattern' \
             '| `shift+up` / `shift+down` | tempo' \
-            'PATTERN BANKS' 'SAVE BANK' 'SAVE RACK' 'LOAD RACK' 'banks/<name>.json' \
+            'PATTERN BANKS' 'SAVE BANK' 'SAVE RACK' 'banks/<name>.json' 'racks/<name>.json' 'click again to replace the rack' \
+            'the first list on the card' \
             '1/16' '1/32' '1/8T' 'GRID' 'Acid Jazz' 'Fast Acid' 'newer' 'HELD' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }
