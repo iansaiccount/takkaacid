@@ -26,11 +26,12 @@ Rounds live here as `NN-topic.md`, one per round, in the shape the earlier phase
   header. Its branch review found one Important thing it could not settle: with the songs first, a full list takes the *doors* off
   the card — twelve songs stop it drawing `SAVE RACK`, thirteen stop `SAVE BANK`. Round 03 is the answer to that, and the plan's
   Progress says so.
-- **03 — the card as a browser.** Designed, and the design is waiting for the player's approval before anything is planned or
-  built: [`2026-11-25-the-card-as-a-browser-design.md`](../../docs/superpowers/specs/2026-11-25-the-card-as-a-browser-design.md).
-  One searchable, kind-filtered, scrolling list replaces the four stacked ones; the save strip follows the chip; a thumb appears
-  only when the list overflows. It answers round 02's finding because `SAVE BANK` and `SAVE RACK` stop being rows under a list and
-  become fixed furniture.
+- [`03-the-card-as-a-browser`](03-the-card-as-a-browser.md) — **planned, in flight on `phase-8-round-03`.** One searchable,
+  kind-filtered, scrolling list replaces the four stacked ones; the save strip follows the chip; a thumb appears only when the list
+  overflows. It answers round 02's finding because `SAVE BANK` and `SAVE RACK` stop being rows under a list and become fixed
+  furniture. Approved by the player on 2026-11-25, and the card's arithmetic moves into one public `Rects` the painter and both
+  live test files read, which is where round 02's `tests/common/` note lands. Design:
+  [`2026-11-25-the-card-as-a-browser-design.md`](../../docs/superpowers/specs/2026-11-25-the-card-as-a-browser-design.md).
 - [`04-duplicate-a-device`](04-duplicate-a-device.md) — `Rack::duplicate`, built from the source's own `SavedDevice`, so a copy needs
   no fourth description of a machine; a `DUPLICATE` key on the device card's second key row (the arithmetic says a fourth key cannot
   join the first); `AddError::NoSuchDevice` beside `AtCapacity`. The copy's kit is decoded by `main` from the source's kit name,
@@ -48,8 +49,8 @@ recorded in its last sections. The plans argue from it; where they disagree, the
 line current, and a commit. The review is of the branch at the pull request, by a subagent that wrote none of it
 (`AGENTS.md`).
 
-**State: rounds 01 and 02 complete in PR #15; round 03 designed and waiting for the player's approval; round 04 planned; round 05
-named, not yet planned.**
+**State: rounds 01 and 02 complete and merged in PR #15; round 03 planned and in flight on `phase-8-round-03`; round 04 planned;
+round 05 named, not yet planned.**
 
 **What phase 8 does not do**, and where each is recorded: merging a saved rack into the open one (the player chose replace —
 spec's Non-goals); a rack file that carries tempo, song name or panel state; remembering a rack file's name across a restart
