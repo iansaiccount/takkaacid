@@ -551,3 +551,43 @@ The branch review's findings and what was done about each go here too, before th
   logical (`xdotool mousemove 1525 1122 click 1`), pointer parked at `20 20`, `import -window 2097154` uncropped at
   1960 × 1340. `ALL` is drawn lit — its fill reads `srgb(25,25,25)` against the other chips' `srgb(4,4,4)`, its legend in
   `lit_ink` — so the design's "the selected one is lit" is in the picture, not just in the code.
+
+**Branch review (the PR), and what it found.** A subagent that wrote none of this read the branch head against this plan, its
+Global Constraints, its Rulings and its Review Focus. It could not see the committed diff (`eee93c3..9d39aa9`) — its dispatch
+had no shell — so it judged the tree's *content* and verified the kept ids by their current spelling rather than by seeing that
+no hunk touched them; and it could not run the gates. It found seven Minor things and no Critical or Important one, and closed
+the round's own questions as met: every interface the plan names exists in the shape claimed, no `_` arm over `Kind`, `Filter`
+or `Door`, no font glyph, `persist::SavedState` and `SAVE_VERSION` untouched and unreachable from the card, `main`'s `Request`
+unchanged, the 31 helpers gone, `tests/common/mod.rs` free of card arithmetic, and the round-02 defect closed by a test that
+discriminates. All seven are settled here; the suite is **1024/1024** with clippy `-D warnings`, `fmt --check` and `guide: ok`.
+
+- **Fixed: the strip was placed with the previous chip's geometry on the frame a chip was clicked.** `rects` was computed
+  before the chip loop and the strip read `songs.filter.door()` after it, so clicking `BANKS` → `ALL` drew `SAVE` in the bank's
+  key with **no `SAVE A COPY`** for that frame — and `main` only promises a repaint within 200 ms, which is long enough to click
+  again. `paint` now places the rects again after the re-top block. Proved by `a_chip_change_draws_its_strip_on_the_same_frame`,
+  which reads the words the *click frame itself* painted (a new `frame_text` helper, because the three-frame `click` cannot see
+  the middle frame); **mutation-checked** — with the second `card_rects` neutered the test lists the frame's words and there is
+  no `SAVE A COPY` among them, as the reviewer said.
+- **Fixed: the re-top rule had no test, and the page states it as fact.** Proved by
+  `a_chip_or_a_search_puts_the_list_back_at_the_top` — `top = 4`, click `SONGS`, `top == 0`; `top = 4`, type into the field,
+  `top == 0` — **mutation-checked** (with `songs.top = 0` deleted the chip half reads 4). Typing goes through the field on
+  purpose: the rule compares the text at the end of a frame with the text at the start, so *writing the field between frames is
+  not typing* and does not re-top, which the test's comment now says.
+- **Fixed: `Door::ALL` was a catalogue list nothing read.** Deleted rather than given a job: the chips are the mapping
+  (`Filter::door`), and the one test that would have iterated a `Door` list is the plan's own instruction to write the copy key's
+  rule out over `Filter::ALL`, so a second list would have been the hand-kept kind `AGENTS.md` names.
+- **Fixed: `Filter::kinds` sliced `Kind::ALL` by position.** `&Kind::ALL[..1]`, `[1..2]`, `[2..3]`, `[3..]` encoded that Song is
+  0 and Bank is 1, and `[3..]` would have swept a future fifth kind into `DEMOS` — a hand-kept positional list in miniature. Each
+  chip now names its kinds (`const SONG: [Kind; 1] = [Kind::Song]`), and `ALL` stays `&Kind::ALL`.
+- **Fixed: `save_centre(filter)` / `copy_centre(filter)` let a test name a chip the card was not on.** The helpers now take the
+  panel and read `card.filter`, so "which key" has one answer; call sites bind the position first, which also reads as "click the
+  strip's key where it is". Cost if wrong: two lines where one did, and a test can no longer click a strip that is not on screen.
+- **Fixed: two stale doc claims in `banks.rs`.** `Rects::row`'s first line described `cross` (a leftover from splitting them),
+  and `delete_armed` still said "the song whose delete cross", which is now `song:{name}` / `bank:{name}` / `rack:{name}`.
+- **Fixed: no `gone` guard for the deleted heading's count.** `check.sh` now guards `four lists` — page 12's old heading — and
+  leaves `four sections` unguarded on purpose, because page 20 truthfully says the *help* card has four.
+- **Not fixed, with the reason: the reviewer's claim that the band is 472 px.** It is 460, which is what `card_rects`' doc
+  already says: at the design size the card is 638 px and the column holds 18 (title) + 22 (search) + 22 (chips) + 22 (strip) +
+  22 (footer) + **six** paddings of 12 = 178, leaving 460 — and `window` on that band gives nineteen rows, which both the test
+  and the picture agree with. The review counted five paddings, not six. Cost if wrong: a comment off by the height of one
+  padding, in the function the test already measures.

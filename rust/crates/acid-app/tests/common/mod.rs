@@ -113,16 +113,23 @@ pub fn search_centre() -> Pos2 {
     rects().search.center()
 }
 
-/// The key beside the strip's field. The strip follows the chip, so the caller says which chip it is looking at.
-pub fn save_centre(filter: Filter) -> Pos2 {
-    rects_for(filter).strip_save.center()
+/// The key beside the strip's field. The strip follows the chip, and the chip is the card's own state — so the card is asked
+/// rather than handed a chip a test could name and the painter not have.
+pub fn save_centre(panel: &PanelState) -> Pos2 {
+    strip_rects(panel).strip_save.center()
 }
 
-pub fn copy_centre(filter: Filter) -> Pos2 {
-    rects_for(filter)
+pub fn copy_centre(panel: &PanelState) -> Pos2 {
+    strip_rects(panel)
         .strip_copy
         .expect("only the song's strip has a copy key, and only a song chip is asked for one")
         .center()
+}
+
+/// The card's geometry for the chip it is on.
+fn strip_rects(panel: &PanelState) -> banks::Rects {
+    let card = panel.songs.card.as_ref().expect("the card is open");
+    rects_for(card.filter)
 }
 
 pub fn footer_new_centre() -> Pos2 {

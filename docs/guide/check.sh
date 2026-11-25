@@ -84,6 +84,9 @@ gone 'does nothing yet' "the guide says the rack section is unwired"
 gone 'PATTERN BANKS' "the guide names a heading the card no longer prints"
 gone 'DEMO BANKS' "the guide names a heading the card no longer prints"
 gone 'the first list on the card' "the guide counts lists the card no longer stacks"
+# And the count itself: page 12's heading was "The four lists", and a rewrite can put that phrase back on a card that draws one.
+# `four sections` stays unguarded on purpose — page 20 says the *help* card has four, which is true.
+gone 'four lists' "the guide counts lists the card no longer stacks"
 # "a later round" is the other half of the same claim: a rack document was deferred, and it is not deferred now. The phrase
 # is narrowed to the sentence that said so, because two other pages use "a later round" for things that still are.
 gone 'is a later round' "the guide defers a round that has landed"

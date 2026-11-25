@@ -16,7 +16,7 @@ use acid_app::ui::draw_panel;
 use acid_core::bank::PatternBank;
 use acid_core::pattern::Grid;
 use common::*;
-use eframe::egui::{Context, Event};
+use eframe::egui::{Context, Event, Modifiers, PointerButton};
 
 /// The smallest library that draws every kind once, in `Kind::ALL` order: the song's row, the bank's, the rack's, a demo's.
 fn library() -> Banks {
@@ -70,7 +70,8 @@ fn a_chip_narrows_the_list_and_the_strip_follows_it() {
     assert_eq!(card.filter, Filter::Banks);
     assert_eq!(rows(card).len(), 1, "the list is the bank rows only");
     panel.songs.card.as_mut().unwrap().bank_name = "Easy 2".to_string();
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Banks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveBank("Easy 2".to_string())),
@@ -81,7 +82,8 @@ fn a_chip_narrows_the_list_and_the_strip_follows_it() {
     click(&ctx, &mut panel, &shared, chip_centre(Filter::Racks));
     assert_eq!(rows(panel.songs.card.as_ref().unwrap()).len(), 1);
     panel.songs.card.as_mut().unwrap().rack_name = "Studio 2".to_string();
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Racks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveRack("Studio 2".to_string())),
@@ -91,7 +93,8 @@ fn a_chip_narrows_the_list_and_the_strip_follows_it() {
     panel.songs.request = None;
     click(&ctx, &mut panel, &shared, chip_centre(Filter::All));
     panel.songs.card.as_mut().unwrap().name = "Acid 2".to_string();
-    click(&ctx, &mut panel, &shared, save_centre(Filter::All));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::Save("Acid 2".to_string())),
@@ -145,7 +148,8 @@ fn a_search_that_matches_nothing_leaves_the_strip_working() {
     }
     assert!(rows(panel.songs.card.as_ref().unwrap()).is_empty());
 
-    click(&ctx, &mut panel, &shared, save_centre(Filter::All));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::Save("Kept".to_string())),
@@ -220,7 +224,8 @@ fn a_library_of_thirty_songs_still_leaves_the_doors() {
 
     click(&ctx, &mut panel, &shared, chip_centre(Filter::Banks));
     panel.songs.card.as_mut().unwrap().bank_name = "Another".to_string();
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Banks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveBank("Another".to_string())),
@@ -230,7 +235,8 @@ fn a_library_of_thirty_songs_still_leaves_the_doors() {
     panel.songs.request = None;
     click(&ctx, &mut panel, &shared, chip_centre(Filter::Racks));
     panel.songs.card.as_mut().unwrap().rack_name = "Another rack".to_string();
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Racks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveRack("Another rack".to_string())),
@@ -240,7 +246,8 @@ fn a_library_of_thirty_songs_still_leaves_the_doors() {
     panel.songs.request = None;
     click(&ctx, &mut panel, &shared, chip_centre(Filter::All));
     panel.songs.card.as_mut().unwrap().name = "A song".to_string();
-    click(&ctx, &mut panel, &shared, save_centre(Filter::All));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::Save("A song".to_string())),
@@ -337,7 +344,8 @@ fn saving_a_rack_asks_with_the_typed_name_or_the_file_it_came_from() {
     click(&ctx, &mut panel, &shared, chip_centre(Filter::Racks));
     panel.songs.card.as_mut().unwrap().rack_name = "Studio 2".to_string();
 
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Racks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveRack("Studio 2".to_string())),
@@ -348,7 +356,8 @@ fn saving_a_rack_asks_with_the_typed_name_or_the_file_it_came_from() {
     panel.songs.request = None;
     panel.songs.card.as_mut().unwrap().rack_name.clear();
     panel.songs.rack_file = Some("Studio".to_string());
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Racks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveRack("Studio".to_string())),
@@ -387,7 +396,8 @@ fn saving_a_bank_asks_with_the_typed_name() {
     click(&ctx, &mut panel, &shared, chip_centre(Filter::Banks));
     panel.songs.card.as_mut().unwrap().bank_name = "Easy 2".to_string();
 
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Banks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveBank("Easy 2".to_string()))
@@ -404,7 +414,8 @@ fn a_blank_bank_field_saves_the_bank_the_device_came_from() {
     click(&ctx, &mut panel, &shared, chip_centre(Filter::Banks));
     panel.songs.bank_file = Some("Easy".to_string());
 
-    click(&ctx, &mut panel, &shared, save_centre(Filter::Banks));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
     assert_eq!(
         panel.songs.request,
         Some(Request::SaveBank("Easy".to_string())),
@@ -546,7 +557,8 @@ fn a_wheel_over_the_strip_does_not_scroll_the_list() {
     let mut panel = open_card(crowded(), false);
 
     for _ in 0..5 {
-        wheel_at(&ctx, &mut panel, &shared, save_centre(Filter::All), -120.0);
+        let at = save_centre(&panel);
+        wheel_at(&ctx, &mut panel, &shared, at, -120.0);
     }
 
     assert_eq!(
@@ -669,4 +681,99 @@ fn track_drawn(ctx: &Context, panel: &mut PanelState, shared: &SharedState) -> b
         .shapes
         .iter()
         .any(|clipped| walk(&clipped.shape, band, track))
+}
+
+/// The words one frame painted, so a test can say what the card said on the frame it was clicked rather than two frames later.
+fn frame_text(
+    ctx: &Context,
+    panel: &mut PanelState,
+    shared: &SharedState,
+    events: Vec<Event>,
+) -> Vec<String> {
+    let input = eframe::egui::RawInput {
+        screen_rect: Some(screen()),
+        events,
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
+    output.textures_delta.clear();
+    fn walk(shape: &eframe::egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            eframe::egui::Shape::Text(text) => out.push(text.galley.text().to_string()),
+            eframe::egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            _ => {}
+        }
+    }
+    let mut words = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut words);
+    }
+    words
+}
+
+#[test]
+fn a_chip_change_draws_its_strip_on_the_same_frame() {
+    // A click is reported on the frame the button comes up, and that frame is still a frame: switching from `BANKS` to `ALL`
+    // must draw the song's field and both its keys at once, not the bank's key wearing the song's label until the next
+    // repaint. The card's own repaint is up to a fifth of a second away, which is long enough to click again.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(library(), false);
+    click(&ctx, &mut panel, &shared, chip_centre(Filter::Banks));
+    assert_eq!(panel.songs.card.as_ref().unwrap().filter, Filter::Banks);
+
+    let at = chip_centre(Filter::All);
+    let button = |pressed: bool| Event::PointerButton {
+        pos: at,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::default(),
+    };
+    run_on(&ctx, &mut panel, &shared, vec![Event::PointerMoved(at)]);
+    run_on(&ctx, &mut panel, &shared, vec![button(true)]);
+    let words = frame_text(&ctx, &mut panel, &shared, vec![button(false)]);
+
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().filter,
+        Filter::All,
+        "the click landed on ALL"
+    );
+    assert!(
+        words.iter().any(|word| word == "SAVE A COPY"),
+        "the song's copy key is drawn on the frame the chip changed: {words:?}"
+    );
+}
+
+#[test]
+fn a_chip_or_a_search_puts_the_list_back_at_the_top() {
+    // A different list starts at its beginning. Without this, typing `acid` into a library of a hundred and twenty songs left
+    // at row 80 would clamp to the last page and leave the best match scrolled off the top of the band.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(crowded(), false);
+    assert_eq!(panel.songs.card.as_ref().unwrap().top, 0);
+
+    panel.songs.card.as_mut().unwrap().top = 4;
+    click(&ctx, &mut panel, &shared, chip_centre(Filter::Songs));
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().top,
+        0,
+        "a chip change re-tops the list"
+    );
+
+    // Typing goes through the field: the card compares the text it holds at the end of a frame with the text it held at the
+    // start, so writing the field between frames is not typing and must not re-top anything.
+    panel.songs.card.as_mut().unwrap().top = 4;
+    click(&ctx, &mut panel, &shared, search_centre());
+    run_on(
+        &ctx,
+        &mut panel,
+        &shared,
+        vec![Event::Text("song".to_string())],
+    );
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().top,
+        0,
+        "and so does typing"
+    );
 }

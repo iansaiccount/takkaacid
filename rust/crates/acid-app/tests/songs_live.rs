@@ -88,7 +88,8 @@ fn save_asks_for_the_typed_name() {
     let shared = SharedState::new();
     let mut panel = open_card(library(vec![], "Acid 2"), false);
 
-    click(&ctx, &mut panel, &shared, save_centre(Filter::All));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
 
     assert_eq!(
         panel.songs.request,
@@ -104,7 +105,8 @@ fn a_blank_field_still_saves_the_open_song() {
     let mut panel = open_card(library(vec!["Acid 1"], ""), false);
     panel.songs.card.as_mut().unwrap().open = Some("Acid 1".to_string());
 
-    click(&ctx, &mut panel, &shared, save_centre(Filter::All));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
 
     assert_eq!(
         panel.songs.request,
@@ -119,7 +121,8 @@ fn save_a_copy_asks_for_a_copy_of_the_typed_name() {
     let mut panel = open_card(library(vec!["Acid 1"], "Acid 1"), false);
     panel.songs.card.as_mut().unwrap().open = Some("Acid 1".to_string());
 
-    click(&ctx, &mut panel, &shared, copy_centre(Filter::All));
+    let at = copy_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
 
     assert_eq!(
         panel.songs.request,
@@ -147,7 +150,8 @@ fn a_name_that_cannot_be_a_file_asks_for_nothing() {
     let shared = SharedState::new();
     let mut panel = open_card(library(vec![], "a/b"), false);
 
-    click(&ctx, &mut panel, &shared, save_centre(Filter::All));
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
 
     assert_eq!(panel.songs.request, None, "a path is not a song name");
 }

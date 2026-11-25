@@ -25,7 +25,8 @@ pub struct Banks {
     pub rack_name: String,
     /// The card's own hint: what the armed row or button is waiting for. Messages from the app go to the status line.
     pub message: Option<String>,
-    /// The song whose delete cross has been clicked once. Deleting a file has no undo, so it takes two clicks.
+    /// The arm key of the cross clicked once — `song:{name}`, `bank:{name}` or `rack:{name}`, one namespace per kind so two
+    /// documents of one name cannot share a guard. Deleting a file has no undo, so it takes two clicks.
     pub delete_armed: Option<String>,
     /// The demo banks built into the app, in their own order. They are not files, so they are never deleted or renamed —
     /// and the seven names are the same on either face, because they are the same demos: a 303 loads the song, a drum
@@ -240,12 +241,18 @@ impl Filter {
 
     /// Which kinds this chip shows — one, or all four.
     pub fn kinds(self) -> &'static [Kind] {
+        // Each chip names the kinds it shows rather than slicing `Kind::ALL` by position: a chip that said "the second kind"
+        // would move silently the day the catalogue was reordered.
+        const SONG: [Kind; 1] = [Kind::Song];
+        const BANK: [Kind; 1] = [Kind::Bank];
+        const RACK: [Kind; 1] = [Kind::Rack];
+        const DEMO: [Kind; 1] = [Kind::Demo];
         match self {
             Filter::All => &Kind::ALL,
-            Filter::Songs => &Kind::ALL[..1],
-            Filter::Banks => &Kind::ALL[1..2],
-            Filter::Racks => &Kind::ALL[2..3],
-            Filter::Demos => &Kind::ALL[3..],
+            Filter::Songs => &SONG,
+            Filter::Banks => &BANK,
+            Filter::Racks => &RACK,
+            Filter::Demos => &DEMO,
         }
     }
 
@@ -272,8 +279,6 @@ pub enum Door {
 }
 
 impl Door {
-    pub const ALL: [Door; 3] = [Door::Song, Door::Bank, Door::Rack];
-
     /// The field's id. Kept per document rather than one `banks-name`, because the fields are one control each and an id is
     /// behaviour: a focus request and a drag are routed by it.
     pub fn field_id(self) -> &'static str {
@@ -481,6 +486,11 @@ pub fn paint(
     if songs.search != search_before || songs.filter != filter_before {
         songs.top = 0;
     }
+
+    // The chip clicked this frame is the chip the strip is drawn for. `rects` above was placed with the chip the frame began
+    // with, so the furniture that follows the chip is placed again now — otherwise a click from `BANKS` to `ALL` would draw the
+    // song's label in the bank's key and lose `SAVE A COPY` for that frame. Nothing else in `Rects` depends on the chip.
+    let rects = card_rects(panel, scale, songs.filter);
 
     // The band: the rows this chip and this search leave, through the window the band can show. Nothing is drawn or
     // hit-tested outside it, so a click on the strip cannot land on a row.
@@ -743,7 +753,6 @@ pub struct Rects {
 }
 
 impl Rects {
-    /// Row `n` of the window, and the delete cross at its right end.
     /// Row `n` of the window: the name's key, which starts after the kind's column so the tag neither moves nor is covered.
     pub fn row(&self, n: usize) -> Rect {
         Rect::from_min_size(
