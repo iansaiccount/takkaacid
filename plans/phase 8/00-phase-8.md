@@ -37,7 +37,8 @@ recorded in its last sections. The plans argue from it; where they disagree, the
 line current, and a commit. The review is of the branch at the pull request, by a subagent that wrote none of it
 (`AGENTS.md`).
 
-**State: round 01 planned, not started. Rounds 02 and 03 are named in the spec and not yet planned.**
+**State: round 01 complete, reviewed and pushed as `phase-8` — PR #15. Rounds 02 and 03 are named in the spec and not yet
+planned.**
 
 **What phase 8 does not do**, and where each is recorded: merging a saved rack into the open one (the player chose replace —
 spec's Non-goals); a rack file that carries tempo, song name or panel state; remembering a rack file's name across a restart

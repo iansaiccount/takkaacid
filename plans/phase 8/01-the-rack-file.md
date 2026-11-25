@@ -376,3 +376,7 @@ Review focus. It found one Critical and six Minor gaps; all are fixed here, and 
   not validating the name before joining the path is what `load_song` and `load_bank` also do, and every request carries a
   name from a listing. The phase-7 handover and the wishlist amendments in the range are the previous session's bookkeeping,
   not this round's.
+
+The branch is pushed as `phase-8` and **PR #15** is open —
+https://github.com/iansaiccount/takkaacid/pull/15. What the PR leaves open is the player's and is listed in it: rounds 02 and
+03, `Sequencer::set_pattern`'s short→long wrap, and the ear check on `Acid Jazz` and `Fast Acid`.
