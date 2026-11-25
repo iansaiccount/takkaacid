@@ -36,6 +36,21 @@ pub struct Banks {
     pub load_armed: Option<String>,
     /// The song file the session is on, if any. SAVE compares against this to decide in place or new file.
     pub open: Option<String>,
+    /// The text the search field holds: every row whose name contains it, case-insensitively, is the list — and a chip with
+    /// no match under it draws one dim line rather than nothing. It is forgotten when the card closes, because `Banks` is
+    /// dropped with it.
+    pub search: String,
+    /// Which chip is lit: `ALL` when the card opens, so a first run reads the whole library in its catalogue's order.
+    ///
+    /// Forgotten when the card closes, with the search. Keeping the chip on `SongState` would be a second place the card
+    /// remembers something, and the round that added the chips chose to forget both.
+    pub filter: Filter,
+    /// The first row of the list the band shows. The wheel writes it, the painter clamps its floor and `window` its ceiling;
+    /// the card never draws row `n` of the list, only row `n - top` of the window.
+    ///
+    /// It goes back to 0 whenever the chip or the search changes, because that is a different list and a re-clamped old
+    /// position would leave the player's best match scrolled off the top. A delete only re-clamps.
+    pub top: usize,
 }
 
 /// What the card asked for. `main` does the work, so the card stays a pure painter.
@@ -88,6 +103,167 @@ pub struct Session<'a> {
     /// The rack file the session's machines came from, if they came from one. A rack save compares against this the way a
     /// song save compares against its name; it lives for the session, because the file records no such fact.
     pub rack_file: Option<&'a str>,
+}
+
+/// What a row in the card's list is. The catalogue the chips, the tags and the saving match on, in the order `ALL` draws
+/// them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Song,
+    Bank,
+    Rack,
+    Demo,
+}
+
+impl Kind {
+    pub const ALL: [Kind; 4] = [Kind::Song, Kind::Bank, Kind::Rack, Kind::Demo];
+
+    /// The word on the row's tag: `SONG`, `BANK`, `RACK`, `DEMO`.
+    pub fn tag(self) -> &'static str {
+        match self {
+            Kind::Song => "SONG",
+            Kind::Bank => "BANK",
+            Kind::Rack => "RACK",
+            Kind::Demo => "DEMO",
+        }
+    }
+
+    /// The arm key's stem: `song`, `bank`, `rack`, `demo`. Every kind has one, because every kind can be loaded, and a load
+    /// that is armed must arm on its own row — two documents may share a name, so the key carries the kind.
+    pub fn stem(self) -> &'static str {
+        match self {
+            Kind::Song => "song",
+            Kind::Bank => "bank",
+            Kind::Rack => "rack",
+            Kind::Demo => "demo",
+        }
+    }
+
+    /// Whether this kind is a file the player owns, and so has a delete cross. A demo is factory content: no cross, no arm.
+    ///
+    /// A second question, so a second function — the stem says which list a key belongs to, this says whether there is a key
+    /// at all.
+    pub fn is_file(self) -> bool {
+        match self {
+            Kind::Song | Kind::Bank | Kind::Rack => true,
+            Kind::Demo => false,
+        }
+    }
+
+    /// The list this kind's rows come from, in its own order — which `persist` sorted.
+    fn names(self, songs: &Banks) -> &[String] {
+        match self {
+            Kind::Song => &songs.names,
+            Kind::Bank => &songs.bank_names,
+            Kind::Rack => &songs.rack_names,
+            Kind::Demo => &songs.demos,
+        }
+    }
+}
+
+/// The chips. `All` is a view over every kind; the rest are one kind each.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Filter {
+    #[default]
+    All,
+    Songs,
+    Banks,
+    Racks,
+    Demos,
+}
+
+impl Filter {
+    pub const ALL: [Filter; 5] = [
+        Filter::All,
+        Filter::Songs,
+        Filter::Banks,
+        Filter::Racks,
+        Filter::Demos,
+    ];
+
+    /// The chip's word: `ALL`, `SONGS`, `BANKS`, `RACKS`, `DEMOS`.
+    pub fn caption(self) -> &'static str {
+        match self {
+            Filter::All => "ALL",
+            Filter::Songs => "SONGS",
+            Filter::Banks => "BANKS",
+            Filter::Racks => "RACKS",
+            Filter::Demos => "DEMOS",
+        }
+    }
+
+    /// Which kinds this chip shows — one, or all four.
+    pub fn kinds(self) -> &'static [Kind] {
+        match self {
+            Filter::All => &Kind::ALL,
+            Filter::Songs => &Kind::ALL[..1],
+            Filter::Banks => &Kind::ALL[1..2],
+            Filter::Racks => &Kind::ALL[2..3],
+            Filter::Demos => &Kind::ALL[3..],
+        }
+    }
+}
+
+/// One row of the card's list: what it is, where it came from, and what it says.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    pub kind: Kind,
+    /// The index into the kind's own list (`songs.names`, `songs.bank_names`, …), which is what a `Request` carries.
+    pub index: usize,
+    pub name: String,
+}
+
+/// The rows the card draws, in `Kind::ALL` order and each kind's own order (which is sorted by `persist`), narrowed by the
+/// chip and then by the search.
+///
+/// A pure function of `Banks`, so a test can ask it what the card would draw without a frame — and so the painter's list is
+/// not a second opinion about what the list is.
+pub fn rows(songs: &Banks) -> Vec<Row> {
+    let search = songs.search.to_lowercase();
+    let mut rows = Vec::new();
+    for kind in songs.filter.kinds() {
+        for (index, name) in kind.names(songs).iter().enumerate() {
+            if !name.to_lowercase().contains(&search) {
+                continue;
+            }
+            rows.push(Row {
+                kind: *kind,
+                index,
+                name: name.clone(),
+            });
+        }
+    }
+    rows
+}
+
+/// What a row's click arms on: `song:Acid 1`, `bank:Easy`, `rack:Studio`, `demo:3`.
+///
+/// A demo has no file name of its own, so it keys on its slot. The others key on their name **with the kind in front**, because
+/// two documents may share one name — `songs/Studio.json` and `racks/Studio.json` — and a shared guard would let a click on
+/// one delete the other.
+pub fn arm_key(kind: Kind, index: usize, name: &str) -> String {
+    match kind {
+        Kind::Song | Kind::Bank | Kind::Rack => format!("{}:{name}", kind.stem()),
+        Kind::Demo => format!("{}:{index}", kind.stem()),
+    }
+}
+
+/// The one line an empty band draws: `NOTHING MATCHES` when a search is typed, and the chip's own sentence when it is not.
+///
+/// Written out over `Filter` rather than defaulted, so a sixth chip has to decide what its emptiness says. `NO DEMOS YET` and
+/// `NOTHING HERE YET` are sentences the shipped app cannot reach — seven demos ship, so `DEMOS` always has rows and `ALL`
+/// always has seven — but a `_` arm is not an option and a panic is not an answer.
+pub fn empty_line(filter: Filter, searching: bool) -> &'static str {
+    if searching {
+        return "NOTHING MATCHES";
+    }
+    match filter {
+        Filter::All => "NOTHING HERE YET",
+        Filter::Songs => "NO SONGS YET",
+        Filter::Banks => "NO BANKS YET",
+        Filter::Racks => "NO RACKS YET",
+        Filter::Demos => "NO DEMOS YET",
+    }
 }
 
 /// Paint the card inside `panel` and say what was clicked, if anything. The first request of the frame wins.
@@ -681,6 +857,180 @@ mod tests {
         for kind in DeviceKind::ALL {
             assert!(!armed_hint(kind).is_empty());
             assert!(!guard_message(kind).is_empty());
+        }
+    }
+
+    /// The card's library for the catalogue's tests: two songs, one bank, one rack and two demos — with one name on two
+    /// kinds (`Studio` is a song and a rack) and one demo a lower-case query finds in a capitalised name.
+    fn library() -> Banks {
+        Banks {
+            names: vec!["Acid 1".to_string(), "Studio".to_string()],
+            bank_names: vec!["Easy".to_string()],
+            rack_names: vec!["Studio".to_string()],
+            demos: vec!["Fast Acid".to_string(), "Warehouse".to_string()],
+            ..Banks::default()
+        }
+    }
+
+    /// The rows' names, in the order the card would draw them.
+    fn listed(rows: &[Row]) -> Vec<&str> {
+        rows.iter().map(|row| row.name.as_str()).collect()
+    }
+
+    #[test]
+    fn the_all_chip_lists_every_kind_in_catalogue_order() {
+        // One list, in a fixed kind order and each kind in its own order — which `persist` sorted before the card saw it.
+        let songs = library();
+        let drawn = rows(&songs);
+        assert_eq!(
+            listed(&drawn),
+            [
+                "Acid 1",
+                "Studio",
+                "Easy",
+                "Studio",
+                "Fast Acid",
+                "Warehouse"
+            ]
+        );
+        assert_eq!(
+            drawn.iter().map(|row| row.kind).collect::<Vec<_>>(),
+            vec![
+                Kind::Song,
+                Kind::Song,
+                Kind::Bank,
+                Kind::Rack,
+                Kind::Demo,
+                Kind::Demo
+            ],
+            "every kind, in the catalogue's order"
+        );
+        assert_eq!(
+            drawn.iter().map(|row| row.index).collect::<Vec<_>>(),
+            vec![0, 1, 0, 0, 0, 1],
+            "a row's index is into its own kind's list, which is what a request carries"
+        );
+    }
+
+    #[test]
+    fn a_chip_shows_its_own_kind_and_each_kind_keeps_its_order() {
+        let mut songs = library();
+        // A chip's word is the catalogue's, and every chip is a view over the same rows.
+        let chips = [
+            (Filter::All, "ALL", 6usize),
+            (Filter::Songs, "SONGS", 2),
+            (Filter::Banks, "BANKS", 1),
+            (Filter::Racks, "RACKS", 1),
+            (Filter::Demos, "DEMOS", 2),
+        ];
+        assert_eq!(
+            Filter::ALL.len(),
+            chips.len(),
+            "a chip without a test is a chip without a word"
+        );
+        for (filter, caption, count) in chips {
+            songs.filter = filter;
+            assert_eq!(filter.caption(), caption, "{filter:?}");
+            assert_eq!(rows(&songs).len(), count, "{filter:?}");
+        }
+        songs.filter = Filter::Songs;
+        assert_eq!(
+            listed(&rows(&songs)),
+            ["Acid 1", "Studio"],
+            "a chip narrows; it does not re-sort"
+        );
+        songs.filter = Filter::Demos;
+        assert_eq!(listed(&rows(&songs)), ["Fast Acid", "Warehouse"]);
+    }
+
+    #[test]
+    fn the_search_narrows_by_substring_without_caring_about_case() {
+        let mut songs = library();
+        songs.search = "acid".to_string();
+        assert_eq!(listed(&rows(&songs)), ["Acid 1", "Fast Acid"]);
+        songs.search = "ACID".to_string();
+        assert_eq!(
+            listed(&rows(&songs)),
+            ["Acid 1", "Fast Acid"],
+            "the query's case does not matter"
+        );
+        songs.search = "dio".to_string();
+        assert_eq!(
+            listed(&rows(&songs)),
+            ["Studio", "Studio"],
+            "a substring finds a name wherever in it the text sits"
+        );
+        songs.search.clear();
+        assert_eq!(
+            rows(&songs).len(),
+            6,
+            "clearing the search restores the list"
+        );
+        songs.search = "zzz".to_string();
+        assert!(
+            rows(&songs).is_empty(),
+            "a search that matches nothing draws nothing"
+        );
+    }
+
+    #[test]
+    fn the_search_and_the_chip_compose() {
+        // The list is the chip over the search, in that order and with nothing else: one row set, two narrowings.
+        let mut songs = library();
+        songs.search = "acid".to_string();
+        songs.filter = Filter::Songs;
+        assert_eq!(listed(&rows(&songs)), ["Acid 1"]);
+        songs.filter = Filter::Demos;
+        assert_eq!(listed(&rows(&songs)), ["Fast Acid"]);
+        songs.filter = Filter::Banks;
+        assert!(
+            rows(&songs).is_empty(),
+            "the chip has no row the search keeps"
+        );
+    }
+
+    #[test]
+    fn only_the_kinds_a_player_owns_have_a_cross() {
+        // A demo is factory content: it is loaded and never deleted or renamed, so its row has no cross and no delete arm.
+        assert!(Kind::Song.is_file());
+        assert!(Kind::Bank.is_file());
+        assert!(Kind::Rack.is_file());
+        assert!(!Kind::Demo.is_file());
+    }
+
+    #[test]
+    fn a_row_arms_under_a_key_that_names_its_kind() {
+        // Two documents can share a name — a song `Studio` and a rack `Studio` — so a key carries its kind, or the crosses
+        // share a guard and one click on a song deletes it because a rack was armed.
+        assert_eq!(arm_key(Kind::Song, 0, "Studio"), "song:Studio");
+        assert_eq!(arm_key(Kind::Bank, 2, "Easy"), "bank:Easy");
+        assert_eq!(arm_key(Kind::Rack, 1, "Studio"), "rack:Studio");
+        assert_eq!(
+            arm_key(Kind::Demo, 3, "Fast Acid"),
+            "demo:3",
+            "a demo has no file name of its own, so it keys on its slot"
+        );
+        // The row's word and its key's word are one catalogue's: every tag is its stem in capitals.
+        for kind in Kind::ALL {
+            assert_eq!(kind.tag(), kind.stem().to_uppercase(), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn the_empty_list_says_what_is_missing() {
+        // A demonstration of absence is cheaper than a player wondering whether the card is broken — and it says which
+        // nothing it is, because a search that finds nothing is not an empty library.
+        assert_eq!(empty_line(Filter::All, false), "NOTHING HERE YET");
+        assert_eq!(empty_line(Filter::Songs, false), "NO SONGS YET");
+        assert_eq!(empty_line(Filter::Banks, false), "NO BANKS YET");
+        assert_eq!(empty_line(Filter::Racks, false), "NO RACKS YET");
+        assert_eq!(empty_line(Filter::Demos, false), "NO DEMOS YET");
+        for filter in Filter::ALL {
+            assert_eq!(
+                empty_line(filter, true),
+                "NOTHING MATCHES",
+                "{filter:?}: a typed search is the reason the band is empty"
+            );
         }
     }
 }

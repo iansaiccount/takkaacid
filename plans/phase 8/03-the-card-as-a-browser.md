@@ -422,3 +422,19 @@ them is a call into `banks::Rects` — the module owns no card arithmetic.
 
 *(One line per task, written as it is done: what landed, the test that proved it, and any ruling with what it costs if wrong.
 The branch review's findings and what was done about each go here too, before the pull request.)*
+- **Task 1 — the catalogue and the rows.** `ui::banks` now holds `Kind` (`ALL`, `tag`, `stem`, `is_file`, `names`), `Filter`
+  (`ALL`, `caption`, `kinds`, `Default = All`), `Row`, `rows(&Banks)`, `arm_key` and `empty_line`; `Banks` gains `search`,
+  `filter` and `top`, each with a doc comment saying what forgetting it at close means. `Filter::kinds` derives its five views
+  from `Kind::ALL` by slicing, so a sixth kind cannot leave a chip answering for nothing. Proved by seven unit tests in
+  `banks.rs`'s `mod tests` over a `library()` of two songs, one bank, one rack and two demos — `Studio` a song *and* a rack,
+  `Fast Acid` a demo a lower-case query finds — watched fail first as `cannot find type Kind in this scope`,
+  `cannot find type Row` and `cannot find function rows`: exact counts (`ALL` 6, songs 2, banks 1, racks 1, demos 2), exact
+  arm keys including `demo:3`, the chip's word beside its count, and every `tag()` equal to its `stem()` uppercased. Suite
+  **1007/1007**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: `empty_line` has six sentences, not the plan's five.** The design's four (`NO SONGS YET`, `NO BANKS YET`,
+  `NO RACKS YET`, `NOTHING MATCHES`) plus the two this plan added (`NO DEMOS YET`, `NOTHING HERE YET`) is six, and both
+  additions are needed: `ALL` empty and `DEMOS` empty are two different chips. The plan's number was its own arithmetic, not a
+  decision. Cost if wrong: none — the two sentences the ruling names are both there and both unreachable in the shipped app.
+  **Ruling: `Kind::names` is private and takes no explicit lifetime.** The design wrote `fn names<'a>(self, songs: &'a Banks)`
+  and `-D warnings` refuses the elidable lifetime. It is a `pub fn` in neither the design nor the plan, and nothing outside
+  `rows` asks a kind for its list. Cost if wrong: a later caller wants it and widens it, which is one word.
