@@ -474,8 +474,8 @@ impl SharedState {
     /// Change the pattern's grid, as the `GRID` key does: one copy-on-write of the whole pattern, the same seam
     /// `set_step` uses, so the audio thread hears it on its next block.
     ///
-    /// A narrower bar **rests** the steps it cannot hold — that rule is `Pattern::with_grid`'s, the one place it lives,
-    /// and the caller counts what a press costs (`Pattern::sounding_steps_beyond`) before it is gone.
+    /// A narrower bar **holds** the steps it cannot play — that rule is `Pattern::with_grid`'s, the one place it lives,
+    /// and the caller counts what a press stops playing (`Pattern::held_steps_beyond`). Nothing is destroyed.
     pub fn set_grid(&self, grid: Grid) {
         self.pattern
             .rcu(|current| Arc::new((**current).with_grid(grid)));

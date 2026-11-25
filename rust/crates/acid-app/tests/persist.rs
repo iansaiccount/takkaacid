@@ -501,14 +501,14 @@ fn a_saved_file_names_its_version_and_an_old_one_upgrades_to_it() {
 /// an accidental bump fail the suite instead of passing every test that compares a file against `SAVE_VERSION` itself.
 /// (Nothing in this build yet refuses a *newer* version — see the wishlist — so the number is a promise, not a guard.)
 #[test]
-fn the_save_version_is_pinned_at_thirteen() {
-    assert_eq!(SAVE_VERSION, 13, "a bump is a migration, not an edit");
+fn the_save_version_is_pinned_at_fourteen() {
+    assert_eq!(SAVE_VERSION, 14, "a bump is a migration, not an edit");
 
     let dir = tempfile::tempdir().unwrap();
     save(dir.path(), &SavedState::default()).unwrap();
     let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
     assert!(
-        text.contains("\"version\": 13"),
+        text.contains("\"version\": 14"),
         "the document names the version it was written in"
     );
     // `devices` is appended after every field a version-11 build knows, so its prefix — `kit` included — still reads.
@@ -1074,18 +1074,19 @@ fn the_autosave_switch_round_trips_and_an_old_file_gets_it_off() {
 #[test]
 fn a_first_run_opens_on_a_demo_under_a_new_name() {
     let dir = tempfile::tempdir().unwrap();
-    let (opened, first_run) = open(dir.path());
-    assert!(first_run, "a missing session file is a first run");
-    assert_eq!(opened.song.as_deref(), Some("New song"));
+    let opened = open(dir.path());
+    assert!(opened.first_run, "a missing session file is a first run");
+    let saved = opened.state;
+    assert_eq!(saved.song.as_deref(), Some("New song"));
     assert!(
-        opened.bank.get(0).steps.iter().any(|step| step.on),
+        saved.bank.get(0).steps.iter().any(|step| step.on),
         "the opening demo plays something"
     );
 
-    save(dir.path(), &opened).unwrap();
-    let (again, first_run) = open(dir.path());
-    assert!(!first_run, "a written session is not a first run");
-    assert_eq!(again.bank.get(0), opened.bank.get(0));
+    save(dir.path(), &saved).unwrap();
+    let again = open(dir.path());
+    assert!(!again.first_run, "a written session is not a first run");
+    assert_eq!(again.state.bank.get(0), saved.bank.get(0));
 }
 
 /// A song can leave the library and come back: the export is the library format, so the import is a plain copy in.
@@ -1257,18 +1258,19 @@ fn a_version_eleven_file_is_one_device_and_its_kit_names_the_kind() {
     // kit ever writes one.
     let drums = tempfile::tempdir().unwrap();
     write_a_version_eleven_file(drums.path(), serde_json::json!("808"));
-    let (loaded, first_run) = open(drums.path());
+    let opened = open(drums.path());
     assert!(
-        !first_run,
+        !opened.first_run,
         "the file is readable, so this is not a first run"
     );
+    let loaded = opened.state;
     assert_eq!(loaded.devices.len(), 1);
     assert_eq!(loaded.devices[0].kind, "DRUMS");
     assert_eq!(loaded.devices[0].kit.as_deref(), Some("808"));
 
     let acid = tempfile::tempdir().unwrap();
     write_a_version_eleven_file(acid.path(), serde_json::Value::Null);
-    let (loaded, _) = open(acid.path());
+    let loaded = open(acid.path()).state;
     assert_eq!(loaded.devices.len(), 1);
     assert_eq!(loaded.devices[0].kind, "ACID");
 }
@@ -1558,4 +1560,175 @@ fn a_bank_file_with_fewer_patterns_opens_as_sixty_four() {
         1,
         "and it opens on one of the patterns the file actually had"
     );
+}
+
+/// A document written by a newer build is **refused**, and the version it named is the answer — not a state relabelled
+/// as this build's and quietly rewritten by the next save.
+#[test]
+fn a_newer_document_is_refused_with_its_version() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document["version"] = serde_json::json!(SAVE_VERSION + 1);
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&document).unwrap(),
+    )
+    .unwrap();
+
+    match load(dir.path()) {
+        Err(acid_app::persist::LoadError::Newer { version, .. }) => {
+            assert_eq!(
+                version,
+                SAVE_VERSION + 1,
+                "the refusal names the file's version"
+            );
+        }
+        other => panic!("a newer document must be refused, got {other:?}"),
+    }
+}
+
+/// A document this build's age loads as it always did, and one with no `version` field is version 0.
+#[test]
+fn a_current_and_an_unversioned_document_still_load() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    assert!(
+        load(dir.path()).unwrap().is_some(),
+        "this build's own file loads"
+    );
+
+    let text = std::fs::read_to_string(dir.path().join("state.json")).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document.as_object_mut().unwrap().remove("version");
+    std::fs::write(
+        dir.path().join("state.json"),
+        serde_json::to_vec(&document).unwrap(),
+    )
+    .unwrap();
+    let old = load(dir.path())
+        .unwrap()
+        .expect("an unversioned document loads");
+    assert_eq!(old.version, 0, "no field, no version");
+}
+
+/// A file that will not parse is a **broken** file, not somebody else's newer one: the refusal names a version only when
+/// it could read one.
+#[test]
+fn a_truncated_document_is_a_broken_file_not_a_newer_one() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("state.json"),
+        b"{\"version\": 14, \"bank\": {",
+    )
+    .unwrap();
+    assert!(
+        matches!(
+            load(dir.path()),
+            Err(acid_app::persist::LoadError::Other(_))
+        ),
+        "a truncated file must not be reported as a newer build's"
+    );
+}
+
+/// A launch on a newer document refuses it: it answers the version, opens a demo as a first run, and — the part that
+/// matters — **leaves the file exactly as it was**.
+#[test]
+fn a_launch_refuses_a_newer_file_and_does_not_touch_it() {
+    let dir = tempfile::tempdir().unwrap();
+    save(dir.path(), &SavedState::default()).unwrap();
+    let path = dir.path().join("state.json");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document["version"] = serde_json::json!(SAVE_VERSION + 1);
+    std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+
+    let opened = acid_app::persist::open(dir.path());
+
+    assert_eq!(
+        opened.refused,
+        Some(SAVE_VERSION + 1),
+        "the version it named"
+    );
+    assert!(opened.first_run, "a refusal opens a first run");
+    assert_eq!(
+        opened.state,
+        acid_app::demo::seed(),
+        "and a demo, not the document it could not read"
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "the refused file must not be touched"
+    );
+}
+
+/// A document this build can read opens as it always did: no refusal, not a first run.
+#[test]
+fn a_launch_on_a_current_file_refuses_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let written = SavedState {
+        bpm: 137.0,
+        ..SavedState::default()
+    };
+    save(dir.path(), &written).unwrap();
+
+    let opened = acid_app::persist::open(dir.path());
+
+    assert_eq!(opened.refused, None);
+    assert!(!opened.first_run);
+    assert!((opened.state.bpm - 137.0).abs() < 1e-6);
+}
+
+/// The notice a refused launch shows names the version it found and says the file was left alone — the words a player
+/// reads, in one place and testable, because `main` is a binary no test can drive.
+#[test]
+fn the_refusal_notice_names_the_version_and_the_promise() {
+    let said = acid_app::persist::refusal_notice(14);
+    assert!(said.contains("14"), "the version it found: {said}");
+    assert!(
+        said.contains(&format!("{SAVE_VERSION}")),
+        "and this build's: {said}"
+    );
+    assert!(
+        said.contains("untouched"),
+        "and that the file is still there: {said}"
+    );
+    assert!(said.is_ascii(), "the face may not print a glyph");
+}
+
+/// A song from a newer build is refused by the same rule as the save file, and **names its version** — the dialog shows
+/// that, and nothing ever lands in the library.
+#[test]
+fn a_newer_song_is_refused_by_import_and_by_load() {
+    let library = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    save_song(library.path(), "Song", &SavedState::default()).unwrap();
+
+    // The song as this build wrote it, carried out and stamped with the next build's version.
+    let text =
+        std::fs::read_to_string(acid_app::persist::song_path(library.path(), "Song")).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document["version"] = serde_json::json!(SAVE_VERSION + 1);
+    let incoming = elsewhere.path().join("Song.json");
+    std::fs::write(&incoming, serde_json::to_vec(&document).unwrap()).unwrap();
+
+    let refused = import_song(&incoming, library.path()).expect_err("a newer song is refused");
+    assert!(
+        refused
+            .to_string()
+            .contains(&format!("version {}", SAVE_VERSION + 1)),
+        "the refusal names the version it found: {refused}"
+    );
+    assert_eq!(
+        list_songs(library.path()),
+        vec!["Song".to_string()],
+        "nothing landed"
+    );
+
+    let loaded = load_song(library.path(), "Song").expect("a song this build can read still loads");
+    assert_eq!(loaded.version, SAVE_VERSION, "the song itself is unchanged");
 }

@@ -177,7 +177,7 @@ impl SavedDevice {
 }
 
 /// The save-file format this build writes. A file without the field is version 0 and is upgraded on load.
-pub const SAVE_VERSION: u32 = 13;
+pub const SAVE_VERSION: u32 = 14;
 
 /// Everything that survives a restart.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -321,17 +321,72 @@ pub fn save(dir: &Path, state: &SavedState) -> Result<()> {
     write_atomic(&dir.join(STATE_FILE), &json)
 }
 
+/// Why a document could not be read.
+#[derive(Debug)]
+pub enum LoadError {
+    /// Written by a newer build: its `version` is greater than this one's. The file has not been touched.
+    Newer { version: u32, path: PathBuf },
+    /// Anything else: no permission, a truncated file, JSON this build cannot parse.
+    Other(anyhow::Error),
+}
+
+impl fmt::Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Newer { version, path } => write!(
+                f,
+                "{} was written by a newer build (version {version}; this build reads {SAVE_VERSION})",
+                path.display()
+            ),
+            Self::Other(error) => write!(f, "{error:#}"),
+        }
+    }
+}
+
+impl std::error::Error for LoadError {}
+
+impl From<anyhow::Error> for LoadError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Other(error)
+    }
+}
+
+/// Read a document from bytes, refusing one a newer build wrote. **The one place `version` is compared**: the save
+/// file, a song and an import all come through here, so the rule cannot drift between the three readers.
+pub fn load_document(bytes: &[u8], path: &Path) -> std::result::Result<SavedState, LoadError> {
+    // The version first, and on its own: a file too broken to parse must be `Other`, never reported as somebody's
+    // newer document. `#[serde(default)]` keeps every version-0 file (no field) readable.
+    #[derive(serde::Deserialize)]
+    struct Version {
+        #[serde(default)]
+        version: u32,
+    }
+    let probe: Version =
+        serde_json::from_slice(bytes).with_context(|| format!("parsing {}", path.display()))?;
+    if probe.version > SAVE_VERSION {
+        return Err(LoadError::Newer {
+            version: probe.version,
+            path: path.to_path_buf(),
+        });
+    }
+    serde_json::from_slice(bytes)
+        .with_context(|| format!("parsing {}", path.display()))
+        .map_err(LoadError::Other)
+}
+
 /// Read the save file. `Ok(None)` means there is nothing saved yet; a broken file is an error that names it.
-pub fn load(dir: &Path) -> Result<Option<SavedState>> {
+pub fn load(dir: &Path) -> std::result::Result<Option<SavedState>, LoadError> {
     let path = dir.join(STATE_FILE);
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
+        Err(error) => {
+            return Err(LoadError::Other(
+                anyhow::Error::new(error).context(format!("reading {}", path.display())),
+            ));
+        }
     };
-    let state =
-        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
-    Ok(Some(state))
+    load_document(&bytes, &path).map(Some)
 }
 
 /// Write `bytes` to `path` through a `.tmp` and a rename, which is the one place the app writes a file it could be
@@ -552,16 +607,50 @@ pub fn rack_to_saved(rack: &Rack) -> SavedState {
 ///
 /// The second half of the answer is whether this was a first run — no session file at all — which `main` uses to mark the
 /// session unsaved and to say so: a first run opens on a demo, and nothing about it is on disk yet.
-pub fn open(dir: &Path) -> (SavedState, bool) {
+/// What a launch opened.
+pub struct Opened {
+    pub state: SavedState,
+    /// Nothing was on disk: the session is a demo, and it is unsaved.
+    pub first_run: bool,
+    /// A newer document was refused, with the version it named. The file is still there and must not be overwritten.
+    pub refused: Option<u32>,
+}
+
+pub fn open(dir: &Path) -> Opened {
     match load(dir) {
         Ok(Some(mut state)) => {
             sanitize(&mut state);
-            (state.upgraded(), false)
+            Opened {
+                state: state.upgraded(),
+                first_run: false,
+                refused: None,
+            }
         }
-        Ok(None) => (crate::demo::seed(), true),
+        Ok(None) => Opened {
+            state: crate::demo::seed(),
+            first_run: true,
+            refused: None,
+        },
+        Err(LoadError::Newer { version, path }) => {
+            // The document is newer than this build. It is left exactly as it is: the session opens as a first run and
+            // `main` keeps it out of the autosave path, so a tick cannot rewrite what it could not read.
+            eprintln!(
+                "takka-acid: {} is version {version}, newer than this build; opened a demo and left it alone",
+                path.display()
+            );
+            Opened {
+                state: crate::demo::seed(),
+                first_run: true,
+                refused: Some(version),
+            }
+        }
         Err(error) => {
             eprintln!("takka-acid: ignoring unreadable save file: {error}");
-            (crate::demo::seed(), true)
+            Opened {
+                state: crate::demo::seed(),
+                first_run: true,
+                refused: None,
+            }
         }
     }
 }
@@ -766,8 +855,7 @@ pub fn save_song(dir: &Path, name: &str, state: &SavedState) -> Result<()> {
 pub fn load_song(dir: &Path, name: &str) -> Result<SavedState> {
     let path = song_path(dir, name);
     let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
-    let mut state: SavedState =
-        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+    let mut state = load_document(&bytes, &path).map_err(anyhow::Error::new)?;
     // A song is a save file like any other, and it may be hand-edited: sanitise before anyone reads its bank.
     sanitize(&mut state);
     Ok(state.upgraded())
@@ -824,8 +912,7 @@ pub fn export_song(to: &Path, state: &SavedState) -> Result<()> {
 /// file that is not a song is refused before anything touches the library.
 pub fn import_song(from: &Path, dir: &Path) -> Result<String> {
     let bytes = std::fs::read(from).with_context(|| format!("reading {}", from.display()))?;
-    let mut state: SavedState =
-        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", from.display()))?;
+    let mut state = load_document(&bytes, from).map_err(anyhow::Error::new)?;
     sanitize(&mut state);
     let state = state.upgraded();
 
@@ -1472,4 +1559,12 @@ impl Autosave {
         }
         due
     }
+}
+
+/// What the status line says when a launch refused a newer document: the version it named, and the promise that the file
+/// is still there. A notice, not a dialog — nothing this app says needs dismissing (`AGENTS.md`).
+pub fn refusal_notice(version: u32) -> String {
+    format!(
+        "session file is version {version}; this build reads {SAVE_VERSION} - opened a demo, file untouched"
+    )
 }

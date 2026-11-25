@@ -34,13 +34,13 @@ pub fn nudge_tempo(bpm: f32, direction: i8) -> f32 {
 /// What a `GRID` press says on the status line: the bar's length before and after, and — only when the shorter bar drops
 /// sound — how many steps that had it.
 ///
-/// `cleared` counts steps **that sounded**, not slots that stopped being drawn: the row already shows the new length the
+/// `held` counts steps **that sounded**, not slots that stopped being drawn: the row already shows the new length the
 /// moment it changes shape, so a count of bare slots would say nothing the face is not saying.
-pub fn grid_notice(before: usize, after: usize, cleared: usize) -> String {
-    if cleared == 0 {
+pub fn grid_notice(before: usize, after: usize, held: usize) -> String {
+    if held == 0 {
         format!("{before} TO {after} STEPS")
     } else {
-        format!("{before} TO {after} STEPS, {cleared} CLEARED")
+        format!("{before} TO {after} STEPS, {held} HELD")
     }
 }
 
@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn the_notice_reads_as_a_bar_before_and_after() {
         assert_eq!(grid_notice(16, 32, 0), "16 TO 32 STEPS");
-        assert_eq!(grid_notice(32, 12, 3), "32 TO 12 STEPS, 3 CLEARED");
+        assert_eq!(grid_notice(32, 12, 3), "32 TO 12 STEPS, 3 HELD");
         assert_eq!(grid_notice(16, 12, 0), "16 TO 12 STEPS");
     }
 }

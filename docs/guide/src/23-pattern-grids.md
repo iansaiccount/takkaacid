@@ -24,18 +24,20 @@ otherwise, so "this pattern is not on the plain grid" is visible at a glance.
 
 ## What a press does to the steps outside the new bar
 
-A press that makes the bar **shorter** rests whatever falls outside it. Nothing is kept in hiding: a step the bar cannot
-hold is a rest the moment the bar narrows, and the status line says what it cost —
+A press that makes the bar **shorter** stops playing whatever falls outside it — and **keeps it**. Nothing is destroyed:
+a step the bar cannot hold keeps its note, stays silent while the bar is narrow, and plays again the moment a wider grid
+arrives, including after a save. The status line says what the press costs in music —
 
 ```text
-32 TO 12 STEPS, 3 CLEARED
+32 TO 12 STEPS, 2 HELD
 ```
 
-— the bar before and after, and how many of the steps that fell outside **had sound** in them. A press that loses nothing
-just says the length (`16 TO 32 STEPS`).
+— the bar before and after, and how many steps that **had sound** in them stopped playing. `HELD` is not `lost`: press
+`GRID` twice more and those two notes are back where they were. A press that holds nothing just says the length
+(`16 TO 32 STEPS`).
 
-A press that makes the bar **longer** adds steps at the end, all rests. The row grows with it, so the new steps have keys
-to land on.
+A press that makes the bar **longer** plays the steps it had been holding. The row grows with it, so they have keys to
+land on again.
 
 ## The row and the beat
 

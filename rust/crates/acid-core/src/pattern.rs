@@ -255,14 +255,15 @@ impl Step {
 
 /// One bar of a pattern: the grid it is divided by, and its slots.
 ///
-/// A pattern is always **exactly one 4/4 bar**, so `len()` is the grid's own count and the slots above it are rests. That
-/// invariant is what makes "the row is the pattern" and "the file is the row" the same sentence: `from_steps_in` rests
-/// what it is not given, `with_grid` rests what a narrower bar drops, and the file writes only the steps that play.
+/// A pattern is always **exactly one 4/4 bar**, so `len()` is the grid's own count. The slots above it are **not played**:
+/// a constructor rests what it is not given, a grid change *holds* what a narrower bar cannot play (so widening plays it
+/// again), and the file writes the steps that play plus whatever is held.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct Pattern {
     /// How this bar is divided. A pattern is the grid's, not the device's, so a bank can hold all three.
     pub grid: Grid,
-    /// The bar's slots. **Every slot at or above `len()` is a rest, always** — see the type's own note.
+    /// The bar's slots. **Every slot at or above `len()` is not played** — it is a rest from a constructor, or a note a
+    /// narrower grid is holding; either way `iter()` never yields it.
     pub steps: [Step; PATTERN_SLOTS],
 }
 
@@ -305,22 +306,18 @@ impl Pattern {
         pattern
     }
 
-    /// The same music on another grid. The steps the new bar can hold are kept and the ones it cannot are **rested** — the
-    /// one place a pattern loses sound, and the panel says so on the status line when it does.
+    /// The same music on another grid. A narrower grid **holds** the steps it stops playing: they keep their notes, stay
+    /// silent, and play again when a later grid can hold them. Nothing is destroyed, in memory or in the file.
     pub fn with_grid(self, grid: Grid) -> Self {
-        let mut pattern = Self { grid, ..self };
-        let len = pattern.len();
-        for step in &mut pattern.steps[len..] {
-            *step = Step::rest();
-        }
-        pattern
+        Self { grid, ..self }
     }
 
-    /// How many steps **that sound** sit outside `grid`'s bar: what a press to that grid would cost.
+    /// How many steps **that sound** sit outside `grid`'s bar: how much music a press to that grid stops playing.
     ///
     /// The count is of notes, not slots. The row already shows the new length the moment it changes shape; what it cannot
-    /// show is how much music the shorter bar leaves behind, and that is the number the status line says.
-    pub fn sounding_steps_beyond(&self, grid: Grid) -> usize {
+    /// show is how much music the shorter bar holds back, and that is the number the status line says. Nothing is lost —
+    /// the count is of steps that stop playing, and a wider grid plays them again.
+    pub fn held_steps_beyond(&self, grid: Grid) -> usize {
         self.steps[grid.steps_per_bar()..]
             .iter()
             .filter(|step| step.on)
@@ -362,14 +359,29 @@ struct PatternFile {
     #[serde(default)]
     grid: Grid,
     steps: Vec<Step>,
+    /// The steps a grid change stopped playing. Absent when nothing is held, so a pattern with nothing held writes exactly
+    /// the bytes it wrote before this field existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    held: Vec<Step>,
 }
 
 #[cfg(feature = "serde")]
 impl Serialize for Pattern {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Only what a grid change actually stopped playing: trailing rests are not a held note, so an untouched pattern
+        // writes exactly the bytes it wrote before `held` existed.
+        let len = self.len();
+        let held = match self.steps[len..]
+            .iter()
+            .rposition(|step| *step != Step::rest())
+        {
+            Some(at) => self.steps[len..=len + at].to_vec(),
+            None => Vec::new(),
+        };
         PatternFile {
             grid: self.grid,
             steps: self.iter().copied().collect(),
+            held,
         }
         .serialize(serializer)
     }
@@ -381,7 +393,13 @@ impl<'de> Deserialize<'de> for Pattern {
         // `from_steps_in` pads a short list with rests and drops a long one, so a hand-edited file lands on the invariant
         // rather than beside it.
         let file = PatternFile::deserialize(deserializer)?;
-        Ok(Pattern::from_steps_in(file.grid, &file.steps))
+        let mut pattern = Pattern::from_steps_in(file.grid, &file.steps);
+        // The held steps are restored above `len()`: they do not play, and a wider grid plays them again.
+        let held = file.held;
+        let len = pattern.len();
+        let room = pattern.steps.len().saturating_sub(len).min(held.len());
+        pattern.steps[len..len + room].copy_from_slice(&held[..room]);
+        Ok(pattern)
     }
 }
 

@@ -87,3 +87,12 @@ Include, in this order:
 6. **What `takka-acid --midi-map` prints**, when the trouble is MIDI.
 
 [`20-reference`](20-reference.md) has every word the panel uses, so you can be sure of the exact spelling when you quote it.
+
+## It opened a demo and said my session file is newer
+
+A save file records the version of the build that wrote it. If yours was written by a **newer** takka-acid than the one
+you are running, the app refuses to read it: it opens a demo, says which version it found on the status line, and leaves
+the file exactly as it is — an autosave will not touch it, and `SAVE` writes only when you choose to.
+
+Nothing is lost. Open the session with the newer build, or copy the file somewhere safe first and start a new session
+here. A file from an *older* build is read as it always was: this build upgrades it and saves it in the current format.
