@@ -188,7 +188,67 @@ pub fn paint(
     // the bottom of the card. A player with more songs than fit sees the first of them; there is no scrolling yet.
     let list_limit = card.bottom() - padding - row_height - CARD_GAP * scale;
 
-    // The demos first: they are what a player reaches for when they want a sound, and they are not files, so there is no
+    // The player's own songs, right under the name field that saves them: the name loads it, the cross beside it deletes it
+    // (twice, because there is no undo).
+    if (y + CARD_HEADING * scale) < list_limit {
+        section(ui, scale, "SONGS", left, &mut y);
+    }
+    for index in 0..songs.names.len() {
+        if (y + row_height) > list_limit {
+            break;
+        }
+        let name = songs.names[index].clone();
+        let row = Rect::from_min_size(
+            egui::Pos2::new(left, y),
+            egui::vec2(width * 0.66, row_height),
+        );
+        let key = format!("song:{name}");
+        let armed = songs.load_armed.as_deref() == Some(key.as_str());
+        if load_row(
+            ui,
+            &format!("song-{index}"),
+            row,
+            &name,
+            armed,
+            session_dirty,
+            REPLACE_SESSION,
+        ) && request.is_none()
+        {
+            request = guarded_load(
+                songs,
+                key,
+                Request::Load(name.clone()),
+                session_dirty,
+                REPLACE_SESSION,
+            );
+            songs.delete_armed = None;
+        }
+        let delete_armed = songs.delete_armed.as_deref() == Some(name.as_str());
+        let cross = Rect::from_min_size(
+            egui::Pos2::new(row.right() + padding, y),
+            egui::vec2(width * 0.14, row_height),
+        );
+        let label = if delete_armed { "SURE" } else { "x" };
+        if transport::card_button(
+            ui,
+            &format!("song-delete-{index}"),
+            cross,
+            label,
+            delete_armed,
+        )
+        .clicked()
+        {
+            if delete_armed {
+                request = Some(Request::Delete(name.clone()));
+                songs.delete_armed = None;
+            } else {
+                songs.delete_armed = Some(name.clone());
+                request = None;
+            }
+        }
+        y += row_height + CARD_GAP * scale;
+    }
+    // Then the demos: they are what a player reaches for when they want a sound, and they are not files, so there is no
     // cross and no rename. Loading one replaces the session on a 303 — twice, while it is unsaved — and on a drum machine
     // it fills the grid with that demo's groove and leaves the session where it was; the device's kind decides which, in
     // `main`. The line a click leaves behind says which of the two it will do — `armed_hint` and `guard_message` ask the
@@ -322,65 +382,6 @@ pub fn paint(
         y += row_height + CARD_GAP * scale;
     }
 
-    // Then the player's own songs: the name loads it, the cross beside it deletes it (twice, because there is no undo).
-    if (y + CARD_HEADING * scale) < list_limit {
-        section(ui, scale, "SONGS", left, &mut y);
-    }
-    for index in 0..songs.names.len() {
-        if (y + row_height) > list_limit {
-            break;
-        }
-        let name = songs.names[index].clone();
-        let row = Rect::from_min_size(
-            egui::Pos2::new(left, y),
-            egui::vec2(width * 0.66, row_height),
-        );
-        let key = format!("song:{name}");
-        let armed = songs.load_armed.as_deref() == Some(key.as_str());
-        if load_row(
-            ui,
-            &format!("song-{index}"),
-            row,
-            &name,
-            armed,
-            session_dirty,
-            REPLACE_SESSION,
-        ) && request.is_none()
-        {
-            request = guarded_load(
-                songs,
-                key,
-                Request::Load(name.clone()),
-                session_dirty,
-                REPLACE_SESSION,
-            );
-            songs.delete_armed = None;
-        }
-        let delete_armed = songs.delete_armed.as_deref() == Some(name.as_str());
-        let cross = Rect::from_min_size(
-            egui::Pos2::new(row.right() + padding, y),
-            egui::vec2(width * 0.14, row_height),
-        );
-        let label = if delete_armed { "SURE" } else { "x" };
-        if transport::card_button(
-            ui,
-            &format!("song-delete-{index}"),
-            cross,
-            label,
-            delete_armed,
-        )
-        .clicked()
-        {
-            if delete_armed {
-                request = Some(Request::Delete(name.clone()));
-                songs.delete_armed = None;
-            } else {
-                songs.delete_armed = Some(name.clone());
-                request = None;
-            }
-        }
-        y += row_height + CARD_GAP * scale;
-    }
     // And the rack's own document, under the bank's rule: rows that load, a cross that deletes, and the name field its SAVE
     // RACK writes under. A rack is the machines, so a row replaces every machine in the session.
     if (y + CARD_HEADING * scale) < list_limit {

@@ -81,9 +81,18 @@ fn field_y() -> f32 {
     card().top() + padding() + 18.0 * scale(screen())
 }
 
-/// `DEMO BANKS` sits one row below the name row, and its rows start under its heading.
-fn demos_top() -> f32 {
+/// `SONGS` sits directly under the name field and its two keys: the list a player is naming, where they name it.
+fn songs_top() -> f32 {
     field_y() + row_height() + padding()
+}
+
+fn song_row_centre(index: usize) -> Pos2 {
+    Pos2::new(left() + 20.0, row_centre(songs_top() + heading(), index))
+}
+
+/// `DEMO BANKS` follows the songs — these tests' card draws one song.
+fn demos_top() -> f32 {
+    section_top(songs_top(), 1)
 }
 
 /// The centre of row `index` of a section whose rows start at `top`.
@@ -134,17 +143,9 @@ fn bank_save_centre(rows: usize) -> Pos2 {
     )
 }
 
-/// `SONGS` starts after the bank rows and the bank's own save row.
-fn songs_top() -> f32 {
-    section_top(banks_top(), 2)
-}
-
-fn song_row_centre(index: usize) -> Pos2 {
-    Pos2::new(left() + 20.0, row_centre(songs_top() + heading(), index))
-}
-
+/// `RACKS` starts after the bank rows and the bank's own save row.
 fn racks_top() -> f32 {
-    section_top(songs_top(), 1)
+    section_top(banks_top(), 2)
 }
 
 fn rack_row_centre(index: usize) -> Pos2 {
@@ -158,6 +159,28 @@ fn rack_save_centre(rows: usize) -> Pos2 {
         save_left + (width() * 0.30 - padding()) * 0.5,
         row_centre(racks_top() + heading(), rows),
     )
+}
+
+#[test]
+fn the_song_list_sits_under_the_name_that_saves_it() {
+    // The song's field and `SAVE` are the first thing under the title, so its list is the first list: the player's own songs
+    // directly under the box that names them, and the factory's demos below. Before this, the songs were the fourth list down
+    // and the box that names them had nothing to do with where they were.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+
+    assert!(
+        song_row_centre(0).y < demo_row_centre(0).y,
+        "the songs come before the demos"
+    );
+
+    click(&ctx, &mut panel, &shared, song_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::Load("Acid 1".to_string())),
+        "the first row under the field loads the song it names"
+    );
 }
 
 /// The cross at a rack row's right end, where deleting takes two clicks.

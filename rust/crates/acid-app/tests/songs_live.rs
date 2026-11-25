@@ -100,10 +100,10 @@ fn row_step() -> f32 {
     row_height() + 2.0 * scale(screen())
 }
 
-/// Song rows start under the third heading. `DEMO BANKS` heads the first list, then `PATTERN BANKS` — whose own name-and-
-/// `SAVE BANK` row is drawn whether or not there is a bank file yet — and then `SONGS`, which is what `MY BANKS` became.
+/// Song rows start under the first heading, which follows the field that names them: the player's own songs are the first
+/// list on the card.
 fn songs_top() -> f32 {
-    field_y() + row_height() + padding() + heading() + heading() + row_step() + heading()
+    field_y() + row_height() + padding() + heading()
 }
 
 fn song_row_centre(index: usize) -> Pos2 {
@@ -166,7 +166,7 @@ fn a_drums_demo_row_is_armed_against_its_grid_not_the_session() {
     let shared = SharedState::new();
     let mut panel = open_card_on_drums();
 
-    click(&ctx, &mut panel, &shared, demo_row_centre(0));
+    click(&ctx, &mut panel, &shared, demo_row_centre(0, 0));
 
     assert_eq!(
         panel
@@ -418,9 +418,10 @@ fn loading_a_song_clears_a_pending_delete() {
     );
 }
 
-/// The first demo row sits just under the DEMO SONGS heading, which follows the name row.
-fn demo_row_centre(index: usize) -> Pos2 {
-    let y = field_y() + row_height() + padding() + 15.0 * scale(screen());
+/// The demo rows follow the songs: `DEMO BANKS` heads the second list, under `count` song rows.
+fn demo_row_centre(count: usize, index: usize) -> Pos2 {
+    let y =
+        field_y() + row_height() + padding() + heading() + row_step() * count as f32 + heading();
     Pos2::new(
         card().left() + padding() + 20.0,
         y + (row_height() + 2.0 * scale(screen())) * index as f32 + row_height() * 0.5,
@@ -443,7 +444,7 @@ fn a_demo_row_asks_to_load_that_demo() {
     let shared = SharedState::new();
     let mut panel = open_card_with_demos(vec![], "", false);
 
-    click(&ctx, &mut panel, &shared, demo_row_centre(1));
+    click(&ctx, &mut panel, &shared, demo_row_centre(0, 1));
 
     assert_eq!(panel.songs.request, Some(Request::LoadDemo(1)));
 }
@@ -454,14 +455,14 @@ fn replacing_an_unsaved_session_takes_two_clicks() {
     let shared = SharedState::new();
     let mut panel = open_card_with_demos(vec![], "", true);
 
-    click(&ctx, &mut panel, &shared, demo_row_centre(0));
+    click(&ctx, &mut panel, &shared, demo_row_centre(0, 0));
     assert_eq!(panel.songs.request, None, "one click only arms it");
     assert!(
         panel.songs.card.as_ref().unwrap().message.is_some(),
         "and says why nothing happened"
     );
 
-    click(&ctx, &mut panel, &shared, demo_row_centre(0));
+    click(&ctx, &mut panel, &shared, demo_row_centre(0, 0));
     assert_eq!(panel.songs.request, Some(Request::LoadDemo(0)));
 }
 

@@ -107,3 +107,15 @@ position is the change.
 
 *(One line per task, written as it is done: what landed, the test that proved it, and any ruling with what it costs if
 wrong. The branch review's findings and what was done about each go here too, before the pull request.)*
+- **Task 1 — the songs list moves up.** `paint` draws `SONGS` immediately under the song field and its `SAVE` / `SAVE A COPY`,
+  before `DEMO BANKS`; the demos', banks' and racks' blocks are untouched, `NOW:` stays in the header, and the two comments
+  that said "the demos first" and "then the player's own songs" now say what the card does. Proved by
+  `the_song_list_sits_under_the_name_that_saves_it` — watched fail first: with the test's section chain in the new order, the
+  song row's click asked `LoadDemo(0)`, because the painter still drew the demos first. Suite **1000/1000**, clippy
+  `-D warnings`, `fmt --check`.
+  **Ruling: the card's geometry is now in two test files, and that is recorded rather than fixed here.** `tests/songs_live.rs`
+  keeps its own hand-rolled helpers for the song and demo rows, and this task had to move them too
+  (`songs_top`, and `demo_row_centre` gained a `count` parameter so the demo offset follows the song rows). Two copies of one
+  card's arithmetic is the hand-kept list `AGENTS.md` warns about; the fix is a `tests/common/` module both files include, and
+  it is a refactor of two test files that this round's plan did not carry. Cost if wrong: the next card change has to be made
+  in two places, and the second one will be found by a failing test — as this one was.
