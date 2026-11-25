@@ -591,3 +591,35 @@ discriminates. All seven are settled here; the suite is **1024/1024** with clipp
   22 (footer) + **six** paddings of 12 = 178, leaving 460 — and `window` on that band gives nineteen rows, which both the test
   and the picture agree with. The review counted five paddings, not six. Cost if wrong: a comment off by the height of one
   padding, in the function the test already measures.
+
+**Second pass of the review, on the diff.** The first pass could not see `eee93c3..9d39aa9` because its dispatch had no shell, so the
+branch was reviewed again with the diff written to a file. This pass read all 4476 lines and confirmed the seven fixes are in the
+diff, the ids are byte-for-byte the nineteen the plan keeps (only `banks-search` and `banks-filter-{n}` are new), `tests/common/mod.rs`
+still owns no arithmetic, and — against the first pass — that the band really is **460 px**: the first review counted five `12` px
+paddings where the column has six, and `window` on 460 gives the nineteen rows the test and the picture both show. It found one
+regression the fix commit had introduced, one missing test and two notes; all four are settled. Suite **1025/1025**, clippy
+`-D warnings`, `fmt --check`, `guide: ok`.
+
+- **Fixed: `EXPORT`'s lit state stopped being the song's.** The strip refactor gave the footer `typed`, which is now whichever
+  document the chip shows — so on `BANKS` a typed bank name lit `EXPORT`, a key that writes the *session*, and a named-and-unsaved
+  song on those chips left it dim. This was a regression of this round's making: `can_export` reads `songs.open` and
+  `document_name(&songs.name)` again, which is what it read before the `Door` catalogue existed. Cost if wrong: none — the key is
+  the same key and the plan's Task 4 step said the footer was unchanged. **Not pinned by a test**, deliberately: a key's lit state
+  changes no request and no text, so `draw_panel` cannot see it — the same reason `SAVE`'s `can_save` is unpinned — and inventing a
+  colour assertion for it would test the palette, not the card.
+- **Fixed: the ids the catalogue now derives had no test.** `every_id_a_click_is_routed_by_is_the_one_it_always_was` writes out
+  `Kind::{row_id, cross}` for all four kinds (`rack-load-3`'s verb included, and the demo's `None`), and
+  `Door::{Song,Bank,Rack}.{field_id, save_id, copy_id}`. No frame: the nineteen ids are strings, and a rename is exactly the change
+  the live tests cannot see because they find every key by its geometry. Watch it fail: `Kind::Rack => format!("rack-{index}")`
+  makes it read `rack-3`.
+- **Recorded: two additions the Interfaces block does not name.** `tests/common/mod.rs::rects_for(filter)` (the plan's `rects()`
+  is `rects_for(Filter::All)`, and the chip tests need the others) and the phase overview's status line in
+  `plans/phase 8/00-phase-8.md`, which has to say which plan is in flight. Neither is feature work; both are named here so the
+  ledger is the record `AGENTS.md` asks for.
+- **Recorded: `Rects::name` is read only by the tests.** It is in the design's Interfaces block, so it stays; the painter hands
+  `row(n)`'s key to `load_row`, which centres the caption, so `name` is the tests' answer to "where does the name start" and its
+  doc comment now says so rather than pretending a painter calls it.
+- **Recorded as deliberately untested: the design's "a cross sits at the same x with or without the thumb".** `Rects::row` and
+  `Rects::cross` never read the list's length, so the property holds by construction and a test comparing two calls would compare
+  one computation with itself — the could-not-fail assertion round 02's review found. The half that can break (the cross clear of
+  the reserved `CARD_TRACK`) is asserted in `a_row_and_its_cross_are_inside_the_band_and_clear_of_the_track`.

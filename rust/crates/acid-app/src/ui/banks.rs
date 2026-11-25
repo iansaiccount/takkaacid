@@ -641,7 +641,9 @@ pub fn paint(
     if transport::card_button(ui, "song-import", rects.footer_import, "IMPORT", false).clicked() {
         request = Some(Request::Import);
     }
-    let can_export = songs.open.is_some() || typed.is_some();
+    // `EXPORT` writes the **session**, so it is the song's name that lights it, not the strip's field: on `BANKS` a typed bank
+    // name would otherwise light a key that has nothing to do with it, and a named song would leave it dim.
+    let can_export = songs.open.is_some() || crate::persist::document_name(&songs.name).is_some();
     if transport::card_button(ui, "song-export", rects.footer_export, "EXPORT", can_export)
         .clicked()
     {
@@ -774,6 +776,9 @@ impl Rects {
 
     /// Where the kind's tag word and the row's name begin: the tag in the band's first column, the name at the key the tag
     /// labels.
+    ///
+    /// `name` is that key's left edge rather than a second way to draw the name: the painter hands the key to `load_row`, which
+    /// centres the caption in it, so this is the tests' answer to "where does the name start".
     pub fn tag(&self, n: usize) -> egui::Pos2 {
         let row = self.row(n);
         egui::Pos2::new(self.band.left(), row.center().y)
@@ -1453,5 +1458,49 @@ mod tests {
             }
             above = Some(row);
         }
+    }
+
+    #[test]
+    fn every_id_a_click_is_routed_by_is_the_one_it_always_was() {
+        // An `egui::Id` is behaviour — a click and a drag in progress are routed by it — and the live tests find these keys by
+        // their geometry, so a rename here would leave them green and break the app. The catalogue derives them now, which is
+        // why they are written out: a deliberate change has to come past this test.
+        assert_eq!(Kind::Song.row_id(3), "song-3");
+        assert_eq!(Kind::Bank.row_id(3), "bank-3");
+        assert_eq!(
+            Kind::Rack.row_id(3),
+            "rack-load-3",
+            "the verb the rack row has always had"
+        );
+        assert_eq!(Kind::Demo.row_id(3), "demo-3");
+
+        let cross_id = |kind: Kind, name: &str| kind.cross(3, name).map(|(id, _)| id);
+        assert_eq!(
+            cross_id(Kind::Song, "Acid 1").as_deref(),
+            Some("song-delete-3")
+        );
+        assert_eq!(
+            cross_id(Kind::Bank, "Easy").as_deref(),
+            Some("bank-delete-3")
+        );
+        assert_eq!(
+            cross_id(Kind::Rack, "Studio").as_deref(),
+            Some("rack-delete-3")
+        );
+        assert_eq!(
+            cross_id(Kind::Demo, "Fast Acid"),
+            None,
+            "a demo has no cross"
+        );
+
+        assert_eq!(Door::Song.field_id(), "song-name");
+        assert_eq!(Door::Song.save_id(), "song-save");
+        assert_eq!(Door::Song.copy_id(), Some("song-save-copy"));
+        assert_eq!(Door::Bank.field_id(), "bank-name");
+        assert_eq!(Door::Bank.save_id(), "bank-save");
+        assert_eq!(Door::Bank.copy_id(), None);
+        assert_eq!(Door::Rack.field_id(), "rack-name");
+        assert_eq!(Door::Rack.save_id(), "rack-save");
+        assert_eq!(Door::Rack.copy_id(), None);
     }
 }
