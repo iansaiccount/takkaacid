@@ -351,11 +351,13 @@ impl From<anyhow::Error> for LoadError {
     }
 }
 
-/// Read a document from bytes, refusing one a newer build wrote. **The one place `version` is compared**: the save
-/// file, a song and an import all come through here, so the rule cannot drift between the three readers.
-pub fn load_document(bytes: &[u8], path: &Path) -> std::result::Result<SavedState, LoadError> {
-    // The version first, and on its own: a file too broken to parse must be `Other`, never reported as somebody's
-    // newer document. `#[serde(default)]` keeps every version-0 file (no field) readable.
+/// The version rule, alone: read a document's own `version` and refuse one a newer build wrote. **The one place the number
+/// is compared** — the save file, a song, an import and a rack all come through here, so the rule cannot drift between the
+/// four readers.
+///
+/// The version is read on its own, before anything else is parsed: a file too broken to parse must be `Other`, never
+/// reported as somebody's newer document. `#[serde(default)]` keeps every version-0 file (no field) readable.
+pub fn checked_version(bytes: &[u8], path: &Path) -> std::result::Result<u32, LoadError> {
     #[derive(serde::Deserialize)]
     struct Version {
         #[serde(default)]
@@ -369,6 +371,12 @@ pub fn load_document(bytes: &[u8], path: &Path) -> std::result::Result<SavedStat
             path: path.to_path_buf(),
         });
     }
+    Ok(probe.version)
+}
+
+/// Read a document from bytes, refusing one a newer build wrote.
+pub fn load_document(bytes: &[u8], path: &Path) -> std::result::Result<SavedState, LoadError> {
+    checked_version(bytes, path)?;
     serde_json::from_slice(bytes)
         .with_context(|| format!("parsing {}", path.display()))
         .map_err(LoadError::Other)
@@ -818,9 +826,12 @@ pub fn document_name(typed: &str) -> Option<String> {
     Some(name.to_string())
 }
 
-/// Every song already saved, sorted so the card's list does not jump about.
-pub fn list_songs(dir: &Path) -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir(dir.join(SONGS_DIR)) else {
+/// One library's names: a `<subdir>/<name>.json` for each document, sorted so the card's list does not jump about.
+///
+/// The one listing rule for songs, banks and racks. Two of these bodies existed before the third document kind arrived, and
+/// a third copy is the hand-kept second list this project has paid for twice.
+fn list_documents(dir: &Path, subdir: &str) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir.join(subdir)) else {
         return Vec::new();
     };
     let mut names: Vec<String> = entries
@@ -832,6 +843,11 @@ pub fn list_songs(dir: &Path) -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+/// Every song already saved, sorted so the card's list does not jump about.
+pub fn list_songs(dir: &Path) -> Vec<String> {
+    list_documents(dir, SONGS_DIR)
 }
 
 /// Write a named song. Same format as the session file, so reading one is the same read, and the file names itself: `song` is
@@ -965,18 +981,7 @@ pub fn bank_path(dir: &Path, name: &str) -> PathBuf {
 
 /// Every bank already saved, sorted so the card's list does not jump about.
 pub fn list_banks(dir: &Path) -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir(dir.join(BANKS_DIR)) else {
-        return Vec::new();
-    };
-    let mut names: Vec<String> = entries
-        .filter_map(|entry| entry.ok())
-        .filter_map(|entry| {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            name.strip_suffix(".json").map(str::to_string)
-        })
-        .collect();
-    names.sort();
-    names
+    list_documents(dir, BANKS_DIR)
 }
 
 /// Write a named bank, through the same `.tmp` and rename every other document goes through.
@@ -1080,6 +1085,99 @@ pub fn distinct_name(wanted: &str, taken: impl Fn(&str) -> bool) -> String {
         }
     }
     format!("{wanted} (copy)")
+}
+
+/// Where the player's racks live: one file each, beside `songs/`, `banks/` and `kits/`.
+pub const RACKS_DIR: &str = "racks";
+
+/// A rack as a document of its own: every machine, and nothing about the song it was built in.
+///
+/// There is no `bpm` here, and that is the point: tempo is the song's, one cell every machine shares, and a preset that
+/// carried its own would retune whatever session it was recalled into. There is no `song` and no panel state either — a
+/// rack file is the machines, and a `SavedState` under another name is a session.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RackDocument {
+    /// The format this file was written in: `SAVE_VERSION`, because a rack is a third **kind** of saved document and not a
+    /// third version.
+    #[serde(default)]
+    pub version: u32,
+    pub devices: Vec<SavedDevice>,
+}
+
+impl RackDocument {
+    /// The rack as it stands. `rack_to_saved` merges each device's live pattern and runs `sanitize`, so a rack written by
+    /// this build and one arriving have passed the same gate; its tempo is dropped here, because a rack document has none.
+    pub fn of(rack: &Rack) -> Self {
+        Self {
+            version: SAVE_VERSION,
+            devices: rack_to_saved(rack).devices,
+        }
+    }
+
+    /// The state a rack load's rack half takes: the machines, and the flat mirror `sanitize` rebuilds from them. The `bpm`
+    /// left in it is nobody's — `Rack::replace_devices_from` does not read it.
+    pub fn into_saved(&self) -> SavedState {
+        let mut state = SavedState {
+            devices: self.devices.clone(),
+            ..SavedState::default()
+        };
+        sanitize(&mut state);
+        state
+    }
+}
+
+/// The file a named rack lives in.
+pub fn rack_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(RACKS_DIR).join(format!("{name}.json"))
+}
+
+/// Every rack already saved, sorted so the card's list does not jump about.
+pub fn list_racks(dir: &Path) -> Vec<String> {
+    list_documents(dir, RACKS_DIR)
+}
+
+/// Write a named rack, through the same `.tmp` and rename every other document goes through.
+pub fn save_rack(dir: &Path, name: &str, document: &RackDocument) -> Result<()> {
+    let Some(name) = document_name(name) else {
+        return Err(anyhow!("a rack needs a name"));
+    };
+    let path = rack_path(dir, &name);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    write_atomic(&path, &serde_json::to_vec_pretty(document)?)
+}
+
+/// Read a named rack back. The machines are repaired when they reach `into_saved`'s `sanitize`, which is the pass a song
+/// takes — a hand-edited rack opens playable rather than refused.
+pub fn load_rack(dir: &Path, name: &str) -> std::result::Result<RackDocument, LoadError> {
+    let path = rack_path(dir, name);
+    let bytes = std::fs::read(&path).map_err(|error| {
+        LoadError::Other(anyhow::Error::new(error).context(format!("reading {}", path.display())))
+    })?;
+    checked_version(&bytes, &path)?;
+    let mut document: RackDocument = serde_json::from_slice(&bytes)
+        .with_context(|| format!("parsing {}", path.display()))
+        .map_err(LoadError::Other)?;
+    // A rack has nothing to migrate yet, and the number is still stamped: a bump with nothing to rewrite still bumps, so a
+    // build that knows the next version does not read this one as its own.
+    document.version = SAVE_VERSION;
+    Ok(document)
+}
+
+/// Remove a saved rack. The name is validated first, so a stray one can never point out of the racks directory.
+pub fn delete_rack(dir: &Path, name: &str) -> Result<()> {
+    let Some(name) = document_name(name) else {
+        return Err(anyhow!("that is not a rack name"));
+    };
+    let path = rack_path(dir, &name);
+    std::fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))
+}
+
+/// The name, or the first `X (2)`, `X (3)` and so on that is free: a rack save never destroys a rack by being given its name.
+pub fn free_rack_name(dir: &Path, wanted: &str) -> String {
+    free_name(wanted, |name| rack_path(dir, name).exists())
 }
 
 /// Where the player's kits live: one folder each, under the data directory. Kept beside [`SONGS_DIR`] because a kit and a

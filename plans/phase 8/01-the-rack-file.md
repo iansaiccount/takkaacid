@@ -250,3 +250,17 @@ PanelState, &RackDocument) -> Recalled`; consumes `Rack::replace_devices_from`, 
 
 *(One line per task, written as it is done: what landed, the test that proved it, and any ruling with what it costs if
 wrong. The branch review's findings and what was done about each go here too, before the pull request.)*
+- **Task 1 — the document, its file, and the version rule.** `RackDocument { version, devices }` with `of` and `into_saved`,
+  `RACKS_DIR`, `rack_path`, `list_racks`, `save_rack`, `load_rack`, `delete_rack`, `free_rack_name`; `load_document` split
+  into **`checked_version`** plus a parse, so the session, a song, an import and a rack compare in one place; and
+  `list_songs` / `list_banks` / `list_racks` are now one `list_documents`. Proved by
+  `a_rack_document_round_trips_lists_and_deletes`, `a_rack_file_holds_the_machines_and_nothing_else` (the file's top level
+  is `devices` and `version` and nothing else), `a_newer_rack_file_is_refused_and_a_broken_one_is_not_newer`,
+  `a_rack_file_is_repaired_by_the_same_sanitize_as_a_song` and `a_rack_name_must_be_a_name_and_not_a_path` — each watched
+  fail first, as unresolved imports in `tests/persist.rs`. Suite **990/990**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: `into_saved` takes `&self`.** The spec wrote a consuming conversion, and Task 3's `recall(&RackDocument)` cannot
+  move out of a reference. Cost if wrong: one four-device `Vec` clone per recall.
+  **Ruling: `load_rack` answers `Result<RackDocument, LoadError>`**, where the spec's shorthand `Result` was `anyhow`'s. The
+  refusal is this document's own answer and a test can match `Newer`; `save_rack` stays `anyhow::Result`, like `save_bank`,
+  because nothing needs to tell its failures apart. Cost if wrong: one error type the caller converts, where a song's path
+  prints an `anyhow` chain.

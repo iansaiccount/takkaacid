@@ -4,9 +4,11 @@ use acid_app::device::{DeviceKind, MAX_DEVICES, Rack, Scheme};
 use acid_app::midi::cc::LEARNABLE;
 use acid_app::midi::route::{Channel, InputFilter, Ports, Role};
 use acid_app::persist::{
-    BankDocument, SaveTarget, bank_kind_notice, bank_path, delete_bank, delete_song, document_name,
-    export_song, free_bank_name, free_song_name, import_song, list_banks, list_songs, load_bank,
-    load_song, new_song, save_bank, save_song, save_target, session_song_file,
+    BankDocument, RackDocument, SaveTarget, bank_kind_notice, bank_path, checked_version,
+    delete_bank, delete_rack, delete_song, document_name, export_song, free_bank_name,
+    free_rack_name, free_song_name, import_song, list_banks, list_racks, list_songs, load_bank,
+    load_rack, load_song, new_song, rack_path, save_bank, save_rack, save_song, save_target,
+    session_song_file,
 };
 use acid_app::persist::{
     ENV_DATA_DIR, Knobs, SAVE_VERSION, SavedDevice, SavedInputs, SavedState, data_dir, load, open,
@@ -1731,4 +1733,181 @@ fn a_newer_song_is_refused_by_import_and_by_load() {
 
     let loaded = load_song(library.path(), "Song").expect("a song this build can read still loads");
     assert_eq!(loaded.version, SAVE_VERSION, "the song itself is unchanged");
+}
+
+// The rack's own document: the machines, and nothing about the song they were built in.
+
+fn a_rack_document(devices: Vec<SavedDevice>) -> RackDocument {
+    RackDocument {
+        version: SAVE_VERSION,
+        devices,
+    }
+}
+
+#[test]
+fn a_rack_document_round_trips_lists_and_deletes() {
+    let dir = tempfile::tempdir().unwrap();
+    let document = a_rack_document(vec![
+        a_saved_device(1, "BASS", "ACID"),
+        a_saved_device(2, "DRUMS", "DRUMS"),
+    ]);
+    save_rack(dir.path(), "Live", &document).unwrap();
+    save_rack(dir.path(), "Another", &document).unwrap();
+
+    assert_eq!(
+        list_racks(dir.path()),
+        vec!["Another".to_string(), "Live".to_string()],
+        "listed by name, sorted"
+    );
+    let back = load_rack(dir.path(), "Live").unwrap();
+    assert_eq!(
+        back.devices, document.devices,
+        "every field of every machine"
+    );
+    assert_eq!(back.version, SAVE_VERSION, "the format it was read as");
+
+    // A name already taken is stepped around rather than written over: a save never destroys a rack nobody opened.
+    assert_eq!(free_rack_name(dir.path(), "Live"), "Live (2)");
+
+    delete_rack(dir.path(), "Live").unwrap();
+    assert_eq!(list_racks(dir.path()), vec!["Another".to_string()]);
+}
+
+#[test]
+fn a_rack_file_holds_the_machines_and_nothing_else() {
+    // A preset that carried a tempo would retune the song it was recalled into, and one that carried the panel state would
+    // be a session under another name. The document is the machines and the format, and nothing else.
+    let dir = tempfile::tempdir().unwrap();
+    save_rack(
+        dir.path(),
+        "Live",
+        &a_rack_document(vec![a_saved_device(1, "BASS", "ACID")]),
+    )
+    .unwrap();
+
+    let text = std::fs::read_to_string(rack_path(dir.path(), "Live")).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let mut keys: Vec<&str> = value
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        ["devices", "version"],
+        "a rack document is the machines and the format, and no tempo, song or panel state"
+    );
+}
+
+#[test]
+fn a_newer_rack_file_is_refused_and_a_broken_one_is_not_newer() {
+    let dir = tempfile::tempdir().unwrap();
+    save_rack(
+        dir.path(),
+        "Live",
+        &a_rack_document(vec![a_saved_device(1, "BASS", "ACID")]),
+    )
+    .unwrap();
+    let path = rack_path(dir.path(), "Live");
+
+    // The rack as this build wrote it, stamped with the next build's version.
+    let text = std::fs::read_to_string(&path).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+    document["version"] = serde_json::json!(SAVE_VERSION + 1);
+    std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    match load_rack(dir.path(), "Live") {
+        Err(acid_app::persist::LoadError::Newer { version, .. }) => {
+            assert_eq!(version, SAVE_VERSION + 1, "the version it found")
+        }
+        other => panic!("a newer rack is refused, not parsed: {other:?}"),
+    }
+
+    // The rule is one function for every kind of document now, so a file too broken to parse is `Other` everywhere.
+    assert!(
+        matches!(
+            checked_version(b"not a document", &path),
+            Err(acid_app::persist::LoadError::Other(_))
+        ),
+        "a broken file is not somebody's newer one"
+    );
+    let current = serde_json::to_vec(&serde_json::json!({ "version": SAVE_VERSION })).unwrap();
+    assert_eq!(
+        checked_version(&current, &path).unwrap(),
+        SAVE_VERSION,
+        "a document this build can read passes"
+    );
+}
+
+#[test]
+fn a_rack_file_is_repaired_by_the_same_sanitize_as_a_song() {
+    // A hand-edited rack is repaired rather than refused: the strip's four machines at most, numbers and names distinct,
+    // a blank name given the kind's own, and a caption this build has never heard of read as the default machine.
+    let document = a_rack_document(vec![
+        a_saved_device(1, "BASS", "ACID"),
+        a_saved_device(1, "BASS", "ACID"),
+        a_saved_device(3, "", "BAGPIPES"),
+        a_saved_device(4, "LEAD", "ACID"),
+        a_saved_device(5, "BASS", "ACID"),
+    ]);
+    let saved = document.into_saved();
+
+    assert_eq!(
+        saved.devices.len(),
+        MAX_DEVICES,
+        "the strip's cells are the file's limit"
+    );
+    let numbers: Vec<usize> = saved.devices.iter().map(|device| device.number).collect();
+    let mut distinct_numbers = numbers.clone();
+    distinct_numbers.sort_unstable();
+    distinct_numbers.dedup();
+    assert_eq!(
+        distinct_numbers.len(),
+        numbers.len(),
+        "numbers are made distinct"
+    );
+
+    let mut names: Vec<&str> = saved
+        .devices
+        .iter()
+        .map(|device| device.name.as_str())
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), saved.devices.len(), "names are made distinct");
+    assert!(
+        saved
+            .devices
+            .iter()
+            .all(|device| !device.name.trim().is_empty()),
+        "a blank name is given one"
+    );
+    assert!(
+        saved
+            .devices
+            .iter()
+            .all(|device| DeviceKind::from_name(&device.kind).is_some()),
+        "a caption this build does not know reads as a machine it has"
+    );
+    assert_eq!(
+        saved.devices[2].kind, "ACID",
+        "a machine of no known kind is an acid line"
+    );
+}
+
+#[test]
+fn a_rack_name_must_be_a_name_and_not_a_path() {
+    let dir = tempfile::tempdir().unwrap();
+    for bad in ["", "   ", "../escape", "a/b", "a\\b", ".hidden"] {
+        assert!(
+            save_rack(dir.path(), bad, &a_rack_document(vec![])).is_err(),
+            "{bad:?} should be refused"
+        );
+    }
+    assert_eq!(
+        list_racks(dir.path()),
+        Vec::<String>::new(),
+        "nothing was written"
+    );
 }
