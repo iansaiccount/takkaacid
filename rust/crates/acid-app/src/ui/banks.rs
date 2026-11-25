@@ -202,6 +202,85 @@ impl Filter {
             Filter::Demos => &Kind::ALL[3..],
         }
     }
+
+    /// Which document's strip a chip shows. One place answers it, and `card_rects` and `paint` both read it: a second match
+    /// over `Filter` would be a second answer to one question.
+    pub fn door(self) -> Door {
+        match self {
+            Filter::All | Filter::Songs | Filter::Demos => Door::Song,
+            Filter::Banks => Door::Bank,
+            Filter::Racks => Door::Rack,
+        }
+    }
+}
+/// The card's three save doors: the document the strip beside the list saves, and the key that saves it.
+///
+/// `ALL`, `SONGS` and `DEMOS` show the song's, because the session is what is always open and saving it must never need a chip
+/// change; `BANKS` and `RACKS` show their own, because that is the thing the player is looking at. The cost, accepted: a player
+/// on `BANKS` who wants to save the *song* clicks `ALL` or `SONGS` first — one click, with the chips on screen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Door {
+    Song,
+    Bank,
+    Rack,
+}
+
+impl Door {
+    pub const ALL: [Door; 3] = [Door::Song, Door::Bank, Door::Rack];
+
+    /// The field's id. Kept per document rather than one `banks-name`, because the fields are one control each and an id is
+    /// behaviour: a focus request and a drag are routed by it.
+    pub fn field_id(self) -> &'static str {
+        match self {
+            Door::Song => "song-name",
+            Door::Bank => "bank-name",
+            Door::Rack => "rack-name",
+        }
+    }
+
+    /// What the empty field says it wants.
+    pub fn field_hint(self) -> &'static str {
+        match self {
+            Door::Song => "song name",
+            Door::Bank => "bank name",
+            Door::Rack => "rack name",
+        }
+    }
+
+    /// The key's words. Every key names its own verb, so no key's meaning depends on which chip is lit.
+    pub fn save_label(self) -> &'static str {
+        match self {
+            Door::Song => "SAVE",
+            Door::Bank => "SAVE BANK",
+            Door::Rack => "SAVE RACK",
+        }
+    }
+
+    /// Whether this door has the song's second key, `SAVE A COPY`. A bank and a rack are saved in place or as a new file by
+    /// the one key's own rule; only the song has a copy that always makes a new file.
+    pub fn has_copy(self) -> bool {
+        match self {
+            Door::Song => true,
+            Door::Bank | Door::Rack => false,
+        }
+    }
+
+    /// What the key asks for, once the name has been decided.
+    pub fn request(self, name: String) -> Request {
+        match self {
+            Door::Song => Request::Save(name),
+            Door::Bank => Request::SaveBank(name),
+            Door::Rack => Request::SaveRack(name),
+        }
+    }
+
+    /// The same question for the song's second key, or `None` where there is none.
+    pub fn copy_request(self, name: String) -> Option<Request> {
+        match self {
+            Door::Song => Some(Request::SaveCopy(name)),
+            Door::Bank | Door::Rack => None,
+        }
+    }
 }
 
 /// One row of the card's list: what it is, where it came from, and what it says.
@@ -763,6 +842,159 @@ pub fn thumb(band: Rect, scale: f32, count: usize, visible: usize, top: usize) -
     Some(Thumb { track, thumb })
 }
 
+/// The column a row's name starts in, in design pixels: wide enough for the longest tag (`DEMO`, `RACK`, `BANK`, `SONG`) plus
+/// a gap, so the names line up whichever kind they are.
+const CARD_TAG: f32 = 44.0;
+
+/// Where everything on the card is, in design pixels times `scale`.
+///
+/// One function fills it; the painter draws from it and the tests click from it, so the card's arithmetic is written once. A
+/// row's position is [`Rects::row`], never a `.+ 24.0` somewhere else: the two live test files used to mirror the painter and
+/// the two copies did not even agree on what `songs_top` meant.
+pub struct Rects {
+    pub card: Rect,
+    pub search: Rect,
+    /// One rect per chip, in `Filter::ALL` order — a length derived from the catalogue, so a sixth chip cannot leave a chip
+    /// without a place on the card.
+    pub chips: [Rect; Filter::ALL.len()],
+    /// The list's band: the rows live here and nothing outside it is drawn or hit-tested.
+    pub band: Rect,
+    pub strip_field: Rect,
+    pub strip_save: Rect,
+    /// `SAVE A COPY`: the song's strip has two keys, a bank's and a rack's have one.
+    pub strip_copy: Option<Rect>,
+    pub footer_new: Rect,
+    pub footer_import: Rect,
+    pub footer_export: Rect,
+    pub footer_close: Rect,
+    scale: f32,
+}
+
+impl Rects {
+    /// Row `n` of the window, and the delete cross at its right end.
+    pub fn row(&self, n: usize) -> Rect {
+        Rect::from_min_size(
+            egui::Pos2::new(self.band.left(), self.band.top() + n as f32 * self.step()),
+            egui::vec2(self.band.width() * ROW_SHARE, CARD_ROW * self.scale),
+        )
+    }
+
+    pub fn cross(&self, n: usize) -> Rect {
+        let row = self.row(n);
+        Rect::from_min_size(
+            egui::Pos2::new(row.right() + CARD_PADDING * self.scale, row.top()),
+            egui::vec2(self.band.width() * CROSS_SHARE, row.height()),
+        )
+    }
+
+    /// Where the kind's tag word and the row's name begin.
+    pub fn tag(&self, n: usize) -> egui::Pos2 {
+        let row = self.row(n);
+        egui::Pos2::new(row.left(), row.center().y)
+    }
+
+    pub fn name(&self, n: usize) -> egui::Pos2 {
+        let row = self.row(n);
+        egui::Pos2::new(row.left() + CARD_TAG * self.scale, row.center().y)
+    }
+
+    /// The y-distance from one row to the next: a row and the gap under it.
+    fn step(&self) -> f32 {
+        (CARD_ROW + CARD_GAP) * self.scale
+    }
+}
+
+/// The row's share of the band's width, leaving the cross its own column and the thumb's track the right edge.
+const ROW_SHARE: f32 = 0.66;
+const CROSS_SHARE: f32 = 0.14;
+
+/// Place every rect of the card inside `panel`. Pure arithmetic: no painting, no egui context.
+///
+/// The vertical budget, from the constants at `scale` 1.0 in a 638 px card: title 18, search 22 + 12, chips 22 + 12, the band,
+/// strip 22 + 12, footer 22 + 12 — which leaves the band 460 px, so nineteen rows. The band is what is left after the fixed
+/// furniture has been placed from both ends, so a taller window gives the band the extra and a door never moves for a list.
+pub fn card_rects(panel: Rect, scale: f32, filter: Filter) -> Rects {
+    let card = panel.shrink(theme::MARGIN * scale);
+    let padding = CARD_PADDING * scale;
+    let row_height = CARD_ROW * scale;
+    let left = card.left() + padding;
+    let width = card.width() - padding * 2.0;
+
+    // The title, then everything the list needs above it.
+    let mut y = card.top() + padding + 18.0 * scale;
+    let search = Rect::from_min_size(egui::Pos2::new(left, y), egui::vec2(width, row_height));
+    y += row_height + padding;
+
+    let chips = Filter::ALL.len();
+    let chip_gap = CARD_GAP * scale;
+    let chip_width = (width - chip_gap * (chips - 1) as f32) / chips as f32;
+    let chip_rects = std::array::from_fn(|index| {
+        Rect::from_min_size(
+            egui::Pos2::new(left + index as f32 * (chip_width + chip_gap), y),
+            egui::vec2(chip_width, row_height),
+        )
+    });
+    y += row_height + padding;
+
+    // The footer from the bottom, the strip one padding above it, and the band is what is left between the chips and both.
+    let bottom = card.bottom() - padding - row_height;
+    let strip_top = bottom - padding - row_height;
+    let band = Rect::from_min_max(
+        egui::Pos2::new(left, y),
+        egui::Pos2::new(left + width, strip_top - padding),
+    );
+
+    let door = filter.door();
+    let save_share = match door {
+        Door::Song => 0.20,
+        Door::Bank | Door::Rack => 0.30,
+    };
+    let strip_field = Rect::from_min_size(
+        egui::Pos2::new(left, strip_top),
+        egui::vec2(width * 0.40, row_height),
+    );
+    let strip_save = Rect::from_min_size(
+        egui::Pos2::new(strip_field.right() + padding, strip_top),
+        egui::vec2(width * save_share - padding, row_height),
+    );
+    let strip_copy = Rect::from_min_size(
+        egui::Pos2::new(strip_save.right() + padding, strip_top),
+        egui::vec2(width * 0.22 - padding, row_height),
+    );
+
+    let footer_new = Rect::from_min_size(
+        egui::Pos2::new(left, bottom),
+        egui::vec2(80.0 * scale, row_height),
+    );
+    let footer_import = Rect::from_min_size(
+        egui::Pos2::new(footer_new.right() + padding, bottom),
+        egui::vec2(96.0 * scale, row_height),
+    );
+    let footer_export = Rect::from_min_size(
+        egui::Pos2::new(footer_import.right() + padding, bottom),
+        egui::vec2(96.0 * scale, row_height),
+    );
+    let footer_close = Rect::from_min_size(
+        egui::Pos2::new(card.right() - padding - 90.0 * scale, bottom),
+        egui::vec2(90.0 * scale, row_height),
+    );
+
+    Rects {
+        card,
+        search,
+        chips: chip_rects,
+        band,
+        strip_field,
+        strip_save,
+        strip_copy: door.has_copy().then_some(strip_copy),
+        footer_new,
+        footer_import,
+        footer_export,
+        footer_close,
+        scale,
+    }
+}
+
 /// A caption over one of a card's lists, at `at`. The one way a listing card names a section.
 pub(super) fn heading(ui: &mut Ui, scale: f32, title: &str, at: egui::Pos2) {
     ui.painter().text(
@@ -1176,5 +1408,175 @@ mod tests {
 
         let half = thumb(band, 1.0, 10, 4, 3).expect("a page in the middle");
         assert!(half.thumb.top() > top.thumb.top() && half.thumb.top() < end.thumb.top());
+    }
+
+    /// The panel the card is designed in, times `scale`: 980 × 670 is the window `layout` divides up, and the card is that
+    /// panel with a margin off it.
+    fn panel_at(scale: f32) -> Rect {
+        Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(980.0 * scale, 670.0 * scale))
+    }
+
+    /// Every rect the card owns, so a test that says "all of them" cannot forget one a later round added.
+    fn all_rects(rects: &Rects) -> Vec<Rect> {
+        let mut all = vec![
+            rects.search,
+            rects.band,
+            rects.strip_field,
+            rects.strip_save,
+            rects.footer_new,
+            rects.footer_import,
+            rects.footer_export,
+            rects.footer_close,
+        ];
+        all.extend(rects.chips);
+        all.extend(rects.strip_copy);
+        all
+    }
+
+    #[test]
+    fn the_card_puts_every_control_inside_itself_at_both_sizes() {
+        // The design's own risk is the vertical budget, and the smallest window is where it bites: every control is inside the
+        // card at the design size and at the 0.65 the scale clamps to.
+        for scale in [1.0, 0.65] {
+            let rects = card_rects(panel_at(scale), scale, Filter::All);
+            for rect in all_rects(&rects) {
+                assert!(
+                    rects.card.contains_rect(rect),
+                    "at scale {scale} a control leaves the card: {rect:?} outside {:?}",
+                    rects.card
+                );
+                assert!(rect.width() > 0.0 && rect.height() > 0.0, "{rect:?}");
+            }
+            for pair in rects.chips.windows(2) {
+                assert!(
+                    pair[0].right() <= pair[1].left(),
+                    "at scale {scale} two chips overlap: {:?} {:?}",
+                    pair[0],
+                    pair[1]
+                );
+            }
+            assert!(rects.chips[0].left() >= rects.card.left());
+            assert!(rects.chips[Filter::ALL.len() - 1].right() <= rects.card.right());
+        }
+    }
+
+    #[test]
+    fn the_band_sits_between_the_chips_and_the_strip() {
+        // Top to bottom: the title, the search, the chips, the band, the strip, the footer — and nothing above the strip or
+        // below the footer moves, because a door is fixed furniture.
+        let scale = 1.0;
+        let rects = card_rects(panel_at(scale), scale, Filter::All);
+        let title = rects.card.top() + CARD_PADDING * scale + 18.0 * scale;
+        assert!(
+            rects.search.top() >= title,
+            "the search sits under the title: {} vs {title}",
+            rects.search.top()
+        );
+        for chip in rects.chips {
+            assert!(
+                chip.top() >= rects.search.bottom(),
+                "the chips are one row under the search"
+            );
+        }
+        assert!(
+            rects.band.top() >= rects.chips[0].bottom(),
+            "the band is under the chips"
+        );
+        assert!(
+            rects.band.bottom() <= rects.strip_field.top(),
+            "and above the strip"
+        );
+        assert!(
+            rects.strip_field.bottom() <= rects.footer_new.top(),
+            "the strip is above the footer"
+        );
+        assert!(
+            rects.footer_new.bottom() <= rects.card.bottom(),
+            "and the footer is inside the card"
+        );
+        assert_eq!(
+            rects.strip_save.bottom(),
+            rects.strip_field.bottom(),
+            "the field and its keys share one row"
+        );
+    }
+
+    #[test]
+    fn the_band_holds_a_library_of_sixteen_at_the_design_size() {
+        // The arithmetic from the constants, pinned: the design's estimate was eighteen, this one asks for sixteen and
+        // leaves the rest to the picture.
+        let scale = 1.0;
+        let rects = card_rects(panel_at(scale), scale, Filter::All);
+        let (visible, top) = window(rects.band, scale, 60, 0);
+        assert!(visible >= 16, "the band holds only {visible} rows");
+        assert_eq!(top, 0);
+        let last = rects.row(visible - 1);
+        assert!(
+            rects.band.contains_rect(last),
+            "the last row of the window is inside the band: {last:?} in {:?}",
+            rects.band
+        );
+    }
+
+    #[test]
+    fn the_strip_offers_a_copy_key_only_to_the_song() {
+        // Written out over the catalogue, so a sixth chip has to say whether its strip can copy.
+        for filter in Filter::ALL {
+            let song_chip = match filter {
+                Filter::All | Filter::Songs | Filter::Demos => true,
+                Filter::Banks | Filter::Racks => false,
+            };
+            let rects = card_rects(panel_at(1.0), 1.0, filter);
+            assert_eq!(rects.strip_copy.is_some(), song_chip, "{filter:?}");
+            match rects.strip_copy {
+                Some(copy) => {
+                    assert_eq!(copy.top(), rects.strip_save.top(), "{filter:?}");
+                    assert!(
+                        copy.left() >= rects.strip_save.right(),
+                        "{filter:?}: the copy key follows the save key"
+                    );
+                }
+                None => assert!(
+                    rects.strip_save.right() <= rects.card.right() - CARD_PADDING,
+                    "{filter:?}: the one key stays inside the card"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn a_row_and_its_cross_are_inside_the_band_and_clear_of_the_track() {
+        let scale = 1.0;
+        let rects = card_rects(panel_at(scale), scale, Filter::All);
+        let track = CARD_TRACK * scale;
+        let (visible, _) = window(rects.band, scale, 60, 0);
+        let mut above: Option<Rect> = None;
+        for n in 0..visible {
+            let row = rects.row(n);
+            assert!(
+                rects.band.contains_rect(row),
+                "row {n} leaves the band: {row:?} in {:?}",
+                rects.band
+            );
+            let cross = rects.cross(n);
+            assert!(rects.band.contains_rect(cross), "row {n}'s cross");
+            assert!(
+                cross.left() > row.center().x,
+                "row {n}'s cross sits right of the name it deletes"
+            );
+            assert!(
+                cross.right() <= rects.band.right() - track,
+                "row {n}'s cross runs under the reserved track: {cross:?}"
+            );
+            assert_eq!(rects.tag(n).y, row.center().y, "the tag is on the row");
+            assert!(
+                rects.name(n).x > rects.tag(n).x,
+                "the name starts after the tag"
+            );
+            if let Some(above) = above {
+                assert!(above.bottom() <= row.top(), "rows {n} overlap");
+            }
+            above = Some(row);
+        }
     }
 }

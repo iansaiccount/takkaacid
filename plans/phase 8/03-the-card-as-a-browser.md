@@ -451,3 +451,20 @@ The branch review's findings and what was done about each go here too, before th
   so placing the handle re-rounds its height at the y it sits at: `94 × 0.4` reads back as `37.600006` against the direct
   `37.600002`. The code is the proportional one the design asked for; the test's equality was the wrong instrument. Cost if
   wrong: a defect inside a hundredth of a pixel of the proportion would pass, and the painter cannot draw one.
+- **Task 3 — the card's arithmetic, made public.** `Rects` (card, search, `chips: [Rect; Filter::ALL.len()]`, band,
+  `strip_field`, `strip_save`, `strip_copy`, the four footer keys, a private `scale`) with `row` / `cross` / `tag` / `name` as
+  the only places a row's position is computed, and `card_rects(panel, scale, filter)` placing it — the band is what the fixed
+  furniture leaves between the chips and the strip, 460 px at the design size, nineteen rows. Proved by five unit tests, watched
+  fail first as `cannot find type Rects` / `cannot find function card_rects`: every rect inside the card at scale 1.0 **and**
+  0.65 with the chips neither overlapping nor leaving it; search under the title, chips under the search, band above the strip,
+  strip above the footer, footer inside the card, the field and its keys on one row; `window` giving `>= 16` rows with the last
+  one inside the band; `strip_copy` present exactly for `ALL`/`SONGS`/`DEMOS`, written out over `Filter::ALL`; and each row and
+  its cross inside the band, the cross right of its row's centre and clear of the reserved `CARD_TRACK`. Suite
+  **1016/1016**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: a `Door` catalogue, so the strip is answered once.** `card_rects` needs the chip only to know the strip's shape
+  (`SAVE A COPY` or not, and the key's width), and `paint` then needs the field's id, its hint, the key's words and the request.
+  One match over `Filter` per caller would be five answers to one question, which the plan's own Global Constraints forbid. So
+  `Filter::door(self) -> Door { Song, Bank, Rack }` is the one mapping, and `Door` owns `field_id`, `field_hint`, `save_label`,
+  `has_copy`, `request` and `copy_request`. It is a three-variant catalogue, not a fourth `Kind`: a demo has no door, and this
+  way no arm is dead and no `_` is needed. Cost if wrong: one public type the design did not name, and the book must describe
+  the strip as the chips describe it — which the `Door` doc comment already does.
