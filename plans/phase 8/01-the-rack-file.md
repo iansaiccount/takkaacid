@@ -290,3 +290,31 @@ wrong. The branch review's findings and what was done about each go here too, be
   `TakkaApp`'s, not `PanelState`'s — a held controller request, which `main` clears on a song load too — so the recall cannot
   reach it and `load_rack_now` clears it beside the call. Cost if wrong: a held pattern request could land on the recalled
   rack; the wiring is Task 4's and is named in the review focus.
+- **Task 4 — the card, the requests, and `main`'s three arms.** `RACKS` is the bank's shape now: a row per `racks/*.json`
+  that loads (twice while the session is unsaved), a cross that deletes, and a name field with `SAVE RACK` under the rows.
+  `Banks` gains `rack_names` and `rack_name`, `SongState` gains `rack_file` (beside `file` and `bank_file`, because it must
+  outlive the card), `banks::Session` carries it in, and `Request::{SaveRack, LoadRack}` take a name with `DeleteRack` beside
+  them; ids are `rack-save` (kept), `rack-name`, `rack-load-{index}`, `rack-delete-{index}`. `bank_save_name` became
+  **`document_save_name`**, one function for both doors. `main` gains `save_rack_now` (target → `free_rack_name` → `write_kit`
+  → `RackDocument::of` → `save_rack`, card refreshed), `delete_rack_now`'s arm (file, list, `rack_file` cleared when it was
+  that file) and `load_rack_now` (read, `save()`, `rack_recall::recall`, kits, ports, `rack_file`, notice); `rack_file` is
+  cleared by `NEW`, a song load, a demo and a delete of that file. Proved by `tests/banks_live.rs`:
+  `the_rack_section_lists_the_files_and_asks_for_a_load`, `a_dirty_session_arms_a_rack_load_first`,
+  `saving_a_rack_asks_with_the_typed_name_or_the_file_it_came_from`, `a_rack_rows_cross_asks_to_delete_twice`, all watched
+  fail first as `no field rack_names` / `expected function, found Request`. Suite **996/996**, clippy `-D warnings`,
+  `fmt --check`.
+  **Ruling: the plan's `tests/racks_live.rs` is a section of `tests/banks_live.rs`, not a file.** The card's geometry — where
+  a section's rows are — is measured by helpers that live in `banks_live.rs` and mirror `banks::paint`'s arithmetic; a second
+  copy for racks would be the hand-kept list this project has paid for twice. Cost if wrong: one file carries the card's
+  tests.
+  **Ruling: `main`'s three arms are sequencing, and are not tested.** Every decision in them is a `persist` function or
+  `rack_recall::recall`, both tested; what is left is the write, the kit decode and the notice, in a binary no
+  `tests/*_live.rs` can construct. The live tests stop at the request, as they do for a bank. Cost if wrong: the wiring
+  between the request and the call is read by the branch review rather than proved — the same gap phase 7's review found a
+  P0 in, which is why the decision was moved out and only the side effects remain.
+  **Ruling: the ports line is said after "loaded rack {name}"**, so it is the sentence that survives on the status line. A
+  song's load says its ports line before its own and loses it; that pre-existing order is left as it is, because changing
+  what a song load says is not this round.
+  **Not re-pinned: "the section is skipped when the card has no room."** That is the card's one `list_limit` rule, already
+  asserted for `PATTERN BANKS`; racks obey the same `if`, and a second arrangement of the same test would pin the painter
+  twice.

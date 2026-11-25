@@ -1,4 +1,4 @@
-//! The `BANKS` card's four sections: the demos, the player's bank files, their songs, and the rack keys that refuse.
+//! The `BANKS` card's four sections: the demos, the player's bank files, their songs, and the rack files.
 //!
 //! The card is a painter: every test here drives `draw_panel` through real egui frames and asserts on the request the card
 //! left behind, because what a click writes is `main`'s to do and not the card's.
@@ -143,17 +143,24 @@ fn racks_top() -> f32 {
     section_top(songs_top(), 1)
 }
 
-fn rack_save_centre() -> Pos2 {
+fn rack_row_centre(index: usize) -> Pos2 {
+    Pos2::new(left() + 20.0, row_centre(racks_top() + heading(), index))
+}
+
+/// `SAVE RACK` sits under the rack rows, in the pattern `PATTERN BANKS` heads: a name field, then one key.
+fn rack_save_centre(rows: usize) -> Pos2 {
+    let save_left = left() + width() * 0.40 + padding();
     Pos2::new(
-        left() + 96.0 * scale(screen()) * 0.5,
-        row_centre(racks_top() + heading(), 0),
+        save_left + (width() * 0.30 - padding()) * 0.5,
+        row_centre(racks_top() + heading(), rows),
     )
 }
 
-fn rack_load_centre() -> Pos2 {
+/// The cross at a rack row's right end, where deleting takes two clicks.
+fn rack_delete_centre(index: usize) -> Pos2 {
     Pos2::new(
-        left() + 96.0 * scale(screen()) + padding() + 96.0 * scale(screen()) * 0.5,
-        row_centre(racks_top() + heading(), 0),
+        left() + width() * 0.66 + padding() + width() * 0.14 * 0.5,
+        row_centre(racks_top() + heading(), index),
     )
 }
 
@@ -165,6 +172,7 @@ fn open_card(dirty: bool) -> PanelState {
             card: Some(Banks {
                 demos: vec!["Slow Acid".to_string()],
                 bank_names: vec!["Easy".to_string()],
+                rack_names: vec!["Studio".to_string()],
                 names: vec!["Acid 1".to_string()],
                 ..Banks::default()
             }),
@@ -238,25 +246,99 @@ fn a_dirty_session_arms_a_bank_load_first() {
 }
 
 #[test]
-fn the_rack_keys_ask_and_write_nothing() {
-    // A rack document is a later round. The keys are drawn where they will live and they ask `main`, which says so; the card
-    // itself has no file to write and no dialog to open, so the request being the whole effect is the assertion.
+fn the_rack_section_lists_the_files_and_asks_for_a_load() {
+    // A rack file is a document now, so its section is the bank's shape: rows that load, and a field and a key that save.
     let ctx = Context::default();
     let shared = SharedState::new();
     let mut panel = open_card(false);
 
-    click(&ctx, &mut panel, &shared, rack_save_centre());
-    assert_eq!(panel.songs.request, Some(Request::SaveRack));
-
-    panel.songs.request = None;
-    click(&ctx, &mut panel, &shared, rack_load_centre());
-    assert_eq!(panel.songs.request, Some(Request::LoadRack));
+    click(&ctx, &mut panel, &shared, rack_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::LoadRack("Studio".to_string())),
+        "a row loads that rack"
+    );
 
     let card = panel.songs.card.as_ref().expect("the card stays open");
-    assert_eq!(card.load_armed, None, "a refusal is not a two-click load");
-    assert_eq!(card.delete_armed, None, "and not a two-click delete");
-    assert_eq!(card.bank_names, vec!["Easy".to_string()], "nothing moved");
-    assert_eq!(card.names, vec!["Acid 1".to_string()]);
+    assert_eq!(card.load_armed, None, "a saved session loads on one click");
+    assert_eq!(card.rack_names, vec!["Studio".to_string()]);
+}
+
+#[test]
+fn a_dirty_session_arms_a_rack_load_first() {
+    // A rack load replaces every machine in the session, so an unsaved session costs two clicks, as a song's load does.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(true);
+
+    click(&ctx, &mut panel, &shared, rack_row_centre(0));
+    assert_eq!(panel.songs.request, None, "the first click loads nothing");
+    let card = panel.songs.card.as_ref().unwrap();
+    assert_eq!(
+        card.load_armed.as_deref(),
+        Some("rack:Studio"),
+        "the row says which click it is waiting for"
+    );
+    assert!(
+        card.message
+            .as_deref()
+            .is_some_and(|line| line.contains("replace")),
+        "and the card says so in words"
+    );
+
+    click(&ctx, &mut panel, &shared, rack_row_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::LoadRack("Studio".to_string()))
+    );
+}
+
+#[test]
+fn saving_a_rack_asks_with_the_typed_name_or_the_file_it_came_from() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    panel.songs.card.as_mut().unwrap().rack_name = "Studio 2".to_string();
+
+    click(&ctx, &mut panel, &shared, rack_save_centre(1));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveRack("Studio 2".to_string())),
+        "the typed name"
+    );
+
+    // A blank field keeps the rack the session came from, SAVE's own rule for the other document.
+    panel.songs.request = None;
+    panel.songs.card.as_mut().unwrap().rack_name.clear();
+    panel.songs.rack_file = Some("Studio".to_string());
+    click(&ctx, &mut panel, &shared, rack_save_centre(1));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveRack("Studio".to_string())),
+        "a blank field names the rack the session is on"
+    );
+}
+
+#[test]
+fn a_rack_rows_cross_asks_to_delete_twice() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+
+    click(&ctx, &mut panel, &shared, rack_delete_centre(0));
+    assert_eq!(panel.songs.request, None, "one click only arms the cross");
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
+        Some("Studio"),
+        "and the cross turns into SURE"
+    );
+
+    click(&ctx, &mut panel, &shared, rack_delete_centre(0));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::DeleteRack("Studio".to_string())),
+        "deleting a file has no undo, so it takes two clicks"
+    );
 }
 
 #[test]
