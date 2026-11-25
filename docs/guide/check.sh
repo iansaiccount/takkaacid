@@ -79,6 +79,9 @@ gone 'MY BANKS' "the guide names a section the card no longer prints"
 # sentence that said the section did nothing is a claim the book may not make again.
 gone 'LOAD RACK' "the guide names a key the card no longer prints"
 gone 'does nothing yet' "the guide says the rack section is unwired"
+# "a later round" is the other half of the same claim: a rack document was deferred, and it is not deferred now. The phrase
+# is narrowed to the sentence that said so, because two other pages use "a later round" for things that still are.
+gone 'is a later round' "the guide defers a round that has landed"
 # Phase 6 turned the two undecided cells into `GRID` and its readout: no page may still call them TBC, and the three grid
 # captions, the key's name and the two new demos are the facts the round is about (`23-pattern-grids`).
 gone 'TBC' "the guide still names the undecided cells"

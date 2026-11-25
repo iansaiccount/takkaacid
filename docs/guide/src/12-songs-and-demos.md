@@ -76,7 +76,7 @@ name stays amber until you do it — and what a save writes depends entirely on 
 branch: load a demo, hit `SAVE A COPY`, and rename the copy.
 
 Names are trimmed, may be up to 48 characters, and may not contain `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, or start
-with a dot — they become file names in `songs/` or `banks/`.
+with a dot — they become file names in `songs/`, `banks/` or `racks/`.
 
 ## The buttons
 

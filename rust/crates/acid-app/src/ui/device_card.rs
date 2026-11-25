@@ -158,10 +158,6 @@ pub fn card_rect(panel: Rect, s: f32, kind: DeviceKind) -> Rect {
     )
 }
 
-/// The picker: a card that offers the kinds of device there are, and greys a row once the rack is full.
-///
-/// It is its own value rather than `device_card`'s flag because it is a different card — its own geometry, its own rows and
-/// its own answer (`Add`), and the two are never up together.
 /// The theme list: a drop-down over the card, because twenty-two themes do not fit one key.
 ///
 /// It lives on the card rather than in a card of its own: it is the same device's question, it is painted over the card's
@@ -173,6 +169,10 @@ pub struct Themes {
     pub top: usize,
 }
 
+/// The picker: a card that offers the kinds of device there are, and greys a row once the rack is full.
+///
+/// It is its own value rather than `device_card`'s flag because it is a different card — its own geometry, its own rows and
+/// its own answer (`Add`), and the two are never up together.
 #[derive(Clone, Debug, Default)]
 pub struct Picker {
     pub open: bool,

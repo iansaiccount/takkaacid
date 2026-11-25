@@ -342,3 +342,37 @@ wrong. The branch review's findings and what was done about each go here too, be
   taken.
   **Ruling: `LOAD RACK` moved from `check.sh`'s must-say list to a `gone` guard.** The key is gone from the face — a row
   loads a rack now — so the pin had to move from "the book says it" to "the book does not".
+
+**Branch review (the PR).** A subagent that wrote none of it read `bee3d21..55fa6e7` against the spec, this plan and its
+Review focus. It found one Critical and six Minor gaps; all are fixed here, and the suite is **999/999** with clippy
+`-D warnings`, `fmt --check` and `guide: ok`.
+
+- **Critical, fixed: a rack row's delete cross shared its arm key with the song rows'.** Both armed on the bare track name, so
+  with a song `Studio` and a rack `Studio` — different folders, one word a player uses for both — arming the rack's `x` and
+  then clicking the song's `SURE` deleted the song on one click, in a section whose whole guard is "the second click". The
+  rack rows now arm on `rack:{name}`, as the bank rows arm on `bank:{name}`. Proved by
+  `a_rack_cross_and_a_song_cross_do_not_share_their_arm`, watched fail first (the rack cross armed `Some("Studio")`), and
+  `a_rack_rows_cross_asks_to_delete_twice` now expects `rack:Studio`.
+- **Fixed: the `rack_name` prefill was untested**, though Task 4 asked for it. `opening_the_card_prefills_the_rack_field_from_the_rack_the_session_is_on`
+  clicks the `BANKS` key with `songs.rack_file` set and reads the field back; **mutation-checked** — `rack_name: String::new()`
+  makes it fail, and the line was restored.
+- **Fixed: "running forwards" was asserted nowhere.** Task 3 asked for it and the book now pins the sentence. The recall test
+  mutes, reverses and transposes the machine it is about to replace **first**, then asserts every recalled machine is
+  unmuted, `!is_reversed()` and in tune — so the assertion proves the recall rather than restating a default.
+- **Fixed: the rule that keeps `SAVE RACK` on a full card was copied and unasserted.** `rack_rows_drawn` and
+  `a_full_rack_list_still_leaves_save_rack_on_the_card` mirror the bank's pair; **mutation-checked** — `list_limit` in place
+  of the reserved row makes it fail, and the line was restored.
+- **Fixed: three stale doc comments.** `write_kit`'s "named by the rack round" (this *is* that round, and `saved_device_from`
+  writes every machine's own kit), `banks::Session`'s summary, which was a field short, and the picker's paragraph, which sat
+  above `Themes` while `Picker` had none.
+- **Fixed: page 12's name rule** now names `racks/` beside `songs/` and `banks/`.
+- **Fixed: the second `gone` guard Task 5 asked for.** `gone 'is a later round'` — narrowed, because two pages of the drum
+  machine use "a later round" for things that still are.
+- **The reviewer's "declined to judge" list, ruled here.** Each stands, and why:
+  `recall` does not clear `kit_dirty` or the per-device editor slots, and neither does `load_song_now` — it is every rack
+  replacement's behaviour, not this round's, and a fix should change both paths at once. `save()` clearing `refused_version`
+  after a refusal is phase 7's own ruling: an explicit save is the player choosing. A rack load leaving `songs.file` set, so
+  autosave later writes the recalled machines into the named song, is the spec's own rule ("the song's name stays"). `load_rack`
+  not validating the name before joining the path is what `load_song` and `load_bank` also do, and every request carries a
+  name from a listing. The phase-7 handover and the wishlist amendments in the range are the previous session's bookkeeping,
+  not this round's.

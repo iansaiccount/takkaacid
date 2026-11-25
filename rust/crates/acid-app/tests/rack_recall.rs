@@ -53,6 +53,11 @@ fn a_recall_replaces_the_machines_and_answers_what_is_left_to_do() {
     // One acid line at 140 with a bank file open and a card showing a machine that is about to be gone.
     let mut rack = Rack::from_saved(&persist::SavedState::default());
     rack.set_tempo_bpm(140.0);
+    // The machine that is about to be replaced is muted, running backwards and transposed, so "a restart forgets it" is
+    // proved by the recall rather than restated by the defaults of machines that were never touched.
+    rack.devices()[0].state.set_mute(true);
+    rack.devices()[0].state.set_reversed(true);
+    rack.devices()[0].state.set_transpose(-7);
     let mut panel = PanelState::default();
     panel.songs.bank_file = Some("Live".to_string());
     panel.open_device_card(0);
@@ -80,9 +85,13 @@ fn a_recall_replaces_the_machines_and_answers_what_is_left_to_do() {
     assert_eq!(rack.selected(), 0, "the panel shows the file's first");
     assert_eq!(rack.tempo_bpm(), 140.0, "a rack file brings no clock");
 
-    // What a restart forgets, a recall forgets: nothing is muted and nothing is transposed.
+    // What a restart forgets, a recall forgets: nothing is muted, nothing runs backwards and nothing is transposed.
     for device in rack.devices() {
         assert!(!device.state.is_muted(), "a recall leaves every machine on");
+        assert!(
+            !device.state.is_reversed(),
+            "and every one of them running forwards"
+        );
         assert_eq!(device.state.transpose(), 0, "and in tune");
     }
 

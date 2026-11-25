@@ -11,6 +11,7 @@ use acid_app::persist::{BankDocument, SavedState, list_banks, load_bank, save_ba
 use acid_app::state::SharedState;
 use acid_app::ui::banks::{Banks, Request};
 use acid_app::ui::layout::{layout, scale};
+use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, SongState, draw_panel, theme};
 use acid_core::bank::PatternBank;
 use acid_core::pattern::Grid;
@@ -164,6 +165,14 @@ fn rack_delete_centre(index: usize) -> Pos2 {
     Pos2::new(
         left() + width() * 0.66 + padding() + width() * 0.14 * 0.5,
         row_centre(racks_top() + heading(), index),
+    )
+}
+
+/// The cross at a song row's right end, in the same column as the bank's and the rack's.
+fn song_delete_centre(index: usize) -> Pos2 {
+    Pos2::new(
+        left() + width() * 0.66 + padding() + width() * 0.14 * 0.5,
+        row_centre(songs_top() + heading(), index),
     )
 }
 
@@ -332,8 +341,8 @@ fn a_rack_rows_cross_asks_to_delete_twice() {
     assert_eq!(panel.songs.request, None, "one click only arms the cross");
     assert_eq!(
         panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
-        Some("Studio"),
-        "and the cross turns into SURE"
+        Some("rack:Studio"),
+        "and the cross turns into SURE, armed under the rack's own key"
     );
 
     click(&ctx, &mut panel, &shared, rack_delete_centre(0));
@@ -341,6 +350,103 @@ fn a_rack_rows_cross_asks_to_delete_twice() {
         panel.songs.request,
         Some(Request::DeleteRack("Studio".to_string())),
         "deleting a file has no undo, so it takes two clicks"
+    );
+}
+
+#[test]
+fn a_rack_cross_and_a_song_cross_do_not_share_their_arm() {
+    // Two files can have one name: `songs/Studio.json` and `racks/Studio.json` are different documents to the app and one
+    // word to a player. Arming the rack's cross must not arm the song's, or the second click lands on the song and deletes
+    // it — the one action on this card with no undo.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    {
+        let card = panel.songs.card.as_mut().unwrap();
+        card.names = vec!["Studio".to_string()];
+        card.rack_names = vec!["Studio".to_string()];
+    }
+
+    click(&ctx, &mut panel, &shared, rack_delete_centre(0));
+    assert_eq!(panel.songs.request, None, "the rack's cross only arms");
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
+        Some("rack:Studio"),
+        "and it arms under its own name, not the bare track name a song uses"
+    );
+
+    click(&ctx, &mut panel, &shared, song_delete_centre(0));
+    assert_eq!(
+        panel.songs.request, None,
+        "a click on the song's cross must not delete the song because a rack of the same name was armed"
+    );
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().delete_armed.as_deref(),
+        Some("Studio"),
+        "it arms the song instead"
+    );
+}
+
+/// How many rack rows the card draws before its save row: the bank's arithmetic, over the rack section's top.
+fn rack_rows_drawn(count: usize) -> usize {
+    let rows_limit = list_limit() - row_height() - gap();
+    let top = racks_top() + heading();
+    (0..count)
+        .take_while(|index| {
+            top + (row_height() + gap()) * *index as f32 + row_height() <= rows_limit
+        })
+        .count()
+}
+
+#[test]
+fn a_full_rack_list_still_leaves_save_rack_on_the_card() {
+    // The save row is the section's door and the card has no scrolling, so a rack list long enough to reach the limit must
+    // stop a row short of it — the bank's rule, and the rack's own door must not be the thing it costs.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(false);
+    let names: Vec<String> = (0..30).map(|index| format!("Rack {index:02}")).collect();
+    let drawn = rack_rows_drawn(names.len());
+    assert!(drawn < names.len(), "the list is long enough to be cut");
+    {
+        let card = panel.songs.card.as_mut().unwrap();
+        card.rack_names = names;
+        card.rack_name = "Thirty One".to_string();
+    }
+
+    click(&ctx, &mut panel, &shared, rack_save_centre(drawn));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::SaveRack("Thirty One".to_string())),
+        "the save row is still on the card, one row under the last rack it drew"
+    );
+}
+
+#[test]
+fn opening_the_card_prefills_the_rack_field_from_the_rack_the_session_is_on() {
+    // `SAVE RACK` writes in place when the field names the rack the machines came from, so the field opens on it — the rule
+    // `SAVE BANK`'s field keeps for the selected device's bank, said for the other document.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = PanelState {
+        songs: SongState {
+            rack_file: Some("Studio".to_string()),
+            ..SongState::default()
+        },
+        ..PanelState::default()
+    };
+
+    click(
+        &ctx,
+        &mut panel,
+        &shared,
+        switches::cell(layout(screen()).switches, Switch::Banks).center(),
+    );
+    assert!(panel.songs.card.is_some(), "the key opens the card");
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().rack_name,
+        "Studio",
+        "the rack field opens on the rack the session came from"
     );
 }
 

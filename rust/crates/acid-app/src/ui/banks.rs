@@ -73,8 +73,8 @@ pub enum Request {
     Close,
 }
 
-/// What the card says about the session it is working on: the song's name, whether it is on disk, and the bank file the
-/// selected device's bank came from.
+/// What the card says about the session it is working on: the song's name, whether it is on disk, the bank file the selected
+/// device's bank came from, and the rack file its machines came from.
 ///
 /// One value because they are three readings of one thing, and because a painter that took them one at a time would have more
 /// arguments than a card has rows.
@@ -418,7 +418,10 @@ pub fn paint(
             );
             songs.delete_armed = None;
         }
-        let delete_armed = songs.delete_armed.as_deref() == Some(name.as_str());
+        // The arm key is namespaced, as the bank rows' is: a song and a rack may share a name, and the crosses must not
+        // share a guard, or one click on the song deletes it because the rack beside it was armed.
+        let delete_key = format!("rack:{name}");
+        let delete_armed = songs.delete_armed.as_deref() == Some(delete_key.as_str());
         let cross = Rect::from_min_size(
             egui::Pos2::new(row.right() + padding, y),
             egui::vec2(width * 0.14, row_height),
@@ -437,7 +440,7 @@ pub fn paint(
                 request = Some(Request::DeleteRack(name.clone()));
                 songs.delete_armed = None;
             } else {
-                songs.delete_armed = Some(name.clone());
+                songs.delete_armed = Some(delete_key);
                 request = None;
             }
         }

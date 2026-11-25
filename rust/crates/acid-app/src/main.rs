@@ -786,8 +786,8 @@ impl TakkaApp {
     ///
     /// The **edited** device is not always the selected one: a player can turn a dial on the second drum machine, click back to
     /// the bass, and save. So the panel records *which* device is owed the write (`PanelState::kit_dirty`), and this reads that
-    /// number. The document still names only the saved device's kit (this phase's rule), so a kit edited on a second drum
-    /// machine lands in the library where the browser lists it and is named by the rack round — but it is written.
+    /// number. A kit edited on a second drum machine is that machine's own: `saved_device_from` writes every machine's kit
+    /// into the document, so the folder this writes is named by the same save that names the machine playing it.
     fn write_kit(&mut self) -> bool {
         let Some(number) = self.panel.kit_dirty else {
             return true;
