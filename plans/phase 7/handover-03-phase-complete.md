@@ -5,7 +5,7 @@ plan you are picking up. `AGENTS.md` outranks everything below.
 
 ## Where the branch stands
 
-`main` is at `e192c45` (phase 6, PR #13, merged). **`phase-7` is open as PR #14** — not merged as this was written:
+`main` is at `bee3d21` — phase 7, **squash-merged** as PR #14 on top of `e192c45` (phase 6, #13). The branch `phase-7` still exists on the remote; its commits are not ancestors of `main` because of the squash, and anything committed to it after the merge (this handover, the wishlist amendments) arrived here instead.
 
 https://github.com/iansaiccount/takkaacid/pull/14
 It carries eleven commits on top of `main`: three planning commits, then one per task — round 01 (`ff8b4cd`, `3cc7d53`, `d8f3ad0`),
