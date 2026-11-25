@@ -11,8 +11,6 @@ https://github.com/iansaiccount/takkaacid/pull/14
 It carries eleven commits on top of `main`: three planning commits, then one per task — round 01 (`ff8b4cd`, `3cc7d53`, `d8f3ad0`),
 the player-reported grid bug and the file that carries held notes (`d01f8fa`, `6ebf28d`), the book (`c322027`), and the review
 fixes (`6c29ac8`). Gates on its head: **985 tests**, clippy `-D warnings`, `fmt --check`, `guide: ok`.
-(`d01f8fa`, `6ebf28d`), the book (`c322027`), and the review fixes (`6c29ac8`). Gates on its head: **985 tests**, clippy `-D warnings`,
-`fmt --check`, `./docs/guide/check.sh` → `guide: ok`.
 
 **Phase 7 has had its branch review** (a subagent that wrote none of it) and every finding is fixed and recorded in the
 plans' `## Progress` — including the P0 it caught, that quitting the app wrote over the very file the launch had refused.
