@@ -500,3 +500,30 @@ The branch review's findings and what was done about each go here too, before th
   total `delete_request` with a fourth arm for a delete that does not exist. `is_file()` stays the design's bool and now has
   its caller in `arm_key`, which keys a demo on its slot because a demo has no file name to key on. Cost if wrong: two
   functions say "a demo has no cross" — `is_file` and `cross`'s `None` — in the same module, each with its own reason.
+- **Task 5 — the wheel, the thumb, and a library too big for the card.** `paint` reads `smooth_scroll_delta.y` only while the
+  pointer is over `rects.band`, steps by `(scrolled / ((CARD_ROW + CARD_GAP) * scale)).round()`, clamps the floor to 0 there
+  and lets `window` clamp the ceiling on the second of its two calls — so a window is still decided in one place. `thumb(..)`
+  draws a track in `theme::BLACK.well` and a handle in `silkscreen_dim`, rounded rects and no glyph, and nothing at all when
+  the list fits. `tests/common/mod.rs` gains `wheel(ctx, panel, shared, dy)` over the band's centre. Proved by five live tests,
+  the wheel's two watched fail first (`the wheel moved the window: 0`, and the far bank row "starts below the first page" but
+  could not be reached): `the_wheel_scrolls_the_list_and_stops_at_the_ends` (a `-60.0` notch moves it, forty more clamp it to
+  `count - visible`, forty the other way return it to 0), `a_wheel_over_the_strip_does_not_scroll_the_list`,
+  `a_delete_re_clamps_the_window_without_re_topping_it` (a `top = 20` request clamps to `count - visible`, and one delete then
+  moves it to `count - visible - 1` rather than to 0), `a_list_that_fits_draws_no_track_or_thumb`, and
+  `a_row_below_the_band_is_reached_by_scrolling_to_it` (the second bank row, past the first page, loads `LoadBank("Second")`
+  after the wheel). `a_library_of_thirty_songs_still_leaves_the_doors` gains the mark's positive half — that the band says
+  there is more of it — so `track_drawn` can be true as well as false. Suite **1022/1022**, clippy `-D warnings`, `fmt --check`.
+  **Three mutation checks, because three of these five passed before the code existed** — they guard behaviour Task 4 landed
+  rather than describing new behaviour, and a guard nobody watched fail proves nothing: `songs.top = 0` in place of the
+  post-wheel clamp kills `a_delete_re_clamps_the_window_without_re_topping_it` (left 0, right 14); `if true` in place of
+  `if over` kills `a_wheel_over_the_strip_does_not_scroll_the_list` (left 14, right 0); and passing `visible = 0` to `thumb`
+  kills `a_list_that_fits_draws_no_track_or_thumb` ("and the card draws no line down the band"). Each line was restored, and
+  the suite re-run green.
+  **Ruling: `common::wheel_at(ctx, panel, shared, at, dy)` beside the plan's `wheel(ctx, panel, shared, dy)`.** The plan's
+  signature parks the pointer nowhere, so it wheels over the band's centre; the strip test needs to wheel over the strip, and a
+  second helper that took the position was cheaper than a test spelling the pointer's place itself. Cost if wrong: one more
+  helper in a test module.
+  **Ruling: the reachability assertion is its own test, `a_row_below_the_band_is_reached_by_scrolling_to_it`.** The plan folds
+  it into the thirty-song test, which already asserts three doors and the mark; a fourth subject there would be a test named
+  for one thing and proving four. The fixture is shared through `crowded()`, so both tests are about the same library. Cost if
+  wrong: two tests share a fixture and a reader finds the wheel's reach under its own name.

@@ -485,8 +485,34 @@ pub fn paint(
     // The band: the rows this chip and this search leave, through the window the band can show. Nothing is drawn or
     // hit-tested outside it, so a click on the strip cannot land on a row.
     let list = rows(songs);
+    // The window's first row, clamped to where the list actually ends, so the wheel scrolls from there rather than from a
+    // request the band could not show.
+    let top = window(rects.band, scale, list.len(), songs.top).1;
+    songs.top = top;
+
+    // The wheel scrolls the list and stops at either end. Read only while the pointer is over the band, so a wheel over the
+    // strip or the footer — the card's fixed furniture — leaves the rows where they are. Only the floor is clamped here: the
+    // ceiling belongs to `window`, which is the one place that decides what a window is.
+    let over = ui
+        .input(|input| input.pointer.hover_pos())
+        .is_some_and(|at| rects.band.contains(at));
+    if over {
+        let scrolled = ui.input(|input| input.smooth_scroll_delta.y);
+        if scrolled != 0.0 {
+            let step = (scrolled / ((CARD_ROW + CARD_GAP) * scale)).round() as i64;
+            songs.top = (top as i64 - step).max(0) as usize;
+        }
+    }
     let (visible, top) = window(rects.band, scale, list.len(), songs.top);
     songs.top = top;
+
+    // The mark that says there is more of the list, and only when there is: two rounded rects in the column `CARD_TRACK`
+    // reserves — a shape, never a glyph, and nothing for the pointer to drag this round.
+    if let Some(mark) = thumb(rects.band, scale, list.len(), visible, top) {
+        let painter = ui.painter();
+        painter.rect_filled(mark.track, 2.0 * scale, theme::BLACK.well);
+        painter.rect_filled(mark.thumb, 2.0 * scale, theme::BLACK.silkscreen_dim);
+    }
     if list.is_empty() {
         // A demonstration of absence is cheaper than a player wondering whether the card is broken.
         ui.painter().text(

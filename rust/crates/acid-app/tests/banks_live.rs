@@ -11,7 +11,8 @@ use acid_app::device::{DeviceKind, Rack};
 use acid_app::persist::{BankDocument, SavedState, list_banks, load_bank, save_bank};
 use acid_app::state::SharedState;
 use acid_app::ui::PanelState;
-use acid_app::ui::banks::{self, Banks, Filter, Request, rows};
+use acid_app::ui::banks::{self, Banks, Filter, Kind, Request, rows};
+use acid_app::ui::draw_panel;
 use acid_core::bank::PatternBank;
 use acid_core::pattern::Grid;
 use common::*;
@@ -210,6 +211,11 @@ fn a_library_of_thirty_songs_still_leaves_the_doors() {
     assert!(
         count > visible,
         "the library is bigger than the band: {count} rows into {visible}"
+    );
+    // And the band says so, or a player would not know there was more of the list than they can see.
+    assert!(
+        track_drawn(&ctx, &mut panel, &shared),
+        "a list longer than the band draws the mark that says there is more of it"
     );
 
     click(&ctx, &mut panel, &shared, chip_centre(Filter::Banks));
@@ -485,4 +491,182 @@ fn loading_a_bank_gives_the_device_all_sixty_four_patterns() {
         0,
         "and the device opens on the first"
     );
+}
+
+/// Thirty songs, one bank and one rack: the library round 02's review broke the card with, and what a row below the band has
+/// to be reached through.
+fn crowded() -> Banks {
+    Banks {
+        names: (0..30).map(|index| format!("Song {index:02}")).collect(),
+        bank_names: vec!["Easy".to_string(), "Second".to_string()],
+        rack_names: vec!["Studio".to_string()],
+        ..Banks::default()
+    }
+}
+
+#[test]
+fn the_wheel_scrolls_the_list_and_stops_at_the_ends() {
+    // A wheel over the band moves the window, and stops at the last page rather than running off it — the shape the theme
+    // list's own test uses, because both lists are one idiom.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(crowded(), false);
+    let count = rows(panel.songs.card.as_ref().unwrap()).len();
+    let (visible, _) = banks::window(rects().band, scale_of(), count, 0);
+
+    wheel(&ctx, &mut panel, &shared, -60.0);
+    let after = panel.songs.card.as_ref().unwrap().top;
+    assert!(after > 0, "the wheel moved the window: {after}");
+
+    for _ in 0..40 {
+        wheel(&ctx, &mut panel, &shared, -120.0);
+    }
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().top,
+        count - visible,
+        "the last page ends on the last row"
+    );
+
+    for _ in 0..40 {
+        wheel(&ctx, &mut panel, &shared, 120.0);
+    }
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().top,
+        0,
+        "and the other way returns to the top"
+    );
+}
+
+#[test]
+fn a_wheel_over_the_strip_does_not_scroll_the_list() {
+    // The strip and the footer are fixed furniture: a wheel over them must not move the rows under the hand that is aiming at
+    // a key.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(crowded(), false);
+
+    for _ in 0..5 {
+        wheel_at(&ctx, &mut panel, &shared, save_centre(Filter::All), -120.0);
+    }
+
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().top,
+        0,
+        "a wheel over the strip leaves the list where it is"
+    );
+}
+
+#[test]
+fn a_delete_re_clamps_the_window_without_re_topping_it() {
+    // The list re-flows under the hand that clicked the cross. Jumping the view to the top would be a surprise; clamping it
+    // into the shorter list is a correction.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(crowded(), false);
+
+    // Where the wheel would have left it, one page past the end of the list.
+    panel.songs.card.as_mut().unwrap().top = 20;
+    run_on(&ctx, &mut panel, &shared, Vec::new());
+    let count = rows(panel.songs.card.as_ref().unwrap()).len();
+    let (visible, _) = banks::window(rects().band, scale_of(), count, 0);
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().top,
+        count - visible,
+        "the request is clamped into the window"
+    );
+
+    panel.songs.card.as_mut().unwrap().names.remove(0);
+    run_on(&ctx, &mut panel, &shared, Vec::new());
+    assert_eq!(
+        panel.songs.card.as_ref().unwrap().top,
+        count - visible - 1,
+        "deleting one row re-clamps the window by one rather than re-topping it"
+    );
+}
+
+#[test]
+fn a_list_that_fits_draws_no_track_or_thumb() {
+    // A library that fits looks exactly as the card did before there was a thumb: no line down its right edge.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(
+        Banks {
+            names: vec!["Acid 1".to_string(), "Another".to_string()],
+            ..Banks::default()
+        },
+        false,
+    );
+
+    let count = rows(panel.songs.card.as_ref().unwrap()).len();
+    let (visible, _) = banks::window(rects().band, scale_of(), count, 0);
+    assert_eq!(visible, count, "two rows fit the band");
+    assert!(
+        banks::thumb(rects().band, scale_of(), count, visible, 0).is_none(),
+        "a list that fits has nothing to say about there being more of it"
+    );
+    assert!(
+        !track_drawn(&ctx, &mut panel, &shared),
+        "and the card draws no line down the band"
+    );
+}
+
+#[test]
+fn a_row_below_the_band_is_reached_by_scrolling_to_it() {
+    // The other half of round 02's finding: the list shows what fits, and the wheel reaches the rest. A bank row past the
+    // first page loads after a turn of the wheel, which is what "a row the list cannot show is reachable" means.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(crowded(), false);
+
+    let list = rows(panel.songs.card.as_ref().unwrap());
+    let bank = list
+        .iter()
+        .position(|row| row.kind == Kind::Bank && row.name == "Second")
+        .expect("the second bank is in the list");
+    let (visible, _) = banks::window(rects().band, scale_of(), list.len(), 0);
+    assert!(bank >= visible, "the row starts below the first page");
+
+    for _ in 0..40 {
+        wheel(&ctx, &mut panel, &shared, -120.0);
+    }
+    let top = panel.songs.card.as_ref().unwrap().top;
+    assert!(
+        bank >= top && bank < top + visible,
+        "the row is in the last page"
+    );
+
+    click(&ctx, &mut panel, &shared, row_centre(bank - top));
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::LoadBank("Second".to_string())),
+        "the far bank row loads once it is scrolled into the band"
+    );
+}
+
+/// Whether the card drew the mark that says there is more of the list: a filled rect inside the band's right-hand column, the
+/// width `CARD_TRACK` reserves. Read out of a real frame's shapes, because the mark is a shape and not a widget.
+fn track_drawn(ctx: &Context, panel: &mut PanelState, shared: &SharedState) -> bool {
+    let input = eframe::egui::RawInput {
+        screen_rect: Some(screen()),
+        events: Vec::new(),
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
+    output.textures_delta.clear();
+
+    let band = rects().band;
+    let track = banks::CARD_TRACK * scale_of();
+    fn walk(shape: &eframe::egui::Shape, band: eframe::egui::Rect, track: f32) -> bool {
+        match shape {
+            eframe::egui::Shape::Rect(rect) => {
+                band.contains_rect(rect.rect) && rect.rect.right() > band.right() - track
+            }
+            eframe::egui::Shape::Vec(shapes) => shapes.iter().any(|shape| walk(shape, band, track)),
+            _ => false,
+        }
+    }
+    output
+        .shapes
+        .iter()
+        .any(|clipped| walk(&clipped.shape, band, track))
 }

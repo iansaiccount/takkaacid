@@ -14,7 +14,9 @@ use acid_app::ui::banks::{self, Banks, Filter};
 use acid_app::ui::layout::{layout, scale};
 use acid_app::ui::switches::{self, Switch};
 use acid_app::ui::{PanelState, SongState, draw_panel};
-use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
+use eframe::egui::{
+    Context, Event, Modifiers, MouseWheelUnit, PointerButton, Pos2, RawInput, Rect, vec2,
+};
 
 /// The window the panel is laid out in: the design's own width, a little shorter, so the card is drawn below the design size
 /// and a row that only fits at the design size has to be found by the band, not by a taller window.
@@ -63,6 +65,29 @@ pub fn click(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Po
     run_on(ctx, panel, shared, vec![Event::PointerMoved(at)]);
     run_on(ctx, panel, shared, vec![button(true)]);
     run_on(ctx, panel, shared, vec![button(false)]);
+}
+
+/// A wheel of `dy` pixels over the list: the pointer onto the band, then the wheel, in two frames. A hand turns a wheel over
+/// what it is looking at, and the card reads it only there.
+pub fn wheel(ctx: &Context, panel: &mut PanelState, shared: &SharedState, dy: f32) {
+    wheel_at(ctx, panel, shared, rects().band.center(), dy);
+}
+
+/// The same wheel, over a place of the test's choosing — the strip, to prove a door does not move under it.
+pub fn wheel_at(ctx: &Context, panel: &mut PanelState, shared: &SharedState, at: Pos2, dy: f32) {
+    run_on(ctx, panel, shared, vec![Event::PointerMoved(at)]);
+    run_on(
+        ctx,
+        panel,
+        shared,
+        vec![Event::MouseWheel {
+            unit: MouseWheelUnit::Point,
+            delta: vec2(0.0, dy),
+            phase: eframe::egui::TouchPhase::Move,
+            source: eframe::egui::MouseWheelSource::Wheel,
+            modifiers: Modifiers::default(),
+        }],
+    );
 }
 
 /// The centre of row `n` of the window: the row's name, which loads what its tag says.
