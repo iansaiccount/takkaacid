@@ -468,3 +468,35 @@ The branch review's findings and what was done about each go here too, before th
   `has_copy`, `request` and `copy_request`. It is a three-variant catalogue, not a fourth `Kind`: a demo has no door, and this
   way no arm is dead and no `_` is needed. Cost if wrong: one public type the design did not name, and the book must describe
   the strip as the chips describe it — which the `Door` doc comment already does.
+- **Task 4 — the face, and the tests that find it.** `paint` is the browser: the search field (`banks-search`, hint `search`),
+  five chips (`banks-filter-{n}`, the lit one the view), the band's rows from `rows(songs)` through `window` with the kind's
+  tag in its own column, the empty band's sentence, the strip by `filter.door()`, and the unchanged footer; a chip or a search
+  change re-tops the list, a delete only re-clamps. `section`, `list_limit`, `bank_rows_limit`, `rack_rows_limit` and the four
+  `section(...)` calls are gone; `load_row`, `guarded_load`, `document_save_name`, `now_line`, the four guard sentences and
+  every id are kept. `tests/common/mod.rs` is new and owns no arithmetic — every helper is a call into `banks::Rects` — and the
+  31 helpers in `banks_live.rs` (18) and `songs_live.rs` (13) are deleted with it. Proved by 16 tests in `banks_live.rs` and
+  21 in `songs_live.rs`, watched fail first against the old painter (`a_rack_rows_cross_asks_to_delete_twice` armed
+  `bank:Easy` at the position of the rack's row — the four sections were still being drawn): `every_kind_of_row_loads_what_its_tag_says`,
+  `a_chip_narrows_the_list_and_the_strip_follows_it`, `the_search_narrows_the_list_to_the_row_that_loads` (the field takes
+  focus under `run_ui`, so the planned fallback was not needed), `a_search_that_matches_nothing_leaves_the_strip_working`,
+  `the_song_row_and_the_rack_row_arm_under_their_own_keys` (`song:Studio` against `rack:Studio`), `a_library_of_thirty_songs_still_leaves_the_doors`,
+  and `a_long_song_list_is_drawn_only_inside_the_band` in place of the cap. Suite **1017/1017**, clippy `-D warnings`,
+  `fmt --check`.
+  **Ruling: `save_name` is deleted.** It was `document_name(&songs.name).or_else(|| songs.open.clone())`, which is exactly
+  `document_save_name(&songs.name, songs.open.as_deref())` — the two functions for one question that `document_save_name`'s
+  own doc comment calls the hand-kept list this project has paid for twice. The plan's step said to keep it; keeping it would
+  have left the song's SAVE on the old path and the other two doors on the new one. Cost if wrong: none — the song's SAVE
+  asks the same name, pinned by `save_asks_for_the_typed_name`, `a_blank_field_still_saves_the_open_song` and
+  `save_a_copy_asks_for_a_copy_of_the_typed_name`.
+  **Ruling: a row's key starts after the kind's column.** `Rects::row(n)` begins at `band.left() + 44 × scale`, with the tag
+  painted in the band's first column, so the name's key holds only the name — otherwise `transport::card_button`'s centred
+  caption would run under the tag on a long name, and splitting the row into two rects would be a second geometry. Cost if
+  wrong: the name's key is 44 design px narrower than the band, and `name(n)` is where `row(n)` begins rather than 44 px into it.
+  **Ruling: `Door::has_copy` became `copy_id() -> Option<&'static str>`, and `save_id()` joined it.** "Is there a copy key"
+  and "what is the copy key's id" are one question — an `egui::Id` is behaviour — so the id's presence is the answer;
+  `card_rects` asks it for `strip_copy` and `paint` asks it for the key. Cost if wrong: `strip_copy` reads
+  `door.copy_id().map(|_| rect)`, one `map` where a bool would have done.
+  **Ruling: `Kind::cross` answers the row's id and its delete request together, `None` for a demo.** The alternative was a
+  total `delete_request` with a fourth arm for a delete that does not exist. `is_file()` stays the design's bool and now has
+  its caller in `arm_key`, which keys a demo on its slot because a demo has no file name to key on. Cost if wrong: two
+  functions say "a demo has no cross" — `is_file` and `cross`'s `None` — in the same module, each with its own reason.

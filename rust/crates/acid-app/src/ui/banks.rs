@@ -159,6 +159,52 @@ impl Kind {
             Kind::Demo => &songs.demos,
         }
     }
+
+    /// The row's id. An `egui::Id` is behaviour — a click in progress is routed by it — so these are the ids the card's rows
+    /// have always had, `rack-load-`'s verb included.
+    fn row_id(self, index: usize) -> String {
+        match self {
+            Kind::Song => format!("song-{index}"),
+            Kind::Bank => format!("bank-{index}"),
+            Kind::Rack => format!("rack-load-{index}"),
+            Kind::Demo => format!("demo-{index}"),
+        }
+    }
+
+    /// What a click on the row's name asks for.
+    fn load_request(self, index: usize, name: &str) -> Request {
+        match self {
+            Kind::Song => Request::Load(name.to_string()),
+            Kind::Bank => Request::LoadBank(name.to_string()),
+            Kind::Rack => Request::LoadRack(name.to_string()),
+            Kind::Demo => Request::LoadDemo(index),
+        }
+    }
+
+    /// The cross at the row's right end: its id, and what a second click asks for. A demo is factory content, so it has no
+    /// file to delete and this is `None` — the same answer [`Kind::is_file`] gives, said by the function that has to say
+    /// something rather than leaving a fourth delete that does not exist.
+    fn cross(self, index: usize, name: &str) -> Option<(String, Request)> {
+        let delete = format!("{}-delete-{index}", self.stem());
+        let request = match self {
+            Kind::Song => Request::Delete(name.to_string()),
+            Kind::Bank => Request::DeleteBank(name.to_string()),
+            Kind::Rack => Request::DeleteRack(name.to_string()),
+            Kind::Demo => return None,
+        };
+        Some((delete, request))
+    }
+
+    /// What a row of this kind says while a click would replace work, and the line the card says in its message slot. A demo
+    /// asks the device's kind, because a 303 replaces the session and a drum machine only that device's grid.
+    fn guard(self, device: crate::device::DeviceKind) -> (&'static str, &'static str) {
+        match self {
+            Kind::Song => (REPLACE_SESSION, REPLACE_SESSION),
+            Kind::Bank => (BANK_ROW_HINT, REPLACE_BANK),
+            Kind::Rack => (RACK_ROW_HINT, REPLACE_RACK),
+            Kind::Demo => (armed_hint(device), guard_message(device)),
+        }
+    }
 }
 
 /// The chips. `All` is a view over every kind; the rest are one kind each.
@@ -256,12 +302,21 @@ impl Door {
         }
     }
 
-    /// Whether this door has the song's second key, `SAVE A COPY`. A bank and a rack are saved in place or as a new file by
-    /// the one key's own rule; only the song has a copy that always makes a new file.
-    pub fn has_copy(self) -> bool {
+    /// The key's id, and `None` where a door has no key: only the song has `SAVE A COPY`, whose id is `song-save-copy`. The
+    /// answer is the id rather than a flag so that "is there a copy key" and "what is it called" cannot disagree.
+    pub fn copy_id(self) -> Option<&'static str> {
         match self {
-            Door::Song => true,
-            Door::Bank | Door::Rack => false,
+            Door::Song => Some("song-save-copy"),
+            Door::Bank | Door::Rack => None,
+        }
+    }
+
+    /// The save key's id. Kept per document for the same reason the field's is: an id is behaviour.
+    pub fn save_id(self) -> &'static str {
+        match self {
+            Door::Song => "song-save",
+            Door::Bank => "bank-save",
+            Door::Rack => "rack-save",
         }
     }
 
@@ -321,9 +376,12 @@ pub fn rows(songs: &Banks) -> Vec<Row> {
 /// two documents may share one name — `songs/Studio.json` and `racks/Studio.json` — and a shared guard would let a click on
 /// one delete the other.
 pub fn arm_key(kind: Kind, index: usize, name: &str) -> String {
-    match kind {
-        Kind::Song | Kind::Bank | Kind::Rack => format!("{}:{name}", kind.stem()),
-        Kind::Demo => format!("{}:{index}", kind.stem()),
+    // A demo has no file name of its own, so it keys on its slot; every other kind keys on the name a player reads. That is
+    // the same question `is_file` answers, asked where the key is made.
+    if kind.is_file() {
+        format!("{}:{name}", kind.stem())
+    } else {
+        format!("{}:{index}", kind.stem())
     }
 }
 
@@ -355,392 +413,187 @@ pub fn paint(
     kind: crate::device::DeviceKind,
 ) -> Option<Request> {
     let session_dirty = session.dirty;
-    let card = panel.shrink(theme::MARGIN * scale);
-    let painter = ui.painter();
-    painter.rect_filled(card, 6.0 * scale, theme::BLACK.panel_raised);
-    painter.rect_stroke(
-        card,
-        6.0 * scale,
-        theme::BLACK.silkscreen_stroke(scale),
-        egui::StrokeKind::Inside,
-    );
-
+    let rects = card_rects(panel, scale, songs.filter);
     let padding = CARD_PADDING * scale;
-    let row_height = CARD_ROW * scale;
-    let left = card.left() + padding;
-    let width = card.width() - padding * 2.0;
-    let mut y = card.top() + padding;
     let mut request = None;
 
-    painter.text(
-        egui::Pos2::new(left, y),
-        egui::Align2::LEFT_TOP,
-        "BANKS",
-        theme::legend(13.0 * scale),
-        theme::BLACK.silkscreen,
-    );
-    // What the card is about, on the card: the song the session is on and whether it is on disk. A player who opened the
-    // card to save should not have to work out which song they are saving. The name is the session's, not the file's, so a
-    // first run and a freshly loaded demo — named, but not yet files — say so instead of calling themselves untitled.
-    let now = now_line(session.name, session_dirty);
-    painter.text(
-        egui::Pos2::new(card.right() - padding, y + 2.0 * scale),
-        egui::Align2::RIGHT_TOP,
-        now,
-        theme::legend(10.0 * scale),
-        theme::BLACK.silkscreen_dim,
-    );
-    // The field holds the song's name, so SAVE keeps the song current, or writes it under a name that is not taken; SAVE A
-    // COPY always makes a new file. There is no third button: renaming is saving under another name.
-    y += 18.0 * scale;
+    {
+        let painter = ui.painter();
+        painter.rect_filled(rects.card, 6.0 * scale, theme::BLACK.panel_raised);
+        painter.rect_stroke(
+            rects.card,
+            6.0 * scale,
+            theme::BLACK.silkscreen_stroke(scale),
+            egui::StrokeKind::Inside,
+        );
+        painter.text(
+            egui::Pos2::new(rects.card.left() + padding, rects.card.top() + padding),
+            egui::Align2::LEFT_TOP,
+            "BANKS",
+            theme::legend(13.0 * scale),
+            theme::BLACK.silkscreen,
+        );
+        // What the card is about, on the card: the song the session is on and whether it is on disk. A player who opened the
+        // card to save should not have to work out which song they are saving. The name is the session's, not the file's, so a
+        // first run and a freshly loaded demo — named, but not yet files — say so instead of calling themselves untitled.
+        painter.text(
+            egui::Pos2::new(
+                rects.card.right() - padding,
+                rects.card.top() + padding + 2.0 * scale,
+            ),
+            egui::Align2::RIGHT_TOP,
+            now_line(session.name, session_dirty),
+            theme::legend(10.0 * scale),
+            theme::BLACK.silkscreen_dim,
+        );
+    }
 
-    // The field needs a name of its own so a nameless SAVE can put the cursor in it.
-    let field_id = ui.scope_id().with("song-name");
-    let field = Rect::from_min_size(
-        egui::Pos2::new(left, y),
-        egui::vec2(width * 0.40, row_height),
-    );
+    // The search narrows the list to the rows whose name contains what is typed, as it is typed. The hint is the plain word:
+    // `…` belongs to `ui::text::fit` and `settings::shorten` and to nothing else.
+    let search_id = ui.scope_id().with("banks-search");
+    let search_before = songs.search.clone();
+    let filter_before = songs.filter;
     ui.put(
-        field,
-        egui::TextEdit::singleline(&mut songs.name)
+        rects.search,
+        egui::TextEdit::singleline(&mut songs.search)
+            .id(search_id)
+            .hint_text("search")
+            .desired_width(rects.search.width()),
+    );
+
+    // The chips: one row of keys, the lit one the view the list is drawn through. A chip is a view of the same rows, so
+    // choosing one is not a second list — and the strip under the list follows it.
+    for (index, chip) in Filter::ALL.iter().enumerate() {
+        if transport::card_button(
+            ui,
+            &format!("banks-filter-{index}"),
+            rects.chips[index],
+            chip.caption(),
+            songs.filter == *chip,
+        )
+        .clicked()
+        {
+            songs.filter = *chip;
+        }
+    }
+    // A different list starts at the top: a clamped old position would leave the player's best match scrolled off it. A
+    // delete only re-clamps, because the list re-flowing under the hand that clicked is not a reason to jump the view.
+    if songs.search != search_before || songs.filter != filter_before {
+        songs.top = 0;
+    }
+
+    // The band: the rows this chip and this search leave, through the window the band can show. Nothing is drawn or
+    // hit-tested outside it, so a click on the strip cannot land on a row.
+    let list = rows(songs);
+    let (visible, top) = window(rects.band, scale, list.len(), songs.top);
+    songs.top = top;
+    if list.is_empty() {
+        // A demonstration of absence is cheaper than a player wondering whether the card is broken.
+        ui.painter().text(
+            rects.band.center(),
+            egui::Align2::CENTER_CENTER,
+            empty_line(songs.filter, !songs.search.is_empty()),
+            theme::legend(10.0 * scale),
+            theme::BLACK.silkscreen_dim,
+        );
+    }
+    for (n, row) in list.iter().skip(top).take(visible).enumerate() {
+        let key = arm_key(row.kind, row.index, &row.name);
+        let armed = songs.load_armed.as_deref() == Some(key.as_str());
+        let (hint, message) = row.kind.guard(kind);
+        if load_row(
+            ui,
+            &row.kind.row_id(row.index),
+            rects.row(n),
+            &row.name,
+            armed,
+            session_dirty,
+            hint,
+        ) && request.is_none()
+        {
+            request = guarded_load(
+                songs,
+                key.clone(),
+                row.kind.load_request(row.index, &row.name),
+                session_dirty,
+                message,
+            );
+            songs.delete_armed = None;
+        }
+        // The kind, in its own column: the row's word and its arm key's stem are one catalogue's. A demo has no cross — it is
+        // factory content — so the three kinds that are files get one at the row's right end.
+        ui.painter().text(
+            rects.tag(n),
+            egui::Align2::LEFT_CENTER,
+            row.kind.tag(),
+            theme::legend(10.0 * scale),
+            theme::BLACK.silkscreen_dim,
+        );
+        if let Some((id, delete)) = row.kind.cross(row.index, &row.name) {
+            let delete_armed = songs.delete_armed.as_deref() == Some(key.as_str());
+            let label = if delete_armed { "SURE" } else { "x" };
+            if transport::card_button(ui, &id, rects.cross(n), label, delete_armed).clicked() {
+                if delete_armed {
+                    request = Some(delete);
+                    songs.delete_armed = None;
+                } else {
+                    songs.delete_armed = Some(key.clone());
+                    request = None;
+                }
+            }
+        }
+    }
+
+    // The strip follows the chip: the song's field and its two keys on `ALL`, `SONGS` and `DEMOS`, the bank's on `BANKS`, the
+    // rack's on `RACKS`. A blank field still saves the document the session came from — SAVE's own rule, said for all three.
+    //
+    // The door answers which field, which key, and what it asks for; the three fields are this card's, so they are named here
+    // once.
+    let door = songs.filter.door();
+    let (field_text, current): (&mut String, Option<&str>) = match door {
+        Door::Song => (&mut songs.name, songs.open.as_deref()),
+        Door::Bank => (&mut songs.bank_name, session.bank_file),
+        Door::Rack => (&mut songs.rack_name, session.rack_file),
+    };
+    let field_id = ui.scope_id().with(door.field_id());
+    ui.put(
+        rects.strip_field,
+        egui::TextEdit::singleline(&mut *field_text)
             .id(field_id)
-            .hint_text("song name")
-            .desired_width(field.width()),
+            .hint_text(door.field_hint())
+            .desired_width(rects.strip_field.width()),
     );
-    let save_rect = Rect::from_min_size(
-        egui::Pos2::new(field.right() + padding, y),
-        egui::vec2(width * 0.20 - padding, row_height),
-    );
-    let copy_rect = Rect::from_min_size(
-        egui::Pos2::new(save_rect.right() + padding, y),
-        egui::vec2(width * 0.22 - padding, row_height),
-    );
-    let typed = crate::persist::document_name(&songs.name);
-    // A blank field still saves the song the session is on. With nothing open there is nothing to save and nothing to copy:
-    // SAVE puts the cursor in the field rather than dying quietly, which is what a player would expect of a save button.
-    let can_save = typed.is_some() || songs.open.is_some();
-    if transport::card_button(ui, "song-save", save_rect, "SAVE", can_save).clicked() {
-        match save_name(songs) {
-            Some(name) => request = Some(Request::Save(name)),
+    let typed = crate::persist::document_name(field_text.as_str());
+    // A blank field still saves the document the session is on. With nothing named and nothing open there is nothing to save:
+    // the key puts the cursor in the field rather than dying quietly, which is what a player would expect of a save key.
+    let can_save = typed.is_some() || current.is_some();
+    if transport::card_button(
+        ui,
+        door.save_id(),
+        rects.strip_save,
+        door.save_label(),
+        can_save,
+    )
+    .clicked()
+    {
+        match document_save_name(field_text.as_str(), current) {
+            Some(name) => request = Some(door.request(name)),
             None => ui.memory_mut(|memory| memory.request_focus(field_id)),
         }
     }
-    if transport::card_button(
-        ui,
-        "song-save-copy",
-        copy_rect,
-        "SAVE A COPY",
-        typed.is_some(),
-    )
-    .clicked()
-        && let Some(name) = save_name(songs)
+    if let (Some(copy), Some(copy_id)) = (rects.strip_copy, door.copy_id())
+        && transport::card_button(ui, copy_id, copy, "SAVE A COPY", typed.is_some()).clicked()
+        && let Some(name) = document_save_name(field_text.as_str(), current)
+        && let Some(copy) = door.copy_request(name)
     {
-        request = Some(Request::SaveCopy(name));
-    }
-    y += row_height + padding;
-    // The room a list may take: everything above the footer keys, less one row so the last row is not painted over them.
-    // Past it the rows stop, as the kit browser's do — the alternative is a list drawn over NEW/IMPORT/EXPORT/CLOSE and off
-    // the bottom of the card. A player with more songs than fit sees the first of them; there is no scrolling yet.
-    let list_limit = card.bottom() - padding - row_height - CARD_GAP * scale;
-
-    // The player's own songs, right under the name field that saves them: the name loads it, the cross beside it deletes it
-    // (twice, because there is no undo).
-    if (y + CARD_HEADING * scale) < list_limit {
-        section(ui, scale, "SONGS", left, &mut y);
-    }
-    for index in 0..songs.names.len() {
-        if (y + row_height) > list_limit {
-            break;
-        }
-        let name = songs.names[index].clone();
-        let row = Rect::from_min_size(
-            egui::Pos2::new(left, y),
-            egui::vec2(width * 0.66, row_height),
-        );
-        let key = format!("song:{name}");
-        let armed = songs.load_armed.as_deref() == Some(key.as_str());
-        if load_row(
-            ui,
-            &format!("song-{index}"),
-            row,
-            &name,
-            armed,
-            session_dirty,
-            REPLACE_SESSION,
-        ) && request.is_none()
-        {
-            request = guarded_load(
-                songs,
-                key,
-                Request::Load(name.clone()),
-                session_dirty,
-                REPLACE_SESSION,
-            );
-            songs.delete_armed = None;
-        }
-        let delete_armed = songs.delete_armed.as_deref() == Some(name.as_str());
-        let cross = Rect::from_min_size(
-            egui::Pos2::new(row.right() + padding, y),
-            egui::vec2(width * 0.14, row_height),
-        );
-        let label = if delete_armed { "SURE" } else { "x" };
-        if transport::card_button(
-            ui,
-            &format!("song-delete-{index}"),
-            cross,
-            label,
-            delete_armed,
-        )
-        .clicked()
-        {
-            if delete_armed {
-                request = Some(Request::Delete(name.clone()));
-                songs.delete_armed = None;
-            } else {
-                songs.delete_armed = Some(name.clone());
-                request = None;
-            }
-        }
-        y += row_height + CARD_GAP * scale;
-    }
-    // Then the demos: they are what a player reaches for when they want a sound, and they are not files, so there is no
-    // cross and no rename. Loading one replaces the session on a 303 — twice, while it is unsaved — and on a drum machine
-    // it fills the grid with that demo's groove and leaves the session where it was; the device's kind decides which, in
-    // `main`. The line a click leaves behind says which of the two it will do — `armed_hint` and `guard_message` ask the
-    // device's kind, because "session" on a drum face was the wrong word.
-    section(ui, scale, "DEMO BANKS", left, &mut y);
-    for index in 0..songs.demos.len() {
-        if (y + row_height) > list_limit {
-            break;
-        }
-        let name = songs.demos[index].clone();
-        let row = Rect::from_min_size(
-            egui::Pos2::new(left, y),
-            egui::vec2(width * 0.66, row_height),
-        );
-        let key = format!("demo:{index}");
-        let armed = songs.load_armed.as_deref() == Some(key.as_str());
-        if load_row(
-            ui,
-            &format!("demo-{index}"),
-            row,
-            &name,
-            armed,
-            session_dirty,
-            armed_hint(kind),
-        ) && request.is_none()
-        {
-            request = guarded_load(
-                songs,
-                key,
-                Request::LoadDemo(index),
-                session_dirty,
-                guard_message(kind),
-            );
-        }
-        y += row_height + CARD_GAP * scale;
+        request = Some(copy);
     }
 
-    // Then the player's own bank files: a bank row replaces the selected device's whole bank — all sixty-four patterns —
-    // armed while the session is unsaved like every other load; the cross deletes the file; the field under the rows saves
-    // that bank under a name, which is its own door rather than a fifth footer key. The rows stop a row short of the limit so
-    // the save row always gets its place: a player with a full list must still be able to save a new bank, and there is no
-    // scrolling to reach a door drawn under the rows.
-    if (y + CARD_HEADING * scale) < list_limit {
-        section(ui, scale, "PATTERN BANKS", left, &mut y);
-    }
-    let bank_rows_limit = list_limit - row_height - CARD_GAP * scale;
-    for index in 0..songs.bank_names.len() {
-        if (y + row_height) > bank_rows_limit {
-            break;
-        }
-        let name = songs.bank_names[index].clone();
-        let row = Rect::from_min_size(
-            egui::Pos2::new(left, y),
-            egui::vec2(width * 0.66, row_height),
-        );
-        let key = format!("bank:{name}");
-        let armed = songs.load_armed.as_deref() == Some(key.as_str());
-        if load_row(
-            ui,
-            &format!("bank-{index}"),
-            row,
-            &name,
-            armed,
-            session_dirty,
-            BANK_ROW_HINT,
-        ) && request.is_none()
-        {
-            request = guarded_load(
-                songs,
-                key,
-                Request::LoadBank(name.clone()),
-                session_dirty,
-                REPLACE_BANK,
-            );
-            songs.delete_armed = None;
-        }
-        let delete_key = format!("bank:{name}");
-        let delete_armed = songs.delete_armed.as_deref() == Some(delete_key.as_str());
-        let cross = Rect::from_min_size(
-            egui::Pos2::new(row.right() + padding, y),
-            egui::vec2(width * 0.14, row_height),
-        );
-        let label = if delete_armed { "SURE" } else { "x" };
-        if transport::card_button(
-            ui,
-            &format!("bank-delete-{index}"),
-            cross,
-            label,
-            delete_armed,
-        )
-        .clicked()
-        {
-            if delete_armed {
-                request = Some(Request::DeleteBank(name.clone()));
-                songs.delete_armed = None;
-            } else {
-                songs.delete_armed = Some(delete_key);
-                request = None;
-            }
-        }
-        y += row_height + CARD_GAP * scale;
-    }
-    // The bank's own save row, under the rows it saves from: a name and one key. A footer key whose meaning depended on which
-    // heading was above it is a key nobody can describe in one sentence, and a bank has no file dialog to open.
-    if (y + row_height) <= list_limit {
-        let bank_field_id = ui.scope_id().with("bank-name");
-        let bank_field = Rect::from_min_size(
-            egui::Pos2::new(left, y),
-            egui::vec2(width * 0.40, row_height),
-        );
-        ui.put(
-            bank_field,
-            egui::TextEdit::singleline(&mut songs.bank_name)
-                .id(bank_field_id)
-                .hint_text("bank name")
-                .desired_width(bank_field.width()),
-        );
-        let bank_save = Rect::from_min_size(
-            egui::Pos2::new(bank_field.right() + padding, y),
-            egui::vec2(width * 0.30 - padding, row_height),
-        );
-        let can_save_bank = crate::persist::document_name(&songs.bank_name).is_some()
-            || session.bank_file.is_some();
-        if transport::card_button(ui, "bank-save", bank_save, "SAVE BANK", can_save_bank).clicked()
-        {
-            match document_save_name(&songs.bank_name, session.bank_file) {
-                Some(name) => request = Some(Request::SaveBank(name)),
-                None => ui.memory_mut(|memory| memory.request_focus(bank_field_id)),
-            }
-        }
-        y += row_height + CARD_GAP * scale;
-    }
-
-    // And the rack's own document, under the bank's rule: rows that load, a cross that deletes, and the name field its SAVE
-    // RACK writes under. A rack is the machines, so a row replaces every machine in the session.
-    if (y + CARD_HEADING * scale) < list_limit {
-        section(ui, scale, "RACKS", left, &mut y);
-    }
-    // The rows stop one row short of the limit so the rack's own save row always has a place, as PATTERN BANKS' do.
-    let rack_rows_limit = list_limit - row_height - CARD_GAP * scale;
-    for index in 0..songs.rack_names.len() {
-        if (y + row_height) > rack_rows_limit {
-            break;
-        }
-        let name = songs.rack_names[index].clone();
-        let row = Rect::from_min_size(
-            egui::Pos2::new(left, y),
-            egui::vec2(width * 0.66, row_height),
-        );
-        let key = format!("rack:{name}");
-        let armed = songs.load_armed.as_deref() == Some(key.as_str());
-        if load_row(
-            ui,
-            &format!("rack-load-{index}"),
-            row,
-            &name,
-            armed,
-            session_dirty,
-            RACK_ROW_HINT,
-        ) && request.is_none()
-        {
-            request = guarded_load(
-                songs,
-                key,
-                Request::LoadRack(name.clone()),
-                session_dirty,
-                REPLACE_RACK,
-            );
-            songs.delete_armed = None;
-        }
-        // The arm key is namespaced, as the bank rows' is: a song and a rack may share a name, and the crosses must not
-        // share a guard, or one click on the song deletes it because the rack beside it was armed.
-        let delete_key = format!("rack:{name}");
-        let delete_armed = songs.delete_armed.as_deref() == Some(delete_key.as_str());
-        let cross = Rect::from_min_size(
-            egui::Pos2::new(row.right() + padding, y),
-            egui::vec2(width * 0.14, row_height),
-        );
-        let label = if delete_armed { "SURE" } else { "x" };
-        if transport::card_button(
-            ui,
-            &format!("rack-delete-{index}"),
-            cross,
-            label,
-            delete_armed,
-        )
-        .clicked()
-        {
-            if delete_armed {
-                request = Some(Request::DeleteRack(name.clone()));
-                songs.delete_armed = None;
-            } else {
-                songs.delete_armed = Some(delete_key);
-                request = None;
-            }
-        }
-        y += row_height + CARD_GAP * scale;
-    }
-    // The rack's own save row: a name and one key, which is the bank's door rather than a footer key whose meaning would
-    // depend on the heading above it.
-    if (y + row_height) <= list_limit {
-        let rack_field_id = ui.scope_id().with("rack-name");
-        let rack_field = Rect::from_min_size(
-            egui::Pos2::new(left, y),
-            egui::vec2(width * 0.40, row_height),
-        );
-        ui.put(
-            rack_field,
-            egui::TextEdit::singleline(&mut songs.rack_name)
-                .id(rack_field_id)
-                .hint_text("rack name")
-                .desired_width(rack_field.width()),
-        );
-        let rack_save = Rect::from_min_size(
-            egui::Pos2::new(rack_field.right() + padding, y),
-            egui::vec2(width * 0.30 - padding, row_height),
-        );
-        let can_save_rack = crate::persist::document_name(&songs.rack_name).is_some()
-            || session.rack_file.is_some();
-        if transport::card_button(ui, "rack-save", rack_save, "SAVE RACK", can_save_rack).clicked()
-        {
-            match document_save_name(&songs.rack_name, session.rack_file) {
-                Some(name) => request = Some(Request::SaveRack(name)),
-                None => ui.memory_mut(|memory| memory.request_focus(rack_field_id)),
-            }
-        }
-    }
     // The footer: a new song, the two doors to the file system, and close. NEW replaces the session, so it asks twice while
     // the session is unsaved, like every other action that would throw work away.
-    let bottom = card.bottom() - padding - row_height;
-    let new_rect = Rect::from_min_size(
-        egui::Pos2::new(left, bottom),
-        egui::vec2(80.0 * scale, row_height),
-    );
     let new_armed = songs.load_armed.as_deref() == Some(NEW_KEY);
     let new_label = if new_armed { "SURE?" } else { "NEW" };
-    if transport::card_button(ui, "song-new", new_rect, new_label, new_armed).clicked() {
+    if transport::card_button(ui, "song-new", rects.footer_new, new_label, new_armed).clicked() {
         request = guarded_load(
             songs,
             NEW_KEY.to_string(),
@@ -749,32 +602,25 @@ pub fn paint(
             REPLACE_SESSION,
         );
     }
-    let import_rect = Rect::from_min_size(
-        egui::Pos2::new(new_rect.right() + padding, bottom),
-        egui::vec2(96.0 * scale, row_height),
-    );
-    if transport::card_button(ui, "song-import", import_rect, "IMPORT", false).clicked() {
+    if transport::card_button(ui, "song-import", rects.footer_import, "IMPORT", false).clicked() {
         request = Some(Request::Import);
     }
-    let export_rect = Rect::from_min_size(
-        egui::Pos2::new(import_rect.right() + padding, bottom),
-        egui::vec2(96.0 * scale, row_height),
-    );
     let can_export = songs.open.is_some() || typed.is_some();
-    if transport::card_button(ui, "song-export", export_rect, "EXPORT", can_export).clicked() {
+    if transport::card_button(ui, "song-export", rects.footer_export, "EXPORT", can_export)
+        .clicked()
+    {
         request = Some(Request::Export);
     }
-    let close = Rect::from_min_size(
-        egui::Pos2::new(card.right() - padding - 90.0 * scale, bottom),
-        egui::vec2(90.0 * scale, row_height),
-    );
-    if transport::card_button(ui, "song-close", close, "CLOSE", false).clicked() {
+    if transport::card_button(ui, "song-close", rects.footer_close, "CLOSE", false).clicked() {
         request = Some(Request::Close);
     }
 
     if let Some(message) = &songs.message {
         ui.painter().text(
-            egui::Pos2::new(export_rect.right() + padding, bottom + row_height * 0.5),
+            egui::Pos2::new(
+                rects.footer_export.right() + padding,
+                rects.footer_new.center().y,
+            ),
             egui::Align2::LEFT_CENTER,
             message,
             theme::legend(10.0 * scale),
@@ -872,9 +718,13 @@ pub struct Rects {
 
 impl Rects {
     /// Row `n` of the window, and the delete cross at its right end.
+    /// Row `n` of the window: the name's key, which starts after the kind's column so the tag neither moves nor is covered.
     pub fn row(&self, n: usize) -> Rect {
         Rect::from_min_size(
-            egui::Pos2::new(self.band.left(), self.band.top() + n as f32 * self.step()),
+            egui::Pos2::new(
+                self.band.left() + CARD_TAG * self.scale,
+                self.band.top() + n as f32 * self.step(),
+            ),
             egui::vec2(self.band.width() * ROW_SHARE, CARD_ROW * self.scale),
         )
     }
@@ -887,15 +737,16 @@ impl Rects {
         )
     }
 
-    /// Where the kind's tag word and the row's name begin.
+    /// Where the kind's tag word and the row's name begin: the tag in the band's first column, the name at the key the tag
+    /// labels.
     pub fn tag(&self, n: usize) -> egui::Pos2 {
         let row = self.row(n);
-        egui::Pos2::new(row.left(), row.center().y)
+        egui::Pos2::new(self.band.left(), row.center().y)
     }
 
     pub fn name(&self, n: usize) -> egui::Pos2 {
         let row = self.row(n);
-        egui::Pos2::new(row.left() + CARD_TAG * self.scale, row.center().y)
+        egui::Pos2::new(row.left(), row.center().y)
     }
 
     /// The y-distance from one row to the next: a row and the gap under it.
@@ -986,7 +837,7 @@ pub fn card_rects(panel: Rect, scale: f32, filter: Filter) -> Rects {
         band,
         strip_field,
         strip_save,
-        strip_copy: door.has_copy().then_some(strip_copy),
+        strip_copy: door.copy_id().map(|_| strip_copy),
         footer_new,
         footer_import,
         footer_export,
@@ -1004,12 +855,6 @@ pub(super) fn heading(ui: &mut Ui, scale: f32, title: &str, at: egui::Pos2) {
         theme::legend(10.0 * scale),
         theme::BLACK.silkscreen_dim,
     );
-}
-
-/// A heading over one of the card's two lists, and the space it takes.
-fn section(ui: &mut Ui, scale: f32, title: &str, left: f32, y: &mut f32) {
-    heading(ui, scale, title, egui::Pos2::new(left, *y));
-    *y += CARD_HEADING * scale;
 }
 
 /// What a demo row says once its first click has been spent, per machine: on a 303 a second click throws the session away
@@ -1085,11 +930,6 @@ fn guarded_load(
 
 /// The two-click guard's key for NEW: it is not a song, so it needs a name of its own in the armed slot.
 const NEW_KEY: &str = "new";
-
-/// The name a SAVE should use: what the player typed, or the song the session is already on when the field is blank.
-fn save_name(songs: &Banks) -> Option<String> {
-    crate::persist::document_name(&songs.name).or_else(|| songs.open.clone())
-}
 
 /// The name a `SAVE BANK` or a `SAVE RACK` should use: what the player typed, or the file the document came from when the
 /// field is blank — SAVE's own rule, said for the other two documents.
