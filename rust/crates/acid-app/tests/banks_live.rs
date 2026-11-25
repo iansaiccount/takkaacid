@@ -2,6 +2,9 @@
 //!
 //! The card is a painter: every test here drives `draw_panel` through real egui frames and asserts on the request the card
 //! left behind, because what a click writes is `main`'s to do and not the card's.
+//!
+//! The rack section's tests live here rather than in a file of their own: the geometry that finds a section's rows is
+//! measured by the helpers above, and a second copy of it would be the hand-kept list this project has paid for twice.
 
 use acid_app::device::{DeviceKind, Rack};
 use acid_app::persist::{BankDocument, SavedState, list_banks, load_bank, save_bank};

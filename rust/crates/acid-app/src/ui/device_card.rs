@@ -158,10 +158,10 @@ pub fn card_rect(panel: Rect, s: f32, kind: DeviceKind) -> Rect {
     )
 }
 
-/// The picker: a card that offers the kinds of device there are, with one honest line about what is not saved yet.
+/// The picker: a card that offers the kinds of device there are, and greys a row once the rack is full.
 ///
-/// It is its own value rather than `device_card`'s flag because it is a different card — its own geometry, its own footnote
-/// and its own answer (`Add`), and the two are never up together.
+/// It is its own value rather than `device_card`'s flag because it is a different card — its own geometry, its own rows and
+/// its own answer (`Add`), and the two are never up together.
 /// The theme list: a drop-down over the card, because twenty-two themes do not fit one key.
 ///
 /// It lives on the card rather than in a card of its own: it is the same device's question, it is painted over the card's

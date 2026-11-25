@@ -144,7 +144,8 @@ notes this round.
 and the row being asked about on `<name> - click again to replace`.
 
 **The bank browser:** `BANKS`, `DEMO BANKS`, `PATTERN BANKS`, `SONGS`, `RACKS`, `SAVE`, `SAVE A COPY`, `SAVE BANK`, `SAVE RACK`,
-`LOAD RACK`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, and the `x` / `SURE` on each of your own rows, of a song and of a bank.
+`NEW`, `IMPORT`, `EXPORT`, `CLOSE`, a row per song, per bank file and per rack file, and the `x` / `SURE` on each of your own
+rows, of a song, of a bank and of a rack.
 
 **The help card** has four sections — `STEPS`, `KEYBOARD`, `MIDI`, `NOTES`.
 

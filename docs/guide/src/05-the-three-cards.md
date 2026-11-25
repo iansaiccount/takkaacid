@@ -55,10 +55,10 @@ and [`22-the-drum-machine`](22-the-drum-machine.md) the machine's.
 
 ## The picker — `+` on the strip
 
-![The picker: two kinds of device, and what is not saved](img/picker.png)
+![The picker: a row for each kind of device](img/picker.png)
 
-What `+` opens: a row for every kind of device there is — `ACID` and `DRUMS` — and a line under them that says what a restart
-costs. At four devices the row is greyed and a click says the rack is full. It closes itself when a row is clicked.
+What `+` opens: a row for every kind of device there is — `ACID` and `DRUMS`. At four devices the row is greyed and a click
+says the rack is full. It closes itself when a row is clicked.
 [`18-a-rack-of-devices`](18-a-rack-of-devices.md) is that page.
 
 ## One card at a time, and which one gives way

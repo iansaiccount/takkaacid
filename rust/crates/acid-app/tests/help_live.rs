@@ -43,7 +43,7 @@ fn strings(output: &FullOutput) -> Vec<String> {
 }
 
 #[test]
-fn the_help_card_names_the_devices_and_what_is_not_saved() {
+fn the_help_card_names_the_devices_and_that_they_are_saved() {
     let state = SharedState::new();
     let mut panel = PanelState {
         help_visible: true,
@@ -60,13 +60,19 @@ fn the_help_card_names_the_devices_and_what_is_not_saved() {
         "Ctrl+V",
         "MUTE",
         "four devices",
-        "not saved",
+        "saved with the song",
     ] {
         assert!(
             said.contains(wanted),
             "the help card should mention {wanted}: {said}"
         );
     }
+    // Phase 5 made the session file hold every machine, and the card said "names and extra devices are not saved yet" for
+    // two rounds after. A claim the panel contradicts cannot come back.
+    assert!(
+        !said.contains("not saved"),
+        "the help card apologises for a format that saves everything: {said}"
+    );
 }
 
 /// The drum face's keys, in the card's own words. The card is the only manual: a drum machine whose keys are not on it

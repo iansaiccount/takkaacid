@@ -318,3 +318,27 @@ wrong. The branch review's findings and what was done about each go here too, be
   **Not re-pinned: "the section is skipped when the card has no room."** That is the card's one `list_limit` rule, already
   asserted for `PATTERN BANKS`; racks obey the same `if`, and a second arrangement of the same test would pin the painter
   twice.
+- **Task 5 — the book, the stale claims, the pins and the picture.** `12-songs-and-demos`'s `RACKS` paragraph is rewritten
+  (a rack is a file of the whole instrument; a row replaces every machine; the song's name and the tempo stay; the armed row's
+  words; `SAVE RACK`'s field rule; what a recall forgets), its intro stops calling a rack "a document this build only has
+  keys for", and `18-a-rack-of-devices` gains *A rack of your own*; `20-reference`'s browser line loses the `LOAD RACK` key
+  and gains a row per rack file; `05-the-three-cards`'s picker caption and prose lose "what is not saved". The same claim is
+  gone from the code: the help card's line reads "four devices; every one of them is saved with the song", the `ADD DEVICE`
+  tip says so too, and `device_card.rs`'s picker doc no longer promises a footnote. `check.sh` pins `racks/<name>.json`,
+  `click again to replace the rack` and `unmuted, running forwards and in tune`, moves `LOAD RACK` from the must-say list to a
+  `gone` guard, and guards `does nothing yet`. `banks-card.png` is retaken on a fresh `Xvfb :87` (`getdisplaygeometry` →
+  `2000 1400`, window `1960x1340`, a fresh `TAKKA_ACID_DATA_DIR`, `BANKS` clicked at `762 561` logical, pointer parked) and
+  its `img/README.md` row records the state and the command. `./docs/guide/check.sh` → `guide: ok`. Suite **996/996**, clippy
+  `-D warnings`, `fmt --check`.
+  **The suite caught a test that pinned the stale claim as behaviour.** `help_live`'s
+  `the_help_card_names_the_devices_and_what_is_not_saved` asserted the card says "not saved", so this round's own words broke
+  it — the test was pinning a lie the panel has contradicted since phase 5. It is now
+  `the_help_card_names_the_devices_and_that_they_are_saved`: the same list with "saved with the song", plus one assertion that
+  "not saved" cannot come back. (The first cut of that edit left a duplicate `#[test]` attribute on the function, which the
+  harness ran twice — 997 instead of 996 — caught by counting the suite, and fixed.)
+  **Ruling: the picture shows the rack's field and no row.** A row would be a rack file the photographer made, and a guide
+  picture is taken on a fresh `TAKKA_ACID_DATA_DIR` so it shows a first run; the row's paint is pinned by
+  `the_rack_section_lists_the_files_and_asks_for_a_load`. Cost if wrong: the book has no picture of a rack row until one is
+  taken.
+  **Ruling: `LOAD RACK` moved from `check.sh`'s must-say list to a `gone` guard.** The key is gone from the face — a row
+  loads a rack now — so the pin had to move from "the book says it" to "the book does not".

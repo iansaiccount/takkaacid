@@ -2,7 +2,7 @@
 
 `BANKS` opens the browser that keeps your work: a name field with `SAVE` and `SAVE A COPY` beside it, four lists, and four
 keys along the bottom. It keeps three different amounts of work: a **song** is the whole rack, a **pattern bank** is sixty-four
-patterns and the machine they were written on, and a **rack** is a document of its own that this build only has keys for.
+patterns and the machine they were written on, and a **rack** is every machine with its patches and banks, as a file of its own.
 
 ## The four lists
 **`DEMO BANKS`** are the seven that ship inside the app: **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock**,
@@ -36,9 +36,19 @@ click only arms the row — it prints `<name> - click again to replace` — and 
 Every row of `PATTERN BANKS` and `SONGS` has a small `x` at its right end. One click turns it into `SURE`; the second deletes
 that file. The demos have no `x`.
 
-**`RACKS`** holds `SAVE RACK` and `LOAD RACK`, and it is the one place on the card that does nothing yet: a rack of its own —
-the machines, their patches and their banks as one document — is a later round. On this build both keys say so on the status
-line and open nothing.
+**`RACKS`** are the racks you have saved: one `racks/<name>.json` per file, each the whole instrument — every machine with its
+kind, name, colour, ports, channel, role, patterns, patch, kit, shuffle and learned controllers. A row loads that rack into
+the session, replacing **every** machine in it; the song's name and the tempo stay where they are, because a rack file carries
+no transport and no song. If what is on screen has unsaved changes, the first click only arms the row — it prints
+`<name> - click again to replace the rack` — and the second loads it. Each row's `x` turns into `SURE` and deletes the file.
+
+`SAVE RACK`, under those rows, keeps the session's machines under a name, and its field behaves as the bank's does: the rack's
+own name rewrites that file, a different name writes a new one — beside a taken one, `Studio (2)` — and a blank field saves
+the rack the session came from. That name is remembered for this session and not across a restart, so after relaunching, a
+name already taken is stepped around rather than written over.
+
+A load brings the machines back as the file wrote them, and what a restart forgets a recall forgets too: every machine comes
+back unmuted, running forwards and in tune.
 
 ## One song, the whole rack
 
