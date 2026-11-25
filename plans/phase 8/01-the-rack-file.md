@@ -275,3 +275,18 @@ wrong. The branch review's findings and what was done about each go here too, be
   **Ruling: `replace_from_saved` sets the tempo before it builds the machines**, where the old body set it after. The bus is
   then published with the clock the file asked for rather than the one the session had. Cost if wrong: a tempo change lands
   one statement earlier inside one synchronous call — nothing reads it in between.
+- **Task 3 — the recall's decisions, in the library.** `rack_recall::recall(&mut Rack, &mut PanelState, &RackDocument,
+  &[String]) -> Recalled` replaces the machines, closes the device card, adopts the new pattern at step 0, clears the bank
+  file and marks the session dirty, and answers the kits to decode and the ports the new rack names and this machine has not
+  got. Proved by `a_recall_replaces_the_machines_and_answers_what_is_left_to_do` (a DRUMS machine carrying `909` and an ACID
+  machine on an unopened port replace a one-machine session; selection 0, tempo kept, every machine unmuted and in tune,
+  `bank_file` gone, the card closed, `(0, "909")` and `["Port B"]` answered), watched fail first as
+  `unresolved import acid_app::rack_recall` — after two mistakes of the test's own were fixed first (`Role::Notes` is
+  `Role::PlayAndControl`, and a `Device`'s bank is a field). Suite **993/993**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: `recall` takes `open_ports: &[String]`.** The spec's signature left it out, but `persist::unopened_ports` needs
+  the list and only `main`'s MIDI system knows it; without the argument the recall would have to guess or `main` would have
+  to re-derive the document. Cost if wrong: one more argument at the one call site.
+  **Ruling: `recall` does not clear `pending_pattern`**, though the plan's step list said it does. That field is
+  `TakkaApp`'s, not `PanelState`'s — a held controller request, which `main` clears on a song load too — so the recall cannot
+  reach it and `load_rack_now` clears it beside the call. Cost if wrong: a held pattern request could land on the recalled
+  rack; the wiring is Task 4's and is named in the review focus.
