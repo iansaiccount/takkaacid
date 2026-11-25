@@ -438,3 +438,16 @@ The branch review's findings and what was done about each go here too, before th
   **Ruling: `Kind::names` is private and takes no explicit lifetime.** The design wrote `fn names<'a>(self, songs: &'a Banks)`
   and `-D warnings` refuses the elidable lifetime. It is a `pub fn` in neither the design nor the plan, and nothing outside
   `rows` asks a kind for its list. Cost if wrong: a later caller wants it and widens it, which is one word.
+- **Task 2 — the window and the thumb.** `window(band, scale, count, top) -> (visible, top)` is the one place that decides
+  what a window is — the painter clamps the floor, this clamps the ceiling — and `thumb(band, scale, count, visible, top) ->
+  Option<Thumb>` draws the track and handle only when the list overflows, with `CARD_TRACK: 4.0` the width reserved at the
+  band's right edge whether or not it is drawn. Proved by four unit tests over a local `band_of(rows)` built from `CARD_ROW`
+  and `CARD_GAP`, watched fail first as `cannot find function window` / `cannot find value CARD_TRACK`: a ten-row band over
+  ten and over three rows is `(10, 0)` / `(3, 0)` with `thumb` `None`; a four-row band over ten is `(4, 0)`, `(4, 3)` and
+  `(4, 6)` at `top = 99`; the same `top = 6` is `(6, 4)` in a six-row band and `(10, 0)` in a ten-row one; and the handle is
+  `CARD_TRACK` wide and `visible / count` of the track, at the top at `top = 0`, at the bottom on the last page. Suite
+  **1011/1011**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: the handle's share is asserted to a hundredth of a pixel, not to the bit.** A `Rect`'s height is `max.y - min.y`,
+  so placing the handle re-rounds its height at the y it sits at: `94 × 0.4` reads back as `37.600006` against the direct
+  `37.600002`. The code is the proportional one the design asked for; the test's equality was the wrong instrument. Cost if
+  wrong: a defect inside a hundredth of a pixel of the proportion would pass, and the painter cannot draw one.

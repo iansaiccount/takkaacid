@@ -715,6 +715,53 @@ pub(super) const CARD_PADDING: f32 = 12.0;
 pub(super) const CARD_ROW: f32 = 22.0;
 pub(super) const CARD_GAP: f32 = 2.0;
 pub(super) const CARD_HEADING: f32 = 15.0;
+/// The width the thumb's track occupies at the band's right edge, reserved whether or not the thumb is drawn, so a row's cross
+/// sits at the same x at every list size.
+pub const CARD_TRACK: f32 = 4.0;
+
+/// The rows the band can show, and the window's first row after clamping the request into it — the one place that decides what
+/// a window is. The painter clamps the floor, this clamps the ceiling.
+///
+/// `scale` multiplies the card's own measurements, so the band and a row are counted in the same units. A band is
+/// `rows * CARD_ROW + (rows - 1) * CARD_GAP` tall, which is why the sum adds one gap before the divide.
+pub fn window(band: Rect, scale: f32, count: usize, top: usize) -> (usize, usize) {
+    let step = (CARD_ROW + CARD_GAP) * scale;
+    let visible = ((band.height() + CARD_GAP * scale) / step).floor().max(0.0) as usize;
+    let visible = visible.min(count);
+    (visible, top.min(count.saturating_sub(visible)))
+}
+
+/// The track and its thumb, or `None` when the list fits and has nothing to say about it.
+pub struct Thumb {
+    pub track: Rect,
+    pub thumb: Rect,
+}
+
+/// The mark that says there is more of the list: a track at the band's right edge and a handle the window's share of it, as
+/// far down as the window has scrolled.
+///
+/// No glyph and no click of its own — the wheel is the input — and nothing at all when everything the list has fits, so a
+/// library that fits looks exactly as the card did before there was a thumb.
+pub fn thumb(band: Rect, scale: f32, count: usize, visible: usize, top: usize) -> Option<Thumb> {
+    if count <= visible {
+        return None;
+    }
+    let width = CARD_TRACK * scale;
+    let track = Rect::from_min_max(
+        egui::Pos2::new(band.right() - width, band.top()),
+        band.right_bottom(),
+    );
+    let height = track.height() * (visible as f32 / count as f32);
+    let travel = track.height() - height;
+    // The last page is the bottom of the track: `window` has already clamped `top` into `0..=count - visible`.
+    let last = count.saturating_sub(visible) as f32;
+    let at = if last == 0.0 { 0.0 } else { top as f32 / last };
+    let thumb = Rect::from_min_size(
+        egui::Pos2::new(track.left(), track.top() + travel * at),
+        egui::vec2(width, height),
+    );
+    Some(Thumb { track, thumb })
+}
 
 /// A caption over one of a card's lists, at `at`. The one way a listing card names a section.
 pub(super) fn heading(ui: &mut Ui, scale: f32, title: &str, at: egui::Pos2) {
@@ -1032,5 +1079,102 @@ mod tests {
                 "{filter:?}: a typed search is the reason the band is empty"
             );
         }
+    }
+
+    /// A band `rows` rows tall, built from the same two constants the painter lays a row out with, so a test's window and the
+    /// card's window are one arithmetic. One pixel of slack is not needed: `window` divides by the same step it built here.
+    fn band_of(rows: usize) -> Rect {
+        Rect::from_min_size(
+            egui::Pos2::new(100.0, 200.0),
+            egui::vec2(
+                400.0,
+                rows as f32 * CARD_ROW + rows.saturating_sub(1) as f32 * CARD_GAP,
+            ),
+        )
+    }
+
+    #[test]
+    fn a_list_that_fits_scrolls_nowhere() {
+        // Nothing to scroll means nothing to say: the band is as tall as the list, at the top, and there is no mark on it.
+        let ten = band_of(10);
+        assert_eq!(window(ten, 1.0, 10, 0), (10, 0));
+        assert_eq!(
+            window(ten, 1.0, 3, 0),
+            (3, 0),
+            "a band taller than the list shows the list"
+        );
+        assert_eq!(
+            window(ten, 1.0, 3, 5),
+            (3, 0),
+            "a clamp of a list that fits is still the top"
+        );
+        assert!(thumb(ten, 1.0, 3, 3, 0).is_none());
+    }
+
+    #[test]
+    fn a_list_that_overflows_stops_at_its_last_page() {
+        // A window never starts past its last page, or the band would be drawing rows that are not there.
+        let four = band_of(4);
+        assert_eq!(window(four, 1.0, 10, 0), (4, 0));
+        assert_eq!(window(four, 1.0, 10, 3), (4, 3));
+        assert_eq!(
+            window(four, 1.0, 10, 99),
+            (4, 6),
+            "ten rows, four shown: the last page is 6"
+        );
+    }
+
+    #[test]
+    fn a_shorter_band_re_clamps_the_window() {
+        // A window is the band's as much as the list's, so the same request in a narrower band is a different window.
+        assert_eq!(window(band_of(6), 1.0, 10, 6), (6, 4));
+        assert_eq!(
+            window(band_of(10), 1.0, 10, 6),
+            (10, 0),
+            "and a band that grew again takes the window back to the top"
+        );
+    }
+
+    #[test]
+    fn the_thumb_is_proportional_and_inside_the_track() {
+        // A shape, not a glyph: the track's width is reserved at every list size, and the handle is the window's share of it.
+        let band = band_of(4);
+        let top = thumb(band, 1.0, 10, 4, 0).expect("ten rows over a four-row band is more of it");
+        assert_eq!(top.track.width(), CARD_TRACK);
+        assert_eq!(
+            top.track.right(),
+            band.right(),
+            "the track sits at the band's right edge"
+        );
+        assert!(band.contains_rect(top.track), "and inside the band");
+        assert_eq!(top.thumb.width(), CARD_TRACK);
+        // A rect's height is `max.y - min.y`, so placing the handle re-rounds it at its own magnitude: the share is compared
+        // to a hundredth of a pixel rather than to the bit, which is all the painter can see anyway.
+        assert!(
+            (top.thumb.height() - top.track.height() * (4.0 / 10.0)).abs() < 0.01,
+            "the handle is the window's share of the track: {} of {}",
+            top.thumb.height(),
+            top.track.height()
+        );
+        assert_eq!(
+            top.thumb.top(),
+            top.track.top(),
+            "at the top while the window is at the top"
+        );
+
+        let end = thumb(band, 1.0, 10, 4, 6).expect("the same list, scrolled to its last page");
+        assert!(
+            (end.thumb.bottom() - end.track.bottom()).abs() < 0.01,
+            "on the last page the handle reaches the bottom of the track: {} vs {}",
+            end.thumb.bottom(),
+            end.track.bottom()
+        );
+        assert!(
+            end.thumb.top() > top.thumb.top(),
+            "and it moved down the track"
+        );
+
+        let half = thumb(band, 1.0, 10, 4, 3).expect("a page in the middle");
+        assert!(half.thumb.top() > top.thumb.top() && half.thumb.top() < end.thumb.top());
     }
 }
