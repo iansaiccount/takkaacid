@@ -177,3 +177,7 @@ wrong. The branch review's findings and what was done about each go here too, be
   would make every untouched pattern's file longer for no music — the cost of the naive version, caught by
   `a_version_nine_file_upgrades_with_empty_drum_masks`. Cost if wrong: a hand-edited file that lists a held rest gets it
   dropped, which is no loss.
+- **Task 5 — the book, the pin.** `23-pattern-grids`'s "What a press does to the steps outside the new bar" now says the
+  outer steps **stop playing and are kept**, that `HELD` is not `lost`, and that a wider grid plays them again — with the
+  notice quoted as `32 TO 12 STEPS, 2 HELD`. `check.sh` pins `HELD` and pins `CLEARED` gone. `./docs/guide/check.sh` →
+  `guide: ok`. Suite **984/984**, clippy `-D warnings`, `fmt --check`.
