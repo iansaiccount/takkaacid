@@ -160,8 +160,9 @@ rows, of a song, of a bank and of a rack.
 | `songs/<name>.json` | one file per named song; the name is the file name |
 | `banks/<name>.json` | one file per saved pattern bank: its sixty-four patterns and the machine it was written from. That kind is a warning, not a check — a bank from another machine loads and plays nothing, and the status line says so |
 | `kits/<name>/` | a kit: its `kit.json` and one `<VOICE>.wav` per sampled voice. The three that ship are compiled into the app and have no folder here; a kit is written when a session that plays an edited one is saved |
+| `racks/<name>.json` | one file per saved rack: every machine with its patch, bank, kit, colour and routes — and **no** tempo and no song name, so recalling it changes the machines and not the clock |
 
-Song and bank names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.
+Song, bank and rack names are trimmed, limited to 48 characters, and may not contain `/ \ : * ? " < > |` or start with a dot.
 
 ## The one flag
 
