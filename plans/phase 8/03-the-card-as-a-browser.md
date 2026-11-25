@@ -527,3 +527,27 @@ The branch review's findings and what was done about each go here too, before th
   it into the thirty-song test, which already asserts three doors and the mark; a fourth subject there would be a test named
   for one thing and proving four. The fixture is shared through `crowded()`, so both tests are about the same library. Cost if
   wrong: two tests share a fixture and a reader finds the wheel's reach under its own name.
+- **Task 6 — the book, the pins and the picture.** `12-songs-and-demos` is rewritten as the browser: the search field, the five
+  chips and what they narrow, one list whose rows carry their kind, the strip following the chip (with the table and the one
+  click's cost), the scrolling band and its mark, the empty band's sentences, and a section per kind of row that keeps the
+  paragraphs about what a song, a bank, a rack and a demo *are*. `20-reference`'s browser line names the chips and the search
+  field; `22-the-drum-machine` puts the seven demos under the `DEMOS` chip where it put them under a heading; `18-a-rack-of-devices`
+  names the `RACKS` chip and its dead `#the-four-lists` anchor now points at `#what-each-kind-of-row-does`. `check.sh` moves
+  `PATTERN BANKS` from the must-say list to a `gone` guard beside new ones for `DEMO BANKS` and `the first list on the card`, and
+  pins three new facts — the chips' row, `sits under the title, above the chips`, and `follows the chip you are on` — each on one
+  line, because a pin is raw `grep -F`. `./docs/guide/check.sh` → `guide: ok`. `banks-card.png` is retaken (below) and its
+  `img/README.md` row rewritten. Suite **1022/1022**, clippy `-D warnings`, `fmt --check`, `guide: ok`.
+  **Ruling: page `05-the-three-cards` is edited, though the plan's Files block does not name it.** Its paragraph described the
+  card as "the name field and `SAVE` / `SAVE A COPY`, the seven demo songs, your own songs" — a card that no longer exists — and
+  it is the page the picture sits on. `AGENTS.md` makes a guide that contradicts the panel a bug, which outranks a Files list.
+  Cost if wrong: one paragraph in a page this round did not set out to touch.
+  **Ruling: the picture shows rows that stop two-thirds across, as the card has since phase 5, and no mark down the band.**
+  `Rects::row` keeps the shipped share of the band and the cross sits in its own column right of it; a demo row has no cross, so
+  the seven rows of a first run leave the right of the card bare. Widening the row to the band is a face change the plan left
+  unasked, and it would be a Task-6 edit to the painter's geometry. Cost if wrong: a player reads the empty right of a short
+  list as unfinished, and the fix is one share in `Rects`.
+  **The picture's facts, checked rather than assumed:** `DISPLAY=:89 xdotool getdisplaygeometry` → `2000 1400` before the
+  launch, `getwindowgeometry` → `1960x1340`, `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-8c` fresh, `BANKS` clicked at `762 561`
+  logical (`xdotool mousemove 1525 1122 click 1`), pointer parked at `20 20`, `import -window 2097154` uncropped at
+  1960 × 1340. `ALL` is drawn lit — its fill reads `srgb(25,25,25)` against the other chips' `srgb(4,4,4)`, its legend in
+  `lit_ink` — so the design's "the selected one is lit" is in the picture, not just in the code.

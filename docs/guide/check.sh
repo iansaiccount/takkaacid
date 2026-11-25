@@ -79,6 +79,11 @@ gone 'MY BANKS' "the guide names a section the card no longer prints"
 # sentence that said the section did nothing is a claim the book may not make again.
 gone 'LOAD RACK' "the guide names a key the card no longer prints"
 gone 'does nothing yet' "the guide says the rack section is unwired"
+# Phase 8's third round made the card one searchable list: the four headings it used to print are rows now, each under its
+# kind's word, and no page may sell the player a section the card does not draw — or call the songs the first of four lists.
+gone 'PATTERN BANKS' "the guide names a heading the card no longer prints"
+gone 'DEMO BANKS' "the guide names a heading the card no longer prints"
+gone 'the first list on the card' "the guide counts lists the card no longer stacks"
 # "a later round" is the other half of the same claim: a rack document was deferred, and it is not deferred now. The phrase
 # is narrowed to the sentence that said so, because two other pages use "a later round" for things that still are.
 gone 'is a later round' "the guide defers a round that has landed"
@@ -107,8 +112,10 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'the step that sounds, not the step the clock is on' \
             'runs the column right to left with the pattern' \
             '| `shift+up` / `shift+down` | tempo' \
-            'PATTERN BANKS' 'SAVE BANK' 'SAVE RACK' 'banks/<name>.json' 'racks/<name>.json' 'click again to replace the rack' \
-            'the first list on the card' \
+            'SAVE BANK' 'SAVE RACK' 'banks/<name>.json' 'racks/<name>.json' 'click again to replace the rack' \
+            '`ALL` `SONGS` `BANKS` `RACKS` `DEMOS`' \
+            'sits under the title, above the chips' \
+            'follows the chip you are on' \
             '1/16' '1/32' '1/8T' 'GRID' 'Acid Jazz' 'Fast Acid' 'newer' 'HELD' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }

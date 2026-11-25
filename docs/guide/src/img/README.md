@@ -65,17 +65,15 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
   said `2000 1400` before the launch and `getwindowgeometry` then said `1960x1340` — with `TAKKA_ACID_DATA_DIR=/tmp/takka-guide`,
   emptied first, and the pointer parked at 5,5 before every grab. It took three pictures: `transport.png` (first run:
   `GRID` and its `1/16` readout, no `TBC`), `35-grid.png` after one press of `GRID` (the row at thirty-two keys, the
-  step band only), and `banks-card.png` after clicking `BANKS` on that same first run (seven demo rows).
-  `1960x1340` — with `TAKKA_ACID_DATA_DIR=/tmp/takka-guide-banks`, emptied first. The card's other rows are driven by clicks, but
-  its **text fields cannot be typed into under Xvfb**: `xdotool type` and `xdotool key --window <id>` both printed
-  `XGetInputFocus returned the focused window of 1` and delivered nothing, though the click that focused the field did take (the
-  cursor and the brighter border are visible in the grab that proved it). So the picture's two rows come from the two ways a row
-  can appear: `SAVE` was pressed with the field as it arrived — `New song`, which is why `SONGS` has a row and the header reads
-  `SAVED` — and `Easy` was written into `banks/` by a throwaway test before the relaunch, because a first run has no bank and the
-  card reads `banks/` the frame it opens. `BANKS` opened the card at `switches::cell(layout(980 × 670).switches, Switch::Banks)`
-  doubled, 1525,1122, and the pointer was parked at 1990,1390 on the 2000 × 1400 screen before the grab, so no tip and no notice
-  is in it. The `bank name` field shows its hint rather than `Easy` because nothing was loaded: no bank is the selected device's
-  until one is.
+  step band only), and `banks-card.png` after clicking `BANKS` on that same first run (seven demo rows) — a picture retaken
+  since, twice; the `img/banks-card.png` row below records the current one.
+- **Text fields cannot be typed into under Xvfb**, which is why no picture in this book shows a name typed into one: `xdotool
+  type` and `xdotool key --window <id>` both printed `XGetInputFocus returned the focused window of 1` and delivered nothing,
+  though the click that focused the field did take — the cursor and the brighter border are visible in the grab that proved it.
+  A picture that needs a saved document takes one of the two other routes: press `SAVE` with the field as it arrived, or write
+  the file into the library with a throwaway test and launch again, because the card reads `banks/` and `racks/` the frame it
+  opens. `BANKS` opened at `switches::cell(layout(980 × 670).switches, Switch::Banks)` doubled — 1525,1122 — and the pointer was
+  parked at `20 20` before every grab, so no tip and no notice is in any of them.
 
 ## The images
 
@@ -85,7 +83,7 @@ the build: the pictures are committed PNGs, and this note is what makes them rep
 | `img/running.png` | the transport running: `PLAY` lit in the tape deck, `PAUSE` dark | `space` from the first-sound state |
 | `img/help-card.png` | the help card over the panel: the arrows as two pairs (`shift+left` / `right` the pattern, `shift+up` / `down` the tempo, then the plain `left` / `right` and `up` / `down` for the face), the drum face's keys folded into those lines, and its two own lines — `h` and `l` / `b` / `p` | `F1` on the arrows round's session (below), pointer parked outside the window |
 | `img/settings-card.png` | the settings card, `MIDI IN` naming the port in use | `F2` |
-| `img/banks-card.png` | the bank browser, retaken for phase 8 round 02: `NOW: New song - UNSAVED`, the song's name field and `SAVE` / `SAVE A COPY` at the top, then `SONGS` (a heading and no rows on a first run — the list now sits under the box that names it), the **seven** demo banks ending in `Acid Jazz` and `Fast Acid`, the `PATTERN BANKS` field with `SAVE BANK`, and `RACKS` with its `rack name` field and `SAVE RACK` | `Xvfb :88 -screen 0 2000x1400x24` (it said `2000 1400`), `TAKKA_ACID_DATA_DIR` a fresh `/tmp/takka-guide-8b`, window `1960x1340`, click `BANKS` at `762 561` logical (`xdotool mousemove 1525 1122 click 1`), pointer parked at `20 20` |
+| `img/banks-card.png` | the bank browser as round 03 left it: `NOW: New song - UNSAVED`, the search field with its `search` hint, the five chips `ALL` `SONGS` `BANKS` `RACKS` `DEMOS` with `ALL` lit, one list whose seven rows are all **demos** under their `DEMO` tags (a first run has no songs, banks or racks, and demos are factory content, so this is still a first run), then the song's strip — the `New song` field with `SAVE` and `SAVE A COPY` — and `NEW` `IMPORT` `EXPORT` `CLOSE`. No mark down the band's right edge, because seven rows fit | `Xvfb :89 -screen 0 2000x1400x24` (`DISPLAY=:89 xdotool getdisplaygeometry` said `2000 1400` before the launch, and `getwindowgeometry` then said `1960x1340`), `TAKKA_ACID_DATA_DIR` a fresh `/tmp/takka-guide-8c` as the only change from a launch, click `BANKS` at `762 561` logical (`xdotool mousemove 1525 1122 click 1`), pointer parked at `20 20`, `import -window 2097154` — 1960 × 1340, uncropped |
 | `img/device-card.png` | the device card for `ACID 1`: `COLOUR BLACK`, one port, `MUTE OFF` | `F3` |
 | `img/picker.png` | the picker: `ADD DEVICE` with the `ACID` and `DRUMS` rows and `CLOSE`, and nothing under them — retaken in the whole-rack round, when the line that said names and extra devices were not saved went away | click `+` at the strip's right end; park the pointer outside the window before grabbing |
 | `img/theme-list.png` | the card for `ACID 1` with the theme list open over it, the dot on `BLACK`, eleven of the twenty-two rows and the scroll thumb | `F3`; click `COLOUR`; park the pointer away from the knobs before grabbing, or their tooltip lands in the picture |

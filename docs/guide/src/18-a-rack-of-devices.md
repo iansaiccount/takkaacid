@@ -82,8 +82,8 @@ on the status line when the machine tries to load it, and the machine keeps the 
 ## A rack of your own
 
 The session file keeps the rack you are working on. A **rack file** keeps the machines themselves, as a preset you can recall
-into any session: `BANKS`'s `RACKS` section saves one, lists the ones you have, loads one and deletes one
-([`12-songs-and-demos`](12-songs-and-demos.md#the-four-lists) is that section of the card).
+into any session: the `RACKS` chip on `BANKS` saves one, lists the ones you have, loads one and deletes one
+([`12-songs-and-demos`](12-songs-and-demos.md#what-each-kind-of-row-does) is the row, and the strip beside it).
 
 A load replaces every machine in the session and leaves the song's name and the tempo alone — a rack built at 150 is heard at
 whatever the song is playing when you recall it, which is what keeps four machines on one clock. What a restart forgets, a
