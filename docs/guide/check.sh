@@ -108,6 +108,7 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             'runs the column right to left with the pattern' \
             '| `shift+up` / `shift+down` | tempo' \
             'PATTERN BANKS' 'SAVE BANK' 'SAVE RACK' 'banks/<name>.json' 'racks/<name>.json' 'click again to replace the rack' \
+            'the first list on the card' \
             '1/16' '1/32' '1/8T' 'GRID' 'Acid Jazz' 'Fast Acid' 'newer' 'HELD' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }

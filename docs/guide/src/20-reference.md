@@ -143,7 +143,7 @@ notes this round.
 **The kit browser:** `KITS`, `FACTORY`, `MY KITS`, `IMPORT`, `CLOSE`, each of the three kits that ship marked `- READ ONLY`,
 and the row being asked about on `<name> - click again to replace`.
 
-**The bank browser:** `BANKS`, `DEMO BANKS`, `PATTERN BANKS`, `SONGS`, `RACKS`, `SAVE`, `SAVE A COPY`, `SAVE BANK`, `SAVE RACK`,
+**The bank browser:** `BANKS`, `SONGS`, `DEMO BANKS`, `PATTERN BANKS`, `RACKS`, `SAVE`, `SAVE A COPY`, `SAVE BANK`, `SAVE RACK`,
 `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, a row per song, per bank file and per rack file, and the `x` / `SURE` on each of your own
 rows, of a song, of a bank and of a rack.
 

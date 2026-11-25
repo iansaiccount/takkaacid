@@ -119,3 +119,15 @@ wrong. The branch review's findings and what was done about each go here too, be
   card's arithmetic is the hand-kept list `AGENTS.md` warns about; the fix is a `tests/common/` module both files include, and
   it is a refactor of two test files that this round's plan did not carry. Cost if wrong: the next card change has to be made
   in two places, and the second one will be found by a failing test — as this one was.
+- **Task 2 — the book and the picture.** Page 12's four lists are in the card's order (`SONGS` first, with the sentence "`SONGS`
+  is the first list on the card, directly under the name field that saves the song it names"), the cross paragraph now names all
+  three lists that have one, and page 20's browser line is in the same order. `check.sh` pins the new sentence. `banks-card.png`
+  retaken on a fresh `Xvfb :88` (`getdisplaygeometry` → `2000 1400`, window `1960x1340`, a fresh `TAKKA_ACID_DATA_DIR`, `BANKS`
+  clicked at `762 561` logical) and its `img/README.md` row records the state and the command. `./docs/guide/check.sh` →
+  `guide: ok`, suite **1000/1000**, clippy `-D warnings`, `fmt --check`.
+  **Ruling: the picture shows `SONGS` as a heading with no rows.** A row would be a song file the photographer made, and a guide
+  picture is taken on a fresh data directory; the adjacency the round is about is visible as the heading's position, directly
+  under the field. Cost if wrong: the book has no picture of a filled song list.
+  **Ruling: the pinned sentence sits on one line.** `check.sh`'s positive pins are raw `grep -F`, not the flattened read the
+  negative guards use, so a phrase the page wraps is not found — the first version of the sentence wrapped and the pin failed.
+  Cost if wrong: none; the page's wrap is chosen by the pin, which the comment above the pin does not say.
