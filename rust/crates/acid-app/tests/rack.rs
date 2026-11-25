@@ -715,3 +715,44 @@ fn replacing_the_rack_publishes_in_order_selects_zero_and_keeps_the_tempo_cell()
     let index = rack.add(DeviceKind::Acid).expect("room after a load");
     assert_eq!(rack.devices()[index].number, 4);
 }
+
+#[test]
+fn a_documents_machines_do_not_move_the_clock() {
+    // A rack file carries no tempo, so the seam it goes through must not read one: the machines come from the document and
+    // the clock stays where the session had it. A song's load still brings its own tempo, one call above this one.
+    let mut rack = one();
+    rack.set_tempo_bpm(150.0);
+    let mut document = three_devices();
+    document.bpm = 90.0;
+
+    rack.replace_devices_from(&document);
+    assert_eq!(rack.devices().len(), 3, "the machines came");
+    assert_eq!(rack.selected(), 0);
+    assert_eq!(rack.tempo_bpm(), 150.0, "the clock did not move");
+
+    rack.replace_from_saved(&document);
+    assert_eq!(
+        rack.tempo_bpm(),
+        90.0,
+        "a song's document still brings its tempo"
+    );
+}
+
+#[test]
+fn a_rack_through_a_document_is_the_rack_it_was() {
+    // The document's machines are the rack's own shape, taken out and put back: the file's mapping of "what a device is",
+    // used in both directions, and not a second copy of it.
+    let rack = Rack::from_saved(&three_devices());
+    let before = persist::rack_to_saved(&rack).devices;
+
+    let document = persist::RackDocument::of(&rack);
+    assert_eq!(document.devices, before, "a document is the machines");
+
+    let mut loaded = Rack::from_saved(&persist::SavedState::default());
+    loaded.replace_devices_from(&document.into_saved());
+    assert_eq!(
+        persist::rack_to_saved(&loaded).devices,
+        before,
+        "device for device"
+    );
+}

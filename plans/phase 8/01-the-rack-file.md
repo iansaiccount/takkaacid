@@ -264,3 +264,14 @@ wrong. The branch review's findings and what was done about each go here too, be
   refusal is this document's own answer and a test can match `Newer`; `save_rack` stays `anyhow::Result`, like `save_bank`,
   because nothing needs to tell its failures apart. Cost if wrong: one error type the caller converts, where a song's path
   prints an `anyhow` chain.
+- **Task 2 — the rack's two halves.** `Rack::replace_devices_from` replaces every machine, resets the selection, numbers
+  above the file's highest and republishes the bus — and **does not read the document's `bpm`**; `replace_from_saved` is now
+  the tempo write plus that call, so a song's behaviour is unchanged and a rack document's tempo cannot leak in. Proved by
+  `a_documents_machines_do_not_move_the_clock` (150 kept through `replace_devices_from`, 90 applied through
+  `replace_from_saved`) and `a_rack_through_a_document_is_the_rack_it_was` (rack → `RackDocument::of` → `into_saved` →
+  `replace_devices_from` is device for device), each watched fail first as `no method replace_devices_from`; the existing
+  `replacing_the_rack_publishes_in_order_selects_zero_and_keeps_the_tempo_cell` passes unchanged. Suite **992/992**, clippy
+  `-D warnings`, `fmt --check`.
+  **Ruling: `replace_from_saved` sets the tempo before it builds the machines**, where the old body set it after. The bus is
+  then published with the clock the file asked for rather than the one the session had. Cost if wrong: a tempo change lands
+  one statement earlier inside one synchronous call — nothing reads it in between.
