@@ -237,15 +237,15 @@ fn a_press_counts_the_sound_it_would_drop() {
     steps[22] = Step::rest(); // a rest is not sound, however far outside the bar it sits
     let wide = Pattern::from_steps_in(Grid::ThirtySecond, steps);
 
-    assert_eq!(wide.sounding_steps_beyond(Grid::EighthTriplet), 2);
+    assert_eq!(wide.held_steps_beyond(Grid::EighthTriplet), 2);
     assert_eq!(
-        wide.sounding_steps_beyond(Grid::ThirtySecond),
+        wide.held_steps_beyond(Grid::ThirtySecond),
         0,
         "nothing sounds past a bar that holds it all"
     );
     assert_eq!(
         wide.with_grid(Grid::Sixteenth)
-            .sounding_steps_beyond(Grid::Sixteenth),
+            .held_steps_beyond(Grid::Sixteenth),
         2,
         "narrowed to sixteenths the two notes are held, and counted as what stops playing"
     );

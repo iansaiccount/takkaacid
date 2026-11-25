@@ -203,3 +203,11 @@ wrong. The branch review's findings and what was done about each go here too, be
 - **Task 5 — the book, the pin.** `17-trouble` gains *"It opened a demo and said my session file is newer"*: the refusal,
   the notice, that the file is untouched, that an autosave will not touch it, and that an older file is read as always.
   `check.sh` pins the word `newer`. `./docs/guide/check.sh` → `guide: ok`. Suite **983/983**, clippy, `fmt --check`.
+
+**Branch review (the PR).** A subagent that wrote none of it found one P0, two P1s and a rename; all fixed here.
+- **P0: `on_exit` saved unconditionally**, so closing the window — the likeliest thing after reading the notice — wrote a
+  version-14 demo over the newer document. The quit save is now gated on `refused_version.is_none()` too, which is what
+  the notice ("file untouched") and `17-trouble` already promised.
+- **P1: `refused_version` was never cleared**, so a manual `SAVE` did not put the session back into the autosave path
+  while the card still said autosave was on. A successful `save()` now clears it.
+- Suite **985/985**, clippy `-D warnings`, `fmt --check`, `guide: ok`.

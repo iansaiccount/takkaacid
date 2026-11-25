@@ -679,7 +679,11 @@ impl eframe::App for TakkaApp {
 
     /// Closing the window is one last chance to keep whatever the user just did.
     fn on_exit(&mut self) {
-        self.save();
+        // A session that refused a newer document must not write on the way out either: closing the window is the most
+        // likely thing a player does after reading the notice, and one write here would destroy what it could not read.
+        if self.refused_version.is_none() {
+            self.save();
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -1056,6 +1060,11 @@ impl TakkaApp {
             Ok(()) if kit_written => self.panel.dirty = false,
             Ok(()) => {}
             Err(error) => eprintln!("takka-acid: could not save: {error}"),
+        }
+        // A successful save is the player having chosen to overwrite: the refusal no longer holds the session out of
+        // the autosave path, because the file it refused is now this session's own.
+        if self.refused_version.is_some() {
+            self.refused_version = None;
         }
         // A session that came from a song keeps that file current: SAVE means "keep this", not "keep half of it".
         if let Some(name) = self.panel.songs.file.clone()

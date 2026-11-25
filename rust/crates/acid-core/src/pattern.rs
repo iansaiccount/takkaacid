@@ -255,14 +255,15 @@ impl Step {
 
 /// One bar of a pattern: the grid it is divided by, and its slots.
 ///
-/// A pattern is always **exactly one 4/4 bar**, so `len()` is the grid's own count and the slots above it are rests. That
-/// invariant is what makes "the row is the pattern" and "the file is the row" the same sentence: `from_steps_in` rests
-/// what it is not given, `with_grid` rests what a narrower bar drops, and the file writes only the steps that play.
+/// A pattern is always **exactly one 4/4 bar**, so `len()` is the grid's own count. The slots above it are **not played**:
+/// a constructor rests what it is not given, a grid change *holds* what a narrower bar cannot play (so widening plays it
+/// again), and the file writes the steps that play plus whatever is held.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct Pattern {
     /// How this bar is divided. A pattern is the grid's, not the device's, so a bank can hold all three.
     pub grid: Grid,
-    /// The bar's slots. **Every slot at or above `len()` is a rest, always** — see the type's own note.
+    /// The bar's slots. **Every slot at or above `len()` is not played** — it is a rest from a constructor, or a note a
+    /// narrower grid is holding; either way `iter()` never yields it.
     pub steps: [Step; PATTERN_SLOTS],
 }
 
@@ -305,19 +306,18 @@ impl Pattern {
         pattern
     }
 
-    /// The same music on another grid. The steps the new bar can hold are kept and the ones it cannot are **rested** — the
-    /// one place a pattern loses sound, and the panel says so on the status line when it does.
-    /// A narrower grid **holds** the steps it stops playing: they keep their notes, stay silent, and play again when a
-    /// later grid can hold them. Nothing is destroyed, in memory or in the file.
+    /// The same music on another grid. A narrower grid **holds** the steps it stops playing: they keep their notes, stay
+    /// silent, and play again when a later grid can hold them. Nothing is destroyed, in memory or in the file.
     pub fn with_grid(self, grid: Grid) -> Self {
         Self { grid, ..self }
     }
 
-    /// How many steps **that sound** sit outside `grid`'s bar: what a press to that grid would cost.
+    /// How many steps **that sound** sit outside `grid`'s bar: how much music a press to that grid stops playing.
     ///
     /// The count is of notes, not slots. The row already shows the new length the moment it changes shape; what it cannot
-    /// show is how much music the shorter bar leaves behind, and that is the number the status line says.
-    pub fn sounding_steps_beyond(&self, grid: Grid) -> usize {
+    /// show is how much music the shorter bar holds back, and that is the number the status line says. Nothing is lost —
+    /// the count is of steps that stop playing, and a wider grid plays them again.
+    pub fn held_steps_beyond(&self, grid: Grid) -> usize {
         self.steps[grid.steps_per_bar()..]
             .iter()
             .filter(|step| step.on)

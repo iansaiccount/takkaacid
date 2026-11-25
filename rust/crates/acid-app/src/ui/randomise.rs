@@ -38,8 +38,11 @@ pub fn randomised(pattern: Pattern, seed: u64, density: f32, scale: Scale) -> Pa
     if !steps[..pattern.len()].iter().any(|step| step.on) {
         steps[0].on = true;
     }
-    // The bar comes back on the grid it went in on: a reroll is new notes, not a shorter or longer bar.
-    Pattern::from_steps_in(pattern.grid, steps)
+    // The bar comes back on the grid it went in on, and the steps a narrower bar is holding come back with it: a reroll
+    // is new notes, never a reason to lose the ones the grid is not playing.
+    let mut next = pattern;
+    next.steps = steps;
+    next
 }
 
 /// The octave closest to `wanted` that keeps `pitch` inside the instrument's range.
@@ -98,7 +101,7 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use acid_core::pattern::Grid;
+    use acid_core::pattern::{Grid, PATTERN_SLOTS};
 
     /// A pattern with three accents placed on alternating steps, so gate/accent/slide survival has something to prove.
     fn pattern() -> Pattern {
@@ -288,5 +291,26 @@ mod tests {
                 grid.name()
             );
         }
+    }
+    /// A reroll must not lose the steps a narrower grid is holding: they are music the player wrote, and the press that
+    /// makes new notes is not a press that throws the old ones away.
+    #[test]
+    fn a_reroll_keeps_the_steps_a_narrow_grid_is_holding() {
+        let mut steps = [Step::rest(); PATTERN_SLOTS];
+        steps[20] = Step::note(Pitch::C, 2);
+        let wide = Pattern::from_steps_in(Grid::ThirtySecond, steps);
+        let narrow = wide.with_grid(Grid::EighthTriplet);
+
+        let after = randomised(narrow, 7, DEFAULT_DENSITY, Scale::Chromatic);
+
+        assert_eq!(after.grid, Grid::EighthTriplet, "the grid is kept");
+        assert!(
+            after.steps[20].on,
+            "a reroll must not lose a note the bar is holding"
+        );
+        assert!(
+            after.with_grid(Grid::ThirtySecond).steps[20].on,
+            "and widening brings it back"
+        );
     }
 }

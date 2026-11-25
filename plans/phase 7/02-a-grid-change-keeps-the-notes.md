@@ -181,3 +181,12 @@ wrong. The branch review's findings and what was done about each go here too, be
   outer steps **stop playing and are kept**, that `HELD` is not `lost`, and that a wider grid plays them again — with the
   notice quoted as `32 TO 12 STEPS, 2 HELD`. `check.sh` pins `HELD` and pins `CLEARED` gone. `./docs/guide/check.sh` →
   `guide: ok`. Suite **984/984**, clippy `-D warnings`, `fmt --check`.
+
+**Branch review (the PR), round 02's share.** Two real findings, both fixed here.
+- **P1: `RANDOM` destroyed held steps.** `randomised` copied the slot table, rolled only the bar, then rebuilt through
+  `from_steps_in`, which rests everything above `len()` — so one press on a narrowed pattern lost the held notes and the
+  next save wrote them gone. It now keeps the pattern and writes only the bar; proved by
+  `a_reroll_keeps_the_steps_a_narrow_grid_is_holding` (narrow → randomise → the note is still held → widening plays it).
+- **P1: four doc comments still said a grid change "rests"** what it holds, including `Pattern`'s own note that *every*
+  slot above `len()` "is a rest, always" — the invariant this round reversed. All rewritten around "not played"/"held".
+- **P2: `sounding_steps_beyond` renamed `held_steps_beyond`**, which the plan asked for and the notice already assumed.
