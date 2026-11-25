@@ -41,7 +41,11 @@ found and labelled once, and the buttons refuse with a notice naming the round t
 
 ## The save file
 
-### A file from a newer build is refused, not relabelled
+### A file from a newer build is refused, not relabelled — **done, phase 7 round 01**
+
+Shipped in `plans/phase 7/01-refuse-a-newer-file.md`: `LoadError::Newer { version, path }` from one `load_document`,
+`Opened { state, first_run, refused }`, the autosave **and quit** saves gated on the refusal, a notice naming the version,
+and `load_song` / `import_song` through the same rule. `SAVE_VERSION` is 14. Kept here as the record of what it was.
 
 **What it would do.** `persist::open`, `load_song` and `import_song` compare a document's `version` with `SAVE_VERSION` and
 refuse one that is newer, naming the version it found — instead of today's behaviour, where `upgraded` stamps its own version
@@ -185,9 +189,15 @@ One cpal stream and an app-side mix is the phase 2 design, and stems would ride 
 into its own block before summing, so a multi-channel device config plus one channel pair per device is the work. It would
 need `audio::Opened` to stop duplicating mono to every channel.
 
-### Pattern length per device
+### Pattern length per device — **answered, and the answer is no length field**
 
-Every pattern is sixteen steps and every clock agrees on the step index. A device with an eight-step pattern would break
+**The player's ruling (phase 7).** There is no length separate from the grid. A pattern is always one bar; a "short
+pattern" is one whose later steps hold nothing to play, so the bar keeps its length and the empty keys are where the next
+notes go. Changing to a narrower grid **stops playing** the outer steps and **keeps** them, so widening plays them again.
+That is `plans/phase 7/02-a-grid-change-keeps-the-notes.md`, and it is done. What remains of the wishlist's worry — a
+device whose bar is not the bar — is unanswered by design: none is offered.
+
+**The original entry, for the record.** Every pattern is sixteen steps and every clock agrees on the step index. A device with an eight-step pattern would break
 "the bar is the same bar for every device", which phase 2 relies on for the pattern swap and `last_position`. It is a
 transport change, not a sequencer change.
 
