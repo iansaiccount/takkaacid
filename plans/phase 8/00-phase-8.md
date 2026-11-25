@@ -21,10 +21,15 @@ Rounds live here as `NN-topic.md`, one per round, in the shape the earlier phase
   gets it, `Rack::replace_devices_from` so a document with no tempo cannot retune the rack, `rack_recall::recall` so the
   recall's decisions are testable, the `RACKS` section with its rows and name field, and `main`'s three arms. The book stops
   saying a rack is not saved. **No `SAVE_VERSION` bump**: a rack is a third kind of document, not a third version.
-- **02 — duplicate a device.** Named, not yet planned. `Rack::duplicate` built from the source's own `SavedDevice`, a
-  `DUPLICATE` key on the device card, the copy selected. Waits on round 01 only because the document decides what a device
-  *is* in a file.
-- **03 — drag to reorder devices.** Named, not yet planned. `Rack::move_device`, the strip's cell gaining `click_and_drag` on
+- [`02-the-card-in-order`](02-the-card-in-order.md) — the `SONGS` list moves directly under the name field and the two keys
+  that save it, so the one document whose field is at the top has its list at the top too. `NOW:` stays in the header. Only the
+  songs block moves; the cost the player accepted is that a long song list can push the demo rows off the card, which is the
+  card's existing "it lists what fits" rule biting the factory content first.
+- [`03-duplicate-a-device`](03-duplicate-a-device.md) — `Rack::duplicate`, built from the source's own `SavedDevice`, so a copy
+  needs no fourth description of a machine; a `DUPLICATE` key on the device card's second key row (the arithmetic says a fourth
+  key cannot join the first); `AddError::NoSuchDevice` beside `AtCapacity`. The copy's kit is decoded by `main` from the source's
+  kit name, because a kit's samples are not in the file's mapping.
+- **04 — drag to reorder devices.** Named, not yet planned. `Rack::move_device`, the strip's cell gaining `click_and_drag` on
   its existing id, the dragged device remembered by number, the selection following it. The file needs no change: it is
   already strip order.
 
@@ -37,8 +42,7 @@ recorded in its last sections. The plans argue from it; where they disagree, the
 line current, and a commit. The review is of the branch at the pull request, by a subagent that wrote none of it
 (`AGENTS.md`).
 
-**State: round 01 complete, reviewed and pushed as `phase-8` — PR #15. Rounds 02 and 03 are named in the spec and not yet
-planned.**
+**State: round 01 complete and up for review as PR #15; rounds 02 and 03 planned; round 04 named, not yet planned.**
 
 **What phase 8 does not do**, and where each is recorded: merging a saved rack into the open one (the player chose replace —
 spec's Non-goals); a rack file that carries tempo, song name or panel state; remembering a rack file's name across a restart
@@ -57,3 +61,4 @@ arrangement; stems; a second rack open at once; reordering by keyboard; a reorde
 | A duplicate's name is `persist::distinct_name`'s, nothing else | A copy of a copy is `ACID 1 (2) (2)`, which reads oddly. The alternative is a stem-stripping rule `rename` and `sanitize` would need too. |
 | The strip's cell keeps its **index-keyed id** and gains a drag sense; the drag carries the device's **number** | One interaction with two senses, and a release whose device has gone moves nothing. If a later egui needs the senses apart, the id has to move. |
 | No `SAVE_VERSION` bump: a rack is a **kind** of document at the same version, like a bank | A later change to `SavedDevice` moves the session, song and rack formats together, so the version bump covers all three. A separate number would let them drift. |
+| The card lists **what fits**, so a long song list can push the demo rows off the bottom | A player with many songs loses sight of the seven demos until they delete one; the alternative is capping the player's own rows to protect factory content. |
