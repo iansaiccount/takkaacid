@@ -8,7 +8,8 @@ behind their headings.
 ## The two switches
 
 **`TOOLTIPS ON`** — hover help. Turn it off and the panel stops explaining itself; the switches and keys go quiet, and the
-tip you were reading is gone. It is on by default.
+tip you were reading is gone. It is on by default. The cards answer it too: the `BANKS` card, the device card, the kit browser
+and the picker each explain their own keys, and with the hints off they go quiet with the rest of the panel.
 
 **`AUTOSAVE OFF`** — **saving is manual by default.** With autosave on, the session is written two seconds after a change
 without your asking; with it off, nothing is written while you play — `state.json` and the open song are written when you

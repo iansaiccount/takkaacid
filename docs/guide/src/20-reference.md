@@ -106,9 +106,10 @@ and tempo wells at the right.
 
 **The device card.** `NAME (ENTER)`, `ROLE` (`PLAY + CTRL` / `CTRL ONLY`), `PORTS` (`ALL PORTS`, then a ticked row per port),
 `CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `KIT` (a drum
-machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`.
+machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`. Each key explains itself on hover, and
+`REMOVE`'s hint names the machine it would take out.
 
-**The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), and `CLOSE`.
+**The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), and `CLOSE`; a row's hint names the kind it would add.
 
 **The drum machine's face.** `DRUMS` is the device; its seven dials are the selected voice's — `ATTACK`, `DECAY`, `SUSTAIN`,
 `RELEASE`, `CUT OFF`, `RESONANCE`, `TUNE` — with the three-way key `LP | BP | HP` beside them, `HIT` to audition that voice,
@@ -141,7 +142,8 @@ notes this round.
 | `CLOSE` | put the card away |
 
 **The kit browser:** `KITS`, `FACTORY`, `MY KITS`, `IMPORT`, `CLOSE`, each of the three kits that ship marked `- READ ONLY`,
-and the row being asked about on `<name> - click again to replace`.
+and the row being asked about on `<name> - click again to replace`. Its `IMPORT` and `CLOSE` explain themselves on hover; a kit
+row is a name and says nothing more.
 
 **The bank browser:** `BANKS`, the search field, the chips `ALL` `SONGS` `BANKS` `RACKS` `DEMOS`, `SAVE`, `SAVE A COPY`,
 `SAVE BANK`, `SAVE RACK`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, a row per song, per bank file, per rack file and per demo, each
