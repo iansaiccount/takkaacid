@@ -310,3 +310,49 @@ the rounds list, so the phase says which plan is in flight), and this plan's `##
 
 *(One line per task, written as it is done: what landed, the test that proved it, and any ruling with what it costs if wrong.
 The branch review's findings and what was done about each go here too, before the pull request.)*
+- **Task 1 — a tip that carries one computed line.** `Tip::text_with(detail)` is the one composer (`Tip::text()` = `text_with(None)`),
+  so the key's placement after the detail is written once; `ui::tips` gains `text_with(wants_help, control, detail)` and
+  `hover_with(..)`, and `text_for`/`hover` stay as wrappers with `None`, so no existing surface churns. Proved by five unit tests
+  in `tips.rs`, watched fail as `cannot find function text_with`: a detail on its own line after the sentence and before the key,
+  `None` equal to the old text for every `Control::ALL` entry, `Some("")` equal to `None`, and silence when help is off. Suite
+  **1030/1030**, clippy `-D warnings`, `fmt --check`.
+- **Task 2 — the catalogue grows by seventeen.** `Control` 49 → **66** and `TIPS` likewise, appended in the spec's table order
+  with the words from its *what the sentence must say* column; the titles are distinct (`SAVE SONG` because the panel's `SAVE`
+  owns `SAVE`), and one `CLOSE` serves four cards. The drum face's pinned length became 66 and its `&Control::ALL[40..]` became
+  `[40..49]`, so it still means "the nine drum controls". Proved by `the_card_keys_are_appended_in_card_order`, watched fail as
+  `no variant named SongSave` and then as the drum test's `left: 66, right: 49`. Suite **1031/1031**, clippy, `fmt --check`.
+- **Task 3 — the `BANKS` card explains itself.** The flag reaches `banks::paint` as one more parameter, and the card supplies the
+  resolved line from `persist::save_target` — the function the save itself runs through — via `save_detail`, `cross_detail` and
+  `export_detail`. `Control::for_door` maps a door to its words, beside `for_knob`/`for_dial`/`for_drum_key`. `tests/common/mod.rs`
+  gains `hover(ctx, panel, shared, screen, at)` (five frames from `drum_live.rs`'s idiom) and `strip_field_centre`. Proved by seven
+  live tests, watched fail first (`the_strip_names_the_document_it_would_write` and four others painted nothing): each door names
+  its document and says in place or new file, the copy key says why it is dim, a row's cross names the file, the footer names the
+  session, a typed name is the name the hint names, help off leaves the card silent and working, and the panel under the card is
+  quiet. Suite **1039/1039**, clippy, `fmt --check`.
+  **Ruling: `PanelState::help()` — the panel's own surfaces go quiet while a card is up.** Found by a failing test: egui paints one
+  tooltip a frame, the first asked for, and the panel is painted before the card, so the knob under the card won and the card could
+  not explain itself where it overlaps the face (the cross's hover showed `DECAY`'s tip). The panel's twelve sites ask `help()`
+  (`tooltips && !cards_are_up()`), the cards ask `tooltips`. Cost if wrong: the panel stops explaining itself while any card is
+  open — which is the intent, since a hint about a knob you cannot see is the wrong hint; a player who wants a knob's hint closes
+  the card. Mutation-checked: `help()` = `tooltips` makes `the_panel_under_the_card_stays_quiet` read `WAVEFORM` and fail.
+  **Ruling: `common::hover` takes the screen it paints at.** The plan pinned `hover(ctx, panel, shared, at)`, but `tests/common`'s
+  screen is 980 × 560 and the device card and kit browser paint at the design size: one helper on two sizes would place the pointer
+  for a layout the card was not painted in, and nothing would hover. Cost if wrong: one argument at each call site.
+  **Ruling: the helper needs a settling frame and a clock that continues.** egui refuses a frame whose time goes backwards and will
+  not start a tooltip's delay on the frame a click was released; the loop runs a still frame first, then the move.
+- **Task 4 — the device card explains itself.** `ROLE`, `ALL PORTS` and every port row, both channel arrows, `COLOUR`, `KIT`,
+  `REMOVE` (with `remove_detail` naming the machine) and `CLOSE`; `MUTE` keeps the strip's tip. `device_card_live` gained
+  `mod common;` and uses the card's own `rows()`/`card_rect()` for the rects — no hand arithmetic. Proved by three live tests,
+  watched fail first (`ROLE` painted no tip). Suite **1042/1042**, clippy, `fmt --check`.
+- **Task 5 — the kit browser and the picker explain themselves.** The browser's `IMPORT` and `CLOSE`; the picker's one
+  `PickerKind` per kind row with `picker_detail` naming the kind, and the shared `CLOSE`. Kit rows stay silent, and that is
+  asserted **first** in its test, because a hover leaves its hint on screen for a frame or two and an absence read afterwards would
+  be the previous key's tip. Proved by two live tests. Suite **1044/1044**, clippy, `fmt --check`.
+- **Task 6 — the book, the pins and the eye.** Page 12 gains `## Every key explains itself` (the claim, `SAVE BANK` in both
+  directions, the `TOOLTIPS` rule); page 13's switch sentence names the four cards; page 20's device-card, picker and kit-browser
+  lines say their keys explain themselves. `check.sh` pins `Every key on the card explains itself on hover` and
+  `Makes a new file, Easy 2.`, each on one line. `./docs/guide/check.sh` → `guide: ok`.
+  **The eye, recorded not gated:** on `Xvfb :92` (`getdisplaygeometry` `2000 1400` before the launch, window `1960x1340`, a fresh
+  `TAKKA_ACID_DATA_DIR=/tmp/takka-tips`), the pointer rested on `SAVE` and on `CLOSE`. **Both hints paint above the key and leave
+  it fully readable** — the spec's overlap risk does not occur at either place. No picture and no `img/README.md` row: the guide's
+  recipe parks the pointer away from the panel.
