@@ -326,6 +326,19 @@ impl Control {
             DrumKey::Hit => Control::DrumHit,
         }
     }
+
+    /// The help for one of the `BANKS` card's strip keys. Beside [`Control::for_knob`] and for its reason: the catalogue names
+    /// no view type, and the arms are written out so a fourth door fails to compile here. `SAVE A COPY` is not a door — it is
+    /// the song's strip only — so the card asks for it by name.
+    pub fn for_door(door: crate::ui::banks::Door) -> Control {
+        use crate::ui::banks::Door;
+
+        match door {
+            Door::Song => Control::SongSave,
+            Door::Bank => Control::BankSave,
+            Door::Rack => Control::RackSave,
+        }
+    }
 }
 
 /// The help text, in `Control::ALL` order.
@@ -990,6 +1003,22 @@ mod tests {
                 Control::KitsImport,
                 Control::PickerKind,
             ]
+        );
+    }
+
+    #[test]
+    fn every_door_names_its_own_control() {
+        // The strip draws one save key per door, and the tip is the door's: three titles, and the copy key is the song's second
+        // key rather than a fourth door.
+        use crate::ui::banks::Door;
+
+        assert_eq!(Control::for_door(Door::Song).tip().title, "SAVE SONG");
+        assert_eq!(Control::for_door(Door::Bank).tip().title, "SAVE BANK");
+        assert_eq!(Control::for_door(Door::Rack).tip().title, "SAVE RACK");
+        assert_ne!(
+            Control::for_door(Door::Song),
+            Control::SongCopy,
+            "SAVE A COPY is the song's second key, not a door"
         );
     }
 }

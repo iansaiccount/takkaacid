@@ -106,7 +106,7 @@ pub(super) fn draw(
         let value = if choosing { &mut scratch } else { &mut swing };
         perform_knob(ui, shuffle_cell, "shuffle", "SHUFFLE", value, p)
     };
-    tips::hover(&response, state.tooltips, tips::Control::Shuffle);
+    tips::hover(&response, state.help(), tips::Control::Shuffle);
     if learn::highlight(state.learn, midi::cc::CcTarget::Swing) {
         panel::learn_highlight(ui.painter(), shuffle_cell, s, p);
     }
@@ -129,7 +129,7 @@ pub(super) fn draw(
     let mut density = state.density;
     let caption = format!("{:.0}%", density * 100.0);
     let response = perform_knob(ui, density_cell, "density", &caption, &mut density, p);
-    tips::hover(&response, state.tooltips, tips::Control::Density);
+    tips::hover(&response, state.help(), tips::Control::Density);
     state.density = density.clamp(0.0, 1.0);
     if state.density != before_density {
         state.dirty = true;
@@ -146,7 +146,7 @@ pub(super) fn draw(
         &mut position,
         p,
     );
-    tips::hover(&response, state.tooltips, tips::Control::Scale);
+    tips::hover(&response, state.help(), tips::Control::Scale);
     state.scale_knob = position.clamp(0.0, 1.0);
     if !response.dragged() {
         // The knob lands on a scale's detent; read the scale back off the snapped position so the two cannot drift.

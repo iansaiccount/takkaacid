@@ -98,7 +98,7 @@ pub fn draw(
     let transport = shared.transport();
     for (key, rect) in TapeKey::ALL.iter().zip(panel::tape_cells(top)) {
         let response = key_key(ui, *key, rect, scale, p, transport, shared);
-        tips::hover(&response, state.tooltips, key.tip());
+        tips::hover(&response, state.help(), key.tip());
         if response.clicked() {
             asked = key.request();
             // A key with nothing behind it still answers: a silent key reads as broken, and the notice is the promise being
@@ -164,7 +164,7 @@ pub fn draw(
         }
         tips::hover(
             &response,
-            state.tooltips,
+            state.help(),
             if which == 0 {
                 tips::Control::TempoDown
             } else {

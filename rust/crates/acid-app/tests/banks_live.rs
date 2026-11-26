@@ -13,6 +13,7 @@ use acid_app::state::SharedState;
 use acid_app::ui::PanelState;
 use acid_app::ui::banks::{self, Banks, Filter, Kind, Request, rows};
 use acid_app::ui::draw_panel;
+use acid_app::ui::tips;
 use acid_core::bank::PatternBank;
 use acid_core::pattern::Grid;
 use common::*;
@@ -775,5 +776,210 @@ fn a_chip_or_a_search_puts_the_list_back_at_the_top() {
         panel.songs.card.as_ref().unwrap().top,
         0,
         "and so does typing"
+    );
+}
+
+/// A panel whose card is open on `library()`, with the session named so `EXPORT` has something to name.
+fn card_with_session() -> PanelState {
+    let mut panel = open_card(
+        Banks {
+            name: "Acid 1".to_string(),
+            open: Some("Acid 1".to_string()),
+            ..library()
+        },
+        false,
+    );
+    panel.songs.name = Some("Acid 1".to_string());
+    panel
+}
+
+#[test]
+fn the_strip_names_the_document_it_would_write() {
+    // The line the player asked for: not "SAVE BANK", but *which* bank, and whether that rewrites a file or makes one. The answer
+    // comes from `persist::save_target`, the function the save itself runs through.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = card_with_session();
+
+    let at = save_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Writes Acid 1 in place.")),
+        "the song's door names the song it would write: {seen:?}"
+    );
+
+    // A bank name that is not the bank this device came from makes a new file.
+    click(&ctx, &mut panel, &shared, chip_centre(Filter::Banks));
+    panel.songs.card.as_mut().unwrap().bank_name = "Easy 2".to_string();
+    let at = save_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Makes a new file, Easy 2.")),
+        "a bank name the device is not on makes a new file: {seen:?}"
+    );
+
+    // A blank field, with a bank the device came from, rewrites that file.
+    panel.songs.card.as_mut().unwrap().bank_name.clear();
+    panel.songs.bank_file = Some("Easy".to_string());
+    let at = save_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Writes Easy in place.")),
+        "a blank field keeps the bank the device came from: {seen:?}"
+    );
+}
+
+#[test]
+fn the_copy_key_says_what_it_would_copy() {
+    // The copy key is dim with nothing to copy, and it does not open the field the way SAVE does: its line says that instead of
+    // promising a click that will not happen.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(library(), false);
+
+    let at = copy_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter().any(|text| text.contains("Type a name first")),
+        "a dim copy key says why it is dim: {seen:?}"
+    );
+
+    panel.songs.card.as_mut().unwrap().name = "Acid 2".to_string();
+    let at = copy_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Makes a new file, Acid 2.")),
+        "a copy is always a new file: {seen:?}"
+    );
+}
+
+#[test]
+fn a_rows_cross_names_the_file_it_would_delete() {
+    // `library()` draws the song's row, the bank's, the rack's and a demo's: row 1 is the bank `Easy`.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(library(), false);
+
+    let at = cross_centre(1);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Deletes the bank Easy.")),
+        "the cross names the file it would delete: {seen:?}"
+    );
+}
+
+#[test]
+fn the_footers_keys_explain_themselves() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = card_with_session();
+
+    for (at, sentence) in [
+        (footer_new_centre(), tips::Control::CardNew.tip().what),
+        (footer_import_centre(), tips::Control::SongImport.tip().what),
+        (footer_export_centre(), tips::Control::SongExport.tip().what),
+        (footer_close_centre(), tips::Control::CardClose.tip().what),
+    ] {
+        let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+        assert!(
+            seen.iter().any(|text| text.contains(sentence)),
+            "{sentence:?} was not painted: {seen:?}"
+        );
+    }
+
+    // And EXPORT names the session it writes, not the field's text.
+    let at = footer_export_centre();
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Writes the session, Acid 1.")),
+        "{seen:?}"
+    );
+}
+
+#[test]
+fn a_name_typed_into_the_field_is_the_name_the_hint_names() {
+    // The line is built in the frame the field is painted in: typing into the field and then resting on the key must name what
+    // was typed, not what the field held a frame ago.
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(library(), false);
+    click(&ctx, &mut panel, &shared, chip_centre(Filter::Banks));
+
+    let at = strip_field_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
+    run_on(
+        &ctx,
+        &mut panel,
+        &shared,
+        vec![Event::Text("easy".to_string())],
+    );
+    assert_eq!(panel.songs.card.as_ref().unwrap().bank_name, "easy");
+
+    let at = save_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Makes a new file, easy.")),
+        "the hint names what was typed: {seen:?}"
+    );
+}
+
+#[test]
+fn help_that_is_off_leaves_the_card_silent_but_working() {
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = card_with_session();
+    panel.tooltips = false;
+
+    let at = save_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        !seen
+            .iter()
+            .any(|text| text.contains(tips::Control::SongSave.tip().what)),
+        "a hint turned off says nothing: {seen:?}"
+    );
+
+    // The card still does its job: the flag is a hint's, not a key's.
+    let at = save_centre(&panel);
+    click(&ctx, &mut panel, &shared, at);
+    assert_eq!(
+        panel.songs.request,
+        Some(Request::Save("Acid 1".to_string()))
+    );
+}
+
+#[test]
+fn the_panel_under_the_card_stays_quiet() {
+    // egui paints one tooltip a frame — the first asked for — and the panel is painted before the card. Without this rule a hint
+    // about a knob hidden under the card wins over the card's own, so the card would be the one surface that cannot explain
+    // itself where it overlaps the face. The second half is what makes the first a rule rather than a coincidence.
+    let knob = tips::Control::for_knob(acid_app::knobs::Knob::Waveform)
+        .tip()
+        .what;
+    let at = acid_app::ui::layout::layout(screen()).knobs.cells[0].center();
+
+    let ctx = Context::default();
+    let shared = SharedState::new();
+    let mut panel = open_card(library(), false);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        !seen.iter().any(|text| text.contains(knob)),
+        "a knob under the card does not talk: {seen:?}"
+    );
+
+    // The same point, the card away: the knob explains itself.
+    let bare = Context::default();
+    let mut closed = PanelState::default();
+    let seen = hover(&bare, &mut closed, &shared, screen(), at);
+    assert!(
+        seen.iter().any(|text| text.contains(knob)),
+        "and with no card it does: {seen:?}"
     );
 }

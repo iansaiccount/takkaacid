@@ -153,7 +153,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &
             ui.scope_id().with(format!("device-cell-{index}")),
             Sense::click(),
         );
-        tips::hover(&response, state.tooltips, tips::Control::DeviceCell);
+        tips::hover(&response, state.help(), tips::Control::DeviceCell);
         if response.clicked() {
             state.device_request = Some(Request::Select(index));
         }
@@ -167,7 +167,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &
             p,
             None,
         );
-        tips::hover(&mute, state.tooltips, tips::Control::DeviceMute);
+        tips::hover(&mute, state.help(), tips::Control::DeviceMute);
         if mute.clicked() {
             // The index it was drawn for, not the selected one: muting the device on the panel when another was clicked
             // is the bug this carries the index to avoid.
@@ -189,7 +189,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &
                 ui.scope_id().with(format!("device-caret-{index}")),
                 Sense::click(),
             );
-            tips::hover(&response, state.tooltips, tips::Control::DeviceCaret);
+            tips::hover(&response, state.help(), tips::Control::DeviceCaret);
             if response.clicked() {
                 state.device_request = Some(Request::Open(index));
             }
@@ -229,7 +229,7 @@ fn paint_add(ui: &mut egui::Ui, state: &mut PanelState, area: Rect, s: f32, p: &
         );
     }
     let response = ui.interact(add, ui.scope_id().with("device-add"), Sense::click());
-    tips::hover(&response, state.tooltips, tips::Control::DeviceAdd);
+    tips::hover(&response, state.help(), tips::Control::DeviceAdd);
     if response.clicked() {
         // The picker offers every kind there is; `+` only opens it. It opens even at the cap — a dead key would say
         // nothing at all, and the picker's greyed rows are what say the rack is full.
