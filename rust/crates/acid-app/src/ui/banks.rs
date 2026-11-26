@@ -1268,6 +1268,53 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_builders_say_what_the_save_would_do() {
+        // These three are pure functions — strings out of the same values the keys read — so every branch a frame cannot easily
+        // reach is walked here, and the panels' own tests prove the wiring. `Some("Acid 1")`/`"Acid 1"` is the in-place case
+        // `save_target` decides; the copy key cannot produce it, which is the third line's whole point.
+        assert_eq!(
+            save_detail(Some("Acid 1"), "Acid 1", false),
+            "Writes Acid 1 in place."
+        );
+        assert_eq!(
+            save_detail(Some("Acid 1"), "Acid 2", false),
+            "Makes a new file, Acid 2."
+        );
+        assert_eq!(
+            save_detail(Some("Acid 1"), "Acid 1", true),
+            "Makes a new file, Acid 1.",
+            "a copy never writes in place, even under the name it came from"
+        );
+        assert_eq!(
+            save_detail(None, "", false),
+            "No name yet: the key opens the field.",
+            "SAVE with nothing named puts the cursor in the field"
+        );
+        assert_eq!(
+            save_detail(None, "", true),
+            "Type a name first: this key is dim until you do.",
+            "the copy key is dead with nothing named, and says so"
+        );
+
+        assert_eq!(export_detail(Some("Acid 1")), "Writes the session, Acid 1.");
+        assert_eq!(
+            export_detail(None),
+            "The session has no name yet.",
+            "a first run has no session name to write"
+        );
+
+        assert_eq!(
+            cross_detail(Kind::Song, "Studio"),
+            "Deletes the song Studio."
+        );
+        assert_eq!(cross_detail(Kind::Bank, "Easy"), "Deletes the bank Easy.");
+        assert_eq!(
+            cross_detail(Kind::Rack, "Studio"),
+            "Deletes the rack Studio."
+        );
+    }
+
     /// A band `rows` rows tall, built from the same two constants the painter lays a row out with, so a test's window and the
     /// card's window are one arithmetic. One pixel of slack is not needed: `window` divides by the same step it built here.
     fn band_of(rows: usize) -> Rect {

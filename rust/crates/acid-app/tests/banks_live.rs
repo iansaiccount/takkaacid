@@ -830,6 +830,24 @@ fn the_strip_names_the_document_it_would_write() {
             .any(|text| text.contains("Writes Easy in place.")),
         "a blank field keeps the bank the device came from: {seen:?}"
     );
+
+    // And the rack's door, the third arm of the same mapping: a strip key is its door's, whichever chip put it there.
+    click(&ctx, &mut panel, &shared, chip_centre(Filter::Racks));
+    panel.songs.card.as_mut().unwrap().rack_name = "Studio 2".to_string();
+    let at = save_centre(&panel);
+    let seen = hover(&ctx, &mut panel, &shared, screen(), at);
+    assert!(
+        seen.iter()
+            .any(|text| text.contains("Makes a new file, Studio 2.")),
+        "the rack's door names the rack it would write: {seen:?}"
+    );
+    // The door's own words, not just the computed line: the title is the catalogue's, and a door answered by the wrong
+    // `Control` would still name the right file.
+    assert!(
+        seen.iter()
+            .any(|text| text.contains(tips::Control::RackSave.tip().what)),
+        "the rack's key wears SAVE RACK's words: {seen:?}"
+    );
 }
 
 #[test]

@@ -331,8 +331,8 @@ The branch review's findings and what was done about each go here too, before th
   quiet. Suite **1039/1039**, clippy, `fmt --check`.
   **Ruling: `PanelState::help()` — the panel's own surfaces go quiet while a card is up.** Found by a failing test: egui paints one
   tooltip a frame, the first asked for, and the panel is painted before the card, so the knob under the card won and the card could
-  not explain itself where it overlaps the face (the cross's hover showed `DECAY`'s tip). The panel's twelve sites ask `help()`
-  (`tooltips && !cards_are_up()`), the cards ask `tooltips`. Cost if wrong: the panel stops explaining itself while any card is
+  not explain itself where it overlaps the face (the cross's hover showed `DECAY`'s tip). The panel's sixteen sites, in seven modules, ask `help()`
+  (`tooltips && !self.a_card_is_up()`), the cards ask `tooltips`. Cost if wrong: the panel stops explaining itself while any card is
   open — which is the intent, since a hint about a knob you cannot see is the wrong hint; a player who wants a knob's hint closes
   the card. Mutation-checked: `help()` = `tooltips` makes `the_panel_under_the_card_stays_quiet` read `WAVEFORM` and fail.
   **Ruling: `common::hover` takes the screen it paints at.** The plan pinned `hover(ctx, panel, shared, at)`, but `tests/common`'s
@@ -356,3 +356,29 @@ The branch review's findings and what was done about each go here too, before th
   `TAKKA_ACID_DATA_DIR=/tmp/takka-tips`), the pointer rested on `SAVE` and on `CLOSE`. **Both hints paint above the key and leave
   it fully readable** — the spec's overlap risk does not occur at either place. No picture and no `img/README.md` row: the guide's
   recipe parks the pointer away from the panel.
+
+**Branch review (the PR).** A subagent that wrote none of this read the whole 2213-line diff against this plan's Files,
+Interfaces, Global Constraints and Review Focus. It found **one Important** and five Minor, and confirmed the round's own
+questions: the catalogue is one table at 66 in the pinned order, every panel surface (sixteen sites, seven modules) is on
+`help()` and every card surface on `tooltips`, `banks::paint` gained exactly one parameter, `save_detail` genuinely asks
+`persist::save_target`, all seventeen titles are distinct and ASCII, no id renamed, no save-file change, no `_` arm, no glyph,
+and the book agrees with the panel. Suite **1045/1045**, clippy `-D warnings`, `fmt --check`, `guide: ok`.
+
+- **Important, fixed: `cards_are_up` was a second answer to a question the panel already answered.** `PanelState` already had
+  `a_card_is_up()` — the same six fields in the same sense — and my private copy is exactly the hand-kept second list `AGENTS.md`
+  names. `help()` is now `self.tooltips && !self.a_card_is_up()`, the copy is deleted, and its doc points at the one function. Cost
+  if wrong: none — the two were identical on the day; the cost was the drift the next card would have caused.
+- **Fixed: `SAVE RACK`'s words were never hovered.** `the_strip_names_the_document_it_would_write` now clicks `RACKS` and asserts
+  both the computed line and `Control::RackSave`'s sentence. **Mutation-checked** — mapping `Door::Rack` to `BankSave` makes it
+  read SAVE BANK's words, which the first version of the test did *not* catch (it asserted only the line, and the line is the
+  door-independent builder's), which is why the words are asserted too.
+- **Fixed: three builder branches had nothing over them.** `the_builders_say_what_the_save_would_do` walks all five `save_detail`
+  shapes (including `No name yet: the key opens the field.`, the dim-`SAVE` line Review Focus 5 is about), both `export_detail`
+  cases, and `cross_detail` for a song, a bank and a rack. **Mutation-checked** — `cross_detail` ignoring `Kind::stem` fails it.
+- **Fixed, and ruled: the picker's line is `Adds ACID to the rack.`, not the design's `Adds an ACID machine.`** The article
+  differs by kind (`an ACID`, `a DRUMS`), so naming the kind *without* one is the shape that needs no per-kind table. The design
+  is the authority, so this is a deviation with a reason rather than a tidy-up: the alternative is a second mapping from kind to
+  article for a line nobody reads twice. Cost if wrong: the word "machine" is missing from a hint, and the guide's wording
+  matches the code rather than the design.
+- **Fixed: the ledger counted twelve panel sites where sixteen moved**, and page 20 said each key of the device card explains
+  itself without excepting the `NAME` field, which the design keeps silent on purpose. Both say the true thing now.

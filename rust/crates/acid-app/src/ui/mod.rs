@@ -286,21 +286,12 @@ impl PanelState {
     ///
     /// `tooltips` is the player's switch; this is the same question asked of the *panel*, and a card standing over it changes the
     /// answer. A hint about a knob hidden under a card is the wrong hint, and egui paints one tooltip a frame — the first one
-    /// asked for — so the panel would otherwise keep the card's own hints from ever being read. The cards ask `tooltips`.
+    /// asked for — so the panel would otherwise keep the card's own hints from ever being read. The cards ask `tooltips`, and "a
+    /// card is up" is [`PanelState::a_card_is_up`] — the one answer to that question, already spoken for `dispatch`.
     pub fn help(&self) -> bool {
-        self.tooltips && !self.cards_are_up()
+        self.tooltips && !self.a_card_is_up()
     }
 
-    /// Whether any card is standing over the panel. Written out rather than `!put_cards_away`, because the two questions are
-    /// not each other's answers: one lists what a card *is*, the other what a dismissal clears.
-    fn cards_are_up(&self) -> bool {
-        self.songs.card.is_some()
-            || self.device_card.open.is_some()
-            || self.device_picker.open
-            || self.kits.open
-            || self.settings_open
-            || self.help_visible
-    }
     /// Put every card away: the one spelling of "one card at a time".
     ///
     /// Every path that *opens* a card calls this and then sets its own flag, so a card added later cannot be forgotten by

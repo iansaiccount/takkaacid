@@ -106,7 +106,7 @@ and tempo wells at the right.
 
 **The device card.** `NAME (ENTER)`, `ROLE` (`PLAY + CTRL` / `CTRL ONLY`), `PORTS` (`ALL PORTS`, then a ticked row per port),
 `CHANNEL` (`CH ANY` or `1`…`16`), `COLOUR` (the theme's name, and the key that opens the list of twenty-two), `KIT` (a drum
-machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`. Each key explains itself on hover, and
+machine's, and the name of the kit it plays), `MUTE OFF` / `MUTE ON`, `REMOVE`, `CLOSE`. Each of these keys except the `NAME` field explains itself on hover, and
 `REMOVE`'s hint names the machine it would take out.
 
 **The picker.** `ADD DEVICE`, a row per kind (`ACID`, `DRUMS`), and `CLOSE`; a row's hint names the kind it would add.
