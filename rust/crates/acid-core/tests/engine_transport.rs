@@ -5,7 +5,7 @@
 //! plan's 24 000 came from its 2x step-duration error.
 
 use acid_core::engine::Engine;
-use acid_core::pattern::{Pattern, Step};
+use acid_core::pattern::{Grid, Pattern, Step};
 use acid_core::pitch::Pitch;
 use std::sync::Arc;
 
@@ -104,5 +104,45 @@ fn tempo_reads_back_and_clamps_like_the_panel() {
         (e.bpm() - acid_core::timing::MAX_BPM).abs() < 1e-6,
         "the clock's clamp is the one that wins: {}",
         e.bpm()
+    );
+}
+
+/// A swap into a longer bar keeps the step the sequence was on and takes the finer grid from there: at 120 BPM a sixteenth is
+/// 6000 samples and a thirty-second is 3000, so a playhead halfway through step 4 of sixteen hears step 5 of thirty-two half a
+/// new step — 1500 samples — after the swap.
+///
+/// This is a decision, not an accident. The other answer keeps the **fraction of the bar** instead of the step number (4 of 16
+/// would become 8 of 32), which holds the bar's absolute position and moves every later step earlier. `Sequencer::set_pattern`
+/// says why the step number won; this test is where a change to that choice fails.
+#[test]
+fn a_swap_into_a_longer_bar_keeps_the_step_it_was_on() {
+    let sr = 48_000.0;
+    let mut e = Engine::new(sr);
+    e.set_bpm(120.0);
+    // A silent first bar: the only sound here is the new pattern's step 5, so nothing from the old bar can be mistaken for it.
+    e.set_pattern(Arc::new(Pattern::from_steps_in(
+        Grid::Sixteenth,
+        [Step::rest(); 16],
+    )));
+    e.start();
+    let mut before = vec![0.0; 27_000]; // four steps and a half: the playhead is part-way through step 4
+    e.render(&mut before);
+    assert!(
+        before.iter().all(|s| s.abs() < 1e-4),
+        "the first bar is silent, or the marker below proves nothing"
+    );
+
+    let mut thirty_two = [Step::rest(); 32];
+    thirty_two[5] = Step::note(Pitch::C, 1);
+    e.set_pattern(Arc::new(Pattern::from_steps_in(
+        Grid::ThirtySecond,
+        thirty_two,
+    )));
+    let mut after = vec![0.0; 12_000];
+    e.render(&mut after);
+    let first = after.iter().position(|s| s.abs() > 1e-4);
+    assert!(
+        first.is_some_and(|at| at < 3_600),
+        "step 5 of the finer bar arrives within a step of the swap: {first:?} samples in"
     );
 }

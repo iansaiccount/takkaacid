@@ -95,12 +95,20 @@ impl Sequencer {
         }
     }
 
-    /// Swap the playing pattern. Position, slide history and the clock are untouched, so a switch at
-    /// speed does not stutter the beat.
+    /// Swap the playing pattern.
+    ///
+    /// The step **number** is kept and the grid comes from the new pattern: a swap into a longer bar carries on counting steps,
+    /// so the sequence is heard from the step it was on, with finer steps around it. The position wraps into the new bar, so a
+    /// swap into a shorter one begins at a step that exists rather than one that has gone.
+    ///
+    /// **The alternative, and why it lost.** Keeping the *fraction of the bar* instead (4 of 16 would become 8 of 32) holds the
+    /// bar's absolute position and moves every later step earlier. The step number won because `GRID` subdivides the bar the
+    /// player is already counting, and a step is what the face shows and the hand touches. Cost if wrong: a grid change lands
+    /// its bar line up to one bar away from where absolute-position arithmetic would put it.
+    /// `tests/engine_transport.rs::a_swap_into_a_longer_bar_keeps_the_step_it_was_on` pins the choice.
     pub fn set_pattern(&mut self, pattern: Arc<Pattern>) {
-        // The grid is the pattern's, and the clock divides the bar by it: a pattern swapped for one of another grid takes
-        // the bar with it, rescaled like a tempo change. The position wraps into the new bar, so a swap from a long bar into
-        // a short one begins the new bar at its first step rather than a step that no longer exists.
+        // The grid is the pattern's and the clock divides the bar by it: a grid change rescales the step in flight, as a tempo
+        // change does, so the current step is never restarted. The wrap is the shorter bar's safety.
         self.clock.set_steps_per_bar(pattern.grid.steps_per_bar());
         self.position %= pattern.len();
         self.pattern = pattern;
