@@ -143,9 +143,10 @@ notes this round.
 **The kit browser:** `KITS`, `FACTORY`, `MY KITS`, `IMPORT`, `CLOSE`, each of the three kits that ship marked `- READ ONLY`,
 and the row being asked about on `<name> - click again to replace`.
 
-**The bank browser:** `BANKS`, `SONGS`, `DEMO BANKS`, `PATTERN BANKS`, `RACKS`, `SAVE`, `SAVE A COPY`, `SAVE BANK`, `SAVE RACK`,
-`NEW`, `IMPORT`, `EXPORT`, `CLOSE`, a row per song, per bank file and per rack file, and the `x` / `SURE` on each of your own
-rows, of a song, of a bank and of a rack.
+**The bank browser:** `BANKS`, the search field, the chips `ALL` `SONGS` `BANKS` `RACKS` `DEMOS`, `SAVE`, `SAVE A COPY`,
+`SAVE BANK`, `SAVE RACK`, `NEW`, `IMPORT`, `EXPORT`, `CLOSE`, a row per song, per bank file, per rack file and per demo, each
+rowed under its kind's word — `SONG`, `BANK`, `RACK`, `DEMO` — and the `x` / `SURE` on each row of your own, of a song, of a bank
+and of a rack.
 
 **The help card** has four sections — `STEPS`, `KEYBOARD`, `MIDI`, `NOTES`.
 

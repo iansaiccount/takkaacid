@@ -116,7 +116,7 @@ repository records where every sample in the three that ship came from and that 
 ## The demos, as drums
 
 `BANKS` is the same browser the 303 opens ([`12-songs-and-demos`](12-songs-and-demos.md)), with the same seven demo names
-under `DEMO BANKS` — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock**, **Funk**, **Acid Jazz** and **Fast Acid**.
+under the `DEMOS` chip — **Slow Acid**, **Hard Techno Acid**, **Blues**, **Rock**, **Funk**, **Acid Jazz** and **Fast Acid**.
 On a drum machine a click
 loads that demo's **drum bank** instead of a song: eight grooves into `A1` to `A8`, at the demo's tempo and shuffle, with
 this machine's kit and the session's name left alone. The acid line and its drums are two halves of one variation, and a
