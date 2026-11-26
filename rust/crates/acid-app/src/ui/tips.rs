@@ -21,10 +21,23 @@ pub struct Tip {
 impl Tip {
     /// The tooltip's text: title, then what it does, then the key when there is one.
     pub fn text(&self) -> String {
-        match self.shortcut {
-            Some(key) => format!("{}\n{}\n{key}", self.title, self.what),
-            None => format!("{}\n{}", self.title, self.what),
+        self.text_with(None)
+    }
+
+    /// The same text with one computed line between the sentence and the key: what a card knows and the catalogue cannot —
+    /// which document a key would write, or which file it would delete. `None` and an empty line are the same thing, so a
+    /// builder with nothing to say leaves no blank line.
+    pub fn text_with(&self, detail: Option<&str>) -> String {
+        let mut text = format!("{}\n{}", self.title, self.what);
+        if let Some(detail) = detail.filter(|detail| !detail.is_empty()) {
+            text.push('\n');
+            text.push_str(detail);
         }
+        if let Some(key) = self.shortcut {
+            text.push('\n');
+            text.push_str(key);
+        }
+        text
     }
 }
 
@@ -513,7 +526,14 @@ const TIPS: [Tip; 49] = [
 /// panel, and its two switches are the controls the deleted TIPS and AUTO keys were. One mapping, `Control::tip`, serves
 /// every surface.
 pub fn text_for(wants_help: bool, control: Control) -> Option<String> {
-    wants_help.then(|| control.tip().text())
+    text_with(wants_help, control, None)
+}
+
+/// The same text with one computed line after the sentence that says what the control does and before its key: the fact only
+/// the surface that draws the control can know — which document a key would write, or which file it would delete. `None` and
+/// an empty line say the same thing, so a caller with nothing to add leaves no blank line.
+pub fn text_with(wants_help: bool, control: Control, detail: Option<&str>) -> Option<String> {
+    wants_help.then(|| control.tip().text_with(detail))
 }
 
 /// Attach a control's help to its response, if the player wants help.
@@ -521,7 +541,12 @@ pub fn text_for(wants_help: bool, control: Control) -> Option<String> {
 /// `Response::on_hover_text` is egui's own tooltip, so the hint appears after the usual hover delay, stays out of the
 /// drag's way, and follows the panel's scale.
 pub fn hover(response: &Response, wants_help: bool, control: Control) {
-    if let Some(text) = text_for(wants_help, control) {
+    hover_with(response, wants_help, control, None);
+}
+
+/// The same, with one computed line — see [`text_with`].
+pub fn hover_with(response: &Response, wants_help: bool, control: Control, detail: Option<&str>) {
+    if let Some(text) = text_with(wants_help, control, detail) {
         response.clone().on_hover_text(text);
     }
 }
@@ -735,5 +760,64 @@ mod tests {
                 "{control:?} is in the catalogue but no drum control reaches it"
             );
         }
+    }
+
+    #[test]
+    fn a_detail_lands_on_its_own_line_after_the_sentence() {
+        // The line a card computes goes after the sentence that says what the key does, and before the key: a player reads
+        // "what does this do", then "which one", then "how else".
+        let text = text_with(true, Control::Cutoff, Some("Writes Acid 1 in place."))
+            .expect("help is on and the control has words");
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(
+            lines,
+            [
+                "CUT OFF",
+                Control::Cutoff.tip().what,
+                "Writes Acid 1 in place."
+            ]
+        );
+    }
+
+    #[test]
+    fn a_key_comes_after_the_detail() {
+        let text = text_with(true, Control::Copy, Some("Copies A1.")).expect("COPY has words");
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 4, "{lines:?}");
+        assert_eq!(lines[2], "Copies A1.");
+        assert_eq!(
+            lines[3],
+            Control::Copy.tip().shortcut.expect("COPY names its key")
+        );
+    }
+
+    #[test]
+    fn no_detail_is_the_text_the_panel_already_had() {
+        // Every surface that passes no detail must read exactly as it did before this existed.
+        for control in Control::ALL {
+            assert_eq!(
+                text_with(true, control, None),
+                text_for(true, control),
+                "{control:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_empty_detail_is_no_detail() {
+        assert_eq!(
+            text_with(true, Control::Cutoff, Some("")),
+            text_with(true, Control::Cutoff, None),
+            "a builder with nothing to say must not leave a blank line"
+        );
+    }
+
+    #[test]
+    fn the_hint_stays_silent_when_help_is_off() {
+        assert_eq!(
+            text_with(false, Control::Cutoff, Some("Writes Acid 1 in place.")),
+            None,
+            "a hint the player turned off says nothing, detail or not"
+        );
     }
 }
