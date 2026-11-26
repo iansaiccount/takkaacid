@@ -115,11 +115,34 @@ pub enum Control {
     DrumTune,
     DrumFilter,
     DrumHit,
+    /// The `BANKS` card's strip: the song's own save and copy, and the bank's and the rack's. The card's song key is `SAVE
+    /// SONG` because the panel's `SAVE` already owns that title, and the catalogue's titles are distinct on purpose.
+    SongSave,
+    SongCopy,
+    BankSave,
+    RackSave,
+    /// The card's footer: a new song, the two doors to the file system, and the cross on a row that is a file.
+    CardNew,
+    SongImport,
+    SongExport,
+    CardDelete,
+    /// The one `CLOSE`, shared by all four cards: it does one thing wherever it stands.
+    CardClose,
+    /// The device card's own keys. `MUTE` is not here — it borrows the strip's tip, because it is the same switch.
+    DeviceRole,
+    DevicePorts,
+    DeviceChannel,
+    DeviceColour,
+    DeviceKit,
+    DeviceRemove,
+    /// The kit browser's `IMPORT`, and the picker's one key per kind. Appended, so no existing position moves.
+    KitsImport,
+    PickerKind,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 49] = [
+    pub const ALL: [Control; 66] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -169,6 +192,23 @@ impl Control {
         Control::DrumTune,
         Control::DrumFilter,
         Control::DrumHit,
+        Control::SongSave,
+        Control::SongCopy,
+        Control::BankSave,
+        Control::RackSave,
+        Control::CardNew,
+        Control::SongImport,
+        Control::SongExport,
+        Control::CardDelete,
+        Control::CardClose,
+        Control::DeviceRole,
+        Control::DevicePorts,
+        Control::DeviceChannel,
+        Control::DeviceColour,
+        Control::DeviceKit,
+        Control::DeviceRemove,
+        Control::KitsImport,
+        Control::PickerKind,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -223,6 +263,23 @@ impl Control {
             Control::DrumTune => TIPS[46],
             Control::DrumFilter => TIPS[47],
             Control::DrumHit => TIPS[48],
+            Control::SongSave => TIPS[49],
+            Control::SongCopy => TIPS[50],
+            Control::BankSave => TIPS[51],
+            Control::RackSave => TIPS[52],
+            Control::CardNew => TIPS[53],
+            Control::SongImport => TIPS[54],
+            Control::SongExport => TIPS[55],
+            Control::CardDelete => TIPS[56],
+            Control::CardClose => TIPS[57],
+            Control::DeviceRole => TIPS[58],
+            Control::DevicePorts => TIPS[59],
+            Control::DeviceChannel => TIPS[60],
+            Control::DeviceColour => TIPS[61],
+            Control::DeviceKit => TIPS[62],
+            Control::DeviceRemove => TIPS[63],
+            Control::KitsImport => TIPS[64],
+            Control::PickerKind => TIPS[65],
         }
     }
 
@@ -272,7 +329,7 @@ impl Control {
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 49] = [
+const TIPS: [Tip; 66] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -518,6 +575,91 @@ const TIPS: [Tip; 49] = [
         what: "Strikes the selected voice, stopped or running. Writing a step is enter.",
         shortcut: Some("H"),
     },
+    Tip {
+        title: "SAVE SONG",
+        what: "Writes the session's song: in place when the field names it, as a new file when it names another. A blank field keeps the song you are on.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SAVE A COPY",
+        what: "Writes a second song under the field's name and leaves the one you are on where it is.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SAVE BANK",
+        what: "Writes the selected device's whole bank under the field's name; the bank's own name rewrites that file, and a blank field keeps it.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SAVE RACK",
+        what: "Writes every machine in the session under the field's name, as one rack file.",
+        shortcut: None,
+    },
+    Tip {
+        title: "NEW SONG",
+        what: "Throws the session away and starts from the starter phrase. Asks twice while the session is unsaved.",
+        shortcut: None,
+    },
+    Tip {
+        title: "IMPORT",
+        what: "Copies a song file from your own disk into the library and loads it; a taken name lands beside, never over.",
+        shortcut: None,
+    },
+    Tip {
+        title: "EXPORT",
+        what: "Writes the session out to a file you choose, in the library's own format.",
+        shortcut: None,
+    },
+    Tip {
+        title: "DELETE",
+        what: "Deletes the file this cross belongs to. Takes two clicks, because a delete has no undo.",
+        shortcut: None,
+    },
+    Tip {
+        title: "CLOSE",
+        what: "Puts this card away; Escape and a click outside do the same.",
+        shortcut: None,
+    },
+    Tip {
+        title: "ROLE",
+        what: "Whether the machine plays notes as well as answering a controller: PLAY + CTRL, or CTRL ONLY.",
+        shortcut: None,
+    },
+    Tip {
+        title: "PORTS",
+        what: "Which of the machine's own ports it listens on; ALL PORTS takes every one.",
+        shortcut: None,
+    },
+    Tip {
+        title: "CHANNEL",
+        what: "Which MIDI channel it answers: CH ANY, or one to sixteen.",
+        shortcut: None,
+    },
+    Tip {
+        title: "COLOUR",
+        what: "The theme the device wears; a click opens the list of twenty-two.",
+        shortcut: None,
+    },
+    Tip {
+        title: "KIT",
+        what: "The drum kit the machine plays; a click opens the kit browser.",
+        shortcut: None,
+    },
+    Tip {
+        title: "REMOVE",
+        what: "Takes the machine out of the rack. Asks once more before it goes.",
+        shortcut: None,
+    },
+    Tip {
+        title: "IMPORT KIT",
+        what: "Copies a kit folder from your own disk into the library and loads it.",
+        shortcut: None,
+    },
+    Tip {
+        title: "DEVICE KIND",
+        what: "One kind per row: adds a machine of that kind to the rack, up to four.",
+        shortcut: None,
+    },
 ];
 
 /// The help for `control`, or nothing at all when the player has turned the hints off.
@@ -704,11 +846,11 @@ mod tests {
 
     #[test]
     fn the_drum_face_has_its_own_help_for_every_control() {
-        // The drum face's controls are appended to the one catalogue, so no existing position moves: the nine new entries
-        // are the last nine, in the order the face draws them — seven dials, then the filter key, `SHUFFLE` and `HIT`.
-        assert_eq!(Control::ALL.len(), 49);
+        // The drum face's controls are the nine entries after the knobs', in the order the face draws them — seven dials, then
+        // the filter key, `SHUFFLE` and `HIT`. The cards' keys are appended after them, which is why the slice names its end.
+        assert_eq!(Control::ALL.len(), 66);
         assert_eq!(
-            &Control::ALL[40..],
+            &Control::ALL[40..49],
             [
                 Control::DrumAttack,
                 Control::DrumDecay,
@@ -754,7 +896,7 @@ mod tests {
             .map(|knob| Control::for_dial(Dial::for_knob(*knob)))
             .collect();
         reached.extend(DrumKey::ALL.iter().map(|key| Control::for_drum_key(*key)));
-        for control in &Control::ALL[40..] {
+        for control in &Control::ALL[40..49] {
             assert!(
                 reached.contains(control),
                 "{control:?} is in the catalogue but no drum control reaches it"
@@ -818,6 +960,36 @@ mod tests {
             text_with(false, Control::Cutoff, Some("Writes Acid 1 in place.")),
             None,
             "a hint the player turned off says nothing, detail or not"
+        );
+    }
+
+    #[test]
+    fn the_card_keys_are_appended_in_card_order() {
+        // The cards' keys come after the drum face's nine, grouped as the faces draw them: `BANKS` first, then the one CLOSE
+        // every card shares, then the device card, the kit browser and the picker. Appended, so no existing control's position
+        // moves and the numbers the tests pin stay lengths rather than layouts.
+        assert_eq!(Control::ALL.len(), 66);
+        assert_eq!(
+            &Control::ALL[49..],
+            [
+                Control::SongSave,
+                Control::SongCopy,
+                Control::BankSave,
+                Control::RackSave,
+                Control::CardNew,
+                Control::SongImport,
+                Control::SongExport,
+                Control::CardDelete,
+                Control::CardClose,
+                Control::DeviceRole,
+                Control::DevicePorts,
+                Control::DeviceChannel,
+                Control::DeviceColour,
+                Control::DeviceKit,
+                Control::DeviceRemove,
+                Control::KitsImport,
+                Control::PickerKind,
+            ]
         );
     }
 }
