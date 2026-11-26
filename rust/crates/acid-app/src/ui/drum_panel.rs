@@ -613,7 +613,7 @@ fn draw_dials(
             p,
         );
         // One call, like `SHUFFLE` below: the tip is the table's, and the mapping from a dial to it is `for_dial`.
-        tips::hover(&response, state.tooltips, tips::Control::for_dial(dial));
+        tips::hover(&response, state.help(), tips::Control::for_dial(dial));
         value = value.clamp(0.0, 1.0);
         state.knobs[slot] = value;
         if !choosing && (value - before).abs() > 1e-6 {
@@ -655,7 +655,7 @@ fn draw_dials(
         // One tip for the three-way key, not one per segment: it is one control and its words name all three sides.
         tips::hover(
             &response,
-            state.tooltips,
+            state.help(),
             tips::Control::for_drum_key(DrumKey::Filter),
         );
         if response.clicked() {
@@ -683,7 +683,7 @@ fn draw_dials(
     );
     tips::hover(
         &response,
-        state.tooltips,
+        state.help(),
         tips::Control::for_drum_key(DrumKey::Shuffle),
     );
     if super::learn::highlight(state.learn, crate::midi::cc::CcTarget::Swing) {
@@ -718,7 +718,7 @@ fn draw_dials(
     );
     tips::hover(
         &hit,
-        state.tooltips,
+        state.help(),
         tips::Control::for_drum_key(DrumKey::Hit),
     );
     if hit.clicked() {

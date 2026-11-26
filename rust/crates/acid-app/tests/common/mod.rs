@@ -100,6 +100,62 @@ pub fn cross_centre(n: usize) -> Pos2 {
     rects().cross(n).center()
 }
 
+/// The words a hover paints: the pointer moved onto `at` once and then left alone for a few frames, because egui waits for the
+/// hand to settle before it shows a tooltip.
+///
+/// `screen` is the window the card is painted in, and it is a parameter because this module's cards paint at 980 × 560 while
+/// the device card's and the kit browser's paint at the design size: the pointer and the layout have to be the same one, or
+/// nothing is hovered. A tooltip is drawn into a floating layer, so its galley arrives in the same shape list as the panel's
+/// own captions — which is what makes a hint assertable at all.
+pub fn hover(
+    ctx: &Context,
+    panel: &mut PanelState,
+    shared: &SharedState,
+    screen: Rect,
+    at: Pos2,
+) -> Vec<String> {
+    // The clock continues from wherever the test left it: egui refuses a frame whose time is behind the last one, and these
+    // tests have already clicked, so the first hover frame cannot start at zero.
+    let start = ctx.input(|input| input.time);
+    let mut seen = Vec::new();
+    // A frame with the pointer where it already is, then the move, then stillness: egui will not start a tooltip's delay on
+    // the frame a click was released, and a test that clicks first would otherwise read the card's words but never its hint.
+    for step in 0..6 {
+        let events = match step {
+            0 => Vec::new(),
+            1 => vec![Event::PointerMoved(at)],
+            _ => Vec::new(),
+        };
+        let input = RawInput {
+            screen_rect: Some(screen),
+            time: Some(start + f64::from(step)),
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| draw_panel(panel, shared, ui));
+        output.textures_delta.clear();
+        let frame = painted_text(&output);
+        seen.extend(frame);
+    }
+    seen
+}
+
+/// Every piece of text one frame painted, tooltips included.
+fn painted_text(output: &eframe::egui::FullOutput) -> Vec<String> {
+    fn walk(shape: &eframe::egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            eframe::egui::Shape::Text(text) => out.push(text.galley.text().to_string()),
+            eframe::egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &output.shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
 /// Where a chip is: the catalogue's order is the card's order, so this is a lookup rather than a second list.
 pub fn chip_centre(filter: Filter) -> Pos2 {
     let index = Filter::ALL
@@ -124,6 +180,11 @@ pub fn copy_centre(panel: &PanelState) -> Pos2 {
         .strip_copy
         .expect("only the song's strip has a copy key, and only a song chip is asked for one")
         .center()
+}
+
+/// The strip's name field, where a player types the document's name. The chip decides which field it is, as it decides the key.
+pub fn strip_field_centre(panel: &PanelState) -> Pos2 {
+    strip_rects(panel).strip_field.center()
 }
 
 /// The card's geometry for the chip it is on.

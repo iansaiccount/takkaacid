@@ -49,6 +49,16 @@ A row the band cannot show is reached by scrolling to it, never by pushing a key
 When the chip and the search leave nothing, the band says which nothing it is: `NOTHING MATCHES` when you have typed something,
 and `NO SONGS YET` / `NO BANKS YET` / `NO RACKS YET` when a chip on its own is empty. The strip still saves under an empty list.
 
+## Every key explains itself
+
+**Every key on the card explains itself on hover**, and the keys that write something say *which*: the key's caption is a verb, and
+the hint is the whole sentence, including the name it would write. With `Easy 2` in the bank's field, `SAVE BANK` says
+`Makes a new file, Easy 2.`; with the field blank and the device on a bank it says `Writes Easy in place.` A row's `x` says which
+file it would delete, and `EXPORT` says which session it would write.
+
+The hint follows the `TOOLTIPS ON` switch in the settings card, like every other hint on the panel: turn it off and the keys go
+quiet, and the card still works.
+
 ## What each kind of row does
 
 **A `SONG` row** is a save you have named. Click it to load one. If what is on screen has unsaved changes, the first click only

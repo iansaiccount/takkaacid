@@ -282,6 +282,16 @@ impl PanelState {
         self.device_card.open = Some(index);
     }
 
+    /// Whether the panel's own controls should explain themselves right now.
+    ///
+    /// `tooltips` is the player's switch; this is the same question asked of the *panel*, and a card standing over it changes the
+    /// answer. A hint about a knob hidden under a card is the wrong hint, and egui paints one tooltip a frame — the first one
+    /// asked for — so the panel would otherwise keep the card's own hints from ever being read. The cards ask `tooltips`, and "a
+    /// card is up" is [`PanelState::a_card_is_up`] — the one answer to that question, already spoken for `dispatch`.
+    pub fn help(&self) -> bool {
+        self.tooltips && !self.a_card_is_up()
+    }
+
     /// Put every card away: the one spelling of "one card at a time".
     ///
     /// Every path that *opens* a card calls this and then sets its own flag, so a card added later cannot be forgotten by
@@ -570,7 +580,7 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
         ),
     ] {
         let response = ui.interact(rect, ui.scope_id().with(name), egui::Sense::hover());
-        tips::hover(&response, state.tooltips, control);
+        tips::hover(&response, state.help(), control);
     }
     // Both readouts wear the pick colour: while choosing, they are the answer to "which one?"; while a learn is
     // listening for one of them, that one keeps its border so the player can see what the controller will bind.
@@ -1051,6 +1061,9 @@ pub fn draw_panel(state: &mut PanelState, shared: &SharedState, ui: &mut egui::U
                     bank_file: bank_file.as_deref(),
                     rack_file: rack_file.as_deref(),
                 },
+                // The hover help's flag, read from the panel's own field beside `dirty`: a card that writes nothing but a hint
+                // needs the switch, and `banks::paint` is not given the whole panel.
+                state.tooltips,
                 kind,
             );
         }

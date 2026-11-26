@@ -119,6 +119,8 @@ for word in 'manual by default' 'xdg-desktop-portal' 'MIDI: none (retrying)' 'RE
             '`ALL` `SONGS` `BANKS` `RACKS` `DEMOS`' \
             'sits under the title, above the chips' \
             'follows the chip you are on' \
+            'Every key on the card explains itself on hover' \
+            'Makes a new file, Easy 2.' \
             '1/16' '1/32' '1/8T' 'GRID' 'Acid Jazz' 'Fast Acid' 'newer' 'HELD' \
             'Every control in the row explains itself'; do
   grep -rqF -- "$word" src || { echo "the guide never says: $word"; exit 1; }

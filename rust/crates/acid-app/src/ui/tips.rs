@@ -21,10 +21,23 @@ pub struct Tip {
 impl Tip {
     /// The tooltip's text: title, then what it does, then the key when there is one.
     pub fn text(&self) -> String {
-        match self.shortcut {
-            Some(key) => format!("{}\n{}\n{key}", self.title, self.what),
-            None => format!("{}\n{}", self.title, self.what),
+        self.text_with(None)
+    }
+
+    /// The same text with one computed line between the sentence and the key: what a card knows and the catalogue cannot —
+    /// which document a key would write, or which file it would delete. `None` and an empty line are the same thing, so a
+    /// builder with nothing to say leaves no blank line.
+    pub fn text_with(&self, detail: Option<&str>) -> String {
+        let mut text = format!("{}\n{}", self.title, self.what);
+        if let Some(detail) = detail.filter(|detail| !detail.is_empty()) {
+            text.push('\n');
+            text.push_str(detail);
         }
+        if let Some(key) = self.shortcut {
+            text.push('\n');
+            text.push_str(key);
+        }
+        text
     }
 }
 
@@ -102,11 +115,34 @@ pub enum Control {
     DrumTune,
     DrumFilter,
     DrumHit,
+    /// The `BANKS` card's strip: the song's own save and copy, and the bank's and the rack's. The card's song key is `SAVE
+    /// SONG` because the panel's `SAVE` already owns that title, and the catalogue's titles are distinct on purpose.
+    SongSave,
+    SongCopy,
+    BankSave,
+    RackSave,
+    /// The card's footer: a new song, the two doors to the file system, and the cross on a row that is a file.
+    CardNew,
+    SongImport,
+    SongExport,
+    CardDelete,
+    /// The one `CLOSE`, shared by all four cards: it does one thing wherever it stands.
+    CardClose,
+    /// The device card's own keys. `MUTE` is not here — it borrows the strip's tip, because it is the same switch.
+    DeviceRole,
+    DevicePorts,
+    DeviceChannel,
+    DeviceColour,
+    DeviceKit,
+    DeviceRemove,
+    /// The kit browser's `IMPORT`, and the picker's one key per kind. Appended, so no existing position moves.
+    KitsImport,
+    PickerKind,
 }
 
 impl Control {
     /// Every control; the tests walk it, so a new one cannot ship without text.
-    pub const ALL: [Control; 49] = [
+    pub const ALL: [Control; 66] = [
         Control::Waveform,
         Control::Tuning,
         Control::Cutoff,
@@ -156,6 +192,23 @@ impl Control {
         Control::DrumTune,
         Control::DrumFilter,
         Control::DrumHit,
+        Control::SongSave,
+        Control::SongCopy,
+        Control::BankSave,
+        Control::RackSave,
+        Control::CardNew,
+        Control::SongImport,
+        Control::SongExport,
+        Control::CardDelete,
+        Control::CardClose,
+        Control::DeviceRole,
+        Control::DevicePorts,
+        Control::DeviceChannel,
+        Control::DeviceColour,
+        Control::DeviceKit,
+        Control::DeviceRemove,
+        Control::KitsImport,
+        Control::PickerKind,
     ];
 
     /// This control's help. The `match` is exhaustive, so a new control cannot reach a player without text.
@@ -210,6 +263,23 @@ impl Control {
             Control::DrumTune => TIPS[46],
             Control::DrumFilter => TIPS[47],
             Control::DrumHit => TIPS[48],
+            Control::SongSave => TIPS[49],
+            Control::SongCopy => TIPS[50],
+            Control::BankSave => TIPS[51],
+            Control::RackSave => TIPS[52],
+            Control::CardNew => TIPS[53],
+            Control::SongImport => TIPS[54],
+            Control::SongExport => TIPS[55],
+            Control::CardDelete => TIPS[56],
+            Control::CardClose => TIPS[57],
+            Control::DeviceRole => TIPS[58],
+            Control::DevicePorts => TIPS[59],
+            Control::DeviceChannel => TIPS[60],
+            Control::DeviceColour => TIPS[61],
+            Control::DeviceKit => TIPS[62],
+            Control::DeviceRemove => TIPS[63],
+            Control::KitsImport => TIPS[64],
+            Control::PickerKind => TIPS[65],
         }
     }
 
@@ -256,10 +326,23 @@ impl Control {
             DrumKey::Hit => Control::DrumHit,
         }
     }
+
+    /// The help for one of the `BANKS` card's strip keys. Beside [`Control::for_knob`] and for its reason: the catalogue names
+    /// no view type, and the arms are written out so a fourth door fails to compile here. `SAVE A COPY` is not a door — it is
+    /// the song's strip only — so the card asks for it by name.
+    pub fn for_door(door: crate::ui::banks::Door) -> Control {
+        use crate::ui::banks::Door;
+
+        match door {
+            Door::Song => Control::SongSave,
+            Door::Bank => Control::BankSave,
+            Door::Rack => Control::RackSave,
+        }
+    }
 }
 
 /// The help text, in `Control::ALL` order.
-const TIPS: [Tip; 49] = [
+const TIPS: [Tip; 66] = [
     Tip {
         title: "WAVEFORM",
         what: "Chooses the oscillator's wave: saw, square, sine or triangle.",
@@ -505,6 +588,91 @@ const TIPS: [Tip; 49] = [
         what: "Strikes the selected voice, stopped or running. Writing a step is enter.",
         shortcut: Some("H"),
     },
+    Tip {
+        title: "SAVE SONG",
+        what: "Writes the session's song: in place when the field names it, as a new file when it names another. A blank field keeps the song you are on.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SAVE A COPY",
+        what: "Writes a second song under the field's name and leaves the one you are on where it is.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SAVE BANK",
+        what: "Writes the selected device's whole bank under the field's name; the bank's own name rewrites that file, and a blank field keeps it.",
+        shortcut: None,
+    },
+    Tip {
+        title: "SAVE RACK",
+        what: "Writes every machine in the session under the field's name, as one rack file.",
+        shortcut: None,
+    },
+    Tip {
+        title: "NEW SONG",
+        what: "Throws the session away and starts from the starter phrase. Asks twice while the session is unsaved.",
+        shortcut: None,
+    },
+    Tip {
+        title: "IMPORT",
+        what: "Copies a song file from your own disk into the library and loads it; a taken name lands beside, never over.",
+        shortcut: None,
+    },
+    Tip {
+        title: "EXPORT",
+        what: "Writes the session out to a file you choose, in the library's own format.",
+        shortcut: None,
+    },
+    Tip {
+        title: "DELETE",
+        what: "Deletes the file this cross belongs to. Takes two clicks, because a delete has no undo.",
+        shortcut: None,
+    },
+    Tip {
+        title: "CLOSE",
+        what: "Puts this card away; Escape and a click outside do the same.",
+        shortcut: None,
+    },
+    Tip {
+        title: "ROLE",
+        what: "Whether the machine plays notes as well as answering a controller: PLAY + CTRL, or CTRL ONLY.",
+        shortcut: None,
+    },
+    Tip {
+        title: "PORTS",
+        what: "Which of the machine's own ports it listens on; ALL PORTS takes every one.",
+        shortcut: None,
+    },
+    Tip {
+        title: "CHANNEL",
+        what: "Which MIDI channel it answers: CH ANY, or one to sixteen.",
+        shortcut: None,
+    },
+    Tip {
+        title: "COLOUR",
+        what: "The theme the device wears; a click opens the list of twenty-two.",
+        shortcut: None,
+    },
+    Tip {
+        title: "KIT",
+        what: "The drum kit the machine plays; a click opens the kit browser.",
+        shortcut: None,
+    },
+    Tip {
+        title: "REMOVE",
+        what: "Takes the machine out of the rack. Asks once more before it goes.",
+        shortcut: None,
+    },
+    Tip {
+        title: "IMPORT KIT",
+        what: "Copies a kit folder from your own disk into the library and loads it.",
+        shortcut: None,
+    },
+    Tip {
+        title: "DEVICE KIND",
+        what: "One kind per row: adds a machine of that kind to the rack, up to four.",
+        shortcut: None,
+    },
 ];
 
 /// The help for `control`, or nothing at all when the player has turned the hints off.
@@ -513,7 +681,14 @@ const TIPS: [Tip; 49] = [
 /// panel, and its two switches are the controls the deleted TIPS and AUTO keys were. One mapping, `Control::tip`, serves
 /// every surface.
 pub fn text_for(wants_help: bool, control: Control) -> Option<String> {
-    wants_help.then(|| control.tip().text())
+    text_with(wants_help, control, None)
+}
+
+/// The same text with one computed line after the sentence that says what the control does and before its key: the fact only
+/// the surface that draws the control can know — which document a key would write, or which file it would delete. `None` and
+/// an empty line say the same thing, so a caller with nothing to add leaves no blank line.
+pub fn text_with(wants_help: bool, control: Control, detail: Option<&str>) -> Option<String> {
+    wants_help.then(|| control.tip().text_with(detail))
 }
 
 /// Attach a control's help to its response, if the player wants help.
@@ -521,7 +696,12 @@ pub fn text_for(wants_help: bool, control: Control) -> Option<String> {
 /// `Response::on_hover_text` is egui's own tooltip, so the hint appears after the usual hover delay, stays out of the
 /// drag's way, and follows the panel's scale.
 pub fn hover(response: &Response, wants_help: bool, control: Control) {
-    if let Some(text) = text_for(wants_help, control) {
+    hover_with(response, wants_help, control, None);
+}
+
+/// The same, with one computed line — see [`text_with`].
+pub fn hover_with(response: &Response, wants_help: bool, control: Control, detail: Option<&str>) {
+    if let Some(text) = text_with(wants_help, control, detail) {
         response.clone().on_hover_text(text);
     }
 }
@@ -679,11 +859,11 @@ mod tests {
 
     #[test]
     fn the_drum_face_has_its_own_help_for_every_control() {
-        // The drum face's controls are appended to the one catalogue, so no existing position moves: the nine new entries
-        // are the last nine, in the order the face draws them — seven dials, then the filter key, `SHUFFLE` and `HIT`.
-        assert_eq!(Control::ALL.len(), 49);
+        // The drum face's controls are the nine entries after the knobs', in the order the face draws them — seven dials, then
+        // the filter key, `SHUFFLE` and `HIT`. The cards' keys are appended after them, which is why the slice names its end.
+        assert_eq!(Control::ALL.len(), 66);
         assert_eq!(
-            &Control::ALL[40..],
+            &Control::ALL[40..49],
             [
                 Control::DrumAttack,
                 Control::DrumDecay,
@@ -729,11 +909,116 @@ mod tests {
             .map(|knob| Control::for_dial(Dial::for_knob(*knob)))
             .collect();
         reached.extend(DrumKey::ALL.iter().map(|key| Control::for_drum_key(*key)));
-        for control in &Control::ALL[40..] {
+        for control in &Control::ALL[40..49] {
             assert!(
                 reached.contains(control),
                 "{control:?} is in the catalogue but no drum control reaches it"
             );
         }
+    }
+
+    #[test]
+    fn a_detail_lands_on_its_own_line_after_the_sentence() {
+        // The line a card computes goes after the sentence that says what the key does, and before the key: a player reads
+        // "what does this do", then "which one", then "how else".
+        let text = text_with(true, Control::Cutoff, Some("Writes Acid 1 in place."))
+            .expect("help is on and the control has words");
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(
+            lines,
+            [
+                "CUT OFF",
+                Control::Cutoff.tip().what,
+                "Writes Acid 1 in place."
+            ]
+        );
+    }
+
+    #[test]
+    fn a_key_comes_after_the_detail() {
+        let text = text_with(true, Control::Copy, Some("Copies A1.")).expect("COPY has words");
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 4, "{lines:?}");
+        assert_eq!(lines[2], "Copies A1.");
+        assert_eq!(
+            lines[3],
+            Control::Copy.tip().shortcut.expect("COPY names its key")
+        );
+    }
+
+    #[test]
+    fn no_detail_is_the_text_the_panel_already_had() {
+        // Every surface that passes no detail must read exactly as it did before this existed.
+        for control in Control::ALL {
+            assert_eq!(
+                text_with(true, control, None),
+                text_for(true, control),
+                "{control:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_empty_detail_is_no_detail() {
+        assert_eq!(
+            text_with(true, Control::Cutoff, Some("")),
+            text_with(true, Control::Cutoff, None),
+            "a builder with nothing to say must not leave a blank line"
+        );
+    }
+
+    #[test]
+    fn the_hint_stays_silent_when_help_is_off() {
+        assert_eq!(
+            text_with(false, Control::Cutoff, Some("Writes Acid 1 in place.")),
+            None,
+            "a hint the player turned off says nothing, detail or not"
+        );
+    }
+
+    #[test]
+    fn the_card_keys_are_appended_in_card_order() {
+        // The cards' keys come after the drum face's nine, grouped as the faces draw them: `BANKS` first, then the one CLOSE
+        // every card shares, then the device card, the kit browser and the picker. Appended, so no existing control's position
+        // moves and the numbers the tests pin stay lengths rather than layouts.
+        assert_eq!(Control::ALL.len(), 66);
+        assert_eq!(
+            &Control::ALL[49..],
+            [
+                Control::SongSave,
+                Control::SongCopy,
+                Control::BankSave,
+                Control::RackSave,
+                Control::CardNew,
+                Control::SongImport,
+                Control::SongExport,
+                Control::CardDelete,
+                Control::CardClose,
+                Control::DeviceRole,
+                Control::DevicePorts,
+                Control::DeviceChannel,
+                Control::DeviceColour,
+                Control::DeviceKit,
+                Control::DeviceRemove,
+                Control::KitsImport,
+                Control::PickerKind,
+            ]
+        );
+    }
+
+    #[test]
+    fn every_door_names_its_own_control() {
+        // The strip draws one save key per door, and the tip is the door's: three titles, and the copy key is the song's second
+        // key rather than a fourth door.
+        use crate::ui::banks::Door;
+
+        assert_eq!(Control::for_door(Door::Song).tip().title, "SAVE SONG");
+        assert_eq!(Control::for_door(Door::Bank).tip().title, "SAVE BANK");
+        assert_eq!(Control::for_door(Door::Rack).tip().title, "SAVE RACK");
+        assert_ne!(
+            Control::for_door(Door::Song),
+            Control::SongCopy,
+            "SAVE A COPY is the song's second key, not a door"
+        );
     }
 }

@@ -264,22 +264,27 @@ pub fn paint_picker(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f
         // A greyed row is the unlit face: recessed and plain instead of raised and amber. It still answers a click, so the
         // refusal is `Rack::add`'s to say — the same reason the strip's `+` stays clickable at the cap.
         let fits = kind.enabled(count);
-        if transport::card_button(
+        let key = transport::card_button(
             ui,
             &format!("device-picker-kind-{index}"),
             rect,
             kind.name(),
             fits,
-        )
-        .clicked()
-        {
+        );
+        tips::hover_with(
+            &key,
+            state.tooltips,
+            tips::Control::PickerKind,
+            Some(&picker_detail(*kind)),
+        );
+        if key.clicked() {
             asked = Some(Request::Add(*kind));
         }
     }
 
-    if transport::card_button(ui, "device-picker-close", rows.close, "CLOSE", false).clicked()
-        || shield.clicked()
-    {
+    let close = transport::card_button(ui, "device-picker-close", rows.close, "CLOSE", false);
+    tips::hover(&close, state.tooltips, tips::Control::CardClose);
+    if close.clicked() || shield.clicked() {
         // Closing is this card's own state and says nothing to the rack: it has no mirror to drop.
         asked = None;
         state.device_picker.open = false;
@@ -559,6 +564,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     if role_key.clicked() {
         asked = Some(Request::SetRole(index, next_role(role)));
     }
+    tips::hover(&role_key, state.tooltips, tips::Control::DeviceRole);
 
     // PORTS: `ALL PORTS` is the factory filter and the way back to it; each row below is one of the machine's ports with the
     // tick the device's own `Ports` gives it, so nothing here remembers a tick the filter does not hold.
@@ -576,6 +582,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     if all_ports.clicked() {
         asked = Some(Request::SetPorts(index, Ports::All));
     }
+    tips::hover(&all_ports, state.tooltips, tips::Control::DevicePorts);
     for port_index in 0..state.device_card.ports.len() {
         let Some(rect) = rows.ports.get(port_index).copied() else {
             break;
@@ -602,6 +609,8 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
             let next = toggled(&state.device_card.ports, port_index);
             asked = Some(Request::SetPorts(index, next));
         }
+        // The same words as `ALL PORTS`: which ports a machine hears is one question, asked at each place it can be asked.
+        tips::hover(&key, state.tooltips, tips::Control::DevicePorts);
     }
 
     // CHANNEL: two keys with the value between them, because the face may not use a triangle from a system font.
@@ -616,6 +625,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     if down.clicked() {
         asked = Some(Request::SetChannel(index, prev_channel(channel)));
     }
+    tips::hover(&down, state.tooltips, tips::Control::DeviceChannel);
     ui.painter().text(
         Pos2::new(
             rows.channel_down.right() + 8.0 * s,
@@ -630,6 +640,8 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
     if up.clicked() {
         asked = Some(Request::SetChannel(index, next_channel(channel)));
     }
+    // Both arrows carry the one tip: the channel is one value with two directions, not two controls.
+    tips::hover(&up, state.tooltips, tips::Control::DeviceChannel);
 
     // COLOUR: the theme this device wears, and the key that opens the list of them. A key that shows the current theme and
     // opens one list beats a key that cycles: twenty-two themes is a lottery with twenty-two tickets.
@@ -641,6 +653,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         scheme.name(),
         state.device_card.themes.open,
     );
+    tips::hover(&colour, state.tooltips, tips::Control::DeviceColour);
     if colour.clicked() {
         state.device_card.themes.open = !state.device_card.themes.open;
         if state.device_card.themes.open {
@@ -666,6 +679,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
             rect.width() - 8.0 * s,
         );
         let key = transport::card_button(ui, "device-card-kit", rect, &label, false);
+        tips::hover(&key, state.tooltips, tips::Control::DeviceKit);
         if key.clicked() {
             // The browser is another card, so this one goes: one card at a time, and `open` is the only way in.
             super::kits::open(state);
@@ -690,6 +704,13 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         if armed { "CONFIRM?" } else { "REMOVE" },
         armed,
     );
+    // REMOVE names the machine, because a rack of four has four of these keys and one of them is the one under the pointer.
+    tips::hover_with(
+        &remove,
+        state.tooltips,
+        tips::Control::DeviceRemove,
+        Some(&remove_detail(&state.device_card.name)),
+    );
     if remove.clicked() {
         match clear::click(state.device_card.armed_remove, now) {
             clear::Click::Armed => {
@@ -705,6 +726,7 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
 
     // CLOSE is the card's own lifetime.
     let close = transport::card_button(ui, "device-card-close", rows.close, "CLOSE", false);
+    tips::hover(&close, state.tooltips, tips::Control::CardClose);
     if shield.clicked() || close.clicked() {
         asked = Some(Request::Close);
     }
@@ -719,6 +741,17 @@ pub fn paint(ui: &mut egui::Ui, state: &mut PanelState, panel: Rect, s: f32) {
         }
         state.device_request = Some(request);
     }
+}
+
+/// What `REMOVE` would take out, in the words its hover help uses: the machine's name, because a rack of four has four of
+/// these keys and only the device's own name says which one the pointer is on.
+fn remove_detail(name: &str) -> String {
+    format!("Takes {name} out of the rack.")
+}
+
+/// What a picker row would add, in the words its hover help uses: the kind the row offers, because every row's job is the same.
+fn picker_detail(kind: crate::device::DeviceKind) -> String {
+    format!("Adds {} to the rack.", kind.name())
 }
 
 /// Paint the theme list and answer a pick.

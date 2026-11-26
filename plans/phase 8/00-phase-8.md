@@ -26,7 +26,7 @@ Rounds live here as `NN-topic.md`, one per round, in the shape the earlier phase
   header. Its branch review found one Important thing it could not settle: with the songs first, a full list takes the *doors* off
   the card — twelve songs stop it drawing `SAVE RACK`, thirteen stop `SAVE BANK`. Round 03 is the answer to that, and the plan's
   Progress says so.
-- [`03-the-card-as-a-browser`](03-the-card-as-a-browser.md) — **planned, in flight on `phase-8-round-03`.** One searchable,
+- [`03-the-card-as-a-browser`](03-the-card-as-a-browser.md) — **done, in PR #16.** One searchable,
   kind-filtered, scrolling list replaces the four stacked ones; the save strip follows the chip; a thumb appears only when the list
   overflows. It answers round 02's finding because `SAVE BANK` and `SAVE RACK` stop being rows under a list and become fixed
   furniture. Approved by the player on 2026-11-25, and the card's arithmetic moves into one public `Rects` the painter and both
@@ -39,6 +39,13 @@ Rounds live here as `NN-topic.md`, one per round, in the shape the earlier phase
 - **05 — drag to reorder devices.** Named, not yet planned. `Rack::move_device`, the strip's cell gaining `click_and_drag` on
   its existing id, the dragged device remembered by number, the selection following it. The file needs no change: it is
   already strip order.
+- [`06-cards-explain-themselves`](06-cards-explain-themselves.md) — **in flight on `phase-8-round-06`.** The one round
+  here that is not about a document: every key on every card explains itself on hover, and the keys whose effect depends on state
+  the player cannot see say *which* — `SAVE BANK` names the bank. The panel already does this everywhere else (knobs, transport,
+  tape, strip, settings, drum face) from one catalogue; no card does. The catalogue grows by seventeen entries, and the strip's
+  line comes from `persist::save_target`, the function `main` uses, so a hint cannot describe a save the save does not make.
+  Approved by the player on 2026-11-25, in the slot after 04 and 05. Design:
+  [`2026-11-25-cards-explain-themselves-design.md`](../../docs/superpowers/specs/2026-11-25-cards-explain-themselves-design.md).
 
 **Spec:** [`docs/superpowers/specs/2026-11-25-rack-documents-design.md`](../../docs/superpowers/specs/2026-11-25-rack-documents-design.md)
 — agreed with the player on 2026-11-25 and revised once against a builder check, whose seven findings and their answers are
@@ -49,8 +56,8 @@ recorded in its last sections. The plans argue from it; where they disagree, the
 line current, and a commit. The review is of the branch at the pull request, by a subagent that wrote none of it
 (`AGENTS.md`).
 
-**State: rounds 01 and 02 complete and merged in PR #15; round 03 planned and in flight on `phase-8-round-03`; round 04 planned;
-round 05 named, not yet planned.**
+**State: rounds 01, 02 and 03 complete and merged in PR #15 and PR #16; round 04 planned; round 05 named, not yet planned; round 06
+in flight on `phase-8-round-06`.**
 
 **What phase 8 does not do**, and where each is recorded: merging a saved rack into the open one (the player chose replace —
 spec's Non-goals); a rack file that carries tempo, song name or panel state; remembering a rack file's name across a restart

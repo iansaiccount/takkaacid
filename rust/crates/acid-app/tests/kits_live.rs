@@ -10,6 +10,9 @@ use acid_app::persist::{self, kit_names, save_kit};
 use acid_app::state::SharedState;
 use acid_app::ui::device_card;
 use acid_app::ui::dispatch;
+use acid_app::ui::tips;
+
+mod common;
 use acid_app::ui::drum_panel;
 use acid_app::ui::kits::{self, Request};
 use acid_app::ui::layout::{layout, scale};
@@ -598,5 +601,42 @@ fn an_edit_records_which_device_is_owed_the_write() {
         panel.kit_dirty,
         Some(2),
         "the write is owed for the device that was edited, by its number, not for the first one"
+    );
+}
+
+#[test]
+fn the_kit_browsers_keys_explain_themselves() {
+    // The browser's rows are kit names and stay silent — a row's label is the name it loads. Its two keys say what they do,
+    // and `CLOSE` is the same control the other three cards wear. A row is asked first: a hover leaves its hint on screen for a
+    // frame or two, so an absence is only worth asserting before anything has been shown.
+    let (mut panel, shared) = drum_panel_state(vec!["808".to_string()], "808");
+    let ctx = Context::default();
+    let s = scale(screen());
+    let laid = kits::rows(layout(screen()).panel, s, &panel.kits.names);
+
+    let seen = common::hover(
+        &ctx,
+        &mut panel,
+        &shared,
+        screen(),
+        laid.factory[0].center(),
+    );
+    assert!(
+        !seen.iter().any(|text| text.contains('\n')),
+        "a row is a name and says nothing more: {seen:?}"
+    );
+
+    let seen = common::hover(&ctx, &mut panel, &shared, screen(), laid.import.center());
+    assert!(
+        seen.iter()
+            .any(|text| text.contains(tips::Control::KitsImport.tip().what)),
+        "IMPORT explains itself: {seen:?}"
+    );
+
+    let seen = common::hover(&ctx, &mut panel, &shared, screen(), laid.close.center());
+    assert!(
+        seen.iter()
+            .any(|text| text.contains(tips::Control::CardClose.tip().what)),
+        "CLOSE explains itself: {seen:?}"
     );
 }

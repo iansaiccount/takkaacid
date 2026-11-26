@@ -3,7 +3,10 @@
 use acid_app::device::Request;
 use acid_app::state::SharedState;
 use acid_app::ui::layout::{layout, strip_cells};
+
+mod common;
 use acid_app::ui::strip::{StripCell, caret_rect};
+use acid_app::ui::tips;
 use acid_app::ui::{PanelState, device_card, dispatch, draw_panel};
 use eframe::egui::{
     Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2,
@@ -1350,5 +1353,125 @@ fn a_click_outside_the_list_puts_the_list_away_and_leaves_the_card() {
         panel.device_card.open,
         Some(0),
         "and is spent on the list, not on the card behind it"
+    );
+}
+
+/// Hover a key of the card and read the words the frame painted. The card paints at the design size, so the screen it is told
+/// about is this file's own — the shared helper takes it rather than assuming the card tests' 980 × 560.
+fn hovered(panel: &mut PanelState, state: &SharedState, at: Pos2) -> Vec<String> {
+    let ctx = Context::default();
+    run(&ctx, panel, state, vec![]);
+    common::hover(&ctx, panel, state, screen(), at)
+}
+
+#[test]
+fn every_key_on_the_device_card_explains_itself() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    open_card(
+        &mut panel,
+        1,
+        &[("Launchkey MIDI", true), ("nanoKONTROL", false)],
+    );
+    let rows = card_rows(&panel);
+
+    for (at, sentence) in [
+        (rows.role.center(), tips::Control::DeviceRole.tip().what),
+        (
+            rows.all_ports.center(),
+            tips::Control::DevicePorts.tip().what,
+        ),
+        (
+            rows.channel_down.center(),
+            tips::Control::DeviceChannel.tip().what,
+        ),
+        (
+            rows.channel_up.center(),
+            tips::Control::DeviceChannel.tip().what,
+        ),
+        (rows.scheme.center(), tips::Control::DeviceColour.tip().what),
+        (rows.mute.center(), tips::Control::DeviceMute.tip().what),
+        (rows.remove.center(), tips::Control::DeviceRemove.tip().what),
+        (rows.close.center(), tips::Control::CardClose.tip().what),
+    ] {
+        let seen = hovered(&mut panel, &state, at);
+        assert!(
+            seen.iter().any(|text| text.contains(sentence)),
+            "{sentence:?} was not painted at {at:?}: {seen:?}"
+        );
+    }
+}
+
+#[test]
+fn every_port_row_answers_with_the_same_tip() {
+    // One question — which ports does this machine listen on — asked at each place it can be asked.
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    open_card(
+        &mut panel,
+        1,
+        &[("Launchkey MIDI", true), ("nanoKONTROL", false)],
+    );
+    let rows = card_rows(&panel);
+    let sentence = tips::Control::DevicePorts.tip().what;
+
+    for row in &rows.ports {
+        let seen = hovered(&mut panel, &state, row.center());
+        assert!(
+            seen.iter().any(|text| text.contains(sentence)),
+            "a port row says what ports are: {seen:?}"
+        );
+    }
+}
+
+#[test]
+fn remove_names_the_device_it_would_take_out() {
+    let state = SharedState::new();
+    let mut panel = two_device_panel();
+    open_card(&mut panel, 1, &[]);
+    let name = panel.device_card.name.clone();
+    let rows = card_rows(&panel);
+
+    let seen = hovered(&mut panel, &state, rows.remove.center());
+    assert!(
+        seen.iter()
+            .any(|text| text.contains(&format!("Takes {name} out of the rack."))),
+        "REMOVE names the machine it would take out: {seen:?}"
+    );
+}
+
+#[test]
+fn a_picker_row_names_the_kind_it_adds() {
+    // The picker's rows all do the same job, so one control carries the words and the resolved line names the kind. Its CLOSE
+    // is the shared one.
+    let state = SharedState::new();
+    let mut panel = PanelState::default();
+    panel.device_picker.open = true;
+    let ctx = Context::default();
+    run(&ctx, &mut panel, &state, vec![]);
+    let s = acid_app::ui::layout::scale(screen());
+    let rows = device_card::picker_rows(device_card::picker_rect(layout(screen()).panel, s), s);
+
+    for (index, kind) in acid_app::device::DeviceKind::ALL.iter().enumerate() {
+        let seen = common::hover(
+            &ctx,
+            &mut panel,
+            &state,
+            screen(),
+            rows.kinds[index].center(),
+        );
+        assert!(
+            seen.iter()
+                .any(|text| text.contains(&format!("Adds {} to the rack.", kind.name()))),
+            "{:?}'s row names its kind: {seen:?}",
+            kind.name()
+        );
+    }
+
+    let seen = common::hover(&ctx, &mut panel, &state, screen(), rows.close.center());
+    assert!(
+        seen.iter()
+            .any(|text| text.contains(tips::Control::CardClose.tip().what)),
+        "the picker's CLOSE explains itself: {seen:?}"
     );
 }

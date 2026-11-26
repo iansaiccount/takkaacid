@@ -6,7 +6,7 @@
 
 use egui::{Rect, Ui};
 
-use super::{theme, transport};
+use super::{theme, tips, transport};
 
 /// What the card is showing.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -415,6 +415,7 @@ pub fn paint(
     scale: f32,
     songs: &mut Banks,
     session: Session<'_>,
+    wants_help: bool,
     kind: crate::device::DeviceKind,
 ) -> Option<Request> {
     let session_dirty = session.dirty;
@@ -568,7 +569,14 @@ pub fn paint(
         if let Some((id, delete)) = row.kind.cross(row.index, &row.name) {
             let delete_armed = songs.delete_armed.as_deref() == Some(key.as_str());
             let label = if delete_armed { "SURE" } else { "x" };
-            if transport::card_button(ui, &id, rects.cross(n), label, delete_armed).clicked() {
+            let cross = transport::card_button(ui, &id, rects.cross(n), label, delete_armed);
+            tips::hover_with(
+                &cross,
+                wants_help,
+                tips::Control::CardDelete,
+                Some(&cross_detail(row.kind, &row.name)),
+            );
+            if cross.clicked() {
                 if delete_armed {
                     request = Some(delete);
                     songs.delete_armed = None;
@@ -603,33 +611,50 @@ pub fn paint(
     // A blank field still saves the document the session is on. With nothing named and nothing open there is nothing to save:
     // the key puts the cursor in the field rather than dying quietly, which is what a player would expect of a save key.
     let can_save = typed.is_some() || current.is_some();
-    if transport::card_button(
+    let save = transport::card_button(
         ui,
         door.save_id(),
         rects.strip_save,
         door.save_label(),
         can_save,
-    )
-    .clicked()
-    {
+    );
+    // The strip's key says *which* document, built from the field's text as typed and the file the document came from: the
+    // line asks `save_detail`, which asks `persist::save_target` — the decision the save itself makes.
+    tips::hover_with(
+        &save,
+        wants_help,
+        tips::Control::for_door(door),
+        Some(&save_detail(current, field_text.as_str(), false)),
+    );
+    if save.clicked() {
         match document_save_name(field_text.as_str(), current) {
             Some(name) => request = Some(door.request(name)),
             None => ui.memory_mut(|memory| memory.request_focus(field_id)),
         }
     }
-    if let (Some(copy), Some(copy_id)) = (rects.strip_copy, door.copy_id())
-        && transport::card_button(ui, copy_id, copy, "SAVE A COPY", typed.is_some()).clicked()
-        && let Some(name) = document_save_name(field_text.as_str(), current)
-        && let Some(copy) = door.copy_request(name)
-    {
-        request = Some(copy);
+    if let (Some(copy), Some(copy_id)) = (rects.strip_copy, door.copy_id()) {
+        let key = transport::card_button(ui, copy_id, copy, "SAVE A COPY", typed.is_some());
+        tips::hover_with(
+            &key,
+            wants_help,
+            tips::Control::SongCopy,
+            Some(&save_detail(current, field_text.as_str(), true)),
+        );
+        if key.clicked()
+            && let Some(name) = document_save_name(field_text.as_str(), current)
+            && let Some(copied) = door.copy_request(name)
+        {
+            request = Some(copied);
+        }
     }
 
     // The footer: a new song, the two doors to the file system, and close. NEW replaces the session, so it asks twice while
     // the session is unsaved, like every other action that would throw work away.
     let new_armed = songs.load_armed.as_deref() == Some(NEW_KEY);
     let new_label = if new_armed { "SURE?" } else { "NEW" };
-    if transport::card_button(ui, "song-new", rects.footer_new, new_label, new_armed).clicked() {
+    let new_key = transport::card_button(ui, "song-new", rects.footer_new, new_label, new_armed);
+    tips::hover(&new_key, wants_help, tips::Control::CardNew);
+    if new_key.clicked() {
         request = guarded_load(
             songs,
             NEW_KEY.to_string(),
@@ -638,18 +663,29 @@ pub fn paint(
             REPLACE_SESSION,
         );
     }
-    if transport::card_button(ui, "song-import", rects.footer_import, "IMPORT", false).clicked() {
+    let import_key =
+        transport::card_button(ui, "song-import", rects.footer_import, "IMPORT", false);
+    tips::hover(&import_key, wants_help, tips::Control::SongImport);
+    if import_key.clicked() {
         request = Some(Request::Import);
     }
     // `EXPORT` writes the **session**, so it is the song's name that lights it, not the strip's field: on `BANKS` a typed bank
     // name would otherwise light a key that has nothing to do with it, and a named song would leave it dim.
     let can_export = songs.open.is_some() || crate::persist::document_name(&songs.name).is_some();
-    if transport::card_button(ui, "song-export", rects.footer_export, "EXPORT", can_export)
-        .clicked()
-    {
+    let export_key =
+        transport::card_button(ui, "song-export", rects.footer_export, "EXPORT", can_export);
+    tips::hover_with(
+        &export_key,
+        wants_help,
+        tips::Control::SongExport,
+        Some(&export_detail(session.name)),
+    );
+    if export_key.clicked() {
         request = Some(Request::Export);
     }
-    if transport::card_button(ui, "song-close", rects.footer_close, "CLOSE", false).clicked() {
+    let close = transport::card_button(ui, "song-close", rects.footer_close, "CLOSE", false);
+    tips::hover(&close, wants_help, tips::Control::CardClose);
+    if close.clicked() {
         request = Some(Request::Close);
     }
 
@@ -980,6 +1016,45 @@ fn document_save_name(typed: &str, current: Option<&str>) -> Option<String> {
     crate::persist::document_name(typed).or_else(|| current.map(str::to_string))
 }
 
+/// What the strip's key would do with this name, in the words its hover help uses.
+///
+/// [`crate::persist::save_target`] is the function that decides whether a save writes in place or makes a new file, and the
+/// click's own path runs through it — so a hint cannot describe a rule the save does not follow. `copy` is `SAVE A COPY`, whose
+/// door is the song's, whose answer is always a new file, and which — unlike `SAVE` — is dead with nothing named.
+fn save_detail(current: Option<&str>, typed: &str, copy: bool) -> String {
+    use crate::persist::SaveTarget;
+
+    let Some(target) = crate::persist::save_target(current, typed) else {
+        return if copy {
+            "Type a name first: this key is dim until you do.".to_string()
+        } else {
+            "No name yet: the key opens the field.".to_string()
+        };
+    };
+    match (copy, target) {
+        (true, SaveTarget::InPlace(name) | SaveTarget::NewFile(name)) => {
+            format!("Makes a new file, {name}.")
+        }
+        (false, SaveTarget::InPlace(name)) => format!("Writes {name} in place."),
+        (false, SaveTarget::NewFile(name)) => format!("Makes a new file, {name}."),
+    }
+}
+
+/// What a row's cross would delete: the kind's own word, so a song and a rack that share one name cannot be confused, and the
+/// file's name, which the row already shows.
+fn cross_detail(kind: Kind, name: &str) -> String {
+    format!("Deletes the {} {name}.", kind.stem())
+}
+
+/// What `EXPORT` would write. It names the **session**, not the field's text: `main` only suggests a file name from the field,
+/// so naming the field here would contradict the card's own header.
+fn export_detail(session: Option<&str>) -> String {
+    match session {
+        Some(name) => format!("Writes the session, {name}."),
+        None => "The session has no name yet.".to_string(),
+    }
+}
+
 /// The card's header: the session's name and whether it is on disk. A first run and a freshly loaded demo have a name and
 /// no file yet, and they are unsaved, not untitled.
 pub fn now_line(session: Option<&str>, dirty: bool) -> String {
@@ -1191,6 +1266,53 @@ mod tests {
                 "{filter:?}: a typed search is the reason the band is empty"
             );
         }
+    }
+
+    #[test]
+    fn the_builders_say_what_the_save_would_do() {
+        // These three are pure functions — strings out of the same values the keys read — so every branch a frame cannot easily
+        // reach is walked here, and the panels' own tests prove the wiring. `Some("Acid 1")`/`"Acid 1"` is the in-place case
+        // `save_target` decides; the copy key cannot produce it, which is the third line's whole point.
+        assert_eq!(
+            save_detail(Some("Acid 1"), "Acid 1", false),
+            "Writes Acid 1 in place."
+        );
+        assert_eq!(
+            save_detail(Some("Acid 1"), "Acid 2", false),
+            "Makes a new file, Acid 2."
+        );
+        assert_eq!(
+            save_detail(Some("Acid 1"), "Acid 1", true),
+            "Makes a new file, Acid 1.",
+            "a copy never writes in place, even under the name it came from"
+        );
+        assert_eq!(
+            save_detail(None, "", false),
+            "No name yet: the key opens the field.",
+            "SAVE with nothing named puts the cursor in the field"
+        );
+        assert_eq!(
+            save_detail(None, "", true),
+            "Type a name first: this key is dim until you do.",
+            "the copy key is dead with nothing named, and says so"
+        );
+
+        assert_eq!(export_detail(Some("Acid 1")), "Writes the session, Acid 1.");
+        assert_eq!(
+            export_detail(None),
+            "The session has no name yet.",
+            "a first run has no session name to write"
+        );
+
+        assert_eq!(
+            cross_detail(Kind::Song, "Studio"),
+            "Deletes the song Studio."
+        );
+        assert_eq!(cross_detail(Kind::Bank, "Easy"), "Deletes the bank Easy.");
+        assert_eq!(
+            cross_detail(Kind::Rack, "Studio"),
+            "Deletes the rack Studio."
+        );
     }
 
     /// A band `rows` rows tall, built from the same two constants the painter lays a row out with, so a test's window and the

@@ -49,7 +49,7 @@ pub(super) fn draw(
             diameter,
             p,
         );
-        tips::hover(&response, state.tooltips, tips::Control::for_knob(knob));
+        tips::hover(&response, state.help(), tips::Control::for_knob(knob));
         // A switch wears its detents, so the faces it may snap to are visible before the hand lets go.
         if knob.kind() == Kind::Switch && !choosing {
             waveform_detents(cell_ui.painter(), *cell, state.knobs[slot], s, p);

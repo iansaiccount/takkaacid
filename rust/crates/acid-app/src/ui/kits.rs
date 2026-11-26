@@ -14,7 +14,7 @@ use egui::{Rect, Ui};
 // The card's measurements and its caption are the banks card's, imported rather than repeated: the two are the same object
 // to a player, and a second set of numbers beside the first is how two siblings stop looking alike.
 use super::banks::{CARD_GAP, CARD_HEADING, CARD_PADDING, CARD_ROW, heading};
-use super::{PanelState, text, theme, transport};
+use super::{PanelState, text, theme, tips, transport};
 use crate::persist::free_name;
 use crate::state::SharedState;
 use acid_core::drums::Kit;
@@ -204,12 +204,14 @@ pub fn paint(
         }
     }
 
-    let a_key = transport::card_button(ui, "kit-import", layout.import, "IMPORT", false).clicked();
-    let closed = transport::card_button(ui, "kit-close", layout.close, "CLOSE", false).clicked();
-    if a_key || closed {
+    let a_key = transport::card_button(ui, "kit-import", layout.import, "IMPORT", false);
+    tips::hover(&a_key, state.tooltips, tips::Control::KitsImport);
+    let closed = transport::card_button(ui, "kit-close", layout.close, "CLOSE", false);
+    tips::hover(&closed, state.tooltips, tips::Control::CardClose);
+    if a_key.clicked() || closed.clicked() {
         state.kits.load_armed = None;
         if request.is_none() {
-            request = Some(if a_key {
+            request = Some(if a_key.clicked() {
                 Request::Import
             } else {
                 Request::Close
