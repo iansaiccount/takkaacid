@@ -19,8 +19,7 @@ function `main` uses to decide in place vs new file — so a hint cannot describ
 
 **Tech Stack:** Rust, egui 0.37 / eframe 0.37. No new dependency.
 
-**Branch:** stacked on `phase-8-round-03` while PR #16 is open, because the card this round tips is round 03's browser. Rebase
-onto `main` once #16 merges, before opening this round's pull request.
+**Branch:** `phase-8-round-06`, cut from `main` after round 03 merged (PR #16), so its diff is this round and nothing else.
 
 ## Global Constraints
 
